@@ -15,6 +15,7 @@ type OrderStatus = "new" | "making" | "ready" | "done";
 
 type OrderRecord = {
   id: string; // 내부용 orderId (긴 값)
+  storeId: string;
   createdAt: number;
   orderDate: string; // YYYY-MM-DD
   displayNo: string; // 고객/직원용 4자리 번호
@@ -37,6 +38,7 @@ const MENU: MenuItem[] = [
 
 const LS_ORDERS_KEY = "qrCafeOrders";
 const LS_LAST_ORDER_ID_KEY = "qrCafeLastOrderId";
+const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 
 function parseCart(cartParam: string | null): Record<string, number> {
   if (!cartParam) return {};
@@ -69,6 +71,7 @@ export default function ConfirmPage() {
   const router = useRouter();
   const sp = useSearchParams();
 
+  const storeId = sp.get("store") || process.env.NEXT_PUBLIC_STORE_ID || "";
   const tableFromMenu = sp.get("table") || "";
   const cart = useMemo(() => parseCart(sp.get("cart")), [sp]);
 
@@ -106,6 +109,7 @@ export default function ConfirmPage() {
 
     const order: OrderRecord = {
       id: orderId,
+      storeId,
       createdAt: Date.now(),
       orderDate,
       displayNo,
@@ -129,8 +133,13 @@ export default function ConfirmPage() {
 
     // ✅ 최근 주문 자동 복구용
     localStorage.setItem(LS_LAST_ORDER_ID_KEY, orderId);
+    localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
 
-    router.push(`/done?orderId=${encodeURIComponent(orderId)}`);
+    const params = new URLSearchParams();
+    params.set("orderId", orderId);
+    if (storeId) params.set("store", storeId);
+    if (tableFromMenu) params.set("table", tableFromMenu);
+    router.push(`/done?${params.toString()}`);
   };
 
   const onBack = () => router.back();

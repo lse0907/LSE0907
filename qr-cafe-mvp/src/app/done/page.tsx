@@ -9,6 +9,7 @@ type OrderStatus = "new" | "making" | "ready" | "done";
 
 type OrderRecord = {
   id: string;
+  storeId: string;
   createdAt: number;
   orderDate: string;
   displayNo: string;
@@ -24,6 +25,7 @@ type OrderRecord = {
 
 const LS_ORDERS_KEY = "qrCafeOrders";
 const LS_LAST_ORDER_ID_KEY = "qrCafeLastOrderId";
+const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 
 function loadOrders(): OrderRecord[] {
   try {
@@ -38,16 +40,43 @@ function loadOrders(): OrderRecord[] {
 
 export default function DonePage() {
   const sp = useSearchParams();
+  const storeId = sp.get("store") || process.env.NEXT_PUBLIC_STORE_ID || "";
+  const table = sp.get("table") || "";
   const orderId = useMemo(() => sp.get("orderId") || "", [sp]);
 
   const order = useMemo(() => {
     const list = loadOrders();
-    if (orderId) return list.find((o) => o.id === orderId) || null;
+    if (orderId) {
+      return (
+        list.find((o) => o.id === orderId && (!storeId || o.storeId === storeId)) ||
+        null
+      );
+    }
 
     // 혹시 파라미터 없이 들어오면 최근 주문 보여줌
     const last = localStorage.getItem(LS_LAST_ORDER_ID_KEY) || "";
-    return last ? list.find((o) => o.id === last) || null : null;
-  }, [orderId]);
+    const lastStoreId = localStorage.getItem(LS_LAST_STORE_ID_KEY) || "";
+    if (!last || (storeId && lastStoreId !== storeId)) return null;
+    return (
+      list.find((o) => o.id === last && (!storeId || o.storeId === storeId)) || null
+    );
+  }, [orderId, storeId]);
+
+  const statusParams = useMemo(() => {
+    if (!order) return "";
+    const params = new URLSearchParams();
+    params.set("orderId", order.id);
+    if (storeId) params.set("store", storeId);
+    if (table) params.set("table", table);
+    return params.toString();
+  }, [order, storeId, table]);
+
+  const menuParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (storeId) params.set("store", storeId);
+    if (table) params.set("table", table);
+    return params.toString();
+  }, [storeId, table]);
 
   if (!order) {
     return (
@@ -57,7 +86,7 @@ export default function DonePage() {
           주문 정보를 찾을 수 없어요. 메뉴로 돌아가 다시 확인해 주세요.
         </p>
         <div style={{ marginTop: 16 }}>
-          <Link href="/menu">메뉴로 가기</Link>
+          <Link href={menuParams ? `/menu?${menuParams}` : "/menu"}>메뉴로 가기</Link>
         </div>
       </main>
     );
@@ -103,7 +132,7 @@ export default function DonePage() {
 
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
         <Link
-          href={`/status?orderId=${encodeURIComponent(order.id)}`}
+          href={`/status?${statusParams}`}
           style={{
             flex: 1,
             textAlign: "center",
@@ -118,7 +147,7 @@ export default function DonePage() {
         </Link>
 
         <Link
-          href="/menu"
+          href={menuParams ? `/menu?${menuParams}` : "/menu"}
           style={{
             flex: 1,
             textAlign: "center",
