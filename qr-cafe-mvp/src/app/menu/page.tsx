@@ -15,6 +15,7 @@ export default function MenuPage() {
 
   // 테이블 QR이면 /menu?table=3 형태로 들어옴 (카운터 QR은 그냥 /menu)
   const table = sp.get("table") || "";
+  const storeId = sp.get("store") || process.env.NEXT_PUBLIC_STORE_ID || "";
 
   const items: MenuItem[] = useMemo(
     () => [
@@ -41,9 +42,11 @@ export default function MenuPage() {
     if (totalCount === 0) return;
 
     const cart = encodeURIComponent(JSON.stringify(qty));
-    const url = table
-      ? `/confirm?table=${encodeURIComponent(table)}&cart=${cart}`
-      : `/confirm?cart=${cart}`;
+    const params = new URLSearchParams();
+    params.set("cart", cart);
+    if (table) params.set("table", table);
+    if (storeId) params.set("store", storeId);
+    const url = `/confirm?${params.toString()}`;
 
     router.push(url);
   };

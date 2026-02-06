@@ -9,6 +9,7 @@ type OrderStatus = "new" | "making" | "ready" | "done";
 
 type OrderRecord = {
   id: string;
+  storeId: string;
   createdAt: number;
   orderDate: string;
   displayNo: string;
@@ -24,6 +25,7 @@ type OrderRecord = {
 
 const LS_ORDERS_KEY = "qrCafeOrders";
 const LS_LAST_ORDER_ID_KEY = "qrCafeLastOrderId";
+const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   new: "접수됨",
@@ -46,23 +48,41 @@ function loadOrders(): OrderRecord[] {
 export default function StatusPage() {
   const sp = useSearchParams();
   const orderIdFromQuery = sp.get("orderId");
+  const storeIdFromQuery = sp.get("store");
+  const table = sp.get("table") || "";
 
   const [tick, setTick] = useState(0);
   const [lastOrderId, setLastOrderId] = useState<string>("");
+  const [lastStoreId, setLastStoreId] = useState<string>("");
 
   useEffect(() => {
     setLastOrderId(localStorage.getItem(LS_LAST_ORDER_ID_KEY) || "");
+    setLastStoreId(localStorage.getItem(LS_LAST_STORE_ID_KEY) || "");
   }, []);
 
+  const storeId =
+    storeIdFromQuery || lastStoreId || process.env.NEXT_PUBLIC_STORE_ID || "";
+
   const orderId = useMemo(() => {
-    return orderIdFromQuery || lastOrderId || "";
-  }, [orderIdFromQuery, lastOrderId]);
+    if (orderIdFromQuery) return orderIdFromQuery;
+    if (lastOrderId && (!storeId || storeId === lastStoreId)) return lastOrderId;
+    return "";
+  }, [lastOrderId, lastStoreId, orderIdFromQuery, storeId]);
 
   const order = useMemo(() => {
     if (!orderId) return null;
     const list = loadOrders();
-    return list.find((o) => o.id === orderId) || null;
-  }, [orderId, tick]);
+    return (
+      list.find((o) => o.id === orderId && (!storeId || o.storeId === storeId)) || null
+    );
+  }, [orderId, storeId, tick]);
+
+  const menuParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (storeId) params.set("store", storeId);
+    if (table) params.set("table", table);
+    return params.toString();
+  }, [storeId, table]);
 
   return (
     <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
@@ -72,7 +92,7 @@ export default function StatusPage() {
         <button onClick={() => setTick((p) => p + 1)} style={{ padding: 10 }}>
           새로고침
         </button>
-        <Link href="/menu" style={{ padding: 10 }}>
+        <Link href={menuParams ? `/menu?${menuParams}` : "/menu"} style={{ padding: 10 }}>
           메뉴로
         </Link>
       </div>

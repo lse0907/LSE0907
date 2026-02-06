@@ -7,6 +7,7 @@ type OrderStatus = "new" | "making" | "ready" | "done";
 
 type OrderRecord = {
   id: string;
+  storeId: string;
   createdAt: number;
   orderDate: string;
   displayNo: string;
@@ -22,7 +23,7 @@ type OrderRecord = {
 
 const LS_KEY = "qrCafeOrders";
 
-function loadOrders(): OrderRecord[] {
+function loadAllOrders(): OrderRecord[] {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return [];
@@ -31,6 +32,12 @@ function loadOrders(): OrderRecord[] {
   } catch {
     return [];
   }
+}
+
+function loadOrders(storeId: string): OrderRecord[] {
+  const list = loadAllOrders();
+  if (!storeId) return list;
+  return list.filter((order) => order.storeId === storeId);
 }
 
 function saveOrders(list: OrderRecord[]) {
@@ -52,32 +59,42 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 };
 
 export default function StaffPage() {
+  const storeId = process.env.NEXT_PUBLIC_STORE_ID || "";
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    setOrders(loadOrders());
-  }, []);
+    setOrders(loadOrders(storeId));
+  }, [storeId]);
 
   const selected = useMemo(
     () => orders.find((o) => o.id === selectedId) || null,
     [orders, selectedId]
   );
 
-  const refresh = () => setOrders(loadOrders());
+  const refresh = () => setOrders(loadOrders(storeId));
 
   const updateOrder = (id: string, patch: Partial<OrderRecord>) => {
-    setOrders((prev) => {
-      const next = prev.map((o) => (o.id === id ? { ...o, ...patch } : o));
-      saveOrders(next);
-      return next;
+    const list = loadAllOrders();
+    const nextAll = list.map((o) => {
+      if (o.id !== id) return o;
+      if (storeId && o.storeId !== storeId) return o;
+      return { ...o, ...patch };
     });
+    saveOrders(nextAll);
+    setOrders(loadOrders(storeId));
   };
 
   const deleteAll = () => {
     if (!confirm("정말 모든 주문을 삭제할까요? (테스트용)")) return;
-    localStorage.removeItem(LS_KEY);
-    setOrders([]);
+    const list = loadAllOrders();
+    const nextAll = storeId ? list.filter((o) => o.storeId !== storeId) : [];
+    if (storeId) {
+      saveOrders(nextAll);
+    } else {
+      localStorage.removeItem(LS_KEY);
+    }
+    setOrders(loadOrders(storeId));
     setSelectedId(null);
   };
 
@@ -303,11 +320,10 @@ export default function StaffPage() {
                 <button
                   onClick={() => {
                     if (!confirm("이 주문을 삭제할까요?")) return;
-                    setOrders((prev) => {
-                      const next = prev.filter((o) => o.id !== selected.id);
-                      saveOrders(next);
-                      return next;
-                    });
+                    const list = loadAllOrders();
+                    const nextAll = list.filter((o) => o.id !== selected.id);
+                    saveOrders(nextAll);
+                    setOrders(loadOrders(storeId));
                     setSelectedId(null);
                   }}
                   style={{ padding: 12, borderRadius: 12 }}
