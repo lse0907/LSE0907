@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { lsLastOrderIdKey, resolveStoreId } from "@/app/lib/storeScope";
+import { lsLastOrderIdKey, lsLastOrderTokenKey, resolveStoreId } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
@@ -83,10 +83,12 @@ export default function StatusPage() {
   const sp = useSearchParams();
 
   const orderIdFromQuery = (sp.get("orderId") || "").trim();
+  const accessTokenFromQuery = (sp.get("accessToken") || "").trim();
   const storeFromQuery = (sp.get("store") || "").trim();
 
   const [lastOrderId, setLastOrderId] = useState<string>("");
   const [lastStoreId, setLastStoreId] = useState<string>("");
+  const [lastOrderToken, setLastOrderToken] = useState<string>("");
 
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<OrderView | null>(null);
@@ -108,30 +110,43 @@ export default function StatusPage() {
   useEffect(() => {
     if (!storeId) return;
     setLastOrderId((localStorage.getItem(lsLastOrderIdKey(storeId)) || "").trim());
+    setLastOrderToken((localStorage.getItem(lsLastOrderTokenKey(storeId)) || "").trim());
   }, [storeId]);
 
   const orderId = useMemo(() => {
     return orderIdFromQuery || lastOrderId || "";
   }, [orderIdFromQuery, lastOrderId]);
 
+  const accessToken = useMemo(() => {
+    return accessTokenFromQuery || lastOrderToken || "";
+  }, [accessTokenFromQuery, lastOrderToken]);
+
   const clearLastOrder = () => {
     try {
       localStorage.removeItem(lsLastOrderIdKey(storeId));
+      localStorage.removeItem(lsLastOrderTokenKey(storeId));
       localStorage.removeItem(LS_LAST_STORE_ID_KEY);
     } catch {}
     setLastOrderId("");
     setLastStoreId("");
+    setLastOrderToken("");
     setOrder(null);
   };
 
   const fetchOrder = async (id: string) => {
     setErrMsg("");
+    if (!accessToken) {
+      setErrMsg("주문 확인용 토큰이 없습니다. 주문 완료 화면에서 다시 진입해주세요.");
+      setOrder(null);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("orders")
       .select("id,display_no,mode,table_no,buzzer_no,status,store_id")
       .eq("id", id)
       .eq("store_id", storeId)
+      .eq("access_token", accessToken)
       .maybeSingle();
 
     if (error) {
@@ -164,15 +179,20 @@ export default function StatusPage() {
         setLoading(false);
         return;
       }
+      if (!accessToken) {
+        setOrder(null);
+        setLoading(false);
+        return;
+      }
       await fetchOrder(orderId);
       setLoading(false);
     };
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, storeId]);
+  }, [orderId, storeId, accessToken]);
 
   useEffect(() => {
-    if (!orderId) return;
+    if (!orderId || !accessToken) return;
 
     const t = window.setInterval(() => {
       fetchOrder(orderId);
@@ -180,7 +200,7 @@ export default function StatusPage() {
 
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, storeId]);
+  }, [orderId, storeId, accessToken]);
 
   useEffect(() => {
     if (!order) return;
@@ -212,7 +232,7 @@ export default function StatusPage() {
   const closePopup = () => setShowReadyPopup(false);
 
   const onRefresh = async () => {
-    if (!orderId) return;
+    if (!orderId || !accessToken) return;
     setLoading(true);
     await fetchOrder(orderId);
     setLoading(false);

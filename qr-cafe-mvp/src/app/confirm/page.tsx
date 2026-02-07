@@ -5,7 +5,12 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { nextDailySequence, format4, todayKey } from "../lib/orderNumber";
 import { supabase } from "@/app/lib/supabaseClient";
-import { getStoreIdFromSearchParams, lsLastOrderIdKey, lsOrdersKey } from "@/app/lib/storeScope";
+import {
+  getStoreIdFromSearchParams,
+  lsLastOrderIdKey,
+  lsLastOrderTokenKey,
+  lsOrdersKey,
+} from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
@@ -178,6 +183,7 @@ export default function ConfirmPage() {
       setSubmitting(true);
 
       const orderId = uuid();
+      const accessToken = uuid();
       const createdAtIso = new Date().toISOString();
       const orderDate = todayKey();
 
@@ -191,6 +197,7 @@ export default function ConfirmPage() {
 
         const orderRow: any = {
           id: orderId,
+          access_token: accessToken,
           created_at: createdAtIso,
           order_date: orderDate,
           display_no: displayNo,
@@ -295,10 +302,13 @@ export default function ConfirmPage() {
 
       // ✅ 핵심: lastOrderId + lastStoreId 함께 저장
       localStorage.setItem(lsLastOrderIdKey(storeId), orderId);
+      localStorage.setItem(lsLastOrderTokenKey(storeId), accessToken);
       localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
 
       router.push(
-        `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(orderId)}`
+        `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(
+          orderId
+        )}&accessToken=${encodeURIComponent(accessToken)}`
       );
     } catch (e: any) {
       console.error(e);

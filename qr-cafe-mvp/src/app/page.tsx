@@ -4,7 +4,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStoreProfile } from "./lib/storeProfile";
-import { getStoreIdFromSearchParams, lsLastOrderIdKey } from "./lib/storeScope";
+import { getStoreIdFromSearchParams, lsLastOrderIdKey, lsLastOrderTokenKey } from "./lib/storeScope";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 
@@ -17,6 +17,7 @@ function HomeStartInner() {
   // ✅ hydration mismatch 방지 + localStorage 안전 처리
   const [mounted, setMounted] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string>("");
+  const [lastOrderToken, setLastOrderToken] = useState<string>("");
   const [orderHidden, setOrderHidden] = useState<boolean>(false);
 
   useEffect(() => {
@@ -25,6 +26,8 @@ function HomeStartInner() {
       const lastOrderKey = lsLastOrderIdKey(storeId);
       const v = (localStorage.getItem(lastOrderKey) || "").trim();
       setLastOrderId(v);
+      const token = (localStorage.getItem(lsLastOrderTokenKey(storeId)) || "").trim();
+      setLastOrderToken(token);
 
       const hidden = (localStorage.getItem(orderHiddenKey(storeId)) || "").trim();
       setOrderHidden(hidden === "true");
@@ -84,7 +87,9 @@ function HomeStartInner() {
   const onStatus = () => {
     if (!lastOrderId) return;
     router.push(
-      `/status?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(lastOrderId)}`
+      `/status?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(
+        lastOrderId
+      )}&accessToken=${encodeURIComponent(lastOrderToken)}`
     );
   };
 
