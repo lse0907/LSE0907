@@ -265,11 +265,6 @@ function HomeStartInner() {
         .btnGhost:active {
           transform: translateY(1px);
         }
-        .summary {
-          font-size: 14px;
-          font-weight: 800;
-          color: var(--text);
-        }
         .descDetails {
           border: 1px dashed var(--line);
           border-radius: 12px;
@@ -277,11 +272,6 @@ function HomeStartInner() {
           background: #fafafa;
           display: grid;
           gap: 6px;
-        }
-        .descLabel {
-          font-weight: 900;
-          font-size: 13px;
-          color: var(--muted);
         }
 
         @media (max-width: 480px) {
@@ -338,10 +328,6 @@ function HomeStartInner() {
               주문하기
             </button>
 
-            <div className="summary">{STORE_DESC.split("\n")[0]}</div>
-
-            <div className="descDetails">
-              <span className="descLabel">매장 소개</span>
               <p className="desc">{STORE_DESC}</p>
             </div>
 
