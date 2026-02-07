@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { lsLastOrderIdKey, resolveStoreId } from "@/app/lib/storeScope";
+import { lsLastOrderIdKey, lsLastOrderTokenKey, resolveStoreId } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
@@ -76,6 +76,7 @@ export default function DonePage() {
   const sp = useSearchParams();
 
   const orderIdFromQuery = useMemo(() => (sp.get("orderId") || "").trim(), [sp]);
+  const accessTokenFromQuery = useMemo(() => (sp.get("accessToken") || "").trim(), [sp]);
   const storeFromQuery = useMemo(() => (sp.get("store") || "").trim(), [sp]);
 
   const [loading, setLoading] = useState(true);
@@ -93,9 +94,11 @@ export default function DonePage() {
 
       // 2) orderId 결정
       const fallbackOrderId = (localStorage.getItem(lsLastOrderIdKey(storeId)) || "").trim();
+      const fallbackAccessToken = (localStorage.getItem(lsLastOrderTokenKey(storeId)) || "").trim();
       const orderId = orderIdFromQuery || fallbackOrderId;
+      const accessToken = accessTokenFromQuery || fallbackAccessToken;
 
-      if (!orderId) {
+      if (!orderId || !accessToken) {
         setOrder(null);
         setLoading(false);
         return;
@@ -109,6 +112,7 @@ export default function DonePage() {
         )
         .eq("id", orderId)
         .eq("store_id", storeId)
+        .eq("access_token", accessToken)
         .maybeSingle();
 
       if (error) {
@@ -131,7 +135,7 @@ export default function DonePage() {
 
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderIdFromQuery, storeFromQuery]);
+  }, [orderIdFromQuery, storeFromQuery, accessTokenFromQuery]);
 
   if (loading) {
     return (
@@ -176,6 +180,14 @@ export default function DonePage() {
   const storeIdForLinks = resolveStoreId(
     storeFromQuery || (localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim()
   );
+  const accessTokenForLinks = useMemo(() => {
+    if (accessTokenFromQuery) return accessTokenFromQuery;
+    try {
+      return (localStorage.getItem(lsLastOrderTokenKey(storeIdForLinks)) || "").trim();
+    } catch {
+      return "";
+    }
+  }, [accessTokenFromQuery, storeIdForLinks]);
 
   return (
     <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
@@ -237,7 +249,9 @@ export default function DonePage() {
 
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
         <Link
-          href={`/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(order.id)}`}
+          href={`/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(
+            order.id
+          )}&accessToken=${encodeURIComponent(accessTokenForLinks)}`}
           style={{
             flex: 1,
             textAlign: "center",

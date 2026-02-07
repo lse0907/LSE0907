@@ -21,6 +21,9 @@ export function lsOrdersKey(storeId: string) {
 export function lsLastOrderIdKey(storeId: string) {
   return `qrCafeLastOrderId:${resolveStoreId(storeId)}`;
 }
+export function lsLastOrderTokenKey(storeId: string) {
+  return `qrCafeLastOrderToken:${resolveStoreId(storeId)}`;
+}
 
 /** (선택) 매장별 스토어프로필 키 */
 export function lsStoreProfileKey(storeId: string) {

@@ -4,7 +4,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { getStoreIdFromSearchParams, lsLastOrderIdKey, lsOrdersKey } from "@/app/lib/storeScope";
+import {
+  getStoreIdFromSearchParams,
+  lsLastOrderIdKey,
+  lsLastOrderTokenKey,
+  lsOrdersKey,
+} from "@/app/lib/storeScope";
 
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
 
@@ -45,6 +50,7 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
 
   const [lastOrderId, setLastOrderId] = useState<string>("");
   const [lastStoreId, setLastStoreId] = useState<string>("");
+  const [lastOrderToken, setLastOrderToken] = useState<string>("");
 
   // ✅ 다른 탭/새로고침/이동 후에도 lastOrderId / lastStoreId 최신화
   useEffect(() => {
@@ -53,6 +59,11 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
         setLastOrderId((localStorage.getItem(lsLastOrderIdKey(currentStoreId)) || "").trim());
       } catch {
         setLastOrderId("");
+      }
+      try {
+        setLastOrderToken((localStorage.getItem(lsLastOrderTokenKey(currentStoreId)) || "").trim());
+      } catch {
+        setLastOrderToken("");
       }
       try {
         setLastStoreId((localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim());
@@ -65,6 +76,7 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
 
     const onStorage = (e: StorageEvent) => {
       if (e.key?.startsWith("qrCafeLastOrderId:")) read();
+      if (e.key?.startsWith("qrCafeLastOrderToken:")) read();
       if (e.key?.startsWith("qrCafeOrders:")) read();
       if (e.key === LS_LAST_STORE_ID_KEY) read();
     };
@@ -121,7 +133,7 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
           <Link
             href={`/status?store=${encodeURIComponent(currentStoreId)}&orderId=${encodeURIComponent(
               lastOrder.id
-            )}`}
+            )}&accessToken=${encodeURIComponent(lastOrderToken)}`}
             style={{
               padding: "8px 10px",
               background: "white",
