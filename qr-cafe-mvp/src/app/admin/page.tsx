@@ -234,9 +234,7 @@ export default function AdminHomePage() {
       <header className="topbar">
         <div>
           <h1 className="h1">관리자</h1>
-          <p className="desc">
-            먼저 <b>매장을 선택</b>한 뒤 메뉴/옵션/QR/통계/직원 화면으로 들어가세요.
-          </p>
+          <p className="desc">매장을 선택하고 핵심 기능부터 시작하세요.</p>
         </div>
 
         <div className="chipRow">
@@ -250,6 +248,21 @@ export default function AdminHomePage() {
       </header>
 
       {msg ? <div className="alert">{msg}</div> : null}
+
+      <section className="card cardSoft">
+        <div className="cardHead">
+          <h2 className="cardTitle">현재 매장</h2>
+          <span className="pill">
+            {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "미선택"}
+            {selectedRole ? ` · ${selectedRole}` : ""}
+          </span>
+        </div>
+        <div className="guideRow">
+          <div className="guideStep">1 매장 등록</div>
+          <div className="guideStep">2 메뉴 등록</div>
+          <div className="guideStep">3 QR 생성</div>
+        </div>
+      </section>
 
       {/* ===== 매장 생성 ===== */}
       <section className="card">
@@ -280,7 +293,7 @@ export default function AdminHomePage() {
               onChange={(e) => setCreateId(e.target.value)}
               placeholder="예: ximen"
             />
-            <div className="hint">영문/숫자/하이픈 권장. 나중에 QR/데이터 키로 사용합니다.</div>
+            <div className="hint">영문/숫자/하이픈 권장. QR/데이터 키로 사용합니다.</div>
           </div>
         </div>
 
@@ -327,29 +340,56 @@ export default function AdminHomePage() {
         )}
       </section>
 
-      {/* ===== 선택된 매장 기능 ===== */}
+      {/* ===== 핵심 기능 ===== */}
       <section className="card">
         <div className="cardHead">
-          <h2 className="cardTitle">운영 기능</h2>
-          <span className="pill">
-            {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
-            {selectedRole ? ` · ${selectedRole}` : ""}
-          </span>
+          <h2 className="cardTitle">핵심</h2>
+          <span className="pill">자주 사용</span>
         </div>
 
         <p className="desc" style={{ marginTop: 10 }}>
-          아래 기능은 <b>선택된 매장</b> 기준으로만 동작하도록 갈 거야. (다중 매장 대비)
+          핵심 기능은 선택된 매장 기준으로 동작합니다.
+        </p>
+
+        <div className="cards">
+          <button className="cardBtn" onClick={() => go("/admin/stats")} disabled={!selectedStoreId}>
+            <div className="cardBtnTitle">매출 통계</div>
+            <div className="cardBtnDesc">일/주/월 매출을 간단히 확인합니다.</div>
+          </button>
+
+          <button className="cardBtn" onClick={() => go("/staff")} disabled={!selectedStoreId}>
+            <div className="cardBtnTitle">직원 화면</div>
+            <div className="cardBtnDesc">주문 처리 전용 화면으로 이동합니다.</div>
+          </button>
+        </div>
+
+        {!selectedStoreId ? (
+          <div className="alert" style={{ marginTop: 12 }}>
+            매장을 선택해야 기능을 사용할 수 있어요.
+          </div>
+        ) : null}
+      </section>
+
+      {/* ===== 설정 ===== */}
+      <section className="card">
+        <div className="cardHead">
+          <h2 className="cardTitle">설정</h2>
+          <span className="pill">가끔 사용</span>
+        </div>
+
+        <p className="desc" style={{ marginTop: 10 }}>
+          매장과 메뉴를 처음 세팅할 때 사용합니다.
         </p>
 
         <div className="cards">
           <button className="cardBtn" onClick={() => go("/admin/store")} disabled={!selectedStoreId}>
             <div className="cardBtnTitle">매장 정보</div>
-            <div className="cardBtnDesc">상호/안내문구/로고 등 기본 정보를 관리합니다.</div>
+            <div className="cardBtnDesc">상호/안내문구/로고를 관리합니다.</div>
           </button>
 
           <button className="cardBtn" onClick={() => go("/admin/menu")} disabled={!selectedStoreId}>
             <div className="cardBtnTitle">메뉴 관리</div>
-            <div className="cardBtnDesc">메뉴/가격/이미지/옵션 연결 + 노출 순서를 관리합니다.</div>
+            <div className="cardBtnDesc">메뉴/가격/이미지/노출 순서를 관리합니다.</div>
           </button>
 
           <button className="cardBtn" onClick={() => go("/admin/options")} disabled={!selectedStoreId}>
@@ -361,24 +401,7 @@ export default function AdminHomePage() {
             <div className="cardBtnTitle">QR 생성</div>
             <div className="cardBtnDesc">테이블/카운터 QR 생성 후 인쇄용 파일을 만듭니다.</div>
           </button>
-
-          {/* ✅ 복구: 통계 메뉴 */}
-          <button className="cardBtn" onClick={() => go("/admin/stats")} disabled={!selectedStoreId}>
-            <div className="cardBtnTitle">통계</div>
-            <div className="cardBtnDesc">일/주/월 매출 및 기간별 CSV 다운로드를 확인합니다.</div>
-          </button>
-
-          <button className="cardBtn" onClick={() => go("/staff")} disabled={!selectedStoreId}>
-            <div className="cardBtnTitle">직원 화면</div>
-            <div className="cardBtnDesc">선택된 매장 주문을 처리합니다.</div>
-          </button>
         </div>
-
-        {!selectedStoreId ? (
-          <div className="alert" style={{ marginTop: 12 }}>
-            매장을 선택해야 기능을 사용할 수 있어요.
-          </div>
-        ) : null}
       </section>
     </main>
   );
@@ -386,24 +409,24 @@ export default function AdminHomePage() {
 
 const baseCss = `
 :root {
-  --bg: #f6f7f9;
+  --bg: #f4f5f8;
   --card: #ffffff;
   --text: #111827;
   --muted: #6b7280;
   --line: #e5e7eb;
   --brand: #111827;
-  --radius: 16px;
+  --radius: 18px;
 }
 body {
   background: var(--bg);
   color: var(--text);
 }
 .wrap{
-  max-width: 920px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 14px;
+  padding: 18px;
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 .topbar{
   display:flex;
@@ -413,29 +436,32 @@ body {
 }
 .h1{
   margin:0;
-  font-size:28px;
-  font-weight:950;
+  font-size:30px;
+  font-weight:900;
   letter-spacing:-0.02em;
 }
 .desc{
   margin:6px 0 0 0;
   color:var(--muted);
   font-size:13px;
-  font-weight:800;
+  font-weight:700;
   line-height:1.4;
   word-break:keep-all;
 }
 .muted{
   color:var(--muted);
-  font-weight:800;
+  font-weight:700;
   font-size:12px;
 }
 .card{
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--radius);
-  padding:14px;
-  box-shadow:0 1px 0 rgba(0,0,0,0.03);
+  padding:16px;
+  box-shadow:0 6px 18px rgba(15, 23, 42, 0.04);
+}
+.cardSoft{
+  background:#f8fafc;
 }
 .cardHead{
   display:flex;
@@ -446,11 +472,11 @@ body {
 .cardTitle{
   margin:0;
   font-size:16px;
-  font-weight:950;
+  font-weight:900;
 }
 .pill{
   font-size:12px;
-  font-weight:900;
+  font-weight:800;
   padding:6px 10px;
   border-radius:999px;
   border:1px solid var(--line);
@@ -464,7 +490,7 @@ body {
   color:#991b1b;
   border-radius:14px;
   padding:10px 12px;
-  font-weight:900;
+  font-weight:800;
 }
 .chipRow{
   display:flex;
@@ -478,7 +504,7 @@ body {
   background:var(--brand);
   color:#fff;
   font-size:14px;
-  font-weight:950;
+  font-weight:800;
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -489,6 +515,21 @@ body {
   background:#fff;
   color:var(--brand);
   border:1px solid var(--line);
+}
+.guideRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:12px;
+}
+.guideStep{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:6px 12px;
+  font-size:12px;
+  font-weight:800;
+  color:#111827;
 }
 .formGrid{
   display:grid;
@@ -503,20 +544,20 @@ body {
 .label{
   font-size:12px;
   color:var(--muted);
-  font-weight:900;
+  font-weight:800;
 }
 .input{
   padding:10px 12px;
   border-radius:12px;
   border:1px solid var(--line);
   background:#fff;
-  font-weight:800;
+  font-weight:700;
   width:100%;
 }
 .hint{
   color:var(--muted);
   font-size:12px;
-  font-weight:800;
+  font-weight:700;
   line-height:1.35;
 }
 .btnRow{
@@ -531,7 +572,7 @@ body {
   padding:10px 14px;
   border-radius:12px;
   cursor:pointer;
-  font-weight:950;
+  font-weight:800;
 }
 .btnPrimary{
   background:var(--brand);
@@ -561,9 +602,10 @@ body {
 }
 .storeRowOn{
   border:2px solid var(--brand);
+  box-shadow:0 8px 16px rgba(15, 23, 42, 0.06);
 }
 .storeName{
-  font-weight:950;
+  font-weight:800;
   font-size:14px;
 }
 .cards{
@@ -578,20 +620,27 @@ body {
   border-radius:16px;
   padding:14px;
   cursor:pointer;
+  transition:box-shadow .2s ease, transform .2s ease;
+}
+.cardBtn:hover{
+  box-shadow:0 10px 20px rgba(15, 23, 42, 0.08);
+  transform:translateY(-2px);
 }
 .cardBtn:disabled{
   opacity:.5;
   cursor:not-allowed;
+  box-shadow:none;
+  transform:none;
 }
 .cardBtnTitle{
   margin:0;
-  font-size:18px;
-  font-weight:950;
+  font-size:17px;
+  font-weight:900;
 }
 .cardBtnDesc{
   margin-top:6px;
   font-size:13px;
-  font-weight:800;
+  font-weight:700;
   color:var(--muted);
   line-height:1.4;
 }
