@@ -45,7 +45,6 @@ export default function AdminHomePage() {
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [activeTab, setActiveTab] = useState<"stats" | "ops" | "settings">("stats");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [scrollToCreate, setScrollToCreate] = useState(false);
 
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -218,21 +217,6 @@ export default function AdminHomePage() {
     router.push(`${path}?store=${encodeURIComponent(selectedStoreId)}`);
   };
 
-  const openCreateTab = () => {
-    setActiveTab("settings");
-    setScrollToCreate(true);
-  };
-
-  useEffect(() => {
-    if (!scrollToCreate) return;
-    const target = document.getElementById("create-store-panel");
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-    const timer = setTimeout(() => setScrollToCreate(false), 300);
-    return () => clearTimeout(timer);
-  }, [scrollToCreate]);
-
   if (booting) {
     return (
       <main className="wrap">
@@ -282,14 +266,9 @@ export default function AdminHomePage() {
         </div>
 
         {stores.length === 0 ? (
-          <div className="emptyBox">
-            <p className="muted">
-              아직 등록된 매장이 없습니다. 먼저 매장을 만든 뒤에 선택할 수 있어요.
-            </p>
-            <button className="btn btnPrimary" onClick={openCreateTab}>
-              매장 만들기
-            </button>
-          </div>
+          <p className="muted" style={{ marginTop: 10 }}>
+            아직 등록된 매장이 없습니다. 설정 탭에서 매장을 먼저 생성하세요.
+          </p>
         ) : (
           <div className="storeList">
             {stores.map((s) => {
@@ -343,9 +322,7 @@ export default function AdminHomePage() {
             {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
             {selectedRole ? ` · ${selectedRole}` : ""}
           </span>
-          <span className="muted">
-            순서: 매장 만들기 → 매장 선택 → 매장 설정 → 메뉴/옵션
-          </span>
+          <span className="muted">탭을 눌러 화면을 전환하세요.</span>
         </div>
 
         {activeTab === "stats" ? (
@@ -383,7 +360,7 @@ export default function AdminHomePage() {
               <div className="cardBtnDesc">상호/안내문구/로고 등 기본 정보를 관리합니다.</div>
             </button>
 
-            <div className="cardPanel" id="create-store-panel">
+            <div className="cardPanel">
               <div className="cardPanelHead">
                 <div>
                   <div className="cardBtnTitle">매장 생성</div>
@@ -560,12 +537,6 @@ body {
   display:grid;
   grid-template-columns:repeat(3, 1fr);
   gap:8px;
-}
-.emptyBox{
-  margin-top:12px;
-  display:grid;
-  gap:10px;
-  align-items:start;
 }
 .tabBtn{
   border:1px solid var(--line);
