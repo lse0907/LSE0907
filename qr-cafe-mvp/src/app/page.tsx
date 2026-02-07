@@ -270,6 +270,8 @@ function HomeStartInner() {
           border-radius: 12px;
           padding: 10px 12px;
           background: #fafafa;
+          display: grid;
+          gap: 6px;
         }
 
         @media (max-width: 480px) {
@@ -326,7 +328,6 @@ function HomeStartInner() {
               주문하기
             </button>
 
-            <div className="descDetails">
               <p className="desc">{STORE_DESC}</p>
             </div>
 
