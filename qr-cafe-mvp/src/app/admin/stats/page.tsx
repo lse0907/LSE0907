@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
+import { supabase } from "@/app/lib/supabaseClient";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
@@ -26,22 +27,6 @@ type OrderRecord = {
   storeId?: string;
   store_id?: string;
 };
-
-const LEGACY_LS_KEY = "qrCafeOrders";
-function storeScopedKey(storeId: string) {
-  return `qrCafeOrders:${storeId}`;
-}
-
-function loadOrdersRawByKey(key: string): any[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? list : [];
-  } catch {
-    return [];
-  }
-}
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -134,83 +119,20 @@ function csvEscape(v: string) {
   return s;
 }
 
-function normalizeOrders(raw: any[]): OrderRecord[] {
-  const out: OrderRecord[] = [];
+function normalizeStatus(v: any): OrderStatus {
+  const s = String(v || "").trim();
+  if (s === "making" || s === "ready" || s === "done" || s === "canceled") return s;
+  return "new";
+}
 
-  for (const r of raw) {
-    const createdAt =
-      typeof r?.createdAt === "number"
-        ? r.createdAt
-        : typeof r?.createdAt === "string"
-        ? Number(r.createdAt)
-        : typeof r?.id === "string" && r.id.includes("_")
-        ? Number(r.id.split("_")[0])
-        : Date.now();
+function normalizeMode(v: any): OrderMode {
+  return v === "takeout" ? "takeout" : "dine-in";
+}
 
-    const safeDate =
-      typeof r?.orderDate === "string" && r.orderDate.length >= 10
-        ? r.orderDate.slice(0, 10)
-        : ymd(new Date(createdAt));
-
-    const items = Array.isArray(r?.items)
-      ? r.items
-          .map((it: any) => ({
-            id: String(it?.id ?? ""),
-            name: String(it?.name ?? ""),
-            price: Number(it?.price ?? 0),
-            qty: Number(it?.qty ?? 0),
-          }))
-          .filter((it: any) => it.name && it.qty > 0)
-      : [];
-
-    const totalCount =
-      typeof r?.totalCount === "number"
-        ? r.totalCount
-        : items.reduce((s: number, it: any) => s + (it.qty || 0), 0);
-
-    const totalPrice =
-      typeof r?.totalPrice === "number"
-        ? r.totalPrice
-        : items.reduce((s: number, it: any) => s + (it.qty || 0) * (it.price || 0), 0);
-
-    const mode: OrderMode = r?.mode === "dine-in" ? "dine-in" : "takeout";
-
-    const status: OrderStatus =
-      r?.status === "new" ||
-      r?.status === "making" ||
-      r?.status === "ready" ||
-      r?.status === "done" ||
-      r?.status === "canceled"
-        ? r.status
-        : "done";
-
-    const id =
-      typeof r?.id === "string" && r.id ? r.id : `${createdAt}_${Math.random().toString(16).slice(2)}`;
-
-    const displayNo =
-      typeof r?.displayNo === "string"
-        ? r.displayNo
-        : String(r?.displayNo ?? "0000").padStart(4, "0");
-
-    out.push({
-      id,
-      createdAt,
-      orderDate: safeDate,
-      displayNo,
-      mode,
-      table: typeof r?.table === "string" ? r.table : undefined,
-      buzzerNo: typeof r?.buzzerNo === "string" ? r.buzzerNo : undefined,
-      requestNote: typeof r?.requestNote === "string" ? r.requestNote : "",
-      items,
-      totalCount,
-      totalPrice,
-      status,
-      storeId: typeof r?.storeId === "string" ? r.storeId : undefined,
-      store_id: typeof r?.store_id === "string" ? r.store_id : undefined,
-    });
-  }
-
-  return out;
+function toInt(v: any, fallback = 0) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.floor(n);
 }
 
 function formatWonCompact(n: number) {
@@ -221,19 +143,55 @@ function formatWonCompact(n: number) {
   return `₩${(v / 100000000).toFixed(1)}억`;
 }
 
+// ✅ DB → OrderRecord 변환(아이템은 이후 결합)
+function dbOrderToRecord(row: any, storeId: string): OrderRecord {
+  const createdAtMs = row?.created_at ? Date.parse(row.created_at) : Date.now();
+  const createdAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
+
+  const orderDate =
+    typeof row?.order_date === "string" && row.order_date.length >= 10
+      ? row.order_date.slice(0, 10)
+      : ymd(new Date(createdAt));
+
+  const displayNo =
+    typeof row?.display_no === "string"
+      ? row.display_no
+      : String(row?.display_no ?? "0000").padStart(4, "0");
+
+  return {
+    id: String(row?.id || ""),
+    createdAt,
+    orderDate,
+    displayNo,
+    mode: normalizeMode(row?.mode),
+    table: row?.table_no ? String(row.table_no) : undefined,
+    buzzerNo: row?.buzzer_no ? String(row.buzzer_no) : undefined,
+    requestNote: String(row?.request_note || ""),
+    items: [],
+    totalCount: Math.max(0, toInt(row?.total_count, 0)),
+    totalPrice: Math.max(0, Math.round(Number(row?.total_price ?? 0) || 0)),
+    status: normalizeStatus(row?.status),
+    storeId,
+    store_id: storeId,
+  };
+}
+
 export default function AdminStatsPage() {
   const router = useRouter();
   const sp = useSearchParams();
 
   const [storeId, setStoreId] = useState<string>("");
-  const [dataMode, setDataMode] = useState<"storeKey" | "legacyKey" | "mixed" | "empty">("empty");
+  const [dataMode, setDataMode] = useState<"db" | "empty">("empty");
 
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [rangeStart, setRangeStart] = useState<string>("");
   const [rangeEnd, setRangeEnd] = useState<string>("");
 
   const [rangeExpanded, setRangeExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errMsg, setErrMsg] = useState<string>("");
 
+  // ✅ store 결정 + 기본 기간(이번달 1일~오늘)
   useEffect(() => {
     const q = (sp.get("store") || "").trim();
     const saved = (getCurrentStoreId() || "").trim();
@@ -245,37 +203,6 @@ export default function AdminStatsPage() {
     }
     setStoreId(sid);
 
-    // 초기 로드
-    const load = () => {
-      const key = storeScopedKey(sid);
-      const storeRaw = loadOrdersRawByKey(key);
-      const legacyRaw = loadOrdersRawByKey(LEGACY_LS_KEY);
-
-      const storeList = normalizeOrders(storeRaw);
-      const legacyList = normalizeOrders(legacyRaw);
-
-      // store키에 데이터가 있으면 그걸 우선
-      if (storeList.length > 0) {
-        setOrders(storeList);
-        setDataMode(legacyList.length > 0 ? "mixed" : "storeKey");
-        return;
-      }
-
-      // store키가 비었으면 레거시라도 보여주기(기존 데이터 보호)
-      if (legacyList.length > 0) {
-        // 레거시 데이터에 storeId 필드가 있으면 필터
-        const filtered = legacyList.filter((o) => (o.storeId || o.store_id) ? (o.storeId || o.store_id) === sid : true);
-        setOrders(filtered);
-        setDataMode("legacyKey");
-        return;
-      }
-
-      setOrders([]);
-      setDataMode("empty");
-    };
-
-    load();
-
     const t = new Date();
     const start = new Date(t.getFullYear(), t.getMonth(), 1);
     setRangeStart(ymd(start));
@@ -283,43 +210,138 @@ export default function AdminStatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const refresh = () => {
-    if (!storeId) return;
-    const key = storeScopedKey(storeId);
-    const storeRaw = loadOrdersRawByKey(key);
-    const legacyRaw = loadOrdersRawByKey(LEGACY_LS_KEY);
-
-    const storeList = normalizeOrders(storeRaw);
-    const legacyList = normalizeOrders(legacyRaw);
-
-    if (storeList.length > 0) {
-      setOrders(storeList);
-      setDataMode(legacyList.length > 0 ? "mixed" : "storeKey");
-      return;
-    }
-
-    if (legacyList.length > 0) {
-      const filtered = legacyList.filter((o) => (o.storeId || o.store_id) ? (o.storeId || o.store_id) === storeId : true);
-      setOrders(filtered);
-      setDataMode("legacyKey");
-      return;
-    }
-
-    setOrders([]);
-    setDataMode("empty");
-  };
-
-  const nonCanceled = useMemo(() => orders.filter((o) => !isCanceled(o)), [orders]);
-
   const today = new Date();
   const todayKey = ymd(today);
   const weekStart = ymd(startOfWeekMon(today));
   const weekEnd = ymd(endOfWeekMon(today));
   const month = monthKey(today);
 
-  const dailyOrders = useMemo(() => nonCanceled.filter((o) => o.orderDate === todayKey), [nonCanceled, todayKey]);
-  const weeklyOrders = useMemo(() => nonCanceled.filter((o) => inRange(o.orderDate, weekStart, weekEnd)), [nonCanceled, weekStart, weekEnd]);
-  const monthlyOrders = useMemo(() => nonCanceled.filter((o) => (o.orderDate || "").startsWith(month)), [nonCanceled, month]);
+  // ✅ 통계에 필요한 “최소 로딩 범위”를 계산해서 DB에서 한 번에 가져옴
+  const computedFetchRange = useMemo(() => {
+    const rs = clampYmd(rangeStart);
+    const re = clampYmd(rangeEnd);
+
+    // 유효하지 않으면 일단 오늘 기준
+    const safeStart = rs || ymd(new Date(today.getFullYear(), today.getMonth(), 1));
+    const safeEnd = re || todayKey;
+
+    // daily/weekly/monthly가 최소한 포함되도록 확장
+    const monthStart = `${month}-01`;
+
+    const start = [safeStart, weekStart, monthStart].sort()[0];
+    const end = [safeEnd, weekEnd, todayKey].sort().slice(-1)[0];
+
+    return { start, end };
+  }, [rangeStart, rangeEnd, weekStart, weekEnd, month, todayKey, today]);
+
+  const fetchFromDb = async () => {
+    if (!storeId) return;
+
+    const { start, end } = computedFetchRange;
+    if (start > end) return;
+
+    setLoading(true);
+    setErrMsg("");
+
+    try {
+      // ✅ orders: store_id + 기간 + canceled 제외
+      const { data: oData, error: oErr } = await supabase
+        .from("orders")
+        .select(
+          "id,created_at,order_date,display_no,mode,table_no,buzzer_no,request_note,total_count,total_price,status,store_id"
+        )
+        .eq("store_id", storeId)
+        .gte("order_date", start)
+        .lte("order_date", end)
+        .neq("status", "canceled")
+        .order("created_at", { ascending: true });
+
+      if (oErr) throw new Error(`[orders] ${oErr.message}`);
+
+      const orderRows = Array.isArray(oData) ? oData : [];
+      if (orderRows.length === 0) {
+        setOrders([]);
+        setDataMode("empty");
+        setLoading(false);
+        return;
+      }
+
+      const base = orderRows.map((r: any) => dbOrderToRecord(r, storeId)).filter((x) => x.id);
+
+      const orderIds = base.map((o) => o.id);
+      // ✅ order_items: store_id + order_id in (...)
+      const { data: iData, error: iErr } = await supabase
+        .from("order_items")
+        .select("id,order_id,menu_id,name,price,qty,store_id")
+        .eq("store_id", storeId)
+        .in("order_id", orderIds);
+
+      if (iErr) throw new Error(`[order_items] ${iErr.message}`);
+
+      const items = Array.isArray(iData) ? iData : [];
+
+      const itemsByOrder = new Map<string, Array<{ id: string; name: string; price: number; qty: number }>>();
+      for (const it of items) {
+        const oid = String((it as any)?.order_id || "");
+        if (!oid) continue;
+        const arr = itemsByOrder.get(oid) || [];
+        arr.push({
+          id: String((it as any)?.menu_id || (it as any)?.id || ""),
+          name: String((it as any)?.name || ""),
+          price: Math.max(0, Math.round(Number((it as any)?.price ?? 0) || 0)),
+          qty: Math.max(0, Math.round(Number((it as any)?.qty ?? 0) || 0)),
+        });
+        itemsByOrder.set(oid, arr);
+      }
+
+      const merged = base.map((o) => {
+        const its = itemsByOrder.get(o.id) || [];
+        // DB totals이 신뢰 가능하면 그대로 쓰고, 혹시 누락이면 items로 보정
+        const computedCount = its.reduce((s, x) => s + (x.qty || 0), 0);
+        const computedPrice = its.reduce((s, x) => s + (x.qty || 0) * (x.price || 0), 0);
+        return {
+          ...o,
+          items: its,
+          totalCount: o.totalCount || computedCount,
+          totalPrice: o.totalPrice || computedPrice,
+        };
+      });
+
+      setOrders(merged);
+      setDataMode("db");
+      setLoading(false);
+    } catch (e: any) {
+      console.error(e);
+      setErrMsg(String(e?.message || e));
+      setOrders([]);
+      setDataMode("empty");
+      setLoading(false);
+    }
+  };
+
+  // 최초 로드 + storeId/기간 변경 시 자동 갱신
+  useEffect(() => {
+    if (!storeId) return;
+    fetchFromDb();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, computedFetchRange.start, computedFetchRange.end]);
+
+  const refresh = () => fetchFromDb();
+
+  const nonCanceled = useMemo(() => orders.filter((o) => !isCanceled(o)), [orders]);
+
+  const dailyOrders = useMemo(
+    () => nonCanceled.filter((o) => o.orderDate === todayKey),
+    [nonCanceled, todayKey]
+  );
+  const weeklyOrders = useMemo(
+    () => nonCanceled.filter((o) => inRange(o.orderDate, weekStart, weekEnd)),
+    [nonCanceled, weekStart, weekEnd]
+  );
+  const monthlyOrders = useMemo(
+    () => nonCanceled.filter((o) => (o.orderDate || "").startsWith(month)),
+    [nonCanceled, month]
+  );
 
   const daily = useMemo(() => summarize(dailyOrders), [dailyOrders]);
   const weekly = useMemo(() => summarize(weeklyOrders), [weeklyOrders]);
@@ -330,9 +352,10 @@ export default function AdminStatsPage() {
 
     for (const o of monthlyOrders) {
       for (const it of o.items || []) {
-        const prev = map.get(it.id);
+        const key = it.id || it.name; // menu_id 우선
+        const prev = map.get(key);
         const lineSales = (it.price || 0) * (it.qty || 0);
-        if (!prev) map.set(it.id, { name: it.name, qty: it.qty, sales: lineSales });
+        if (!prev) map.set(key, { name: it.name, qty: it.qty, sales: lineSales });
         else {
           prev.qty += it.qty;
           prev.sales += lineSales;
@@ -358,7 +381,8 @@ export default function AdminStatsPage() {
     const bucket = new Map<string, Summary>();
     for (const o of nonCanceled) {
       if (!inRange(o.orderDate, effectiveStart, effectiveEnd)) continue;
-      const prev = bucket.get(o.orderDate) || { sales: 0, orders: 0, qty: 0, dineIn: 0, takeout: 0 };
+      const prev =
+        bucket.get(o.orderDate) || { sales: 0, orders: 0, qty: 0, dineIn: 0, takeout: 0 };
       prev.sales += o.totalPrice;
       prev.orders += 1;
       prev.qty += o.totalCount;
@@ -426,6 +450,29 @@ export default function AdminStatsPage() {
       .sort((a, b) => a.createdAt - b.createdAt);
 
     for (const o of list) {
+      // items가 비어있으면 “주문 1줄”이라도 남기고 싶으면 여기서 처리 가능
+      if (!o.items?.length) {
+        const cols = [
+          o.orderDate,
+          formatTime(o.createdAt),
+          o.displayNo,
+          o.mode === "dine-in" ? "매장" : "포장",
+          o.table ?? "",
+          o.status,
+          o.buzzerNo ?? "",
+          o.requestNote ?? "",
+          "",
+          "",
+          "",
+          "",
+          String(o.totalPrice),
+          o.id,
+          String(o.storeId || o.store_id || storeId),
+        ].map((x) => csvEscape(String(x)));
+        rows.push(cols.join(","));
+        continue;
+      }
+
       for (const it of o.items) {
         const cols = [
           o.orderDate,
@@ -460,14 +507,7 @@ export default function AdminStatsPage() {
     return rangeSummaryRows.slice(Math.max(0, rangeSummaryRows.length - previewCount));
   }, [rangeSummaryRows, rangeExpanded]);
 
-  const modeLabel =
-    dataMode === "storeKey"
-      ? "store별 데이터"
-      : dataMode === "legacyKey"
-      ? "레거시 데이터(공유)"
-      : dataMode === "mixed"
-      ? "혼합(레거시 + store)"
-      : "데이터 없음";
+  const modeLabel = dataMode === "db" ? (loading ? "DB 로딩중..." : "DB 집계") : "데이터 없음";
 
   return (
     <main className="wrap">
@@ -725,6 +765,12 @@ export default function AdminStatsPage() {
         .muted {
           color: var(--muted);
         }
+        .err {
+          margin-top: 6px;
+          color: #b91c1c;
+          font-weight: 900;
+          font-size: 13px;
+        }
         @media (max-width: 980px) {
           .twoCol {
             grid-template-columns: 1fr;
@@ -763,9 +809,10 @@ export default function AdminStatsPage() {
           <button className="btn btnPrimary" onClick={() => (window.location.href = "/staff")}>
             직원 화면
           </button>
-          <button className="btn" onClick={refresh}>
-            새로고침
+          <button className="btn" onClick={refresh} disabled={loading}>
+            {loading ? "로딩중..." : "새로고침"}
           </button>
+          {errMsg ? <div className="err">오류: {errMsg}</div> : null}
         </div>
       </header>
 
@@ -927,7 +974,7 @@ export default function AdminStatsPage() {
               />
             </div>
 
-            <button className="btn btnPrimary" onClick={downloadRangeCsv}>
+            <button className="btn btnPrimary" onClick={downloadRangeCsv} disabled={loading}>
               상세 CSV 다운로드
             </button>
           </div>

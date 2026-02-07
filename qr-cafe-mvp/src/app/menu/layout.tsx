@@ -1,14 +1,14 @@
+// src/app/menu/layout.tsx
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-type OrderStatus = "new" | "making" | "ready" | "done";
+type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
 
 type OrderRecord = {
   id: string;
-  storeId: string;
   displayNo: string;
   status: OrderStatus;
 };
@@ -28,93 +28,123 @@ function loadOrders(): OrderRecord[] {
   }
 }
 
+function isActiveStatus(s: OrderStatus) {
+  return s === "new" || s === "making";
+}
+
+function statusLabel(s: OrderStatus) {
+  if (s === "new") return "접수됨";
+  if (s === "making") return "제조중";
+  if (s === "ready") return "준비완료";
+  if (s === "done") return "완료";
+  return "취소";
+}
+
+function envStoreId() {
+  return (process.env.NEXT_PUBLIC_STORE_ID || "ximen").trim();
+}
+
 export default function MenuLayout({ children }: { children: React.ReactNode }) {
   const sp = useSearchParams();
-  const storeId = sp.get("store") || process.env.NEXT_PUBLIC_STORE_ID || "";
-  const table = sp.get("table") || "";
+  const currentStoreId = useMemo(() => {
+    const s = (sp.get("store") || "").trim();
+    return s || envStoreId();
+  }, [sp]);
+
   const [lastOrderId, setLastOrderId] = useState<string>("");
   const [lastStoreId, setLastStoreId] = useState<string>("");
 
+  // ✅ 다른 탭/새로고침/이동 후에도 lastOrderId / lastStoreId 최신화
   useEffect(() => {
-    setLastOrderId(localStorage.getItem(LS_LAST_ORDER_ID_KEY) || "");
-    setLastStoreId(localStorage.getItem(LS_LAST_STORE_ID_KEY) || "");
+    const read = () => {
+      try {
+        setLastOrderId((localStorage.getItem(LS_LAST_ORDER_ID_KEY) || "").trim());
+      } catch {
+        setLastOrderId("");
+      }
+      try {
+        setLastStoreId((localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim());
+      } catch {
+        setLastStoreId("");
+      }
+    };
+
+    read();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === LS_LAST_ORDER_ID_KEY) read();
+      if (e.key === LS_LAST_STORE_ID_KEY) read();
+      if (e.key === LS_ORDERS_KEY) read();
+    };
+    window.addEventListener("storage", onStorage);
+
+    // 같은 탭에서도 반영
+    const t = window.setInterval(read, 1200);
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.clearInterval(t);
+    };
   }, []);
 
   const lastOrder = useMemo(() => {
     if (!lastOrderId) return null;
-    if (storeId && lastStoreId !== storeId) return null;
     const list = loadOrders();
-    return (
-      list.find((o) => o.id === lastOrderId && (!storeId || o.storeId === storeId)) ||
-      null
-    );
-  }, [lastOrderId, lastStoreId, storeId]);
+    return list.find((o) => o.id === lastOrderId) || null;
+  }, [lastOrderId]);
 
-  const clear = () => {
-    localStorage.removeItem(LS_LAST_ORDER_ID_KEY);
-    localStorage.removeItem(LS_LAST_STORE_ID_KEY);
-    setLastOrderId("");
-    setLastStoreId("");
-  };
+  // ✅ 멀티매장 핵심: 현재 store와 lastStore가 같을 때만 배너 표시
+  const storeMatch = !!lastStoreId && lastStoreId === currentStoreId;
 
-  const statusParams = useMemo(() => {
-    if (!lastOrder) return "";
-    const params = new URLSearchParams();
-    params.set("orderId", lastOrder.id);
-    if (storeId) params.set("store", storeId);
-    if (table) params.set("table", table);
-    return params.toString();
-  }, [lastOrder, storeId, table]);
+  // ✅ "ready/done/canceled"이면 배너 숨김 + store mismatch면 숨김
+  const showBanner = !!lastOrder && storeMatch && isActiveStatus(lastOrder.status);
 
   return (
     <div>
-      {lastOrder && (
+      {showBanner ? (
         <div
           style={{
             position: "sticky",
             top: 0,
             zIndex: 50,
-            padding: 12,
-            background: "#fff8db",
-            borderBottom: "1px solid #f0d98a",
+            padding: 10,
+            background: "rgba(17,24,39,0.92)",
+            borderBottom: "1px solid rgba(255,255,255,0.10)",
+            color: "white",
             display: "flex",
             gap: 10,
             alignItems: "center",
             justifyContent: "space-between",
+            backdropFilter: "blur(8px)",
           }}
         >
-          <div>
-            진행 중인 주문: <b>{lastOrder.displayNo}</b>
+          <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: "-0.01em" }}>
+            진행 중인 주문 <span style={{ opacity: 0.9 }}>·</span>{" "}
+            <span style={{ fontSize: 16 }}>{lastOrder.displayNo}</span>{" "}
+            <span style={{ opacity: 0.8, fontWeight: 800, marginLeft: 6 }}>
+              ({statusLabel(lastOrder.status)})
+            </span>
           </div>
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <Link
-              href={`/status?${statusParams}`}
-              style={{
-                padding: "8px 10px",
-                background: "black",
-                color: "white",
-                borderRadius: 6,
-                textDecoration: "none",
-              }}
-            >
-              상태 보기
-            </Link>
-
-            <button
-              onClick={clear}
-              style={{
-                padding: "8px 10px",
-                background: "white",
-                border: "1px solid #999",
-                borderRadius: 6,
-              }}
-            >
-              닫기
-            </button>
-          </div>
+          <Link
+            href={`/status?store=${encodeURIComponent(currentStoreId)}&orderId=${encodeURIComponent(
+              lastOrder.id
+            )}`}
+            style={{
+              padding: "8px 10px",
+              background: "white",
+              color: "#111827",
+              borderRadius: 10,
+              textDecoration: "none",
+              fontWeight: 950,
+              fontSize: 13,
+              whiteSpace: "nowrap",
+            }}
+          >
+            상태 보기
+          </Link>
         </div>
-      )}
+      ) : null}
 
       {children}
     </div>

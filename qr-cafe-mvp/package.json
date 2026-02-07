@@ -9,9 +9,13 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.93.3",
     "next": "16.1.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-daum-postcode": "^3.2.0",
+    "react-dom": "19.2.3",
+    "styled-jsx": "^5.1.7"
   },
   "devDependencies": {
     "@types/node": "^20",
