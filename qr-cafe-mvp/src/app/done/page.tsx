@@ -83,6 +83,24 @@ export default function DonePage() {
   const [order, setOrder] = useState<OrderView | null>(null);
   const [errMsg, setErrMsg] = useState<string>("");
 
+  const storeIdForLinks = useMemo(() => {
+    if (storeFromQuery) return resolveStoreId(storeFromQuery);
+    try {
+      return resolveStoreId((localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim());
+    } catch {
+      return resolveStoreId("");
+    }
+  }, [storeFromQuery]);
+
+  const accessTokenForLinks = useMemo(() => {
+    if (accessTokenFromQuery) return accessTokenFromQuery;
+    try {
+      return (localStorage.getItem(lsLastOrderTokenKey(storeIdForLinks)) || "").trim();
+    } catch {
+      return "";
+    }
+  }, [accessTokenFromQuery, storeIdForLinks]);
+
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -147,26 +165,6 @@ export default function DonePage() {
       </main>
     );
   }
-
-  const storeIdForLinks = useMemo(() => {
-    if (storeFromQuery) return resolveStoreId(storeFromQuery);
-    try {
-      return resolveStoreId(
-        (localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim()
-      );
-    } catch {
-      return resolveStoreId("");
-    }
-  }, [storeFromQuery]);
-
-  const accessTokenForLinks = useMemo(() => {
-    if (accessTokenFromQuery) return accessTokenFromQuery;
-    try {
-      return (localStorage.getItem(lsLastOrderTokenKey(storeIdForLinks)) || "").trim();
-    } catch {
-      return "";
-    }
-  }, [accessTokenFromQuery, storeIdForLinks]);
 
   if (!order) {
     return (
