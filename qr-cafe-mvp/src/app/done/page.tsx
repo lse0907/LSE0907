@@ -148,6 +148,26 @@ export default function DonePage() {
     );
   }
 
+  const storeIdForLinks = useMemo(() => {
+    if (storeFromQuery) return resolveStoreId(storeFromQuery);
+    try {
+      return resolveStoreId(
+        (localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim()
+      );
+    } catch {
+      return resolveStoreId("");
+    }
+  }, [storeFromQuery]);
+
+  const accessTokenForLinks = useMemo(() => {
+    if (accessTokenFromQuery) return accessTokenFromQuery;
+    try {
+      return (localStorage.getItem(lsLastOrderTokenKey(storeIdForLinks)) || "").trim();
+    } catch {
+      return "";
+    }
+  }, [accessTokenFromQuery, storeIdForLinks]);
+
   if (!order) {
     return (
       <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
@@ -176,18 +196,6 @@ export default function DonePage() {
       </main>
     );
   }
-
-  const storeIdForLinks = resolveStoreId(
-    storeFromQuery || (localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim()
-  );
-  const accessTokenForLinks = useMemo(() => {
-    if (accessTokenFromQuery) return accessTokenFromQuery;
-    try {
-      return (localStorage.getItem(lsLastOrderTokenKey(storeIdForLinks)) || "").trim();
-    } catch {
-      return "";
-    }
-  }, [accessTokenFromQuery, storeIdForLinks]);
 
   return (
     <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
