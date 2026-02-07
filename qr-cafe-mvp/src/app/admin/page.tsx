@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app/lib/currentStore";
 
@@ -34,6 +34,7 @@ function slugifyStoreId(input: string) {
 
 export default function AdminHomePage() {
   const router = useRouter();
+  const sp = useSearchParams();
 
   const [booting, setBooting] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -41,7 +42,7 @@ export default function AdminHomePage() {
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [members, setMembers] = useState<MemberRow[]>([]);
 
-  const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(null);
+  const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
 
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -118,7 +119,11 @@ export default function AdminHomePage() {
         await loadMyStores(u.id);
 
         const saved = getCurrentStoreId();
-        if (saved) setSelectedStoreIdState(saved);
+        const fromQuery = (sp.get("store") || "").trim();
+        const preferred = fromQuery || saved;
+        if (preferred) {
+          setSelectedStoreId(preferred);
+        }
       } catch (e: any) {
         console.error("[admin] load stores error:", e?.message || e);
         setMsg(`매장 목록 로드 실패: ${String(e?.message || e)}`);
@@ -127,7 +132,7 @@ export default function AdminHomePage() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sp]);
 
   useEffect(() => {
     if (!stores.length) {
@@ -135,11 +140,12 @@ export default function AdminHomePage() {
       clearCurrentStoreId();
       return;
     }
-    if (!selectedStoreId || !stores.some((s) => s.store_id === selectedStoreId)) {
-      setSelectedStoreId(stores[0].store_id);
+    if (selectedStoreId && stores.some((s) => s.store_id === selectedStoreId)) {
+      return;
     }
+    setSelectedStoreId(stores[0].store_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stores]);
+  }, [stores, selectedStoreId]);
 
   useEffect(() => {
     if (!createName.trim()) return;
