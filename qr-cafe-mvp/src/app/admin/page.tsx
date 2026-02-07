@@ -43,6 +43,8 @@ export default function AdminHomePage() {
   const [members, setMembers] = useState<MemberRow[]>([]);
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
+  const [activeTab, setActiveTab] = useState<"stats" | "ops" | "settings">("stats");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -234,73 +236,38 @@ export default function AdminHomePage() {
       <header className="topbar">
         <div>
           <h1 className="h1">관리자</h1>
-          <p className="desc">
-            먼저 <b>매장을 선택</b>한 뒤 메뉴/옵션/QR/통계/직원 화면으로 들어가세요.
-          </p>
+          <p className="desc">모바일에 맞춘 탭 화면입니다. 먼저 매장을 선택하세요.</p>
         </div>
 
-        <div className="chipRow">
-          <a className="chip chipGhost" href="/logout">
-            로그아웃
-          </a>
-          <a className="chip" href="/menu">
-            고객 화면
-          </a>
+        <div className="menuWrap">
+          <button className="menuBtn" onClick={() => setMenuOpen((prev) => !prev)} aria-label="메뉴 열기">
+            ⋯
+          </button>
+          {menuOpen ? (
+            <div className="menuPanel">
+              <a className="menuItem" href="/menu">
+                고객 화면
+              </a>
+              <a className="menuItem" href="/logout">
+                로그아웃
+              </a>
+            </div>
+          ) : null}
         </div>
       </header>
 
       {msg ? <div className="alert">{msg}</div> : null}
 
-      {/* ===== 매장 생성 ===== */}
+      {/* ===== 매장 선택 ===== */}
       <section className="card">
         <div className="cardHead">
-          <h2 className="cardTitle">매장 생성</h2>
-          <span className="pill">owner 자동 등록</span>
-        </div>
-
-        <div className="formGrid">
-          <div className="field">
-            <div className="label">매장명</div>
-            <input
-              className="input"
-              value={createName}
-              onChange={(e) => {
-                setCreateName(e.target.value);
-                setCreateId("");
-              }}
-              placeholder="예: 테스트 매장"
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">매장 ID (URL/DB 키)</div>
-            <input
-              className="input"
-              value={createId}
-              onChange={(e) => setCreateId(e.target.value)}
-              placeholder="예: ximen"
-            />
-            <div className="hint">영문/숫자/하이픈 권장. 나중에 QR/데이터 키로 사용합니다.</div>
-          </div>
-        </div>
-
-        <div className="btnRow">
-          <button className="btn btnPrimary" onClick={onCreateStore} disabled={creating}>
-            {creating ? "생성 중..." : "매장 등록"}
-          </button>
-        </div>
-      </section>
-
-      {/* ===== 내 매장 목록 ===== */}
-      <section className="card">
-        <div className="cardHead">
-          <h2 className="cardTitle">내 매장</h2>
+          <h2 className="cardTitle">매장 선택</h2>
           <span className="pill">{stores.length}개</span>
         </div>
 
         {stores.length === 0 ? (
           <p className="muted" style={{ marginTop: 10 }}>
-            아직 등록된 매장이 없습니다. 위에서 매장을 먼저 생성하세요.
+            아직 등록된 매장이 없습니다. 설정 탭에서 매장을 먼저 생성하세요.
           </p>
         ) : (
           <div className="storeList">
@@ -327,52 +294,115 @@ export default function AdminHomePage() {
         )}
       </section>
 
-      {/* ===== 선택된 매장 기능 ===== */}
+      {/* ===== 관리자 탭 ===== */}
       <section className="card">
-        <div className="cardHead">
-          <h2 className="cardTitle">운영 기능</h2>
+        <div className="tabHeader">
+          <button
+            className={`tabBtn ${activeTab === "stats" ? "tabBtnOn" : ""}`}
+            onClick={() => setActiveTab("stats")}
+          >
+            통계
+          </button>
+          <button
+            className={`tabBtn ${activeTab === "ops" ? "tabBtnOn" : ""}`}
+            onClick={() => setActiveTab("ops")}
+          >
+            운영
+          </button>
+          <button
+            className={`tabBtn ${activeTab === "settings" ? "tabBtnOn" : ""}`}
+            onClick={() => setActiveTab("settings")}
+          >
+            설정
+          </button>
+        </div>
+
+        <div className="tabMeta">
           <span className="pill">
             {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
             {selectedRole ? ` · ${selectedRole}` : ""}
           </span>
+          <span className="muted">탭을 눌러 화면을 전환하세요.</span>
         </div>
 
-        <p className="desc" style={{ marginTop: 10 }}>
-          아래 기능은 <b>선택된 매장</b> 기준으로만 동작하도록 갈 거야. (다중 매장 대비)
-        </p>
+        {activeTab === "stats" ? (
+          <div className="cards">
+            <button className="cardBtn" onClick={() => go("/admin/stats")} disabled={!selectedStoreId}>
+              <div className="cardBtnTitle">통계 바로가기</div>
+              <div className="cardBtnDesc">매출/기간별 CSV 다운로드를 확인합니다.</div>
+            </button>
+          </div>
+        ) : null}
 
-        <div className="cards">
-          <button className="cardBtn" onClick={() => go("/admin/store")} disabled={!selectedStoreId}>
-            <div className="cardBtnTitle">매장 정보</div>
-            <div className="cardBtnDesc">상호/안내문구/로고 등 기본 정보를 관리합니다.</div>
-          </button>
+        {activeTab === "ops" ? (
+          <div className="cards">
+            <button className="cardBtn" onClick={() => go("/admin/menu")} disabled={!selectedStoreId}>
+              <div className="cardBtnTitle">메뉴 관리</div>
+              <div className="cardBtnDesc">메뉴/가격/이미지/옵션 연결 + 노출 순서를 관리합니다.</div>
+            </button>
 
-          <button className="cardBtn" onClick={() => go("/admin/menu")} disabled={!selectedStoreId}>
-            <div className="cardBtnTitle">메뉴 관리</div>
-            <div className="cardBtnDesc">메뉴/가격/이미지/옵션 연결 + 노출 순서를 관리합니다.</div>
-          </button>
+            <button className="cardBtn" onClick={() => go("/admin/options")} disabled={!selectedStoreId}>
+              <div className="cardBtnTitle">옵션 관리</div>
+              <div className="cardBtnDesc">옵션 그룹/옵션 항목을 등록합니다.</div>
+            </button>
 
-          <button className="cardBtn" onClick={() => go("/admin/options")} disabled={!selectedStoreId}>
-            <div className="cardBtnTitle">옵션 관리</div>
-            <div className="cardBtnDesc">옵션 그룹/옵션 항목을 등록합니다.</div>
-          </button>
+            <button className="cardBtn" onClick={() => go("/admin/qr")} disabled={!selectedStoreId}>
+              <div className="cardBtnTitle">QR 생성</div>
+              <div className="cardBtnDesc">테이블/카운터 QR 생성 후 인쇄용 파일을 만듭니다.</div>
+            </button>
+          </div>
+        ) : null}
 
-          <button className="cardBtn" onClick={() => go("/admin/qr")} disabled={!selectedStoreId}>
-            <div className="cardBtnTitle">QR 생성</div>
-            <div className="cardBtnDesc">테이블/카운터 QR 생성 후 인쇄용 파일을 만듭니다.</div>
-          </button>
+        {activeTab === "settings" ? (
+          <div className="cards">
+            <button className="cardBtn" onClick={() => go("/admin/store")} disabled={!selectedStoreId}>
+              <div className="cardBtnTitle">매장 정보</div>
+              <div className="cardBtnDesc">상호/안내문구/로고 등 기본 정보를 관리합니다.</div>
+            </button>
 
-          {/* ✅ 복구: 통계 메뉴 */}
-          <button className="cardBtn" onClick={() => go("/admin/stats")} disabled={!selectedStoreId}>
-            <div className="cardBtnTitle">통계</div>
-            <div className="cardBtnDesc">일/주/월 매출 및 기간별 CSV 다운로드를 확인합니다.</div>
-          </button>
+            <div className="cardPanel">
+              <div className="cardPanelHead">
+                <div>
+                  <div className="cardBtnTitle">매장 생성</div>
+                  <div className="cardBtnDesc">새 매장을 만들고 자동으로 owner가 등록됩니다.</div>
+                </div>
+                <span className="pill">owner 자동 등록</span>
+              </div>
 
-          <button className="cardBtn" onClick={() => go("/staff")} disabled={!selectedStoreId}>
-            <div className="cardBtnTitle">직원 화면</div>
-            <div className="cardBtnDesc">선택된 매장 주문을 처리합니다.</div>
-          </button>
-        </div>
+              <div className="formGrid">
+                <div className="field">
+                  <div className="label">매장명</div>
+                  <input
+                    className="input"
+                    value={createName}
+                    onChange={(e) => {
+                      setCreateName(e.target.value);
+                      setCreateId("");
+                    }}
+                    placeholder="예: 테스트 매장"
+                  />
+                </div>
+
+                <div className="field">
+                  <div className="label">매장 ID (URL/DB 키)</div>
+                  <input
+                    className="input"
+                    value={createId}
+                    onChange={(e) => setCreateId(e.target.value)}
+                    placeholder="예: ximen"
+                  />
+                  <div className="hint">영문/숫자/하이픈 권장. 나중에 QR/데이터 키로 사용합니다.</div>
+                </div>
+              </div>
+
+              <div className="btnRow">
+                <button className="btn btnPrimary" onClick={onCreateStore} disabled={creating}>
+                  {creating ? "생성 중..." : "매장 등록"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {!selectedStoreId ? (
           <div className="alert" style={{ marginTop: 12 }}>
@@ -410,6 +440,43 @@ body {
   align-items:flex-end;
   justify-content:space-between;
   gap:12px;
+}
+.menuWrap{
+  position:relative;
+}
+.menuBtn{
+  height:38px;
+  width:44px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-size:22px;
+  font-weight:900;
+  cursor:pointer;
+}
+.menuPanel{
+  position:absolute;
+  top:46px;
+  right:0;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:14px;
+  min-width:140px;
+  box-shadow:0 8px 24px rgba(15,23,42,0.12);
+  padding:6px;
+  display:grid;
+  gap:4px;
+  z-index:10;
+}
+.menuItem{
+  padding:10px 12px;
+  border-radius:10px;
+  font-weight:900;
+  color:var(--text);
+  text-decoration:none;
+}
+.menuItem:hover{
+  background:#f3f4f6;
 }
 .h1{
   margin:0;
@@ -466,29 +533,31 @@ body {
   padding:10px 12px;
   font-weight:900;
 }
-.chipRow{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
+.tabHeader{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:8px;
 }
-.chip{
-  height:40px;
-  padding:0 16px;
-  border-radius:14px;
+.tabBtn{
+  border:1px solid var(--line);
+  background:#fff;
+  padding:10px 0;
+  border-radius:12px;
+  font-weight:950;
+  cursor:pointer;
+}
+.tabBtnOn{
   background:var(--brand);
   color:#fff;
-  font-size:14px;
-  font-weight:950;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  text-decoration:none;
-  border:1px solid var(--brand);
+  border-color:var(--brand);
 }
-.chipGhost{
-  background:#fff;
-  color:var(--brand);
-  border:1px solid var(--line);
+.tabMeta{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  margin-top:12px;
+  flex-wrap:wrap;
 }
 .formGrid{
   display:grid;
@@ -570,6 +639,20 @@ body {
   display:grid;
   gap:12px;
   margin-top:12px;
+}
+.cardPanel{
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:14px;
+  background:#fff;
+  display:grid;
+  gap:12px;
+}
+.cardPanelHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
 }
 .cardBtn{
   text-align:left;
