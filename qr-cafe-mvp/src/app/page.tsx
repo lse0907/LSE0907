@@ -265,25 +265,11 @@ function HomeStartInner() {
         .btnGhost:active {
           transform: translateY(1px);
         }
-        .summary {
-          font-size: 14px;
-          font-weight: 800;
-          color: var(--text);
-        }
         .descDetails {
           border: 1px dashed var(--line);
           border-radius: 12px;
           padding: 10px 12px;
           background: #fafafa;
-        }
-        .descDetails summary {
-          font-weight: 900;
-          font-size: 13px;
-          color: var(--muted);
-          cursor: pointer;
-        }
-        .descDetails[open] summary {
-          margin-bottom: 6px;
         }
 
         @media (max-width: 480px) {
@@ -340,12 +326,9 @@ function HomeStartInner() {
               주문하기
             </button>
 
-            <div className="summary">{STORE_DESC.split("\n")[0]}</div>
-
-            <details className="descDetails">
-              <summary>매장 소개</summary>
+            <div className="descDetails">
               <p className="desc">{STORE_DESC}</p>
-            </details>
+            </div>
 
             {/* ✅ “주문 상태 확인” 버튼은 조건부로만 표시(ready 이후 숨김 포함) */}
             {showStatusButton ? (
