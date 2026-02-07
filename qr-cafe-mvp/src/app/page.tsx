@@ -275,15 +275,13 @@ function HomeStartInner() {
           border-radius: 12px;
           padding: 10px 12px;
           background: #fafafa;
+          display: grid;
+          gap: 6px;
         }
-        .descDetails summary {
+        .descLabel {
           font-weight: 900;
           font-size: 13px;
           color: var(--muted);
-          cursor: pointer;
-        }
-        .descDetails[open] summary {
-          margin-bottom: 6px;
         }
 
         @media (max-width: 480px) {
@@ -342,10 +340,10 @@ function HomeStartInner() {
 
             <div className="summary">{STORE_DESC.split("\n")[0]}</div>
 
-            <details className="descDetails">
-              <summary>매장 소개</summary>
+            <div className="descDetails">
+              <span className="descLabel">매장 소개</span>
               <p className="desc">{STORE_DESC}</p>
-            </details>
+            </div>
 
             {/* ✅ “주문 상태 확인” 버튼은 조건부로만 표시(ready 이후 숨김 포함) */}
             {showStatusButton ? (
