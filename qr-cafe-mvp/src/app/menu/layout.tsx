@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { getStoreIdFromSearchParams, lsLastOrderIdKey, lsOrdersKey } from "@/app/lib/storeScope";
 
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
 
@@ -13,13 +14,11 @@ type OrderRecord = {
   status: OrderStatus;
 };
 
-const LS_ORDERS_KEY = "qrCafeOrders";
-const LS_LAST_ORDER_ID_KEY = "qrCafeLastOrderId";
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 
-function loadOrders(): OrderRecord[] {
+function loadOrders(storeId: string): OrderRecord[] {
   try {
-    const raw = localStorage.getItem(LS_ORDERS_KEY);
+    const raw = localStorage.getItem(lsOrdersKey(storeId));
     if (!raw) return [];
     const list = JSON.parse(raw);
     return Array.isArray(list) ? list : [];
@@ -40,16 +39,9 @@ function statusLabel(s: OrderStatus) {
   return "취소";
 }
 
-function envStoreId() {
-  return (process.env.NEXT_PUBLIC_STORE_ID || "ximen").trim();
-}
-
 export default function MenuLayout({ children }: { children: React.ReactNode }) {
   const sp = useSearchParams();
-  const currentStoreId = useMemo(() => {
-    const s = (sp.get("store") || "").trim();
-    return s || envStoreId();
-  }, [sp]);
+  const currentStoreId = useMemo(() => getStoreIdFromSearchParams(sp), [sp]);
 
   const [lastOrderId, setLastOrderId] = useState<string>("");
   const [lastStoreId, setLastStoreId] = useState<string>("");
@@ -58,7 +50,7 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     const read = () => {
       try {
-        setLastOrderId((localStorage.getItem(LS_LAST_ORDER_ID_KEY) || "").trim());
+        setLastOrderId((localStorage.getItem(lsLastOrderIdKey(currentStoreId)) || "").trim());
       } catch {
         setLastOrderId("");
       }
@@ -72,9 +64,9 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
     read();
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key === LS_LAST_ORDER_ID_KEY) read();
+      if (e.key?.startsWith("qrCafeLastOrderId:")) read();
+      if (e.key?.startsWith("qrCafeOrders:")) read();
       if (e.key === LS_LAST_STORE_ID_KEY) read();
-      if (e.key === LS_ORDERS_KEY) read();
     };
     window.addEventListener("storage", onStorage);
 
@@ -85,13 +77,13 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
       window.removeEventListener("storage", onStorage);
       window.clearInterval(t);
     };
-  }, []);
+  }, [currentStoreId]);
 
   const lastOrder = useMemo(() => {
     if (!lastOrderId) return null;
-    const list = loadOrders();
+    const list = loadOrders(currentStoreId);
     return list.find((o) => o.id === lastOrderId) || null;
-  }, [lastOrderId]);
+  }, [currentStoreId, lastOrderId]);
 
   // ✅ 멀티매장 핵심: 현재 store와 lastStore가 같을 때만 배너 표시
   const storeMatch = !!lastStoreId && lastStoreId === currentStoreId;

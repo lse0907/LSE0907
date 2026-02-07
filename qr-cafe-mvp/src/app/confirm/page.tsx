@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { nextDailySequence, format4, todayKey } from "../lib/orderNumber";
 import { supabase } from "@/app/lib/supabaseClient";
+import { getStoreIdFromSearchParams, lsLastOrderIdKey, lsOrdersKey } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
@@ -60,17 +61,10 @@ type OrderRecord = {
   status: OrderStatus;
 };
 
-const LS_ORDERS_KEY = "qrCafeOrders";
-const LS_LAST_ORDER_ID_KEY = "qrCafeLastOrderId";
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString();
-}
-
-function getStoreIdFromSearchParams(sp: ReturnType<typeof useSearchParams>) {
-  const s = (sp.get("store") || "").trim();
-  return s || (process.env.NEXT_PUBLIC_STORE_ID || "ximen").trim();
 }
 
 function uuid() {
@@ -106,9 +100,9 @@ function parseCart(cartParam: string | null): CartLine[] {
   }
 }
 
-function loadOrders(): OrderRecord[] {
+function loadOrders(storeId: string): OrderRecord[] {
   try {
-    const raw = localStorage.getItem(LS_ORDERS_KEY);
+    const raw = localStorage.getItem(lsOrdersKey(storeId));
     if (!raw) return [];
     const list = JSON.parse(raw);
     return Array.isArray(list) ? list : [];
@@ -117,8 +111,8 @@ function loadOrders(): OrderRecord[] {
   }
 }
 
-function saveOrders(list: OrderRecord[]) {
-  localStorage.setItem(LS_ORDERS_KEY, JSON.stringify(list));
+function saveOrders(storeId: string, list: OrderRecord[]) {
+  localStorage.setItem(lsOrdersKey(storeId), JSON.stringify(list));
 }
 
 function isDuplicateDisplayNoError(msg: string) {
@@ -295,12 +289,12 @@ export default function ConfirmPage() {
         status: "new",
       };
 
-      const list = loadOrders();
+      const list = loadOrders(storeId);
       list.unshift(order);
-      saveOrders(list);
+      saveOrders(storeId, list);
 
       // ✅ 핵심: lastOrderId + lastStoreId 함께 저장
-      localStorage.setItem(LS_LAST_ORDER_ID_KEY, orderId);
+      localStorage.setItem(lsLastOrderIdKey(storeId), orderId);
       localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
 
       router.push(

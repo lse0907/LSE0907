@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { getCurrentStoreId } from "@/app/lib/currentStore";
 import { loadStoreProfile, saveStoreProfile, useStoreProfile } from "@/app/lib/storeProfile";
 
 function clampOverlay(v: number) {
@@ -20,7 +22,10 @@ function pickCore(p: any) {
 }
 
 export default function AdminStorePage() {
-  const { profile, setProfile } = useStoreProfile();
+  const router = useRouter();
+  const sp = useSearchParams();
+  const [storeId, setStoreId] = useState<string>("");
+  const { profile, setProfile } = useStoreProfile(storeId);
 
   // ✅ 폼 상태(편집용)
   const [draft, setDraft] = useState(profile);
@@ -31,6 +36,17 @@ export default function AdminStorePage() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   // ✅ profile이 외부에서 바뀌면 draft도 동기화
+  useEffect(() => {
+    const q = (sp.get("store") || "").trim();
+    const saved = (getCurrentStoreId() || "").trim();
+    const sid = q || saved;
+    if (!sid) {
+      router.replace("/admin");
+      return;
+    }
+    setStoreId(sid);
+  }, [router, sp]);
+
   useEffect(() => {
     setDraft(profile);
   }, [profile]);
@@ -58,6 +74,10 @@ export default function AdminStorePage() {
   }, [strength]);
 
   const onSave = async () => {
+    if (!storeId) {
+      setSaveState("error");
+      return;
+    }
     setSaving(true);
     setSaveState("idle");
 
@@ -65,13 +85,13 @@ export default function AdminStorePage() {
       // ✅ 핵심 필드만 저장 의도를 고정
       const core = pickCore(draft);
 
-      saveStoreProfile({
+      saveStoreProfile(storeId, {
         ...(draft as any),
         ...core,
       });
 
       // ✅ 즉시 반영
-      const fresh = loadStoreProfile();
+      const fresh = loadStoreProfile(storeId);
       setProfile(fresh);
 
       setSaveState("saved");

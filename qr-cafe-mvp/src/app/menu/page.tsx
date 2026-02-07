@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useMenuItems, MenuItem } from "@/app/lib/menuStore";
 import { useStoreProfile } from "@/app/lib/storeProfile";
 import { supabase } from "@/app/lib/supabaseClient";
+import { getStoreIdFromSearchParams } from "@/app/lib/storeScope";
 
 type SelectedOptionItem = {
   id: string;
@@ -79,12 +80,6 @@ function toInt(v: any, fallback = 0) {
   return Math.floor(n);
 }
 
-// ✅ store 우선순위: URL(store) > env fallback
-function getStoreIdFromSearchParams(sp: ReturnType<typeof useSearchParams>) {
-  const s = (sp.get("store") || "").trim();
-  return s || (process.env.NEXT_PUBLIC_STORE_ID || "ximen").trim();
-}
-
 export default function MenuPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -95,8 +90,8 @@ export default function MenuPage() {
   // ⚠️ useStoreProfile/useMenuItems는 아직 내부가 "store별"이 아님(로컬스토리지/ENV 기준).
   //    그래서 이 페이지에서 storeId 바뀔 때마다 refresh를 확실히 호출해주고,
   //    옵션은 여기서 직접 storeId 기반으로 쿼리함.
-  const { profile } = useStoreProfile();
-  const { items: menuItems, loading: menuLoading, refresh: refreshMenu } = useMenuItems();
+  const { profile } = useStoreProfile(storeId);
+  const { items: menuItems, loading: menuLoading, refresh: refreshMenu } = useMenuItems(storeId);
 
   const table = (sp.get("table") || "").trim();
   const isTableQr = !!table;
