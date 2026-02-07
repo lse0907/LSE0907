@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app/lib/currentStore";
+import { DEFAULT_STORE_PROFILE, saveStoreProfile } from "@/app/lib/storeProfile";
 
 type StoreRow = {
   store_id: string;
@@ -32,6 +33,11 @@ function slugifyStoreId(input: string) {
   return out.slice(0, 40);
 }
 
+function clampOverlay(v: number) {
+  if (!Number.isFinite(v)) return DEFAULT_STORE_PROFILE.mainImageOverlayStrength;
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+
 export default function AdminHomePage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -45,10 +51,15 @@ export default function AdminHomePage() {
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [activeTab, setActiveTab] = useState<"stats" | "ops" | "settings">("stats");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrollToCreate, setScrollToCreate] = useState(false);
 
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createId, setCreateId] = useState("");
+  const [createDesc, setCreateDesc] = useState(DEFAULT_STORE_PROFILE.storeDesc);
+  const [createMainImage, setCreateMainImage] = useState(DEFAULT_STORE_PROFILE.mainImage);
+  const [createLogoImage, setCreateLogoImage] = useState(DEFAULT_STORE_PROFILE.logoImage);
+  const [createOverlayStrength, setCreateOverlayStrength] = useState(DEFAULT_STORE_PROFILE.mainImageOverlayStrength);
   const [msg, setMsg] = useState<string>("");
 
   const selectedStore = useMemo(() => {
@@ -194,11 +205,24 @@ export default function AdminHomePage() {
 
       if (insMem.error) throw insMem.error;
 
+      saveStoreProfile(id, {
+        storeName: name,
+        storeDesc: createDesc.trim() || DEFAULT_STORE_PROFILE.storeDesc,
+        mainImage: createMainImage.trim() || DEFAULT_STORE_PROFILE.mainImage,
+        logoImage: createLogoImage.trim(),
+        mainImageOverlayStrength: clampOverlay(createOverlayStrength),
+        extra: { ...DEFAULT_STORE_PROFILE.extra },
+      });
+
       await loadMyStores(userId);
       setSelectedStoreId(id);
 
       setCreateName("");
       setCreateId("");
+      setCreateDesc(DEFAULT_STORE_PROFILE.storeDesc);
+      setCreateMainImage(DEFAULT_STORE_PROFILE.mainImage);
+      setCreateLogoImage(DEFAULT_STORE_PROFILE.logoImage);
+      setCreateOverlayStrength(DEFAULT_STORE_PROFILE.mainImageOverlayStrength);
       setMsg("매장이 생성되었습니다 ✅");
     } catch (e: any) {
       console.error("[admin] create store error:", e?.message || e);
@@ -216,6 +240,21 @@ export default function AdminHomePage() {
     }
     router.push(`${path}?store=${encodeURIComponent(selectedStoreId)}`);
   };
+
+  const openCreateTab = () => {
+    setActiveTab("settings");
+    setScrollToCreate(true);
+  };
+
+  useEffect(() => {
+    if (!scrollToCreate) return;
+    const target = document.getElementById("create-store-panel");
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    const timer = setTimeout(() => setScrollToCreate(false), 300);
+    return () => clearTimeout(timer);
+  }, [scrollToCreate]);
 
   if (booting) {
     return (
@@ -266,9 +305,14 @@ export default function AdminHomePage() {
         </div>
 
         {stores.length === 0 ? (
-          <p className="muted" style={{ marginTop: 10 }}>
-            아직 등록된 매장이 없습니다. 설정 탭에서 매장을 먼저 생성하세요.
-          </p>
+          <div className="emptyBox">
+            <p className="muted">
+              아직 등록된 매장이 없습니다. 매장을 만들면서 기본 정보까지 함께 입력해 주세요.
+            </p>
+            <button className="btn btnPrimary" onClick={openCreateTab}>
+              매장 만들기
+            </button>
+          </div>
         ) : (
           <div className="storeList">
             {stores.map((s) => {
@@ -322,7 +366,7 @@ export default function AdminHomePage() {
             {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
             {selectedRole ? ` · ${selectedRole}` : ""}
           </span>
-          <span className="muted">탭을 눌러 화면을 전환하세요.</span>
+          <span className="muted">순서: 매장 만들기 → 매장 선택 → 메뉴/옵션</span>
         </div>
 
         {activeTab === "stats" ? (
@@ -355,16 +399,11 @@ export default function AdminHomePage() {
 
         {activeTab === "settings" ? (
           <div className="cards">
-            <button className="cardBtn" onClick={() => go("/admin/store")} disabled={!selectedStoreId}>
-              <div className="cardBtnTitle">매장 정보</div>
-              <div className="cardBtnDesc">상호/안내문구/로고 등 기본 정보를 관리합니다.</div>
-            </button>
-
-            <div className="cardPanel">
+            <div className="cardPanel" id="create-store-panel">
               <div className="cardPanelHead">
                 <div>
-                  <div className="cardBtnTitle">매장 생성</div>
-                  <div className="cardBtnDesc">새 매장을 만들고 자동으로 owner가 등록됩니다.</div>
+                  <div className="cardBtnTitle">매장 만들기 + 정보 입력</div>
+                  <div className="cardBtnDesc">매장을 만들면서 기본 정보를 함께 등록합니다.</div>
                 </div>
                 <span className="pill">owner 자동 등록</span>
               </div>
@@ -395,12 +434,68 @@ export default function AdminHomePage() {
                 </div>
               </div>
 
+              <div className="field">
+                <div className="label">매장 설명</div>
+                <textarea
+                  className="textarea"
+                  value={createDesc}
+                  onChange={(e) => setCreateDesc(e.target.value)}
+                  placeholder="예) QR로 간편하게 주문하고 기다리세요..."
+                />
+              </div>
+
+              <div className="field">
+                <div className="label">대표 이미지 경로 (public 기준)</div>
+                <input
+                  className="input"
+                  value={createMainImage}
+                  onChange={(e) => setCreateMainImage(e.target.value)}
+                  placeholder='예: "/hero.jpg"'
+                />
+              </div>
+
+              <div className="field">
+                <div className="label">로고 이미지 경로 (선택)</div>
+                <input
+                  className="input"
+                  value={createLogoImage}
+                  onChange={(e) => setCreateLogoImage(e.target.value)}
+                  placeholder='예: "/logo.png" (없으면 빈칸)'
+                />
+              </div>
+
+              <div className="field">
+                <div className="label">대표이미지 오버레이 강도 (0~100)</div>
+                <div className="sliderRow">
+                  <input
+                    className="range"
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={createOverlayStrength}
+                    onChange={(e) => setCreateOverlayStrength(clampOverlay(Number(e.target.value)))}
+                  />
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    value={String(createOverlayStrength)}
+                    onChange={(e) => setCreateOverlayStrength(clampOverlay(Number(e.target.value)))}
+                  />
+                </div>
+                <div className="hint">0 = 거의 원본 / 100 = 아주 어둡게</div>
+              </div>
+
               <div className="btnRow">
                 <button className="btn btnPrimary" onClick={onCreateStore} disabled={creating}>
                   {creating ? "생성 중..." : "매장 등록"}
                 </button>
               </div>
             </div>
+
+            <button className="cardBtn" onClick={() => go("/admin/store")} disabled={!selectedStoreId}>
+              <div className="cardBtnTitle">매장 정보 수정</div>
+              <div className="cardBtnDesc">생성 후에 기본 정보를 수정할 때 사용합니다.</div>
+            </button>
           </div>
         ) : null}
 
@@ -538,6 +633,12 @@ body {
   grid-template-columns:repeat(3, 1fr);
   gap:8px;
 }
+.emptyBox{
+  margin-top:12px;
+  display:grid;
+  gap:10px;
+  align-items:start;
+}
 .tabBtn{
   border:1px solid var(--line);
   background:#fff;
@@ -558,6 +659,26 @@ body {
   gap:8px;
   margin-top:12px;
   flex-wrap:wrap;
+}
+.textarea{
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-weight:800;
+  width:100%;
+  min-height:88px;
+  resize:vertical;
+  white-space:pre-wrap;
+}
+.sliderRow{
+  display:grid;
+  grid-template-columns:1fr 90px;
+  gap:10px;
+  align-items:center;
+}
+.range{
+  width:100%;
 }
 .formGrid{
   display:grid;
