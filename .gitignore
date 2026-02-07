@@ -1,0 +1,11 @@
+cd "$(git rev-parse --show-toplevel)"
+cat >> .gitignore << 'EOF'
+
+# dependencies
+node_modules/
+**/node_modules/
+
+# env
+.env*
+**/.env*
+EOF
