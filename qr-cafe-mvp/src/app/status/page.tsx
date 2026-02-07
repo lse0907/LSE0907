@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
+import { lsLastOrderIdKey, resolveStoreId } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
@@ -28,7 +29,6 @@ type OrderView = {
   status: OrderStatus;
 };
 
-const LS_LAST_ORDER_ID_KEY = "qrCafeLastOrderId";
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -38,10 +38,6 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   done: "완료",
   canceled: "취소",
 };
-
-function envStoreId() {
-  return (process.env.NEXT_PUBLIC_STORE_ID || "ximen").trim();
-}
 
 function normalizeMode(v: any): OrderMode {
   return v === "takeout" ? "takeout" : "dine-in";
@@ -102,13 +98,17 @@ export default function StatusPage() {
   const lastStatusRef = useRef<Record<string, OrderStatus | undefined>>({});
 
   useEffect(() => {
-    setLastOrderId((localStorage.getItem(LS_LAST_ORDER_ID_KEY) || "").trim());
     setLastStoreId((localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim());
   }, []);
 
   const storeId = useMemo(() => {
-    return storeFromQuery || lastStoreId || envStoreId();
+    return resolveStoreId(storeFromQuery || lastStoreId);
   }, [storeFromQuery, lastStoreId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    setLastOrderId((localStorage.getItem(lsLastOrderIdKey(storeId)) || "").trim());
+  }, [storeId]);
 
   const orderId = useMemo(() => {
     return orderIdFromQuery || lastOrderId || "";
@@ -116,7 +116,7 @@ export default function StatusPage() {
 
   const clearLastOrder = () => {
     try {
-      localStorage.removeItem(LS_LAST_ORDER_ID_KEY);
+      localStorage.removeItem(lsLastOrderIdKey(storeId));
       localStorage.removeItem(LS_LAST_STORE_ID_KEY);
     } catch {}
     setLastOrderId("");

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
+import { lsLastOrderIdKey, resolveStoreId } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
@@ -38,12 +39,7 @@ type OrderView = {
   status: OrderStatus;
 };
 
-const LS_LAST_ORDER_ID_KEY = "qrCafeLastOrderId";
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
-
-function envStoreId() {
-  return (process.env.NEXT_PUBLIC_STORE_ID || "ximen").trim();
-}
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString();
@@ -91,8 +87,12 @@ export default function DonePage() {
       setLoading(true);
       setErrMsg("");
 
-      // 1) orderId 결정
-      const fallbackOrderId = (localStorage.getItem(LS_LAST_ORDER_ID_KEY) || "").trim();
+      // 1) storeId 결정: URL 우선 -> lastStoreId -> env
+      const fallbackStoreId = (localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim();
+      const storeId = resolveStoreId(storeFromQuery || fallbackStoreId);
+
+      // 2) orderId 결정
+      const fallbackOrderId = (localStorage.getItem(lsLastOrderIdKey(storeId)) || "").trim();
       const orderId = orderIdFromQuery || fallbackOrderId;
 
       if (!orderId) {
@@ -100,10 +100,6 @@ export default function DonePage() {
         setLoading(false);
         return;
       }
-
-      // 2) storeId 결정: URL 우선 -> lastStoreId -> env
-      const fallbackStoreId = (localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim();
-      const storeId = storeFromQuery || fallbackStoreId || envStoreId();
 
       // 3) DB 조회 (store 검증)
       const { data, error } = await supabase
@@ -177,7 +173,9 @@ export default function DonePage() {
     );
   }
 
-  const storeIdForLinks = storeFromQuery || (localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim() || envStoreId();
+  const storeIdForLinks = resolveStoreId(
+    storeFromQuery || (localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim()
+  );
 
   return (
     <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>

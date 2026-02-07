@@ -4,14 +4,15 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStoreProfile } from "./lib/storeProfile";
+import { getStoreIdFromSearchParams, lsLastOrderIdKey } from "./lib/storeScope";
 
-const LS_LAST_ORDER_ID_KEY = "qrCafeLastOrderId";
-const LS_ORDER_HIDDEN_KEY = "qrCafeOrderHidden"; // ✅ ready 확인 후 홈에서 숨김
+const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 
 function HomeStartInner() {
   const router = useRouter();
   const sp = useSearchParams();
-  const { profile } = useStoreProfile();
+  const storeId = useMemo(() => getStoreIdFromSearchParams(sp), [sp]);
+  const { profile } = useStoreProfile(storeId);
 
   // ✅ hydration mismatch 방지 + localStorage 안전 처리
   const [mounted, setMounted] = useState(false);
@@ -21,16 +22,17 @@ function HomeStartInner() {
   useEffect(() => {
     setMounted(true);
     try {
-      const v = (localStorage.getItem(LS_LAST_ORDER_ID_KEY) || "").trim();
+      const lastOrderKey = lsLastOrderIdKey(storeId);
+      const v = (localStorage.getItem(lastOrderKey) || "").trim();
       setLastOrderId(v);
 
-      const hidden = (localStorage.getItem(LS_ORDER_HIDDEN_KEY) || "").trim();
+      const hidden = (localStorage.getItem(orderHiddenKey(storeId)) || "").trim();
       setOrderHidden(hidden === "true");
     } catch {
       setLastOrderId("");
       setOrderHidden(false);
     }
-  }, []);
+  }, [storeId]);
 
   // 테이블 QR이면 /?table=3
   const table = useMemo(() => (sp.get("table") || "").trim(), [sp]);
@@ -68,11 +70,12 @@ function HomeStartInner() {
   const onStart = () => {
     // ✅ 새 주문 시작이므로 “숨김” 해제 (다음 주문은 상태 버튼이 다시 뜨게)
     try {
-      localStorage.removeItem(LS_ORDER_HIDDEN_KEY);
+      localStorage.removeItem(orderHiddenKey(storeId));
       setOrderHidden(false);
     } catch {}
 
     const qs = new URLSearchParams();
+    qs.set("store", storeId);
     if (table) qs.set("table", table);
     const suffix = qs.toString();
     router.push(suffix ? `/menu?${suffix}` : "/menu");
@@ -80,7 +83,9 @@ function HomeStartInner() {
 
   const onStatus = () => {
     if (!lastOrderId) return;
-    router.push(`/status?orderId=${encodeURIComponent(lastOrderId)}`);
+    router.push(
+      `/status?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(lastOrderId)}`
+    );
   };
 
   // ✅ 버튼 표시 조건:
@@ -260,6 +265,26 @@ function HomeStartInner() {
         .btnGhost:active {
           transform: translateY(1px);
         }
+        .summary {
+          font-size: 14px;
+          font-weight: 800;
+          color: var(--text);
+        }
+        .descDetails {
+          border: 1px dashed var(--line);
+          border-radius: 12px;
+          padding: 10px 12px;
+          background: #fafafa;
+        }
+        .descDetails summary {
+          font-weight: 900;
+          font-size: 13px;
+          color: var(--muted);
+          cursor: pointer;
+        }
+        .descDetails[open] summary {
+          margin-bottom: 6px;
+        }
 
         @media (max-width: 480px) {
           .hero {
@@ -310,12 +335,17 @@ function HomeStartInner() {
 
       <section className="content">
         <div className="card">
-          <p className="desc">{STORE_DESC}</p>
-
           <div className="ctaRow">
             <button className="btnPrimary" onClick={onStart}>
               주문하기
             </button>
+
+            <div className="summary">{STORE_DESC.split("\n")[0]}</div>
+
+            <details className="descDetails">
+              <summary>매장 소개</summary>
+              <p className="desc">{STORE_DESC}</p>
+            </details>
 
             {/* ✅ “주문 상태 확인” 버튼은 조건부로만 표시(ready 이후 숨김 포함) */}
             {showStatusButton ? (

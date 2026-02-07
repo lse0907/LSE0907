@@ -4,11 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
-import {
-  loadStoreProfile,
-  STORE_PROFILE_UPDATED_EVENT,
-  type StoreProfile,
-} from "@/app/lib/storeProfile";
+import { useStoreProfile } from "@/app/lib/storeProfile";
 
 type QrItem = {
   key: string;
@@ -115,8 +111,7 @@ export default function AdminQrPage() {
   // ✅ 선택 매장
   const [storeId, setStoreId] = useState<string>("");
 
-  // ✅ 단일 소스: storeProfile을 상태로 유지(저장 이벤트 시 즉시 반영)
-  const [profile, setProfile] = useState<StoreProfile | null>(null);
+  const { profile } = useStoreProfile(storeId);
 
   // ✅ 화면에서만 쓰는(선택) 값들
   const [makeCounter, setMakeCounter] = useState(true);
@@ -152,30 +147,12 @@ export default function AdminQrPage() {
   useEffect(() => {
     setOrigin(window.location.origin);
     setSeed(String(Date.now()));
-
-    // ✅ 최초 로드 (지금 단계에서는 storeProfile이 로컬 1개라서 “매장별”로 아직 분리 X)
-    setProfile(loadStoreProfile());
-
-    // ✅ 저장 즉시 반영
-    const onUpdated = () => {
-      setProfile(loadStoreProfile());
-      setSeed(String(Date.now()));
-    };
-    window.addEventListener(STORE_PROFILE_UPDATED_EVENT, onUpdated);
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "qrCafeStoreProfile") {
-        setProfile(loadStoreProfile());
-        setSeed(String(Date.now()));
-      }
-    };
-    window.addEventListener("storage", onStorage);
-
-    return () => {
-      window.removeEventListener(STORE_PROFILE_UPDATED_EVENT, onUpdated);
-      window.removeEventListener("storage", onStorage);
-    };
   }, []);
+
+  useEffect(() => {
+    if (!storeId) return;
+    setSeed(String(Date.now()));
+  }, [storeId, profile]);
 
   const storeName = profile?.storeName ?? "카페 브라운";
   const mainImage = profile?.mainImage ?? "/hero.jpg";
