@@ -2,7 +2,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
+import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 
 type OptionGroup = {
   id: string;
@@ -31,15 +33,8 @@ function toInt(v: string, fallback: number) {
   return Math.max(0, Math.round(n));
 }
 
-function getCurrentStoreIdClient() {
-  try {
-    return (localStorage.getItem("current_store_id") || "").trim();
-  } catch {
-    return "";
-  }
-}
-
 export default function AdminOptionsPage() {
+  const sp = useSearchParams();
   const [storeId, setStoreId] = useState<string>("");
 
   const [groups, setGroups] = useState<OptionGroup[]>([]);
@@ -53,9 +48,16 @@ export default function AdminOptionsPage() {
 
   // 1) storeId 로드
   useEffect(() => {
-    const sid = getCurrentStoreIdClient();
-    setStoreId(sid);
-  }, []);
+    const queryStore = (sp.get("store") || "").trim();
+    const saved = (getCurrentStoreId() || "").trim();
+    const sid = queryStore || saved;
+    if (sid) {
+      setStoreId(sid);
+      setCurrentStoreId(sid);
+    } else {
+      setStoreId("");
+    }
+  }, [sp]);
 
   // 2) 데이터 로드
   const refresh = async () => {
@@ -525,11 +527,11 @@ export default function AdminOptionsPage() {
         <section className="card">
           <h2 className="cardTitle">매장을 먼저 선택/생성하세요</h2>
           <p className="muted" style={{ marginTop: 10, lineHeight: 1.5 }}>
-            현재 선택된 매장(current_store_id)이 없습니다.<br />
+            현재 선택된 매장(저장된 매장)이 없습니다.<br />
             관리자 홈에서 매장을 선택한 뒤 다시 들어와 주세요.
           </p>
           <div className="btnRow">
-            <a className="btn btnPrimary" href="/admin">
+            <a className="btn btnPrimary" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
               관리자 홈으로
             </a>
           </div>
@@ -547,7 +549,7 @@ export default function AdminOptionsPage() {
               <button className="btn" onClick={refresh} disabled={saving || loading}>
                 새로고침
               </button>
-              <a className="btn" href="/admin">
+              <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
                 관리자 홈
               </a>
             </div>
