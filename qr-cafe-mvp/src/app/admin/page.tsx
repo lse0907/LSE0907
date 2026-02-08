@@ -118,47 +118,7 @@ export default function AdminHomePage() {
     setStoresLoaded(true);
   };
 
-  const fetchStatsSummary = async (storeId: string) => {
-    const today = new Date();
-    const todayKey = ymd(today);
-    const weekStart = ymd(startOfWeekMon(today));
-    const weekEnd = ymd(endOfWeekMon(today));
-    const month = monthKey(today);
-    const monthStart = `${month}-01`;
-    const rangeStart = [monthStart, weekStart].sort()[0];
-    const rangeEnd = [todayKey, weekEnd].sort().slice(-1)[0];
-
-    setStatsLoading(true);
-    setStatsErr("");
-    try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("order_date,total_price,status,store_id")
-        .eq("store_id", storeId)
-        .gte("order_date", rangeStart)
-        .lte("order_date", rangeEnd)
-        .neq("status", "canceled");
-
-      if (error) throw error;
-
-      const rows = Array.isArray(data) ? data : [];
-      const sum = (list: any[]) => list.reduce((acc, cur) => acc + Math.max(0, Number(cur?.total_price || 0)), 0);
-
-      const daily = sum(rows.filter((r) => String(r?.order_date || "") === todayKey));
-      const weekly = sum(rows.filter((r) => String(r?.order_date || "") >= weekStart && String(r?.order_date || "") <= weekEnd));
-      const monthly = sum(rows.filter((r) => String(r?.order_date || "").startsWith(month)));
-
-      setStatsSummary({ daily, weekly, monthly });
-    } catch (e: any) {
-      console.error("[admin] stats summary error:", e?.message || e);
-      setStatsErr(String(e?.message || e));
-      setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
-    } finally {
-      setStatsLoading(false);
-    }
-  };
-
-  const fetchStatsSummary = async (storeId: string) => {
+  const fetchStatsSummaryForStore = async (storeId: string) => {
     const today = new Date();
     const todayKey = ymd(today);
     const weekStart = ymd(startOfWeekMon(today));
@@ -258,7 +218,7 @@ export default function AdminHomePage() {
       setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
       return;
     }
-    fetchStatsSummary(selectedStoreId);
+    fetchStatsSummaryForStore(selectedStoreId);
   }, [selectedStoreId]);
 
   const go = (path: string) => {
