@@ -806,9 +806,6 @@ export default function AdminStatsPage() {
           <a className="btn" href="/admin">
             관리자 홈
           </a>
-          <button className="btn btnPrimary" onClick={() => (window.location.href = "/staff")}>
-            직원 화면
-          </button>
           <button className="btn" onClick={refresh} disabled={loading}>
             {loading ? "로딩중..." : "새로고침"}
           </button>

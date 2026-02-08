@@ -7,9 +7,17 @@ import { getCurrentStoreId } from "@/app/lib/currentStore";
 import { loadStoreProfile, saveStoreProfile, useStoreProfile } from "@/app/lib/storeProfile";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 
+const STORE_IMAGE_BUCKET = "store-assets";
+
 function clampOverlay(v: number) {
   if (!Number.isFinite(v)) return 0;
   return Math.max(0, Math.min(100, Math.round(v)));
+}
+
+function getFileExt(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed.includes(".")) return "";
+  return trimmed.split(".").pop() || "";
 }
 
 // ✅ "실제로 저장/반영되는 핵심 필드"만 비교/저장에 사용
@@ -50,6 +58,9 @@ export default function AdminStorePage() {
   const { profile, setProfile } = useStoreProfile(storeId);
   const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
   const [showAddr, setShowAddr] = useState(false);
+  const [uploadingMain, setUploadingMain] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState("");
 
   // ✅ 폼 상태(편집용)
   const [draft, setDraft] = useState(profile);
@@ -177,6 +188,52 @@ export default function AdminStorePage() {
     }, 50);
   };
 
+  const uploadStoreImage = async (file: File, kind: "main" | "logo") => {
+    if (!storeId) {
+      setUploadMsg("매장 정보를 먼저 불러온 뒤에 이미지를 업로드해 주세요.");
+      return "";
+    }
+    const ext = getFileExt(file.name) || "png";
+    const path = `${storeId}/${kind}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from(STORE_IMAGE_BUCKET).upload(path, file, { upsert: true });
+    if (error) throw error;
+
+    const { data } = supabase.storage.from(STORE_IMAGE_BUCKET).getPublicUrl(path);
+    return data.publicUrl || "";
+  };
+
+  const onUploadMain = async (file: File | null) => {
+    if (!file) return;
+    setUploadingMain(true);
+    setUploadMsg("");
+    try {
+      const url = await uploadStoreImage(file, "main");
+      if (url) {
+        setDraft((p: any) => ({ ...p, mainImage: url }));
+      }
+    } catch (e: any) {
+      setUploadMsg(`대표 이미지 업로드 실패: ${String(e?.message || e)}`);
+    } finally {
+      setUploadingMain(false);
+    }
+  };
+
+  const onUploadLogo = async (file: File | null) => {
+    if (!file) return;
+    setUploadingLogo(true);
+    setUploadMsg("");
+    try {
+      const url = await uploadStoreImage(file, "logo");
+      if (url) {
+        setDraft((p: any) => ({ ...p, logoImage: url }));
+      }
+    } catch (e: any) {
+      setUploadMsg(`로고 이미지 업로드 실패: ${String(e?.message || e)}`);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   return (
     <main className="wrap">
       <style jsx global>{`
@@ -210,6 +267,18 @@ export default function AdminStorePage() {
           align-items: flex-end;
           gap: 10px;
         }
+        .topActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .badgeRow {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          align-items: center;
+        }
 
         .h1 {
           margin: 0;
@@ -240,6 +309,14 @@ export default function AdminStorePage() {
         .badgeError {
           border-color: #fecaca;
           background: #fef2f2;
+        }
+        .alert {
+          border: 1px solid #fecaca;
+          background: #fef2f2;
+          color: #991b1b;
+          border-radius: 14px;
+          padding: 10px 12px;
+          font-weight: 900;
         }
 
         .grid {
@@ -451,13 +528,6 @@ export default function AdminStorePage() {
           width: 100%;
         }
 
-        /* 확장(비활성) */
-        .disabledNote {
-          color: var(--muted);
-          font-size: 12px;
-          font-weight: 800;
-          margin-top: 6px;
-        }
         .input:disabled,
         .textarea:disabled {
           background: #f9fafb;
@@ -517,27 +587,37 @@ export default function AdminStorePage() {
           <p className="sub">필수 정보만 입력하세요.</p>
         </div>
 
-        <div>
-          {saveState === "saved" ? (
-            <span className="badge badgeSaved">저장됨 ✅</span>
-          ) : saveState === "error" ? (
-            <span className="badge badgeError">저장 실패 ❗</span>
-          ) : lastSavedAt ? (
-            <span className="badge">마지막 저장: {new Date(lastSavedAt).toLocaleTimeString()}</span>
-          ) : (
-            <span className="badge">미저장</span>
-          )}
-          {remainingDays !== null ? (
-            <span className="badge" style={{ marginLeft: 6 }}>
-              무료 사용기간 {FREE_TRIAL_DAYS}일 · 잔여 {remainingDays}일
-            </span>
-          ) : (
-            <span className="badge" style={{ marginLeft: 6 }}>
-              무료 사용기간 {FREE_TRIAL_DAYS}일
-            </span>
-          )}
+        <div className="topActions">
+          <button
+            className="btn"
+            type="button"
+            onClick={() => router.push(`/admin?store=${encodeURIComponent(storeId)}`)}
+          >
+            관리자 화면
+          </button>
         </div>
       </header>
+
+      <div className="badgeRow">
+        {saveState === "saved" ? (
+          <span className="badge badgeSaved">저장됨 ✅</span>
+        ) : saveState === "error" ? (
+          <span className="badge badgeError">저장 실패 ❗</span>
+        ) : lastSavedAt ? (
+          <span className="badge">마지막 저장: {new Date(lastSavedAt).toLocaleTimeString()}</span>
+        ) : (
+          <span className="badge">미저장</span>
+        )}
+        {remainingDays !== null ? (
+          <span className="badge">
+            무료 사용기간 {FREE_TRIAL_DAYS}일 · 잔여 {remainingDays}일
+          </span>
+        ) : (
+          <span className="badge">무료 사용기간 {FREE_TRIAL_DAYS}일</span>
+        )}
+      </div>
+
+      {uploadMsg ? <div className="alert">{uploadMsg}</div> : null}
 
       <section className="grid">
         {/* ✅ 미리보기(위쪽) */}
@@ -610,23 +690,39 @@ export default function AdminStorePage() {
           </div>
 
           <div className="field">
-            <div className="label">대표 이미지 경로</div>
+            <div className="label">대표 이미지 업로드</div>
             <input
               className="input"
-              value={(draft as any).mainImage}
-              onChange={(e) => setDraft((p: any) => ({ ...p, mainImage: e.target.value }))}
-              placeholder='예: "/hero.jpg"'
+              type="file"
+              accept="image/*"
+              onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
+              disabled={uploadingMain}
             />
+            <div className="hint">
+              {uploadingMain
+                ? "업로드 중..."
+                : (draft as any).mainImage
+                  ? `등록됨: ${(draft as any).mainImage}`
+                  : "아직 등록된 이미지가 없습니다."}
+            </div>
           </div>
 
           <div className="field">
-            <div className="label">로고 이미지 경로 (선택)</div>
+            <div className="label">로고 이미지 업로드 (선택)</div>
             <input
               className="input"
-              value={(draft as any).logoImage}
-              onChange={(e) => setDraft((p: any) => ({ ...p, logoImage: e.target.value }))}
-              placeholder='예: "/logo.png" (없으면 빈칸)'
+              type="file"
+              accept="image/*"
+              onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
+              disabled={uploadingLogo}
             />
+            <div className="hint">
+              {uploadingLogo
+                ? "업로드 중..."
+                : (draft as any).logoImage
+                  ? `등록됨: ${(draft as any).logoImage}`
+                  : "아직 등록된 이미지가 없습니다."}
+            </div>
           </div>
 
           <div className="field">
@@ -793,20 +889,6 @@ export default function AdminStorePage() {
 
           {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
 
-          {/* ==========================
-              ✅ 추후 확장(비활성)
-              ========================== */}
-          <div style={{ marginTop: 18 }}>
-            <h2 className="cardTitle">결제/구독 정보 (비활성)</h2>
-            <div className="field">
-              <div className="label">
-                결제/구독 정보 <span className="pill">비활성</span>
-              </div>
-              <textarea className="textarea" disabled value="" placeholder="예: 현재 플랜 / 결제수단 ..." />
-            </div>
-
-            <div className="disabledNote">지금은 저장하지 않습니다.</div>
-          </div>
         </div>
       </section>
 
