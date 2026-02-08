@@ -178,6 +178,20 @@ export default function AdminStoreCreatePage() {
         if (insMem.error) throw insMem.error;
       }
 
+      if (mainImage.trim() || logoImage.trim()) {
+        const { error: imageErr } = await supabase
+          .from("stores")
+          .update({
+            main_image_url: mainImage.trim() || null,
+            logo_image_url: logoImage.trim() || null,
+          })
+          .eq("store_id", id);
+        if (imageErr) {
+          console.error("[admin/store/create] image update error:", imageErr.message);
+          setMsg("이미지는 저장되지 않았습니다. 매장 정보에서 다시 저장해주세요.");
+        }
+      }
+
       saveStoreProfile(id, {
         storeName: name,
         storeDesc: storeDesc.trim() || DEFAULT_STORE_PROFILE.storeDesc,

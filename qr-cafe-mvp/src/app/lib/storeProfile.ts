@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/app/lib/supabaseClient";
 
 /**
  * ✅ 핵심 필드만 사용
@@ -128,6 +129,39 @@ export function useStoreProfile(storeId?: string) {
 
   useEffect(() => {
     setProfile(loadStoreProfile(sid));
+
+    const syncFromDb = async () => {
+      if (!sid) return;
+      const { data, error } = await supabase
+        .from("stores")
+        .select("main_image_url, logo_image_url")
+        .eq("store_id", sid)
+        .maybeSingle();
+
+      if (error) {
+        console.error("[storeProfile] sync from db error:", error.message);
+        return;
+      }
+
+      if (!data) return;
+
+      const current = loadStoreProfile(sid);
+      const next: StoreProfile = {
+        ...current,
+        mainImage: data.main_image_url || current.mainImage,
+        logoImage: data.logo_image_url || current.logoImage,
+      };
+
+      if (
+        current.mainImage !== next.mainImage ||
+        current.logoImage !== next.logoImage
+      ) {
+        saveStoreProfile(sid, next);
+        setProfile(next);
+      }
+    };
+
+    syncFromDb();
 
     const onUpdate = (e: any) => {
       const target = e?.detail?.storeId;

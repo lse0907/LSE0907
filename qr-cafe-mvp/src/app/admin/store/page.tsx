@@ -139,6 +139,7 @@ export default function AdminStorePage() {
     }
     setSaving(true);
     setSaveState("idle");
+    setUploadMsg("");
 
     try {
       // ✅ 핵심 필드만 저장 의도를 고정
@@ -148,6 +149,19 @@ export default function AdminStorePage() {
         ...(draft as any),
         ...core,
       });
+
+      const { error: imageErr } = await supabase
+        .from("stores")
+        .update({
+          main_image_url: (draft as any).mainImage || null,
+          logo_image_url: (draft as any).logoImage || null,
+        })
+        .eq("store_id", storeId);
+
+      if (imageErr) {
+        console.error("[admin/store] image update error:", imageErr.message);
+        setUploadMsg("이미지 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      }
 
       // ✅ 즉시 반영
       const fresh = loadStoreProfile(storeId);
