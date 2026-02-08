@@ -450,12 +450,26 @@ export default function AdminStoreCreatePage() {
             grid-template-columns: 1fr;
           }
         }
+        @media (max-width: 640px) {
+          .wrap {
+            padding: 12px;
+          }
+          .topbar {
+            align-items: center;
+          }
+          .hero {
+            height: 200px;
+          }
+          .storeName {
+            font-size: 18px;
+          }
+        }
       `}</style>
 
       <header className="topbar">
         <div>
           <h1 className="h1">매장 만들기</h1>
-          <p className="sub">필수 정보 입력 후 저장하면 매장이 생성됩니다.</p>
+          <p className="sub">필수 정보만 입력하세요.</p>
         </div>
         <button className="btn" type="button" onClick={() => router.back()}>
           뒤로가기
@@ -500,7 +514,6 @@ export default function AdminStoreCreatePage() {
             <p className="descText">{storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
           </div>
 
-          <div className="hint">* 오버레이 강도를 올리면 이미지가 더 어두워지고 글자가 더 잘 보입니다.</div>
         </div>
 
         <div className="card">
@@ -518,7 +531,6 @@ export default function AdminStoreCreatePage() {
               매장 ID <span className="pill">필수</span>
             </div>
             <input className="input" value={storeId} onChange={(e) => setStoreId(e.target.value)} />
-            <div className="hint">영문/숫자/하이픈 권장. 중복된 ID는 사용할 수 없습니다.</div>
           </div>
 
           <div className="field">
@@ -569,7 +581,6 @@ export default function AdminStoreCreatePage() {
                 onChange={(e) => setOverlayStrength(clampOverlay(Number(e.target.value)))}
               />
             </div>
-            <div className="hint">0 = 거의 원본 / 100 = 아주 어둡게</div>
           </div>
 
           <h2 className="cardTitle" style={{ marginTop: 16 }}>
@@ -634,14 +645,12 @@ export default function AdminStoreCreatePage() {
               결제/구독 정보 <span className="pill">비활성</span>
             </div>
             <textarea className="textarea" disabled value="" placeholder="예: 현재 플랜 / 결제수단 ..." />
-            <div className="hint">지금은 표시만 하고, 정식 오픈 때 결제 연동을 붙입니다.</div>
           </div>
 
           <div className="btnRow">
             <button className="btn btnPrimary" onClick={onCreate} disabled={creating}>
               {creating ? "생성 중..." : "매장 생성"}
             </button>
-            <span className="hint">무료 사용기간 {FREE_TRIAL_DAYS}일이 기본 제공됩니다.</span>
           </div>
         </div>
       </section>
@@ -658,9 +667,7 @@ export default function AdminStoreCreatePage() {
             <div style={{ marginTop: 12 }}>
               <DaumPostcodeEmbed onComplete={onCompleteAddress} autoClose={false} />
             </div>
-            <p className="hint" style={{ marginTop: 10 }}>
-              도로명 주소를 검색하고 선택하세요.
-            </p>
+            <p className="hint" style={{ marginTop: 10 }}>도로명 주소를 검색하세요.</p>
           </div>
         </div>
       ) : null}

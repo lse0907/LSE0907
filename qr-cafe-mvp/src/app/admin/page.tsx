@@ -172,7 +172,7 @@ export default function AdminHomePage() {
       <header className="topbar">
         <div>
           <h1 className="h1">관리자</h1>
-          <p className="desc">모바일에 맞춘 탭 화면입니다. 먼저 매장을 선택하세요.</p>
+          <p className="desc">매장을 선택해 주세요.</p>
         </div>
 
         <div className="menuWrap">
@@ -199,12 +199,11 @@ export default function AdminHomePage() {
           <h2 className="cardTitle">매장 만들기</h2>
           <span className="pill">상단 고정</span>
         </div>
-        <p className="muted">신규 가입자는 먼저 매장을 생성해야 합니다.</p>
+        <p className="muted">매장을 먼저 생성해 주세요.</p>
         <div className="btnRow">
           <button className="btn btnPrimary" onClick={goCreate}>
             매장 만들기
           </button>
-          <span className="hint">추가 매장은 정식 오픈 시 결제 후 생성됩니다. (현재는 테스트 단계)</span>
         </div>
       </section>
 
@@ -261,23 +260,19 @@ export default function AdminHomePage() {
             {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
             {selectedRole ? ` · ${selectedRole}` : ""}
           </span>
-          <span className="muted">순서: 매장 만들기 → 매장 선택 → 기능 사용</span>
         </div>
 
         <div className="btnGroup">
           <button className="cardBtn cardBtnOn" onClick={() => go("/admin/store")} disabled={!selectedStoreId}>
             <div className="cardBtnTitle">매장설정</div>
-            <div className="cardBtnDesc">매장정보 수정 화면으로 이동합니다.</div>
           </button>
 
-          <button className="cardBtn" onClick={() => go("/admin/menu")} disabled={!selectedStoreId}>
+          <button className="cardBtn" onClick={() => go("/admin/ops")} disabled={!selectedStoreId}>
             <div className="cardBtnTitle">매장운영</div>
-            <div className="cardBtnDesc">메뉴/옵션/QR 등 운영 기능을 관리합니다.</div>
           </button>
 
           <button className="cardBtn" onClick={() => go("/admin/stats")} disabled={!selectedStoreId}>
             <div className="cardBtnTitle">매출통계</div>
-            <div className="cardBtnDesc">매출/기간별 CSV 다운로드를 확인합니다.</div>
           </button>
         </div>
 
@@ -364,7 +359,7 @@ body {
 .desc{
   margin:6px 0 0 0;
   color:var(--muted);
-  font-size:13px;
+  font-size:12px;
   font-weight:800;
   line-height:1.4;
   word-break:keep-all;
@@ -445,7 +440,7 @@ body {
   font-weight:950;
 }
 .btnGroup{
-  display:grid;
+  display:flex;
   gap:10px;
   margin-top:12px;
 }
@@ -507,16 +502,22 @@ body {
   font-size:18px;
   font-weight:950;
 }
-.cardBtnDesc{
-  margin-top:6px;
-  font-size:13px;
-  font-weight:800;
-  color:var(--muted);
-  line-height:1.4;
-}
 .stickyCard{
   position:sticky;
   top:10px;
   z-index:5;
+}
+@media (max-width: 640px){
+  .wrap{ padding:12px; }
+  .topbar{ align-items:center; }
+  .cardBtnTitle{ font-size:16px; }
+  .btnGroup{
+    flex-direction:row;
+    flex-wrap:wrap;
+  }
+  .storeRow{
+    flex-direction:column;
+    align-items:flex-start;
+  }
 }
 `;

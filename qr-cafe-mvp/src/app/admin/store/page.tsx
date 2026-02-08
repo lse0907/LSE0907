@@ -495,12 +495,26 @@ export default function AdminStorePage() {
             grid-template-columns: 1fr;
           }
         }
+        @media (max-width: 640px) {
+          .wrap {
+            padding: 12px;
+          }
+          .topbar {
+            align-items: center;
+          }
+          .hero {
+            height: 200px;
+          }
+          .storeName {
+            font-size: 18px;
+          }
+        }
       `}</style>
 
       <header className="topbar">
         <div>
           <h1 className="h1">매장 정보</h1>
-          <p className="sub">저장하면 스타트/QR 등 화면에 즉시 반영됩니다.</p>
+          <p className="sub">필수 정보만 입력하세요.</p>
         </div>
 
         <div>
@@ -562,7 +576,6 @@ export default function AdminStorePage() {
             <p className="descText">{(draft as any).storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
           </div>
 
-          <div className="hint">* 오버레이 강도를 올리면 이미지가 더 어두워지고 글자가 더 잘 보입니다.</div>
         </div>
 
         {/* 설정 */}
@@ -597,7 +610,7 @@ export default function AdminStorePage() {
           </div>
 
           <div className="field">
-            <div className="label">대표 이미지 경로 (public 기준)</div>
+            <div className="label">대표 이미지 경로</div>
             <input
               className="input"
               value={(draft as any).mainImage}
@@ -647,7 +660,6 @@ export default function AdminStorePage() {
               />
             </div>
 
-            <div className="hint">0 = 거의 원본 / 100 = 아주 어둡게</div>
           </div>
 
           <div style={{ marginTop: 14 }}>
@@ -779,14 +791,13 @@ export default function AdminStorePage() {
             {isDirty ? <span className="badge">변경됨</span> : <span className="badge">변경 없음</span>}
           </div>
 
-          {lastSavedAt ? <div className="hint">마지막 저장 시각: {new Date(lastSavedAt).toLocaleString()}</div> : null}
+          {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
 
           {/* ==========================
               ✅ 추후 확장(비활성)
               ========================== */}
           <div style={{ marginTop: 18 }}>
             <h2 className="cardTitle">결제/구독 정보 (비활성)</h2>
-            <div className="hint">* 지금은 화면에만 고정해 두고, 정식 오픈 때 결제 연동을 붙입니다.</div>
             <div className="field">
               <div className="label">
                 결제/구독 정보 <span className="pill">비활성</span>
@@ -794,7 +805,7 @@ export default function AdminStorePage() {
               <textarea className="textarea" disabled value="" placeholder="예: 현재 플랜 / 결제수단 ..." />
             </div>
 
-            <div className="disabledNote">지금은 저장/연동하지 않습니다. (UI만 고정해두는 단계)</div>
+            <div className="disabledNote">지금은 저장하지 않습니다.</div>
           </div>
         </div>
       </section>
@@ -811,9 +822,7 @@ export default function AdminStorePage() {
             <div style={{ marginTop: 12 }}>
               <DaumPostcodeEmbed onComplete={onCompleteAddress} autoClose={false} />
             </div>
-            <p className="hint" style={{ marginTop: 10 }}>
-              도로명 주소를 검색하고 선택하세요.
-            </p>
+            <p className="hint" style={{ marginTop: 10 }}>도로명 주소를 검색하세요.</p>
           </div>
         </div>
       ) : null}
