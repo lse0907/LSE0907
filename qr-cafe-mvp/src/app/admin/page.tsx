@@ -38,10 +38,14 @@ export default function AdminHomePage() {
 
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [members, setMembers] = useState<MemberRow[]>([]);
+  const [storesLoaded, setStoresLoaded] = useState(false);
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
-  const [menuOpen, setMenuOpen] = useState(false);
   const [msg, setMsg] = useState<string>("");
+  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsErr, setStatsErr] = useState("");
+  const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
 
   const selectedStore = useMemo(() => {
     if (!selectedStoreId) return null;
@@ -58,6 +62,30 @@ export default function AdminHomePage() {
     setCurrentStoreId(storeId);
   };
 
+  const ymd = (d: Date) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const startOfWeekMon = (d: Date) => {
+    const day = d.getDay(); // 0=일
+    const diff = day === 0 ? -6 : 1 - day;
+    const out = new Date(d);
+    out.setDate(d.getDate() + diff);
+    return out;
+  };
+
+  const endOfWeekMon = (d: Date) => {
+    const start = startOfWeekMon(d);
+    const out = new Date(start);
+    out.setDate(start.getDate() + 6);
+    return out;
+  };
+
+  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
   const loadMyStores = async (uid: string) => {
     const memRes = await supabase
       .from("store_members")
@@ -73,6 +101,7 @@ export default function AdminHomePage() {
     const ids = memRows.map((m) => m.store_id).filter(Boolean);
     if (!ids.length) {
       setStores([]);
+      setStoresLoaded(true);
       return;
     }
 
@@ -86,6 +115,47 @@ export default function AdminHomePage() {
     const list = (storeRes.data || []) as StoreRow[];
     list.sort((a, b) => String(a.store_name || "").localeCompare(String(b.store_name || "")));
     setStores(list);
+    setStoresLoaded(true);
+  };
+
+  const fetchStatsSummaryForStore = async (storeId: string) => {
+    const today = new Date();
+    const todayKey = ymd(today);
+    const weekStart = ymd(startOfWeekMon(today));
+    const weekEnd = ymd(endOfWeekMon(today));
+    const month = monthKey(today);
+    const monthStart = `${month}-01`;
+    const rangeStart = [monthStart, weekStart].sort()[0];
+    const rangeEnd = [todayKey, weekEnd].sort().slice(-1)[0];
+
+    setStatsLoading(true);
+    setStatsErr("");
+    try {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("order_date,total_price,status,store_id")
+        .eq("store_id", storeId)
+        .gte("order_date", rangeStart)
+        .lte("order_date", rangeEnd)
+        .neq("status", "canceled");
+
+      if (error) throw error;
+
+      const rows = Array.isArray(data) ? data : [];
+      const sum = (list: any[]) => list.reduce((acc, cur) => acc + Math.max(0, Number(cur?.total_price || 0)), 0);
+
+      const daily = sum(rows.filter((r) => String(r?.order_date || "") === todayKey));
+      const weekly = sum(rows.filter((r) => String(r?.order_date || "") >= weekStart && String(r?.order_date || "") <= weekEnd));
+      const monthly = sum(rows.filter((r) => String(r?.order_date || "").startsWith(month)));
+
+      setStatsSummary({ daily, weekly, monthly });
+    } catch (e: any) {
+      console.error("[admin] stats summary error:", e?.message || e);
+      setStatsErr(String(e?.message || e));
+      setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
+    } finally {
+      setStatsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -121,6 +191,7 @@ export default function AdminHomePage() {
       } catch (e: any) {
         console.error("[admin] load stores error:", e?.message || e);
         setMsg(`매장 목록 로드 실패: ${String(e?.message || e)}`);
+        setStoresLoaded(true);
       } finally {
         setBooting(false);
       }
@@ -129,6 +200,7 @@ export default function AdminHomePage() {
   }, [sp]);
 
   useEffect(() => {
+    if (!storesLoaded) return;
     if (!stores.length) {
       setSelectedStoreIdState(null);
       clearCurrentStoreId();
@@ -141,7 +213,23 @@ export default function AdminHomePage() {
     clearCurrentStoreId();
   }, [stores, selectedStoreId]);
 
+  useEffect(() => {
+    if (!selectedStoreId) {
+      setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
+      return;
+    }
+    fetchStatsSummaryForStore(selectedStoreId);
+  }, [selectedStoreId]);
+
   const go = (path: string) => {
+    if (!selectedStoreId) {
+      setMsg("먼저 매장을 선택하거나 생성해주세요.");
+      return;
+    }
+    router.push(`${path}?store=${encodeURIComponent(selectedStoreId)}`);
+  };
+
+  const goPublic = (path: string) => {
     if (!selectedStoreId) {
       setMsg("먼저 매장을 선택하거나 생성해주세요.");
       return;
@@ -175,20 +263,16 @@ export default function AdminHomePage() {
           <p className="desc">매장을 선택해 주세요.</p>
         </div>
 
-        <div className="menuWrap">
-          <button className="menuBtn" onClick={() => setMenuOpen((prev) => !prev)} aria-label="메뉴 열기">
-            ⋯
+        <div className="topActions">
+          <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
+            고객화면
           </button>
-          {menuOpen ? (
-            <div className="menuPanel">
-              <a className="menuItem" href="/menu">
-                고객 화면
-              </a>
-              <a className="menuItem" href="/logout">
-                로그아웃
-              </a>
-            </div>
-          ) : null}
+          <button className="btn" onClick={() => goPublic("/staff")} disabled={!selectedStoreId}>
+            직원화면
+          </button>
+          <a className="btn" href="/logout">
+            로그아웃
+          </a>
         </div>
       </header>
 
@@ -263,18 +347,78 @@ export default function AdminHomePage() {
         </div>
 
         <div className="btnGroup">
-          <button className="cardBtn cardBtnOn" onClick={() => go("/admin/store")} disabled={!selectedStoreId}>
+          <button
+            className={`cardBtn ${activeSection === "store" ? "cardBtnOn" : ""}`}
+            onClick={() => setActiveSection((prev) => (prev === "store" ? null : "store"))}
+            disabled={!selectedStoreId}
+          >
             <div className="cardBtnTitle">매장설정</div>
           </button>
 
-          <button className="cardBtn" onClick={() => go("/admin/ops")} disabled={!selectedStoreId}>
+          <button
+            className={`cardBtn ${activeSection === "ops" ? "cardBtnOn" : ""}`}
+            onClick={() => setActiveSection((prev) => (prev === "ops" ? null : "ops"))}
+            disabled={!selectedStoreId}
+          >
             <div className="cardBtnTitle">매장운영</div>
           </button>
 
-          <button className="cardBtn" onClick={() => go("/admin/stats")} disabled={!selectedStoreId}>
+          <button
+            className={`cardBtn ${activeSection === "stats" ? "cardBtnOn" : ""}`}
+            onClick={() => setActiveSection((prev) => (prev === "stats" ? null : "stats"))}
+            disabled={!selectedStoreId}
+          >
             <div className="cardBtnTitle">매출통계</div>
           </button>
         </div>
+
+        {activeSection === "store" ? (
+          <div className="subPanel">
+            <button className="subBtn" onClick={() => go("/admin/store")}>
+              매장정보
+            </button>
+            <button className="subBtn subBtnDisabled" disabled>
+              결제/구독 (준비중)
+            </button>
+          </div>
+        ) : null}
+
+        {activeSection === "ops" ? (
+          <div className="subPanel">
+            <button className="subBtn" onClick={() => go("/admin/menu")}>
+              메뉴관리
+            </button>
+            <button className="subBtn" onClick={() => go("/admin/options")}>
+              옵션관리
+            </button>
+            <button className="subBtn" onClick={() => go("/admin/qr")}>
+              QR 생성
+            </button>
+          </div>
+        ) : null}
+
+        {activeSection === "stats" ? (
+          <div className="subPanel">
+            <div className="statsSummary">
+              <div className="statsRow">
+                <span className="statsLabel">일간 매출</span>
+                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
+              </div>
+              <div className="statsRow">
+                <span className="statsLabel">주간 매출</span>
+                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
+              </div>
+              <div className="statsRow">
+                <span className="statsLabel">월간 매출</span>
+                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
+              </div>
+              {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
+            </div>
+            <button className="subBtn subBtnPrimary" onClick={() => go("/admin/stats")}>
+              자세히보기
+            </button>
+          </div>
+        ) : null}
 
         {!selectedStoreId ? (
           <div className="alert" style={{ marginTop: 12 }}>
@@ -309,46 +453,15 @@ body {
 }
 .topbar{
   display:flex;
-  align-items:flex-end;
+  align-items:center;
   justify-content:space-between;
   gap:12px;
 }
-.menuWrap{
-  position:relative;
-}
-.menuBtn{
-  height:38px;
-  width:44px;
-  border-radius:12px;
-  border:1px solid var(--line);
-  background:#fff;
-  font-size:22px;
-  font-weight:900;
-  cursor:pointer;
-}
-.menuPanel{
-  position:absolute;
-  top:46px;
-  right:0;
-  background:#fff;
-  border:1px solid var(--line);
-  border-radius:14px;
-  min-width:140px;
-  box-shadow:0 8px 24px rgba(15,23,42,0.12);
-  padding:6px;
-  display:grid;
-  gap:4px;
-  z-index:10;
-}
-.menuItem{
-  padding:10px 12px;
-  border-radius:10px;
-  font-weight:900;
-  color:var(--text);
-  text-decoration:none;
-}
-.menuItem:hover{
-  background:#f3f4f6;
+.topActions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
 }
 .h1{
   margin:0;
@@ -501,6 +614,51 @@ body {
   margin:0;
   font-size:18px;
   font-weight:950;
+}
+.subPanel{
+  margin-top:12px;
+  display:grid;
+  gap:8px;
+}
+.subBtn{
+  border:1px solid var(--line);
+  background:#fff;
+  padding:12px 14px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:900;
+  text-align:left;
+}
+.subBtnPrimary{
+  background:var(--brand);
+  border-color:var(--brand);
+  color:#fff;
+}
+.subBtnDisabled{
+  opacity:.6;
+  cursor:not-allowed;
+}
+.statsSummary{
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:12px;
+  background:#f9fafb;
+  display:grid;
+  gap:8px;
+}
+.statsRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  font-weight:900;
+}
+.statsLabel{
+  color:var(--muted);
+  font-size:12px;
+}
+.statsValue{
+  font-size:14px;
 }
 .stickyCard{
   position:sticky;
