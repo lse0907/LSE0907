@@ -21,7 +21,6 @@ export type StoreProfile = {
     addressDetail?: string;
     hours?: string;
     sns?: string;
-    billing?: string;
   };
 };
 
@@ -41,7 +40,6 @@ export const DEFAULT_STORE_PROFILE: StoreProfile = {
     addressDetail: "",
     hours: "",
     sns: "",
-    billing: "",
   },
 };
 
@@ -86,7 +84,6 @@ export function loadStoreProfile(storeId?: string): StoreProfile {
         addressDetail: pickString(parsed?.extra?.addressDetail, DEFAULT_STORE_PROFILE.extra?.addressDetail || ""),
         hours: pickString(parsed?.extra?.hours, DEFAULT_STORE_PROFILE.extra?.hours || ""),
         sns: pickString(parsed?.extra?.sns, DEFAULT_STORE_PROFILE.extra?.sns || ""),
-        billing: pickString(parsed?.extra?.billing, DEFAULT_STORE_PROFILE.extra?.billing || ""),
       },
     };
   } catch {
@@ -110,7 +107,6 @@ export function saveStoreProfile(storeId: string | undefined, next: StoreProfile
       addressDetail: pickString(next?.extra?.addressDetail, DEFAULT_STORE_PROFILE.extra?.addressDetail || ""),
       hours: pickString(next?.extra?.hours, DEFAULT_STORE_PROFILE.extra?.hours || ""),
       sns: pickString(next?.extra?.sns, DEFAULT_STORE_PROFILE.extra?.sns || ""),
-      billing: pickString(next?.extra?.billing, DEFAULT_STORE_PROFILE.extra?.billing || ""),
     },
   };
 
