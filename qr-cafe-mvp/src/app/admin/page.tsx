@@ -38,6 +38,7 @@ export default function AdminHomePage() {
 
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [members, setMembers] = useState<MemberRow[]>([]);
+  const [storesLoaded, setStoresLoaded] = useState(false);
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [msg, setMsg] = useState<string>("");
@@ -100,6 +101,7 @@ export default function AdminHomePage() {
     const ids = memRows.map((m) => m.store_id).filter(Boolean);
     if (!ids.length) {
       setStores([]);
+      setStoresLoaded(true);
       return;
     }
 
@@ -113,6 +115,47 @@ export default function AdminHomePage() {
     const list = (storeRes.data || []) as StoreRow[];
     list.sort((a, b) => String(a.store_name || "").localeCompare(String(b.store_name || "")));
     setStores(list);
+    setStoresLoaded(true);
+  };
+
+  const fetchStatsSummary = async (storeId: string) => {
+    const today = new Date();
+    const todayKey = ymd(today);
+    const weekStart = ymd(startOfWeekMon(today));
+    const weekEnd = ymd(endOfWeekMon(today));
+    const month = monthKey(today);
+    const monthStart = `${month}-01`;
+    const rangeStart = [monthStart, weekStart].sort()[0];
+    const rangeEnd = [todayKey, weekEnd].sort().slice(-1)[0];
+
+    setStatsLoading(true);
+    setStatsErr("");
+    try {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("order_date,total_price,status,store_id")
+        .eq("store_id", storeId)
+        .gte("order_date", rangeStart)
+        .lte("order_date", rangeEnd)
+        .neq("status", "canceled");
+
+      if (error) throw error;
+
+      const rows = Array.isArray(data) ? data : [];
+      const sum = (list: any[]) => list.reduce((acc, cur) => acc + Math.max(0, Number(cur?.total_price || 0)), 0);
+
+      const daily = sum(rows.filter((r) => String(r?.order_date || "") === todayKey));
+      const weekly = sum(rows.filter((r) => String(r?.order_date || "") >= weekStart && String(r?.order_date || "") <= weekEnd));
+      const monthly = sum(rows.filter((r) => String(r?.order_date || "").startsWith(month)));
+
+      setStatsSummary({ daily, weekly, monthly });
+    } catch (e: any) {
+      console.error("[admin] stats summary error:", e?.message || e);
+      setStatsErr(String(e?.message || e));
+      setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
+    } finally {
+      setStatsLoading(false);
+    }
   };
 
   const fetchStatsSummary = async (storeId: string) => {
@@ -188,6 +231,7 @@ export default function AdminHomePage() {
       } catch (e: any) {
         console.error("[admin] load stores error:", e?.message || e);
         setMsg(`매장 목록 로드 실패: ${String(e?.message || e)}`);
+        setStoresLoaded(true);
       } finally {
         setBooting(false);
       }
@@ -196,6 +240,7 @@ export default function AdminHomePage() {
   }, [sp]);
 
   useEffect(() => {
+    if (!storesLoaded) return;
     if (!stores.length) {
       setSelectedStoreIdState(null);
       clearCurrentStoreId();
