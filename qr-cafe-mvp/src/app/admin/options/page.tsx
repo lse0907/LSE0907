@@ -13,6 +13,7 @@ type OptionGroup = {
   required: boolean;
   min: number;
   max: number;
+  scope?: "common" | "exclusive" | null;
 };
 
 type OptionItem = {
@@ -20,7 +21,12 @@ type OptionItem = {
   store_id: string;
   group_id: string;
   name: string;
-  price_delta: number;
+};
+
+type MenuSummary = {
+  id: string;
+  name: string;
+  option_group_ids?: string[] | null;
 };
 
 function uid(prefix = "opt") {
@@ -39,12 +45,14 @@ export default function AdminOptionsPage() {
 
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [items, setItems] = useState<OptionItem[]>([]);
+  const [menus, setMenus] = useState<MenuSummary[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [badge, setBadge] = useState<"idle" | "saved" | "error">("idle");
   const badgeText = badge === "saved" ? "저장됨 ✅" : badge === "error" ? "저장 실패 ❗" : " ";
+  const [activeScope, setActiveScope] = useState<"common" | "exclusive">("common");
 
   // 1) storeId 로드
   useEffect(() => {
@@ -78,7 +86,7 @@ export default function AdminOptionsPage() {
 
       const gRes = await supabase
         .from("option_groups")
-        .select("id, store_id, name, required, min, max")
+        .select("id, store_id, name, required, min, max, scope")
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
 
@@ -86,17 +94,27 @@ export default function AdminOptionsPage() {
 
       const iRes = await supabase
         .from("option_items")
-        .select("id, store_id, group_id, name, price_delta")
+        .select("id, store_id, group_id, name")
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
 
       if (iRes.error) throw iRes.error;
 
+      const mRes = await supabase
+        .from("menu_items")
+        .select("id, name, option_group_ids")
+        .eq("store_id", storeId)
+        .order("created_at", { ascending: false });
+
+      if (mRes.error) throw mRes.error;
+
       const nextGroups = (gRes.data || []) as OptionGroup[];
       const nextItems = (iRes.data || []) as OptionItem[];
+      const nextMenus = (mRes.data || []) as MenuSummary[];
 
       setGroups(nextGroups);
       setItems(nextItems);
+      setMenus(nextMenus);
 
       // 선택 그룹 자동 세팅
       setSelectedGroupId((prev) => {
@@ -127,6 +145,25 @@ export default function AdminOptionsPage() {
     [items, selectedGroupId]
   );
 
+  const scopedGroups = useMemo(
+    () => groups.filter((g) => (g.scope || "common") === activeScope),
+    [groups, activeScope]
+  );
+
+  useEffect(() => {
+    setSelectedGroupId((prev) => {
+      if (prev && scopedGroups.some((g) => g.id === prev)) return prev;
+      return scopedGroups[0]?.id || "";
+    });
+  }, [scopedGroups]);
+
+  const linkedMenus = useMemo(() => {
+    if (!selectedGroup) return [];
+    return menus.filter((m) =>
+      Array.isArray(m.option_group_ids) ? m.option_group_ids.includes(selectedGroup.id) : false
+    );
+  }, [menus, selectedGroup]);
+
   // 공통: 뱃지 처리
   const markSaved = () => {
     setBadge("saved");
@@ -152,6 +189,7 @@ export default function AdminOptionsPage() {
         required: false,
         min: 0,
         max: 1,
+        scope: activeScope,
       };
 
       const { error } = await supabase.from("option_groups").insert([row]);
@@ -182,6 +220,7 @@ export default function AdminOptionsPage() {
           required: patch.required ?? selectedGroup.required,
           min: typeof patch.min === "number" ? patch.min : selectedGroup.min,
           max: typeof patch.max === "number" ? patch.max : selectedGroup.max,
+          scope: patch.scope ?? selectedGroup.scope ?? "common",
         })
         .eq("id", selectedGroup.id)
         .eq("store_id", storeId);
@@ -248,7 +287,6 @@ export default function AdminOptionsPage() {
         store_id: storeId,
         group_id: selectedGroup.id,
         name: "새 옵션",
-        price_delta: 0,
       };
 
       const { error } = await supabase.from("option_items").insert([row]);
@@ -277,7 +315,6 @@ export default function AdminOptionsPage() {
         .from("option_items")
         .update({
           name: patch.name ?? cur.name,
-          price_delta: typeof patch.price_delta === "number" ? patch.price_delta : cur.price_delta,
         })
         .eq("id", id)
         .eq("store_id", storeId);
@@ -456,6 +493,35 @@ export default function AdminOptionsPage() {
           font-size: 12px;
         }
 
+        .scopeRow {
+          display: flex;
+          gap: 8px;
+          margin-top: 10px;
+          flex-wrap: wrap;
+        }
+        .scopeBtn {
+          border: 1px solid var(--line);
+          background: #fff;
+          padding: 8px 12px;
+          border-radius: 999px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+        .scopeBtnOn {
+          background: var(--brand);
+          color: #fff;
+          border-color: var(--brand);
+        }
+        .pill {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 8px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 900;
+          background: #f3f4f6;
+          color: #111827;
+        }
         .field {
           display: grid;
           gap: 6px;
@@ -508,10 +574,28 @@ export default function AdminOptionsPage() {
       <header className="topbar">
         <div>
           <h1 className="h1">옵션 관리</h1>
-          <p className="sub">옵션 그룹/옵션 항목을 등록합니다. (예: 샷 추가, 시럽)</p>
+          <p className="sub">
+            공통옵션(여러 메뉴에서 사용)과 전용옵션(특정 메뉴 전용)을 분리해 관리합니다.
+          </p>
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
+          <div className="scopeRow">
+            <button
+              className={`scopeBtn ${activeScope === "common" ? "scopeBtnOn" : ""}`}
+              onClick={() => setActiveScope("common")}
+              type="button"
+            >
+              공통옵션
+            </button>
+            <button
+              className={`scopeBtn ${activeScope === "exclusive" ? "scopeBtnOn" : ""}`}
+              onClick={() => setActiveScope("exclusive")}
+              type="button"
+            >
+              전용옵션
+            </button>
+          </div>
         </div>
 
         {badge === "saved" ? (
@@ -540,7 +624,9 @@ export default function AdminOptionsPage() {
         <section className="grid">
           {/* 그룹 */}
           <div className="card">
-            <h2 className="cardTitle">옵션 그룹 ({groups.length})</h2>
+            <h2 className="cardTitle">
+              {activeScope === "common" ? "공통옵션 그룹" : "전용옵션 그룹"} ({scopedGroups.length})
+            </h2>
 
             <div className="btnRow">
               <button className="btn btnPrimary" onClick={addGroup} disabled={saving || loading}>
@@ -555,7 +641,7 @@ export default function AdminOptionsPage() {
             </div>
 
             <div className="list">
-              {groups.map((g) => (
+              {scopedGroups.map((g) => (
                 <button
                   key={g.id}
                   className={`rowBtn ${g.id === selectedGroupId ? "rowBtnOn" : ""}`}
@@ -567,7 +653,7 @@ export default function AdminOptionsPage() {
                   </div>
                 </button>
               ))}
-              {!loading && groups.length === 0 ? (
+              {!loading && scopedGroups.length === 0 ? (
                 <div className="muted" style={{ marginTop: 10 }}>
                   아직 옵션 그룹이 없습니다. “+ 새 그룹”으로 시작하세요.
                 </div>
@@ -585,6 +671,31 @@ export default function AdminOptionsPage() {
               </p>
             ) : (
               <>
+                <div className="field" style={{ marginTop: 0 }}>
+                  <div className="label">옵션 유형</div>
+                  <div className="scopeRow">
+                    <button
+                      className={`scopeBtn ${selectedGroup.scope !== "exclusive" ? "scopeBtnOn" : ""}`}
+                      onClick={() => updateGroup({ scope: "common" })}
+                      disabled={saving || loading}
+                      type="button"
+                    >
+                      공통옵션
+                    </button>
+                    <button
+                      className={`scopeBtn ${selectedGroup.scope === "exclusive" ? "scopeBtnOn" : ""}`}
+                      onClick={() => updateGroup({ scope: "exclusive" })}
+                      disabled={saving || loading}
+                      type="button"
+                    >
+                      전용옵션
+                    </button>
+                  </div>
+                  <div className="muted" style={{ marginTop: 6 }}>
+                    공통옵션은 여러 메뉴에 붙일 수 있고, 전용옵션은 특정 메뉴에만 붙이는 것을 권장해요.
+                  </div>
+                </div>
+
                 <div className="field">
                   <div className="label">그룹명</div>
                   <input
@@ -650,6 +761,23 @@ export default function AdminOptionsPage() {
                   </button>
                 </div>
 
+                <div style={{ marginTop: 12 }}>
+                  <div className="label">연결된 메뉴</div>
+                  {linkedMenus.length === 0 ? (
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
+                    </div>
+                  ) : (
+                    <div className="scopeRow">
+                      {linkedMenus.map((m) => (
+                        <span key={m.id} className="pill">
+                          {m.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 950 }}>
                     옵션 항목 ({groupItems.length})
@@ -676,16 +804,6 @@ export default function AdminOptionsPage() {
                               className="input"
                               value={it.name}
                               onChange={(e) => updateItem(it.id, { name: e.target.value })}
-                              disabled={saving || loading}
-                            />
-                          </div>
-                          <div className="field" style={{ marginTop: 0 }}>
-                            <div className="label">추가금(원)</div>
-                            <input
-                              className="input"
-                              inputMode="numeric"
-                              value={String(it.price_delta)}
-                              onChange={(e) => updateItem(it.id, { price_delta: toInt(e.target.value, it.price_delta) })}
                               disabled={saving || loading}
                             />
                           </div>

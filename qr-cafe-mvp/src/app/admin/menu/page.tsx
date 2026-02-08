@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 
+const MENU_IMAGE_BUCKET = "menu-assets";
+
 type MenuItem = {
   id: string;
   store_id: string;
@@ -20,6 +22,22 @@ type OptionGroup = {
   id: string;
   store_id: string;
   name: string;
+  scope?: "common" | "exclusive" | null;
+};
+
+type OptionItem = {
+  id: string;
+  store_id: string;
+  group_id: string;
+  name: string;
+  price_delta?: number | null;
+};
+
+type MenuOptionPrice = {
+  store_id: string;
+  menu_id: string;
+  option_item_id: string;
+  price_delta: number;
 };
 
 type MenuDraft = {
@@ -30,6 +48,7 @@ type MenuDraft = {
   isSoldOut: boolean;
   optionGroupIds: string[];
   sortOrder: string;
+  optionPriceByItem: Record<string, string>;
 };
 
 function slugify(input: string) {
@@ -50,6 +69,12 @@ function toInt(v: string, fallback: number) {
   return Math.max(0, Math.round(n));
 }
 
+function getFileExt(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed.includes(".")) return "";
+  return trimmed.split(".").pop() || "";
+}
+
 const emptyDraft: MenuDraft = {
   id: "",
   name: "",
@@ -58,6 +83,7 @@ const emptyDraft: MenuDraft = {
   isSoldOut: false,
   optionGroupIds: [],
   sortOrder: "",
+  optionPriceByItem: {},
 };
 
 export default function AdminMenuPage() {
@@ -66,10 +92,14 @@ export default function AdminMenuPage() {
   const [storeId, setStoreId] = useState("");
   const [items, setItems] = useState<MenuItem[]>([]);
   const [groups, setGroups] = useState<OptionGroup[]>([]);
+  const [optionItems, setOptionItems] = useState<OptionItem[]>([]);
+  const [optionPrices, setOptionPrices] = useState<MenuOptionPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [badge, setBadge] = useState<"idle" | "saved" | "error">("idle");
   const badgeText = badge === "saved" ? "저장됨 ✅" : badge === "error" ? "저장 실패 ❗" : " ";
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [msg, setMsg] = useState("");
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -111,14 +141,31 @@ export default function AdminMenuPage() {
 
       const groupRes = await supabase
         .from("option_groups")
-        .select("id,store_id,name")
+        .select("id,store_id,name,scope")
         .eq("store_id", storeId)
         .order("created_at", { ascending: true });
 
       if (groupRes.error) throw groupRes.error;
 
+      const itemRes = await supabase
+        .from("option_items")
+        .select("id,store_id,group_id,name,price_delta")
+        .eq("store_id", storeId)
+        .order("created_at", { ascending: true });
+
+      if (itemRes.error) throw itemRes.error;
+
+      const priceRes = await supabase
+        .from("menu_option_prices")
+        .select("store_id,menu_id,option_item_id,price_delta")
+        .eq("store_id", storeId);
+
+      if (priceRes.error) throw priceRes.error;
+
       setItems((menuRes.data || []) as MenuItem[]);
       setGroups((groupRes.data || []) as OptionGroup[]);
+      setOptionItems((itemRes.data || []) as OptionItem[]);
+      setOptionPrices((priceRes.data || []) as MenuOptionPrice[]);
 
       setSelectedId((prev) => {
         if (prev && (menuRes.data || []).some((x) => x.id === prev)) return prev;
@@ -154,8 +201,14 @@ export default function AdminMenuPage() {
       isSoldOut: Boolean(found.is_sold_out),
       optionGroupIds: Array.isArray(found.option_group_ids) ? found.option_group_ids : [],
       sortOrder: found.sort_order != null ? String(found.sort_order) : "",
+      optionPriceByItem: optionPrices
+        .filter((row) => row.menu_id === found.id)
+        .reduce<Record<string, string>>((acc, row) => {
+          acc[row.option_item_id] = String(row.price_delta ?? 0);
+          return acc;
+        }, {}),
     });
-  }, [items, selectedId]);
+  }, [items, selectedId, optionPrices]);
 
   const sortedItems = useMemo(() => {
     const list = [...items];
@@ -171,6 +224,7 @@ export default function AdminMenuPage() {
   const onNew = () => {
     setSelectedId("");
     setDraft(emptyDraft);
+    setMsg("");
   };
 
   const onSave = async () => {
@@ -225,6 +279,38 @@ export default function AdminMenuPage() {
         if (ins.error) throw ins.error;
       }
 
+      const activeOptionItemIds = new Set(
+        draft.optionGroupIds.flatMap((gid) =>
+          optionItems.filter((it) => it.group_id === gid).map((it) => it.id)
+        )
+      );
+
+      if (activeOptionItemIds.size === 0) {
+        const delAll = await supabase.from("menu_option_prices").delete().eq("menu_id", id).eq("store_id", storeId);
+        if (delAll.error) throw delAll.error;
+      } else {
+        const ids = [...activeOptionItemIds];
+        const inFilter = `(${ids.map((val) => `"${val}"`).join(",")})`;
+        const delOther = await supabase
+          .from("menu_option_prices")
+          .delete()
+          .eq("menu_id", id)
+          .eq("store_id", storeId)
+          .not("option_item_id", "in", inFilter);
+        if (delOther.error) throw delOther.error;
+
+        const rows = ids.map((optionItemId) => ({
+          store_id: storeId,
+          menu_id: id,
+          option_item_id: optionItemId,
+          price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
+        }));
+        const up = await supabase
+          .from("menu_option_prices")
+          .upsert(rows, { onConflict: "store_id,menu_id,option_item_id" });
+        if (up.error) throw up.error;
+      }
+
       await refresh();
       setSelectedId(id);
       setBadge("saved");
@@ -266,7 +352,15 @@ export default function AdminMenuPage() {
     setDraft((prev) => {
       const has = prev.optionGroupIds.includes(id);
       const next = has ? prev.optionGroupIds.filter((g) => g !== id) : [...prev.optionGroupIds, id];
-      return { ...prev, optionGroupIds: next };
+      if (!has) return { ...prev, optionGroupIds: next };
+
+      const nextPrices = { ...prev.optionPriceByItem };
+      optionItems
+        .filter((it) => it.group_id === id)
+        .forEach((it) => {
+          delete nextPrices[it.id];
+        });
+      return { ...prev, optionGroupIds: next, optionPriceByItem: nextPrices };
     });
   };
 
@@ -279,6 +373,45 @@ export default function AdminMenuPage() {
   };
 
   const isEditing = Boolean(selectedId);
+  const selectedGroups = groups.filter((g) => draft.optionGroupIds.includes(g.id));
+  const itemsByGroup = useMemo(() => {
+    const map = new Map<string, OptionItem[]>();
+    optionItems.forEach((it) => {
+      if (!map.has(it.group_id)) map.set(it.group_id, []);
+      map.get(it.group_id)?.push(it);
+    });
+    return map;
+  }, [optionItems]);
+
+  const getOptionPrice = (item: OptionItem) => {
+    if (draft.optionPriceByItem[item.id] != null) return draft.optionPriceByItem[item.id];
+    return String(item.price_delta ?? 0);
+  };
+
+  const onUploadMenuImage = async (file: File | null) => {
+    if (!file) return;
+    if (!draft.id.trim()) {
+      setMsg("이미지를 올리려면 메뉴 ID를 먼저 입력해주세요.");
+      return;
+    }
+
+    setUploadingImage(true);
+    setMsg("");
+    try {
+      const ext = getFileExt(file.name) || "png";
+      const path = `${storeId}/${draft.id.trim()}-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from(MENU_IMAGE_BUCKET).upload(path, file, { upsert: true });
+      if (error) throw error;
+
+      const { data } = supabase.storage.from(MENU_IMAGE_BUCKET).getPublicUrl(path);
+      const url = data.publicUrl || "";
+      if (url) setDraft((prev) => ({ ...prev, image: url }));
+    } catch (e: any) {
+      setMsg(`메뉴 이미지 업로드 실패: ${String(e?.message || e)}`);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   return (
     <main className="wrap">
@@ -289,7 +422,9 @@ export default function AdminMenuPage() {
           --text: #111827;
           --muted: #6b7280;
           --line: #e5e7eb;
-          --brand: #111827;
+          --brand: #0f172a;
+          --brand-soft: #e2e8f0;
+          --accent: #2563eb;
           --radius: 16px;
         }
         body {
@@ -451,10 +586,15 @@ export default function AdminMenuPage() {
       <header className="topbar">
         <div>
           <h1 className="h1">메뉴 관리</h1>
-          <p className="sub">메뉴를 등록/수정/삭제하고 옵션 그룹을 연결합니다.</p>
+          <p className="sub">메뉴 기본정보와 옵션 가격을 관리합니다. (모바일 화면 최적화)</p>
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
+          {msg ? (
+            <p className="sub" style={{ marginTop: 6, color: "#b91c1c" }}>
+              {msg}
+            </p>
+          ) : null}
         </div>
 
         {badge === "saved" ? (
@@ -505,7 +645,7 @@ export default function AdminMenuPage() {
                 >
                   <div className="name">{m.name}</div>
                   <div className="muted">
-                    {Number(m.price || 0).toLocaleString()}원 · id: {m.id}
+                    {Number(m.price || 0).toLocaleString()}원 · 옵션 {m.option_group_ids?.length || 0}개
                   </div>
                 </button>
               ))}
@@ -551,7 +691,7 @@ export default function AdminMenuPage() {
             </div>
 
             <div className="field">
-              <div className="label">가격</div>
+              <div className="label">기본 가격</div>
               <input
                 className="input"
                 inputMode="numeric"
@@ -563,14 +703,20 @@ export default function AdminMenuPage() {
             </div>
 
             <div className="field">
-              <div className="label">이미지 URL (선택)</div>
-              <input
-                className="input"
-                value={draft.image}
-                onChange={(e) => setDraft((prev) => ({ ...prev, image: e.target.value }))}
-                placeholder="https://..."
-                disabled={saving || loading}
-              />
+              <div className="label">메뉴 이미지</div>
+              <div className="btnRow" style={{ marginTop: 4 }}>
+                <label className="btn">
+                  {uploadingImage ? "업로드 중..." : "이미지 업로드"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => onUploadMenuImage(e.target.files?.[0] || null)}
+                    disabled={saving || loading || uploadingImage}
+                  />
+                </label>
+              </div>
+              <input className="input" value={draft.image} readOnly placeholder="이미지 업로드 후 자동 입력" />
             </div>
 
             <div className="field">
@@ -612,9 +758,63 @@ export default function AdminMenuPage() {
                         onChange={() => toggleGroup(g.id)}
                         disabled={saving || loading}
                       />
-                      {g.name} <span className="muted">({g.id})</span>
+                      {g.name}
+                      <span className="muted">
+                        · {g.scope === "exclusive" ? "전용옵션" : "공통옵션"}
+                      </span>
                     </label>
                   ))}
+                </div>
+              )}
+            </div>
+
+            <div className="field">
+              <div className="label">옵션 추가금 설정</div>
+              <div className="hint">메뉴마다 다른 옵션 가격을 설정할 수 있습니다.</div>
+              {selectedGroups.length === 0 ? (
+                <div className="muted" style={{ marginTop: 8 }}>
+                  연결된 옵션 그룹이 없습니다.
+                </div>
+              ) : (
+                <div className="optionGrid" style={{ marginTop: 10 }}>
+                  {selectedGroups.map((group) => {
+                    const groupOptions = itemsByGroup.get(group.id) || [];
+                    return (
+                      <div key={group.id} className="card" style={{ padding: 12 }}>
+                        <div className="name" style={{ marginBottom: 6 }}>
+                          {group.name}
+                          <span className="muted" style={{ marginLeft: 6 }}>
+                            ({group.scope === "exclusive" ? "전용옵션" : "공통옵션"})
+                          </span>
+                        </div>
+                        {groupOptions.length === 0 ? (
+                          <div className="muted">옵션 항목이 없습니다.</div>
+                        ) : (
+                          groupOptions.map((item) => (
+                            <div key={item.id} className="optionRow" style={{ justifyContent: "space-between" }}>
+                              <span>{item.name}</span>
+                              <input
+                                className="input"
+                                style={{ maxWidth: 120 }}
+                                inputMode="numeric"
+                                value={getOptionPrice(item)}
+                                onChange={(e) =>
+                                  setDraft((prev) => ({
+                                    ...prev,
+                                    optionPriceByItem: {
+                                      ...prev.optionPriceByItem,
+                                      [item.id]: e.target.value,
+                                    },
+                                  }))
+                                }
+                                disabled={saving || loading}
+                              />
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

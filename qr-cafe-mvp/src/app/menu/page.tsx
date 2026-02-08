@@ -49,6 +49,12 @@ type OptionItem = {
   priceDelta: number;
 };
 
+type MenuOptionPrice = {
+  menuId: string;
+  optionItemId: string;
+  priceDelta: number;
+};
+
 type OptionData = {
   groups: OptionGroup[];
   items: OptionItem[];
@@ -100,6 +106,7 @@ export default function MenuPage() {
     groups: [],
     items: [],
   });
+  const [menuOptionPrices, setMenuOptionPrices] = useState<MenuOptionPrice[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(true);
 
   const [cartLines, setCartLines] = useState<CartLine[]>([]);
@@ -112,22 +119,30 @@ export default function MenuPage() {
   const fetchOptionsFromDb = async () => {
     setOptionsLoading(true);
 
-    const [{ data: gData, error: gErr }, { data: iData, error: iErr }] =
-      await Promise.all([
-        supabase
-          .from("option_groups")
-          .select("id,name,required,min,max,store_id,created_at")
-          .eq("store_id", storeId)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("option_items")
-          .select("id,group_id,name,price_delta,store_id,created_at")
-          .eq("store_id", storeId)
-          .order("created_at", { ascending: true }),
-      ]);
+    const [
+      { data: gData, error: gErr },
+      { data: iData, error: iErr },
+      { data: pData, error: pErr },
+    ] = await Promise.all([
+      supabase
+        .from("option_groups")
+        .select("id,name,required,min,max,store_id,created_at")
+        .eq("store_id", storeId)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("option_items")
+        .select("id,group_id,name,price_delta,store_id,created_at")
+        .eq("store_id", storeId)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("menu_option_prices")
+        .select("menu_id,option_item_id,price_delta,store_id")
+        .eq("store_id", storeId),
+    ]);
 
     if (gErr) console.error("[menu] fetch option_groups error:", gErr.message);
     if (iErr) console.error("[menu] fetch option_items error:", iErr.message);
+    if (pErr) console.error("[menu] fetch menu_option_prices error:", pErr.message);
 
     const groups: OptionGroup[] = (Array.isArray(gData) ? gData : [])
       .map((g: any) => ({
@@ -148,7 +163,16 @@ export default function MenuPage() {
       }))
       .filter((it) => it.id && it.groupId && it.name);
 
+    const priceRows: MenuOptionPrice[] = (Array.isArray(pData) ? pData : [])
+      .map((row: any) => ({
+        menuId: toStr(row.menu_id).trim(),
+        optionItemId: toStr(row.option_item_id).trim(),
+        priceDelta: Math.round(Number(row.price_delta ?? 0)),
+      }))
+      .filter((row) => row.menuId && row.optionItemId);
+
     setOptionsData({ groups, items });
+    setMenuOptionPrices(priceRows);
     setOptionsLoading(false);
   };
 
@@ -302,6 +326,21 @@ export default function MenuPage() {
   const groupItems = (gid: string): OptionItem[] =>
     optionsData.items.filter((it) => it.groupId === gid);
 
+  const menuOptionPriceMap = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    menuOptionPrices.forEach((row) => {
+      if (!map.has(row.menuId)) map.set(row.menuId, new Map());
+      map.get(row.menuId)?.set(row.optionItemId, row.priceDelta);
+    });
+    return map;
+  }, [menuOptionPrices]);
+
+  const resolveOptionPrice = (menuId: string, item: OptionItem) => {
+    const menuMap = menuOptionPriceMap.get(menuId);
+    if (menuMap && menuMap.has(item.id)) return menuMap.get(item.id) || 0;
+    return item.priceDelta || 0;
+  };
+
   const validateOpt = () => {
     if (!optTarget) return { ok: false, msg: "대상 메뉴가 없습니다." };
     const groupIds: string[] = Array.isArray((optTarget as any).optionGroupIds)
@@ -348,7 +387,7 @@ export default function MenuPage() {
         .map((x: any) => ({
           id: x.id,
           name: x.name,
-          priceDelta: Number(x.priceDelta || 0),
+          priceDelta: resolveOptionPrice(m.id, x),
         }));
 
       const sum = selectedItems.reduce((s, x) => s + Number(x.priceDelta || 0), 0);
@@ -1015,9 +1054,9 @@ export default function MenuPage() {
                             </div>
 
                             <div className="iPrice">
-                              {it.priceDelta >= 0
-                                ? `+${fmt(it.priceDelta)}`
-                                : `-${fmt(Math.abs(it.priceDelta))}`}
+                              {resolveOptionPrice(optTarget.id, it) >= 0
+                                ? `+${fmt(resolveOptionPrice(optTarget.id, it))}`
+                                : `-${fmt(Math.abs(resolveOptionPrice(optTarget.id, it)))}`}
                               원
                             </div>
                           </label>
