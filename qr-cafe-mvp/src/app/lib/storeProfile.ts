@@ -18,6 +18,7 @@ export type StoreProfile = {
     industry?: string;
     phone?: string;
     address?: string;
+    addressDetail?: string;
     hours?: string;
     sns?: string;
     billing?: string;
@@ -37,6 +38,7 @@ export const DEFAULT_STORE_PROFILE: StoreProfile = {
     industry: "",
     phone: "",
     address: "",
+    addressDetail: "",
     hours: "",
     sns: "",
     billing: "",
@@ -76,8 +78,16 @@ export function loadStoreProfile(storeId?: string): StoreProfile {
       mainImage: pickString((parsed as any).mainImage, DEFAULT_STORE_PROFILE.mainImage),
       logoImage: pickString(parsed.logoImage, DEFAULT_STORE_PROFILE.logoImage),
       mainImageOverlayStrength: clampOverlay(Number((parsed as any).mainImageOverlayStrength)),
-      // extra는 아직 저장 정책상 비활성
-      extra: { ...DEFAULT_STORE_PROFILE.extra },
+      extra: {
+        bizNo: pickString(parsed?.extra?.bizNo, DEFAULT_STORE_PROFILE.extra?.bizNo || ""),
+        industry: pickString(parsed?.extra?.industry, DEFAULT_STORE_PROFILE.extra?.industry || ""),
+        phone: pickString(parsed?.extra?.phone, DEFAULT_STORE_PROFILE.extra?.phone || ""),
+        address: pickString(parsed?.extra?.address, DEFAULT_STORE_PROFILE.extra?.address || ""),
+        addressDetail: pickString(parsed?.extra?.addressDetail, DEFAULT_STORE_PROFILE.extra?.addressDetail || ""),
+        hours: pickString(parsed?.extra?.hours, DEFAULT_STORE_PROFILE.extra?.hours || ""),
+        sns: pickString(parsed?.extra?.sns, DEFAULT_STORE_PROFILE.extra?.sns || ""),
+        billing: pickString(parsed?.extra?.billing, DEFAULT_STORE_PROFILE.extra?.billing || ""),
+      },
     };
   } catch {
     return DEFAULT_STORE_PROFILE;
@@ -92,7 +102,16 @@ export function saveStoreProfile(storeId: string | undefined, next: StoreProfile
     mainImage: pickString(next.mainImage, DEFAULT_STORE_PROFILE.mainImage),
     logoImage: pickString(next.logoImage, DEFAULT_STORE_PROFILE.logoImage),
     mainImageOverlayStrength: clampOverlay(next.mainImageOverlayStrength),
-    extra: { ...DEFAULT_STORE_PROFILE.extra },
+    extra: {
+      bizNo: pickString(next?.extra?.bizNo, DEFAULT_STORE_PROFILE.extra?.bizNo || ""),
+      industry: pickString(next?.extra?.industry, DEFAULT_STORE_PROFILE.extra?.industry || ""),
+      phone: pickString(next?.extra?.phone, DEFAULT_STORE_PROFILE.extra?.phone || ""),
+      address: pickString(next?.extra?.address, DEFAULT_STORE_PROFILE.extra?.address || ""),
+      addressDetail: pickString(next?.extra?.addressDetail, DEFAULT_STORE_PROFILE.extra?.addressDetail || ""),
+      hours: pickString(next?.extra?.hours, DEFAULT_STORE_PROFILE.extra?.hours || ""),
+      sns: pickString(next?.extra?.sns, DEFAULT_STORE_PROFILE.extra?.sns || ""),
+      billing: pickString(next?.extra?.billing, DEFAULT_STORE_PROFILE.extra?.billing || ""),
+    },
   };
 
   localStorage.setItem(keyOf(storeId), JSON.stringify(sanitized));
