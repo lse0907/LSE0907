@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
 import { loadStoreProfile, saveStoreProfile, useStoreProfile } from "@/app/lib/storeProfile";
+import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 
 function clampOverlay(v: number) {
   if (!Number.isFinite(v)) return 0;
@@ -18,7 +20,27 @@ function pickCore(p: any) {
     mainImage: String(p?.mainImage ?? ""),
     logoImage: String(p?.logoImage ?? ""),
     mainImageOverlayStrength: clampOverlay(Number(p?.mainImageOverlayStrength ?? 55)),
+    extra: {
+      bizNo: String(p?.extra?.bizNo ?? ""),
+      industry: String(p?.extra?.industry ?? ""),
+      phone: String(p?.extra?.phone ?? ""),
+      address: String(p?.extra?.address ?? ""),
+      addressDetail: String(p?.extra?.addressDetail ?? ""),
+      hours: String(p?.extra?.hours ?? ""),
+      sns: String(p?.extra?.sns ?? ""),
+    },
   };
+}
+
+const FREE_TRIAL_DAYS = 30;
+
+function calcRemainingDays(createdAt?: string | null) {
+  if (!createdAt) return null;
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return null;
+  const diffMs = Date.now() - created;
+  const usedDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.max(0, FREE_TRIAL_DAYS - usedDays);
 }
 
 export default function AdminStorePage() {
@@ -26,6 +48,8 @@ export default function AdminStorePage() {
   const sp = useSearchParams();
   const [storeId, setStoreId] = useState<string>("");
   const { profile, setProfile } = useStoreProfile(storeId);
+  const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
+  const [showAddr, setShowAddr] = useState(false);
 
   // ✅ 폼 상태(편집용)
   const [draft, setDraft] = useState(profile);
@@ -51,12 +75,36 @@ export default function AdminStorePage() {
     setDraft(profile);
   }, [profile]);
 
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from("stores")
+        .select("created_at")
+        .eq("store_id", storeId)
+        .maybeSingle();
+      if (!mounted) return;
+      if (error) {
+        console.error("[admin/store] load created_at error:", error.message);
+        setStoreCreatedAt(null);
+        return;
+      }
+      setStoreCreatedAt(data?.created_at || null);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
+
   // ✅ 변경 여부: 핵심 필드만 비교 (extra는 저장도 안 하니 제외)
   const isDirty = useMemo(() => {
     const a = pickCore(draft);
     const b = pickCore(profile);
     return JSON.stringify(a) !== JSON.stringify(b);
   }, [draft, profile]);
+
+  const remainingDays = useMemo(() => calcRemainingDays(storeCreatedAt), [storeCreatedAt]);
 
   // ✅ 미리보기용 오버레이 계산(0~100)
   const strength = clampOverlay(Number((draft as any).mainImageOverlayStrength ?? 55));
@@ -107,6 +155,26 @@ export default function AdminStorePage() {
   const onReset = () => {
     setDraft(profile);
     setSaveState("idle");
+  };
+
+  const openAddressSearch = () => setShowAddr(true);
+  const closeAddressSearch = () => setShowAddr(false);
+
+  const onCompleteAddress = (data: Address) => {
+    const picked = (data.address || "").trim();
+    setDraft((p: any) => ({
+      ...p,
+      extra: {
+        ...(p?.extra || {}),
+        address: picked,
+      },
+    }));
+    closeAddressSearch();
+
+    setTimeout(() => {
+      const el = document.getElementById("storeAddressDetailInput");
+      if (el) (el as HTMLInputElement).focus();
+    }, 50);
   };
 
   return (
@@ -297,6 +365,18 @@ export default function AdminStorePage() {
           object-fit: cover;
         }
 
+        .heroFallback {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          place-items: center;
+          color: #fff;
+          font-weight: 900;
+          font-size: 14px;
+          text-align: center;
+          padding: 12px;
+        }
+
         .overlay {
           position: absolute;
           inset: 0;
@@ -384,9 +464,49 @@ export default function AdminStorePage() {
           color: #6b7280;
         }
 
+        .modalOverlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.55);
+          display: grid;
+          place-items: center;
+          padding: 16px;
+          z-index: 50;
+        }
+
+        .modal {
+          width: min(680px, 100%);
+          background: #fff;
+          border-radius: 16px;
+          padding: 14px;
+          border: 1px solid var(--line);
+          box-shadow: 0 14px 40px rgba(15, 23, 42, 0.2);
+        }
+
+        .modalHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+        }
+
         @media (max-width: 860px) {
           .grid {
             grid-template-columns: 1fr;
+          }
+        }
+        @media (max-width: 640px) {
+          .wrap {
+            padding: 12px;
+          }
+          .topbar {
+            align-items: center;
+          }
+          .hero {
+            height: 200px;
+          }
+          .storeName {
+            font-size: 18px;
           }
         }
       `}</style>
@@ -394,7 +514,7 @@ export default function AdminStorePage() {
       <header className="topbar">
         <div>
           <h1 className="h1">매장 정보</h1>
-          <p className="sub">저장하면 스타트/QR 등 화면에 즉시 반영됩니다.</p>
+          <p className="sub">필수 정보만 입력하세요.</p>
         </div>
 
         <div>
@@ -406,6 +526,15 @@ export default function AdminStorePage() {
             <span className="badge">마지막 저장: {new Date(lastSavedAt).toLocaleTimeString()}</span>
           ) : (
             <span className="badge">미저장</span>
+          )}
+          {remainingDays !== null ? (
+            <span className="badge" style={{ marginLeft: 6 }}>
+              무료 사용기간 {FREE_TRIAL_DAYS}일 · 잔여 {remainingDays}일
+            </span>
+          ) : (
+            <span className="badge" style={{ marginLeft: 6 }}>
+              무료 사용기간 {FREE_TRIAL_DAYS}일
+            </span>
           )}
         </div>
       </header>
@@ -419,7 +548,9 @@ export default function AdminStorePage() {
             {(draft as any).mainImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img className="heroImg" src={(draft as any).mainImage} alt="main" />
-            ) : null}
+            ) : (
+              <div className="heroFallback">대표 이미지를 등록하세요</div>
+            )}
             <div className="overlay" style={{ background: overlayBg }} />
 
             <div className="heroInner">
@@ -431,7 +562,7 @@ export default function AdminStorePage() {
                   </div>
                 ) : (
                   <div className="logo" aria-hidden="true">
-                    <span style={{ color: "white", fontWeight: 950 }}>QR</span>
+                    <span style={{ color: "white", fontWeight: 900, fontSize: 12 }}>logo</span>
                   </div>
                 )}
                 <div style={{ minWidth: 0 }}>
@@ -445,7 +576,6 @@ export default function AdminStorePage() {
             <p className="descText">{(draft as any).storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
           </div>
 
-          <div className="hint">* 오버레이 강도를 올리면 이미지가 더 어두워지고 글자가 더 잘 보입니다.</div>
         </div>
 
         {/* 설정 */}
@@ -463,6 +593,13 @@ export default function AdminStorePage() {
           </div>
 
           <div className="field">
+            <div className="label">
+              매장 ID <span className="pill">수정 불가</span>
+            </div>
+            <input className="input" value={storeId} disabled placeholder="예: ximen" />
+          </div>
+
+          <div className="field">
             <div className="label">매장 설명</div>
             <textarea
               className="textarea"
@@ -473,7 +610,7 @@ export default function AdminStorePage() {
           </div>
 
           <div className="field">
-            <div className="label">대표 이미지 경로 (public 기준)</div>
+            <div className="label">대표 이미지 경로</div>
             <input
               className="input"
               value={(draft as any).mainImage}
@@ -523,7 +660,123 @@ export default function AdminStorePage() {
               />
             </div>
 
-            <div className="hint">0 = 거의 원본 / 100 = 아주 어둡게</div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <h3 className="cardTitle">매장 상세 정보</h3>
+
+            <div className="field">
+              <div className="label">
+                사업자등록번호 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.bizNo || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), bizNo: e.target.value },
+                  }))
+                }
+                placeholder="예: 000-00-00000"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                업종 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.industry || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), industry: e.target.value },
+                  }))
+                }
+                placeholder="예: 카페, 음식점"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                매장 전화번호 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.phone || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), phone: e.target.value },
+                  }))
+                }
+                placeholder="예: 010-0000-0000"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                매장 주소 <span className="pill">필수</span>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  className="input"
+                  value={(draft as any)?.extra?.address || ""}
+                  readOnly
+                  placeholder="주소 검색으로 입력"
+                />
+                <button type="button" className="btn" onClick={openAddressSearch}>
+                  주소 검색
+                </button>
+              </div>
+              <input
+                id="storeAddressDetailInput"
+                className="input"
+                value={(draft as any)?.extra?.addressDetail || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), addressDetail: e.target.value },
+                  }))
+                }
+                placeholder="상세주소 (선택) 예: 101동 1203호"
+                style={{ marginTop: 8 }}
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                영업시간 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.hours || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), hours: e.target.value },
+                  }))
+                }
+                placeholder="예: 10:00 ~ 22:00"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">SNS 링크 (선택)</div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.sns || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), sns: e.target.value },
+                  }))
+                }
+                placeholder="예: instagram.com/..."
+              />
+            </div>
           </div>
 
           <div className="btnRow">
@@ -538,68 +791,41 @@ export default function AdminStorePage() {
             {isDirty ? <span className="badge">변경됨</span> : <span className="badge">변경 없음</span>}
           </div>
 
-          {lastSavedAt ? <div className="hint">마지막 저장 시각: {new Date(lastSavedAt).toLocaleString()}</div> : null}
+          {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
 
           {/* ==========================
               ✅ 추후 확장(비활성)
               ========================== */}
           <div style={{ marginTop: 18 }}>
-            <h2 className="cardTitle">추후 확장(비활성)</h2>
-            <div className="hint">* 지금은 화면에만 고정해 두고, DB/다중매장/구독 단계에서 연결합니다.</div>
-
+            <h2 className="cardTitle">결제/구독 정보 (비활성)</h2>
             <div className="field">
               <div className="label">
-                사업자번호 <span className="pill">추후 제공</span>
-              </div>
-              <input className="input" disabled value="" placeholder="예: 000-00-00000" />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                업종 <span className="pill">추후 제공</span>
-              </div>
-              <input className="input" disabled value="" placeholder="예: 카페/음료" />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                전화번호 <span className="pill">추후 제공</span>
-              </div>
-              <input className="input" disabled value="" placeholder="예: 010-0000-0000" />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                주소 <span className="pill">추후 제공</span>
-              </div>
-              <input className="input" disabled value="" placeholder="예: 전남 순천시 ..." />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                영업시간 <span className="pill">추후 제공</span>
-              </div>
-              <input className="input" disabled value="" placeholder="예: 10:00 ~ 22:00" />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                SNS 링크 <span className="pill">추후 제공</span>
-              </div>
-              <input className="input" disabled value="" placeholder="예: instagram.com/..." />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                결제/구독 정보 <span className="pill">추후 제공</span>
+                결제/구독 정보 <span className="pill">비활성</span>
               </div>
               <textarea className="textarea" disabled value="" placeholder="예: 현재 플랜 / 결제수단 ..." />
             </div>
 
-            <div className="disabledNote">지금은 저장/연동하지 않습니다. (UI만 고정해두는 단계)</div>
+            <div className="disabledNote">지금은 저장하지 않습니다.</div>
           </div>
         </div>
       </section>
+
+      {showAddr ? (
+        <div className="modalOverlay" onClick={closeAddressSearch}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modalHead">
+              <b style={{ fontSize: 16 }}>주소 검색</b>
+              <button type="button" className="btn" onClick={closeAddressSearch}>
+                닫기
+              </button>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <DaumPostcodeEmbed onComplete={onCompleteAddress} autoClose={false} />
+            </div>
+            <p className="hint" style={{ marginTop: 10 }}>도로명 주소를 검색하세요.</p>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

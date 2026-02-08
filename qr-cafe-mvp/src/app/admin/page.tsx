@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app/lib/currentStore";
-import { DEFAULT_STORE_PROFILE, saveStoreProfile } from "@/app/lib/storeProfile";
 
 type StoreRow = {
   store_id: string;
@@ -19,23 +18,15 @@ type MemberRow = {
   role: string | null;
 };
 
-function slugifyStoreId(input: string) {
-  const base = (input || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9\-]/g, "")
-    .replace(/\-+/g, "-")
-    .replace(/^\-+|\-+$/g, "");
+const FREE_TRIAL_DAYS = 30;
 
-  const suffix = Math.random().toString(16).slice(2, 8);
-  const out = base.length >= 3 ? base : `store-${suffix}`;
-  return out.slice(0, 40);
-}
-
-function clampOverlay(v: number) {
-  if (!Number.isFinite(v)) return DEFAULT_STORE_PROFILE.mainImageOverlayStrength;
-  return Math.max(0, Math.min(100, Math.round(v)));
+function calcRemainingDays(createdAt?: string | null) {
+  if (!createdAt) return null;
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return null;
+  const diffMs = Date.now() - created;
+  const usedDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.max(0, FREE_TRIAL_DAYS - usedDays);
 }
 
 export default function AdminHomePage() {
@@ -49,17 +40,7 @@ export default function AdminHomePage() {
   const [members, setMembers] = useState<MemberRow[]>([]);
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
-  const [activeTab, setActiveTab] = useState<"stats" | "ops" | "settings">("stats");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [scrollToCreate, setScrollToCreate] = useState(false);
-
-  const [creating, setCreating] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createId, setCreateId] = useState("");
-  const [createDesc, setCreateDesc] = useState(DEFAULT_STORE_PROFILE.storeDesc);
-  const [createMainImage, setCreateMainImage] = useState(DEFAULT_STORE_PROFILE.mainImage);
-  const [createLogoImage, setCreateLogoImage] = useState(DEFAULT_STORE_PROFILE.logoImage);
-  const [createOverlayStrength, setCreateOverlayStrength] = useState(DEFAULT_STORE_PROFILE.mainImageOverlayStrength);
   const [msg, setMsg] = useState<string>("");
 
   const selectedStore = useMemo(() => {
@@ -156,82 +137,9 @@ export default function AdminHomePage() {
     if (selectedStoreId && stores.some((s) => s.store_id === selectedStoreId)) {
       return;
     }
-    setSelectedStoreId(stores[0].store_id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSelectedStoreIdState(null);
+    clearCurrentStoreId();
   }, [stores, selectedStoreId]);
-
-  useEffect(() => {
-    if (!createName.trim()) return;
-    if (createId.trim()) return;
-    setCreateId(slugifyStoreId(createName));
-  }, [createName, createId]);
-
-  const onCreateStore = async () => {
-    if (!userId) return;
-    setMsg("");
-
-    const name = createName.trim();
-    const id = createId.trim();
-
-    if (!name) return setMsg("매장명을 입력해주세요.");
-    if (!id) return setMsg("매장 ID를 입력해주세요.");
-
-    setCreating(true);
-    try {
-      const insStore = await supabase.from("stores").insert([
-        {
-          store_id: id,
-          store_name: name,
-          owner_user_id: userId,
-        } as any,
-      ]);
-
-      if (insStore.error) {
-        if (String(insStore.error.message || "").includes("owner_user_id")) {
-          const retry = await supabase.from("stores").insert([{ store_id: id, store_name: name } as any]);
-          if (retry.error) throw retry.error;
-        } else {
-          throw insStore.error;
-        }
-      }
-
-      const insMem = await supabase.from("store_members").insert([
-        {
-          store_id: id,
-          user_id: userId,
-          role: "owner",
-        },
-      ]);
-
-      if (insMem.error) throw insMem.error;
-
-      saveStoreProfile(id, {
-        storeName: name,
-        storeDesc: createDesc.trim() || DEFAULT_STORE_PROFILE.storeDesc,
-        mainImage: createMainImage.trim() || DEFAULT_STORE_PROFILE.mainImage,
-        logoImage: createLogoImage.trim(),
-        mainImageOverlayStrength: clampOverlay(createOverlayStrength),
-        extra: { ...DEFAULT_STORE_PROFILE.extra },
-      });
-
-      await loadMyStores(userId);
-      setSelectedStoreId(id);
-
-      setCreateName("");
-      setCreateId("");
-      setCreateDesc(DEFAULT_STORE_PROFILE.storeDesc);
-      setCreateMainImage(DEFAULT_STORE_PROFILE.mainImage);
-      setCreateLogoImage(DEFAULT_STORE_PROFILE.logoImage);
-      setCreateOverlayStrength(DEFAULT_STORE_PROFILE.mainImageOverlayStrength);
-      setMsg("매장이 생성되었습니다 ✅");
-    } catch (e: any) {
-      console.error("[admin] create store error:", e?.message || e);
-      setMsg(`매장 생성 실패: ${String(e?.message || e)}`);
-    } finally {
-      setCreating(false);
-      setTimeout(() => setMsg(""), 2000);
-    }
-  };
 
   const go = (path: string) => {
     if (!selectedStoreId) {
@@ -241,20 +149,9 @@ export default function AdminHomePage() {
     router.push(`${path}?store=${encodeURIComponent(selectedStoreId)}`);
   };
 
-  const openCreateTab = () => {
-    setActiveTab("settings");
-    setScrollToCreate(true);
+  const goCreate = () => {
+    router.push("/admin/store/create");
   };
-
-  useEffect(() => {
-    if (!scrollToCreate) return;
-    const target = document.getElementById("create-store-panel");
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-    const timer = setTimeout(() => setScrollToCreate(false), 300);
-    return () => clearTimeout(timer);
-  }, [scrollToCreate]);
 
   if (booting) {
     return (
@@ -275,7 +172,7 @@ export default function AdminHomePage() {
       <header className="topbar">
         <div>
           <h1 className="h1">관리자</h1>
-          <p className="desc">모바일에 맞춘 탭 화면입니다. 먼저 매장을 선택하세요.</p>
+          <p className="desc">매장을 선택해 주세요.</p>
         </div>
 
         <div className="menuWrap">
@@ -297,211 +194,91 @@ export default function AdminHomePage() {
 
       {msg ? <div className="alert">{msg}</div> : null}
 
+      <section className="card stickyCard">
+        <div className="cardHead">
+          <h2 className="cardTitle">매장 만들기</h2>
+          <span className="pill">상단 고정</span>
+        </div>
+        <p className="muted">매장을 먼저 생성해 주세요.</p>
+        <div className="btnRow">
+          <button className="btn btnPrimary" onClick={goCreate}>
+            매장 만들기
+          </button>
+        </div>
+      </section>
+
       {/* ===== 매장 선택 ===== */}
       <section className="card">
         <div className="cardHead">
-          <h2 className="cardTitle">매장 선택</h2>
+          <h2 className="cardTitle">매장 리스트</h2>
           <span className="pill">{stores.length}개</span>
         </div>
 
         {stores.length === 0 ? (
           <div className="emptyBox">
-            <p className="muted">
-              아직 등록된 매장이 없습니다. 매장을 만들면서 기본 정보까지 함께 입력해 주세요.
-            </p>
-            <button className="btn btnPrimary" onClick={openCreateTab}>
-              매장 만들기
-            </button>
+            <p className="muted">매장이 없습니다. 먼저 매장을 만들어주세요.</p>
           </div>
         ) : (
-          <div className="storeList">
-            {stores.map((s) => {
-              const on = s.store_id === selectedStoreId;
-              const role = members.find((m) => m.store_id === s.store_id)?.role || "-";
-              return (
-                <button
-                  key={s.store_id}
-                  className={`storeRow ${on ? "storeRowOn" : ""}`}
-                  onClick={() => setSelectedStoreId(s.store_id)}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div className="storeName">
-                      {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
+          <>
+            {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
+            <div className="storeList">
+              {stores.map((s, idx) => {
+                const on = s.store_id === selectedStoreId;
+                const role = members.find((m) => m.store_id === s.store_id)?.role || "-";
+                const remaining = calcRemainingDays(s.created_at);
+                const trialText =
+                  remaining === null
+                    ? `무료 사용기간 ${FREE_TRIAL_DAYS}일`
+                    : `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remaining}일`;
+                return (
+                  <button
+                    key={s.store_id}
+                    className={`storeRow ${on ? "storeRowOn" : ""}`}
+                    onClick={() => setSelectedStoreId(s.store_id)}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div className="storeName">
+                        {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
+                      </div>
+                      <div className="muted">권한: {role}</div>
+                      <div className="muted">{trialText}</div>
+                      {idx > 0 ? <div className="muted">추가 매장은 결제 후 생성 (예정)</div> : null}
                     </div>
-                    <div className="muted">권한: {role}</div>
-                  </div>
-                  <div className="pill">{on ? "선택됨" : "선택"}</div>
-                </button>
-              );
-            })}
-          </div>
+                    <div className="pill">{on ? "선택됨" : "선택"}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
       </section>
 
-      {/* ===== 관리자 탭 ===== */}
+      {/* ===== 관리자 메뉴 ===== */}
       <section className="card">
-        <div className="tabHeader">
-          <button
-            className={`tabBtn ${activeTab === "stats" ? "tabBtnOn" : ""}`}
-            onClick={() => setActiveTab("stats")}
-          >
-            통계
-          </button>
-          <button
-            className={`tabBtn ${activeTab === "ops" ? "tabBtnOn" : ""}`}
-            onClick={() => setActiveTab("ops")}
-          >
-            운영
-          </button>
-          <button
-            className={`tabBtn ${activeTab === "settings" ? "tabBtnOn" : ""}`}
-            onClick={() => setActiveTab("settings")}
-          >
-            설정
-          </button>
-        </div>
-
         <div className="tabMeta">
           <span className="pill">
             {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
             {selectedRole ? ` · ${selectedRole}` : ""}
           </span>
-          <span className="muted">순서: 매장 만들기 → 매장 선택 → 메뉴/옵션</span>
         </div>
 
-        {activeTab === "stats" ? (
-          <div className="cards">
-            <button className="cardBtn" onClick={() => go("/admin/stats")} disabled={!selectedStoreId}>
-              <div className="cardBtnTitle">통계 바로가기</div>
-              <div className="cardBtnDesc">매출/기간별 CSV 다운로드를 확인합니다.</div>
-            </button>
-          </div>
-        ) : null}
+        <div className="btnGroup">
+          <button className="cardBtn cardBtnOn" onClick={() => go("/admin/store")} disabled={!selectedStoreId}>
+            <div className="cardBtnTitle">매장설정</div>
+          </button>
 
-        {activeTab === "ops" ? (
-          <div className="cards">
-            <button className="cardBtn" onClick={() => go("/admin/menu")} disabled={!selectedStoreId}>
-              <div className="cardBtnTitle">메뉴 관리</div>
-              <div className="cardBtnDesc">메뉴/가격/이미지/옵션 연결 + 노출 순서를 관리합니다.</div>
-            </button>
+          <button className="cardBtn" onClick={() => go("/admin/ops")} disabled={!selectedStoreId}>
+            <div className="cardBtnTitle">매장운영</div>
+          </button>
 
-            <button className="cardBtn" onClick={() => go("/admin/options")} disabled={!selectedStoreId}>
-              <div className="cardBtnTitle">옵션 관리</div>
-              <div className="cardBtnDesc">옵션 그룹/옵션 항목을 등록합니다.</div>
-            </button>
-
-            <button className="cardBtn" onClick={() => go("/admin/qr")} disabled={!selectedStoreId}>
-              <div className="cardBtnTitle">QR 생성</div>
-              <div className="cardBtnDesc">테이블/카운터 QR 생성 후 인쇄용 파일을 만듭니다.</div>
-            </button>
-          </div>
-        ) : null}
-
-        {activeTab === "settings" ? (
-          <div className="cards">
-            <div className="cardPanel" id="create-store-panel">
-              <div className="cardPanelHead">
-                <div>
-                  <div className="cardBtnTitle">매장 만들기 + 정보 입력</div>
-                  <div className="cardBtnDesc">매장을 만들면서 기본 정보를 함께 등록합니다.</div>
-                </div>
-                <span className="pill">owner 자동 등록</span>
-              </div>
-
-              <div className="formGrid">
-                <div className="field">
-                  <div className="label">매장명</div>
-                  <input
-                    className="input"
-                    value={createName}
-                    onChange={(e) => {
-                      setCreateName(e.target.value);
-                      setCreateId("");
-                    }}
-                    placeholder="예: 테스트 매장"
-                  />
-                </div>
-
-                <div className="field">
-                  <div className="label">매장 ID (URL/DB 키)</div>
-                  <input
-                    className="input"
-                    value={createId}
-                    onChange={(e) => setCreateId(e.target.value)}
-                    placeholder="예: ximen"
-                  />
-                  <div className="hint">영문/숫자/하이픈 권장. 나중에 QR/데이터 키로 사용합니다.</div>
-                </div>
-              </div>
-
-              <div className="field">
-                <div className="label">매장 설명</div>
-                <textarea
-                  className="textarea"
-                  value={createDesc}
-                  onChange={(e) => setCreateDesc(e.target.value)}
-                  placeholder="예) QR로 간편하게 주문하고 기다리세요..."
-                />
-              </div>
-
-              <div className="field">
-                <div className="label">대표 이미지 경로 (public 기준)</div>
-                <input
-                  className="input"
-                  value={createMainImage}
-                  onChange={(e) => setCreateMainImage(e.target.value)}
-                  placeholder='예: "/hero.jpg"'
-                />
-              </div>
-
-              <div className="field">
-                <div className="label">로고 이미지 경로 (선택)</div>
-                <input
-                  className="input"
-                  value={createLogoImage}
-                  onChange={(e) => setCreateLogoImage(e.target.value)}
-                  placeholder='예: "/logo.png" (없으면 빈칸)'
-                />
-              </div>
-
-              <div className="field">
-                <div className="label">대표이미지 오버레이 강도 (0~100)</div>
-                <div className="sliderRow">
-                  <input
-                    className="range"
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={createOverlayStrength}
-                    onChange={(e) => setCreateOverlayStrength(clampOverlay(Number(e.target.value)))}
-                  />
-                  <input
-                    className="input"
-                    inputMode="numeric"
-                    value={String(createOverlayStrength)}
-                    onChange={(e) => setCreateOverlayStrength(clampOverlay(Number(e.target.value)))}
-                  />
-                </div>
-                <div className="hint">0 = 거의 원본 / 100 = 아주 어둡게</div>
-              </div>
-
-              <div className="btnRow">
-                <button className="btn btnPrimary" onClick={onCreateStore} disabled={creating}>
-                  {creating ? "생성 중..." : "매장 등록"}
-                </button>
-              </div>
-            </div>
-
-            <button className="cardBtn" onClick={() => go("/admin/store")} disabled={!selectedStoreId}>
-              <div className="cardBtnTitle">매장 정보 수정</div>
-              <div className="cardBtnDesc">생성 후에 기본 정보를 수정할 때 사용합니다.</div>
-            </button>
-          </div>
-        ) : null}
+          <button className="cardBtn" onClick={() => go("/admin/stats")} disabled={!selectedStoreId}>
+            <div className="cardBtnTitle">매출통계</div>
+          </button>
+        </div>
 
         {!selectedStoreId ? (
           <div className="alert" style={{ marginTop: 12 }}>
-            매장을 선택해야 기능을 사용할 수 있어요.
+            매장을 선택해야 버튼이 활성화됩니다.
           </div>
         ) : null}
       </section>
@@ -582,7 +359,7 @@ body {
 .desc{
   margin:6px 0 0 0;
   color:var(--muted);
-  font-size:13px;
+  font-size:12px;
   font-weight:800;
   line-height:1.4;
   word-break:keep-all;
@@ -628,29 +405,11 @@ body {
   padding:10px 12px;
   font-weight:900;
 }
-.tabHeader{
-  display:grid;
-  grid-template-columns:repeat(3, 1fr);
-  gap:8px;
-}
 .emptyBox{
   margin-top:12px;
   display:grid;
   gap:10px;
   align-items:start;
-}
-.tabBtn{
-  border:1px solid var(--line);
-  background:#fff;
-  padding:10px 0;
-  border-radius:12px;
-  font-weight:950;
-  cursor:pointer;
-}
-.tabBtnOn{
-  background:var(--brand);
-  color:#fff;
-  border-color:var(--brand);
 }
 .tabMeta{
   display:flex;
@@ -659,49 +418,6 @@ body {
   gap:8px;
   margin-top:12px;
   flex-wrap:wrap;
-}
-.textarea{
-  padding:10px 12px;
-  border-radius:12px;
-  border:1px solid var(--line);
-  background:#fff;
-  font-weight:800;
-  width:100%;
-  min-height:88px;
-  resize:vertical;
-  white-space:pre-wrap;
-}
-.sliderRow{
-  display:grid;
-  grid-template-columns:1fr 90px;
-  gap:10px;
-  align-items:center;
-}
-.range{
-  width:100%;
-}
-.formGrid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
-  margin-top:12px;
-}
-.field{
-  display:grid;
-  gap:6px;
-}
-.label{
-  font-size:12px;
-  color:var(--muted);
-  font-weight:900;
-}
-.input{
-  padding:10px 12px;
-  border-radius:12px;
-  border:1px solid var(--line);
-  background:#fff;
-  font-weight:800;
-  width:100%;
 }
 .hint{
   color:var(--muted);
@@ -722,6 +438,11 @@ body {
   border-radius:12px;
   cursor:pointer;
   font-weight:950;
+}
+.btnGroup{
+  display:flex;
+  gap:10px;
+  margin-top:12px;
 }
 .btnPrimary{
   background:var(--brand);
@@ -756,25 +477,6 @@ body {
   font-weight:950;
   font-size:14px;
 }
-.cards{
-  display:grid;
-  gap:12px;
-  margin-top:12px;
-}
-.cardPanel{
-  border:1px solid var(--line);
-  border-radius:16px;
-  padding:14px;
-  background:#fff;
-  display:grid;
-  gap:12px;
-}
-.cardPanelHead{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-}
 .cardBtn{
   text-align:left;
   border:1px solid var(--line);
@@ -787,19 +489,35 @@ body {
   opacity:.5;
   cursor:not-allowed;
 }
+.cardBtnOn{
+  background:var(--brand);
+  color:#fff;
+  border-color:var(--brand);
+}
+.cardBtnOn .cardBtnDesc{
+  color:#f3f4f6;
+}
 .cardBtnTitle{
   margin:0;
   font-size:18px;
   font-weight:950;
 }
-.cardBtnDesc{
-  margin-top:6px;
-  font-size:13px;
-  font-weight:800;
-  color:var(--muted);
-  line-height:1.4;
+.stickyCard{
+  position:sticky;
+  top:10px;
+  z-index:5;
 }
-@media (max-width: 820px){
-  .formGrid{ grid-template-columns:1fr; }
+@media (max-width: 640px){
+  .wrap{ padding:12px; }
+  .topbar{ align-items:center; }
+  .cardBtnTitle{ font-size:16px; }
+  .btnGroup{
+    flex-direction:row;
+    flex-wrap:wrap;
+  }
+  .storeRow{
+    flex-direction:column;
+    align-items:flex-start;
+  }
 }
 `;
