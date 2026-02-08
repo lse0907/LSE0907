@@ -7,11 +7,17 @@ import { setCurrentStoreId } from "@/app/lib/currentStore";
 import { DEFAULT_STORE_PROFILE, saveStoreProfile } from "@/app/lib/storeProfile";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 
-const FREE_TRIAL_DAYS = 30;
+const STORE_IMAGE_BUCKET = "store-assets";
 
 function clampOverlay(v: number) {
   if (!Number.isFinite(v)) return DEFAULT_STORE_PROFILE.mainImageOverlayStrength;
   return Math.max(0, Math.min(100, Math.round(v)));
+}
+
+function getFileExt(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed.includes(".")) return "";
+  return trimmed.split(".").pop() || "";
 }
 
 export default function AdminStoreCreatePage() {
@@ -35,6 +41,8 @@ export default function AdminStoreCreatePage() {
   const [showAddr, setShowAddr] = useState(false);
   const [creating, setCreating] = useState(false);
   const [msg, setMsg] = useState("");
+  const [uploadingMain, setUploadingMain] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const overlayBg = useMemo(() => {
     const aTop = 0.1 + 0.35 * (overlayStrength / 100);
@@ -72,6 +80,50 @@ export default function AdminStoreCreatePage() {
       const el = document.getElementById("storeAddressDetailInput");
       if (el) (el as HTMLInputElement).focus();
     }, 50);
+  };
+
+  const uploadStoreImage = async (file: File, kind: "main" | "logo") => {
+    const trimmedStoreId = storeId.trim();
+    if (!trimmedStoreId) {
+      setMsg("이미지를 올리기 전에 매장 ID를 먼저 입력해주세요.");
+      return "";
+    }
+
+    const ext = getFileExt(file.name) || "png";
+    const path = `${trimmedStoreId}/${kind}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from(STORE_IMAGE_BUCKET).upload(path, file, { upsert: true });
+    if (error) throw error;
+
+    const { data } = supabase.storage.from(STORE_IMAGE_BUCKET).getPublicUrl(path);
+    return data.publicUrl || "";
+  };
+
+  const onUploadMain = async (file: File | null) => {
+    if (!file) return;
+    setUploadingMain(true);
+    setMsg("");
+    try {
+      const url = await uploadStoreImage(file, "main");
+      if (url) setMainImage(url);
+    } catch (e: any) {
+      setMsg(`대표 이미지 업로드 실패: ${String(e?.message || e)}`);
+    } finally {
+      setUploadingMain(false);
+    }
+  };
+
+  const onUploadLogo = async (file: File | null) => {
+    if (!file) return;
+    setUploadingLogo(true);
+    setMsg("");
+    try {
+      const url = await uploadStoreImage(file, "logo");
+      if (url) setLogoImage(url);
+    } catch (e: any) {
+      setMsg(`로고 이미지 업로드 실패: ${String(e?.message || e)}`);
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const onCreate = async () => {
@@ -126,6 +178,20 @@ export default function AdminStoreCreatePage() {
         if (insMem.error) throw insMem.error;
       }
 
+      if (mainImage.trim() || logoImage.trim()) {
+        const { error: imageErr } = await supabase
+          .from("stores")
+          .update({
+            main_image_url: mainImage.trim() || null,
+            logo_image_url: logoImage.trim() || null,
+          })
+          .eq("store_id", id);
+        if (imageErr) {
+          console.error("[admin/store/create] image update error:", imageErr.message);
+          setMsg("이미지는 저장되지 않았습니다. 매장 정보에서 다시 저장해주세요.");
+        }
+      }
+
       saveStoreProfile(id, {
         storeName: name,
         storeDesc: storeDesc.trim() || DEFAULT_STORE_PROFILE.storeDesc,
@@ -140,7 +206,6 @@ export default function AdminStoreCreatePage() {
           addressDetail: addressDetail.trim(),
           hours: hours.trim(),
           sns: sns.trim(),
-          billing: "",
         },
       });
 
@@ -544,23 +609,31 @@ export default function AdminStoreCreatePage() {
           </div>
 
           <div className="field">
-            <div className="label">대표 이미지 경로 (선택)</div>
+            <div className="label">대표 이미지 업로드 (선택)</div>
             <input
               className="input"
-              value={mainImage}
-              onChange={(e) => setMainImage(e.target.value)}
-              placeholder='예: "/hero.jpg"'
+              type="file"
+              accept="image/*"
+              onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
+              disabled={uploadingMain}
             />
+            <div className="hint">
+              {uploadingMain ? "업로드 중..." : mainImage ? `등록됨: ${mainImage}` : "아직 등록된 이미지가 없습니다."}
+            </div>
           </div>
 
           <div className="field">
-            <div className="label">로고 이미지 경로 (선택)</div>
+            <div className="label">로고 이미지 업로드 (선택)</div>
             <input
               className="input"
-              value={logoImage}
-              onChange={(e) => setLogoImage(e.target.value)}
-              placeholder='예: "/logo.png"'
+              type="file"
+              accept="image/*"
+              onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
+              disabled={uploadingLogo}
             />
+            <div className="hint">
+              {uploadingLogo ? "업로드 중..." : logoImage ? `등록됨: ${logoImage}` : "아직 등록된 이미지가 없습니다."}
+            </div>
           </div>
 
           <div className="field">
@@ -638,13 +711,6 @@ export default function AdminStoreCreatePage() {
           <div className="field">
             <div className="label">SNS 링크 (선택)</div>
             <input className="input" value={sns} onChange={(e) => setSns(e.target.value)} />
-          </div>
-
-          <div className="field">
-            <div className="label">
-              결제/구독 정보 <span className="pill">비활성</span>
-            </div>
-            <textarea className="textarea" disabled value="" placeholder="예: 현재 플랜 / 결제수단 ..." />
           </div>
 
           <div className="btnRow">
