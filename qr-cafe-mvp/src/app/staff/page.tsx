@@ -7,6 +7,7 @@ import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type PaymentStatus = "not_required" | "pending" | "paid";
 
 type SelectedOptionItem = {
   id: string;
@@ -46,6 +47,7 @@ type OrderRecord = {
   totalCount: number;
   totalPrice: number;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
 };
 
 type DbOrderRow = {
@@ -60,6 +62,7 @@ type DbOrderRow = {
   total_count: number | null;
   total_price: number | null;
   status: string | null;
+  payment_status?: string | null;
   store_id: string | null;
 };
 
@@ -133,6 +136,12 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   canceled: "취소",
 };
 
+const PAYMENT_LABEL: Record<PaymentStatus, string> = {
+  not_required: "후불(결제 불필요)",
+  pending: "결제대기",
+  paid: "결제완료",
+};
+
 function isActive(status: OrderStatus) {
   return status === "new" || status === "making" || status === "ready";
 }
@@ -147,6 +156,12 @@ function normalizeStatus(v: any): OrderStatus {
   const s = String(v || "").trim();
   if (s === "making" || s === "ready" || s === "done" || s === "canceled") return s;
   return "new";
+}
+
+function normalizePaymentStatus(v: any): PaymentStatus {
+  const s = String(v || "").trim();
+  if (s === "pending" || s === "paid") return s;
+  return "not_required";
 }
 
 function speakKoreanOnce(text: string) {
@@ -260,6 +275,7 @@ export default function StaffPage() {
   }, [storeFromQuery]);
 
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [prepayAddonActive, setPrepayAddonActive] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [listTab, setListTab] = useState<"active" | "completed" | "all">("active");
@@ -291,14 +307,38 @@ export default function StaffPage() {
 
     if (!silent) setErrMsg("");
 
-    const { data: oData, error: oErr } = await supabase
+    const addonRes = await supabase
+      .from("store_addons")
+      .select("prepay_addon_status")
+      .eq("store_id", sid)
+      .maybeSingle();
+    setPrepayAddonActive(String(addonRes.data?.prepay_addon_status || "inactive") === "active");
+
+    let oRes = await supabase
       .from("orders")
       .select(
-        "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, store_id"
+        "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, payment_status, store_id"
       )
       .eq("store_id", sid)
       .order("created_at", { ascending: false })
       .limit(200);
+
+    if (oRes.error) {
+      const msg = String(oRes.error.message || "").toLowerCase();
+      const missingPaymentColumn = msg.includes("payment_status") && (msg.includes("column") || msg.includes("schema cache"));
+      if (missingPaymentColumn) {
+        oRes = await supabase
+          .from("orders")
+          .select(
+            "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, store_id"
+          )
+          .eq("store_id", sid)
+          .order("created_at", { ascending: false })
+          .limit(200);
+      }
+    }
+
+    const { data: oData, error: oErr } = oRes;
 
     if (oErr) {
       console.error("[staff] fetch orders error:", oErr.message);
@@ -402,6 +442,7 @@ export default function StaffPage() {
         totalCount,
         totalPrice,
         status: normalizeStatus(o.status),
+        paymentStatus: normalizePaymentStatus(o.payment_status),
       };
     });
 
@@ -509,10 +550,28 @@ export default function StaffPage() {
     const payload: any = {};
     if (typeof patch.buzzerNo !== "undefined") payload.buzzer_no = patch.buzzerNo || null;
     if (typeof patch.status !== "undefined") payload.status = patch.status;
+    if (typeof patch.paymentStatus !== "undefined") payload.payment_status = patch.paymentStatus;
 
     if (!Object.keys(payload).length) return;
 
     const { error } = await supabase.from("orders").update(payload).eq("id", id).eq("store_id", sid);
+
+    if (error) {
+      const msg = String(error.message || "").toLowerCase();
+      const missingPaymentColumn =
+        typeof patch.paymentStatus !== "undefined" &&
+        msg.includes("payment_status") &&
+        (msg.includes("column") || msg.includes("schema cache"));
+
+      if (missingPaymentColumn) {
+        delete payload.payment_status;
+        const fallback = await supabase.from("orders").update(payload).eq("id", id).eq("store_id", sid);
+        if (!fallback.error) {
+          setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+          return;
+        }
+      }
+    }
 
     if (error) {
       console.error("[staff] update order error:", error.message);
@@ -1063,9 +1122,18 @@ export default function StaffPage() {
                   <b>{STATUS_LABEL[selected.status]}</b>
                 </p>
                 <p className="muted" style={{ margin: "6px 0 0 0" }}>
+                  결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b>
+                </p>
+                <p className="muted" style={{ margin: "6px 0 0 0" }}>
                   주문시각: {formatTime(selected.createdAt)}
                 </p>
               </div>
+
+              {prepayAddonActive && selected.paymentStatus === "pending" ? (
+                <div className="detailBox" style={{ borderColor: "#f59e0b", background: "#fffbeb" }}>
+                  <b style={{ color: "#92400e" }}>선결재 옵션 매장: 결제완료 전에는 제조 시작이 불가합니다.</b>
+                </div>
+              ) : null}
 
               <div className="section">
                 <h3 style={{ margin: "0 0 8px 0" }}>진동벨 번호 (선택)</h3>
@@ -1151,13 +1219,32 @@ export default function StaffPage() {
                 <button
                   className="actionBtn actionPrimary"
                   onClick={() => updateOrderInDb(selected.id, { status: nextStatus(selected.status) })}
-                  disabled={selected.status === "done" || selected.status === "canceled"}
+                  disabled={
+                    selected.status === "done" ||
+                    selected.status === "canceled" ||
+                    (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new")
+                  }
                   style={{
-                    opacity: selected.status === "done" || selected.status === "canceled" ? 0.5 : 1,
+                    opacity:
+                      selected.status === "done" ||
+                      selected.status === "canceled" ||
+                      (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new")
+                        ? 0.5
+                        : 1,
                   }}
                 >
                   {statusButtonLabel(selected.status)}
                 </button>
+
+                {prepayAddonActive && selected.paymentStatus === "pending" ? (
+                  <button
+                    className="actionBtn"
+                    style={{ borderColor: "#2563eb", color: "#2563eb" }}
+                    onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
+                  >
+                    결제완료 처리(테스트)
+                  </button>
+                ) : null}
 
                 <button
                   className="actionBtn actionCancel"
