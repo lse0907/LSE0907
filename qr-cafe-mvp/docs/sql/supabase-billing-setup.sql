@@ -5,6 +5,11 @@
 
 begin;
 
+-- A) orders 테이블에 payment_status 컬럼 추가 (이미 있으면 유지)
+alter table public.orders
+  add column if not exists payment_status text not null default 'not_required'
+  check (payment_status in ('not_required', 'pending', 'paid'));
+
 -- 0) 공통 타임스탬프 갱신 함수
 create or replace function public.set_updated_at()
 returns trigger
