@@ -377,8 +377,8 @@ export default function AdminHomePage() {
             <button className="subBtn" onClick={() => go("/admin/store")}>
               매장정보
             </button>
-            <button className="subBtn subBtnDisabled" disabled>
-              결제/구독 (준비중)
+            <button className="subBtn" onClick={() => go("/admin/billing")}>
+              결제/구독
             </button>
           </div>
         ) : null}
