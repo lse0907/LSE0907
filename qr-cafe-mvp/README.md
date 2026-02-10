@@ -38,3 +38,5 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 - 선결재 기능(유료 옵션) 정책/운영 초안: `docs/tosspayments-live-checklist.md`
 
+
+- 선결재 기능 다음 단계 실행계획(코드 전): `docs/prepay-next-step-plan.md`
