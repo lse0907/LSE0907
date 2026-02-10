@@ -14,6 +14,7 @@ import {
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type PaymentStatus = "not_required" | "pending" | "paid";
 
 type SelectedOptionItem = {
   id: string;
@@ -64,6 +65,7 @@ type OrderRecord = {
   totalCount: number;
   totalPrice: number;
   status: OrderStatus;
+  paymentStatus?: PaymentStatus;
 };
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
@@ -176,6 +178,36 @@ export default function ConfirmPage() {
 
   const canSubmit = totalCount > 0 && !submitting;
 
+  const resolvePaymentStatus = async (): Promise<PaymentStatus> => {
+    try {
+      const { data, error } = await supabase
+        .from("store_addons")
+        .select("prepay_addon_status")
+        .eq("store_id", storeId)
+        .maybeSingle();
+
+      if (error) return "not_required";
+      return String(data?.prepay_addon_status || "inactive") === "active" ? "pending" : "not_required";
+    } catch {
+      return "not_required";
+    }
+  };
+
+  const insertOrderRowSafe = async (row: Record<string, unknown>) => {
+    const first = await supabase.from("orders").insert([row]);
+    if (!first.error) return first;
+
+    const msg = String(first.error.message || "").toLowerCase();
+    const missingPaymentColumn =
+      msg.includes("payment_status") && (msg.includes("column") || msg.includes("schema cache"));
+
+    if (!missingPaymentColumn) return first;
+
+    const fallbackRow = { ...row } as Record<string, unknown>;
+    delete fallbackRow.payment_status;
+    return supabase.from("orders").insert([fallbackRow]);
+  };
+
   const onSubmit = async () => {
     if (!canSubmit) return;
 
@@ -189,6 +221,7 @@ export default function ConfirmPage() {
 
       let finalDisplayNo = "";
       const MAX_TRY = 5;
+      const paymentStatus = await resolvePaymentStatus();
 
       for (let attempt = 0; attempt < MAX_TRY; attempt++) {
         const seq = nextDailySequence();
@@ -208,10 +241,11 @@ export default function ConfirmPage() {
           total_count: totalCount,
           total_price: Math.round(totalPrice),
           status: "new",
+          payment_status: paymentStatus,
           store_id: storeId,
         };
 
-        const { error: oErr } = await supabase.from("orders").insert([orderRow]);
+        const { error: oErr } = await insertOrderRowSafe(orderRow);
 
         if (!oErr) break;
 
@@ -294,6 +328,7 @@ export default function ConfirmPage() {
         totalCount,
         totalPrice,
         status: "new",
+        paymentStatus,
       };
 
       const list = loadOrders(storeId);
