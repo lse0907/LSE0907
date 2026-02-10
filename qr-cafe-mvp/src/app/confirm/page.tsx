@@ -230,6 +230,36 @@ export default function ConfirmPage() {
     return supabase.from("orders").insert([fallbackRow]);
   };
 
+  const resolvePaymentStatus = async (): Promise<PaymentStatus> => {
+    try {
+      const { data, error } = await supabase
+        .from("store_addons")
+        .select("prepay_addon_status")
+        .eq("store_id", storeId)
+        .maybeSingle();
+
+      if (error) return "not_required";
+      return String(data?.prepay_addon_status || "inactive") === "active" ? "pending" : "not_required";
+    } catch {
+      return "not_required";
+    }
+  };
+
+  const insertOrderRowSafe = async (row: Record<string, unknown>) => {
+    const first = await supabase.from("orders").insert([row]);
+    if (!first.error) return first;
+
+    const msg = String(first.error.message || "").toLowerCase();
+    const missingPaymentColumn =
+      msg.includes("payment_status") && (msg.includes("column") || msg.includes("schema cache"));
+
+    if (!missingPaymentColumn) return first;
+
+    const fallbackRow = { ...row } as Record<string, unknown>;
+    delete fallbackRow.payment_status;
+    return supabase.from("orders").insert([fallbackRow]);
+  };
+
   const onSubmit = async () => {
     if (!canSubmit) return;
 
