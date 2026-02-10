@@ -1,7 +1,7 @@
 // src/app/confirm/page.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { nextDailySequence, format4, todayKey } from "../lib/orderNumber";
 import { supabase } from "@/app/lib/supabaseClient";
@@ -164,6 +164,8 @@ export default function ConfirmPage() {
 
   const [requestNote, setRequestNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isPrepayStore, setIsPrepayStore] = useState(false);
+  const [prepayLoading, setPrepayLoading] = useState(true);
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -176,7 +178,57 @@ export default function ConfirmPage() {
         : ""
       : "";
 
-  const canSubmit = totalCount > 0 && !submitting;
+  const canSubmit = totalCount > 0 && !submitting && !prepayLoading;
+
+  const fetchPrepayAddonActive = async (): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from("store_addons")
+        .select("prepay_addon_status")
+        .eq("store_id", storeId)
+        .maybeSingle();
+
+      if (error) return false;
+      return String(data?.prepay_addon_status || "inactive") === "active";
+    } catch {
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const active = await fetchPrepayAddonActive();
+      if (!mounted) return;
+      setIsPrepayStore(active);
+      setPrepayLoading(false);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  const resolvePaymentStatus = async (): Promise<PaymentStatus> => {
+    const active = await fetchPrepayAddonActive();
+    return active ? "paid" : "not_required";
+  };
+
+  const insertOrderRowSafe = async (row: Record<string, unknown>) => {
+    const first = await supabase.from("orders").insert([row]);
+    if (!first.error) return first;
+
+    const msg = String(first.error.message || "").toLowerCase();
+    const missingPaymentColumn =
+      msg.includes("payment_status") && (msg.includes("column") || msg.includes("schema cache"));
+
+    if (!missingPaymentColumn) return first;
+
+    const fallbackRow = { ...row } as Record<string, unknown>;
+    delete fallbackRow.payment_status;
+    return supabase.from("orders").insert([fallbackRow]);
+  };
 
   const resolvePaymentStatus = async (): Promise<PaymentStatus> => {
     try {
@@ -222,6 +274,14 @@ export default function ConfirmPage() {
       let finalDisplayNo = "";
       const MAX_TRY = 5;
       const paymentStatus = await resolvePaymentStatus();
+
+      if (paymentStatus === "paid") {
+        const ok = window.confirm("결제 시뮬레이션을 완료 처리하고 주문을 접수할까요?");
+        if (!ok) {
+          setSubmitting(false);
+          return;
+        }
+      }
 
       for (let attempt = 0; attempt < MAX_TRY; attempt++) {
         const seq = nextDailySequence();
@@ -548,9 +608,17 @@ export default function ConfirmPage() {
             fontWeight: 900,
           }}
         >
-          {submitting ? "저장 중..." : "주문 접수"}
+          {submitting ? "저장 중..." : isPrepayStore ? "결제하기" : "주문 접수"}
         </button>
       </div>
+
+      <p style={{ marginTop: 8, color: "#6b7280", fontWeight: 800, fontSize: 13 }}>
+        {prepayLoading
+          ? "매장 결제 옵션 확인 중..."
+          : isPrepayStore
+          ? "결제 완료 후 주문이 접수됩니다."
+          : "결제는 매장에서 진행됩니다."}
+      </p>
     </main>
   );
 }
