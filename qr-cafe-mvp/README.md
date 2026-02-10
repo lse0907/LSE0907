@@ -34,3 +34,13 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Payment / subscription policy draft
+
+- 선결재 기능(유료 옵션) 정책/운영 초안: `docs/tosspayments-live-checklist.md`
+
+
+- 선결재 기능 다음 단계 실행계획(코드 전): `docs/prepay-next-step-plan.md`
+
+- Supabase 결제 스키마/정책 SQL(복붙용): `docs/sql/supabase-billing-setup.sql`
+
+- B안(결제 성공 후 주문 생성) 1페이지 확정본: `docs/b-plan-final-onepage.md`
