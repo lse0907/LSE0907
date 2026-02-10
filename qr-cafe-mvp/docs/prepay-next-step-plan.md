@@ -111,3 +111,4 @@
   - `docs/sql/supabase-billing-setup.sql`
 - 실행 후 관리자 `/admin/billing`에서 저장 위치가 `Supabase(DB)`로 표시되는지 확인합니다.
 - DB 저장 실패 시 화면에 `Local 시뮬레이션` 배지가 보이며, 이 상태는 운영 전 임시 모드입니다.
+- B안(결제 성공 후 주문 생성) 최종 확정본은 `docs/b-plan-final-onepage.md`를 기준으로 운영합니다.
