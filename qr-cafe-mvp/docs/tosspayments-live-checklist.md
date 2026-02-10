@@ -160,3 +160,4 @@ PG사를 토스페이먼츠로 고정했기 때문에, 사장님이 따라할 �
 - 다음 단계에서 화면 문구/DB 필드/API 순서도를 확정한 뒤 구현을 시작합니다.
 
 - 실무 실행 순서는 `prepay-next-step-plan.md` 문서를 기준으로 진행합니다.
+- Supabase 반영이 필요하면 `docs/sql/supabase-billing-setup.sql` 파일을 SQL Editor에 전체 복붙해서 실행합니다.

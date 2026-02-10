@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import {
   BillingSettings,
@@ -10,25 +11,136 @@ import {
   saveBillingSettings,
 } from "@/app/lib/billingSettings";
 
+type SaveMode = "db" | "local";
+
+async function loadBillingFromDb(storeId: string): Promise<BillingSettings | null> {
+  try {
+    const [baseRes, addonRes, pgRes] = await Promise.all([
+      supabase.from("store_billing").select("base_plan_status, updated_at").eq("store_id", storeId).maybeSingle(),
+      supabase.from("store_addons").select("prepay_addon_status").eq("store_id", storeId).maybeSingle(),
+      supabase
+        .from("store_pg_config")
+        .select("mid, client_key, secret_key, updated_at")
+        .eq("store_id", storeId)
+        .maybeSingle(),
+    ]);
+
+    if (baseRes.error || addonRes.error || pgRes.error) return null;
+
+    const baseRow = baseRes.data;
+    const addonRow = addonRes.data;
+    const pgRow = pgRes.data;
+
+    if (!baseRow && !addonRow && !pgRow) return null;
+
+    return {
+      baseApproved: String(baseRow?.base_plan_status || "inactive") === "active",
+      addonApproved: String(addonRow?.prepay_addon_status || "inactive") === "active",
+      pgMid: String(pgRow?.mid || ""),
+      pgClientKey: String(pgRow?.client_key || ""),
+      pgSecretKey: String(pgRow?.secret_key || ""),
+      updatedAt: Number.isFinite(new Date(String(pgRow?.updated_at || baseRow?.updated_at || "")).getTime())
+        ? new Date(String(pgRow?.updated_at || baseRow?.updated_at || "")).getTime()
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function saveBillingToDb(storeId: string, form: BillingSettings): Promise<boolean> {
+  try {
+    const basePayload = {
+      store_id: storeId,
+      base_plan_status: form.baseApproved ? "active" : "inactive",
+      updated_at: new Date().toISOString(),
+    };
+    const addonPayload = {
+      store_id: storeId,
+      prepay_addon_status: form.addonApproved ? "active" : "inactive",
+      updated_at: new Date().toISOString(),
+    };
+    const pgPayload = {
+      store_id: storeId,
+      mid: form.pgMid.trim(),
+      client_key: form.pgClientKey.trim(),
+      secret_key: form.pgSecretKey.trim(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const [baseUpsert, addonUpsert, pgUpsert] = await Promise.all([
+      supabase.from("store_billing").upsert(basePayload, { onConflict: "store_id" }),
+      supabase.from("store_addons").upsert(addonPayload, { onConflict: "store_id" }),
+      supabase.from("store_pg_config").upsert(pgPayload, { onConflict: "store_id" }),
+    ]);
+
+    return !baseUpsert.error && !addonUpsert.error && !pgUpsert.error;
+  } catch {
+    return false;
+  }
+}
+
 function BillingForm({ storeId }: { storeId: string }) {
-  const initial = useMemo(() => loadBillingSettings(storeId), [storeId]);
-  const [form, setForm] = useState<BillingSettings>(initial);
-  const [saveBadge, setSaveBadge] = useState<"idle" | "saved">("idle");
+  const [form, setForm] = useState<BillingSettings>(() => loadBillingSettings(storeId));
+  const [saveBadge, setSaveBadge] = useState<"idle" | "saved" | "error">("idle");
+  const [saveMode, setSaveMode] = useState<SaveMode>("local");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const dbData = await loadBillingFromDb(storeId);
+      if (!mounted) return;
+      if (dbData) {
+        setForm(dbData);
+        setSaveMode("db");
+      } else {
+        setForm(loadBillingSettings(storeId));
+        setSaveMode("local");
+      }
+      setLoading(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
 
   const activationReady = useMemo(() => {
     return form.baseApproved && form.addonApproved && !!form.pgMid && !!form.pgClientKey && !!form.pgSecretKey;
   }, [form]);
 
-  const onSave = () => {
+  const onSave = async () => {
+    const savedToDb = await saveBillingToDb(storeId, form);
+    if (savedToDb) {
+      setSaveMode("db");
+      setSaveBadge("saved");
+      setTimeout(() => setSaveBadge("idle"), 1400);
+      return;
+    }
+
     saveBillingSettings(storeId, form);
-    setSaveBadge("saved");
-    setTimeout(() => setSaveBadge("idle"), 1400);
+    setSaveMode("local");
+    setSaveBadge("error");
+    setTimeout(() => setSaveBadge("idle"), 2000);
   };
+
+  if (loading) {
+    return (
+      <section className="card">
+        <p className="muted">결제/구독 설정 로딩 중...</p>
+      </section>
+    );
+  }
 
   return (
     <>
       <section className="card">
-        <div className="pill">store: {storeId || "-"}</div>
+        <div className="rowWrap">
+          <div className="pill">store: {storeId || "-"}</div>
+          <div className={saveMode === "db" ? "mode modeDb" : "mode modeLocal"}>
+            저장 위치: {saveMode === "db" ? "Supabase(DB)" : "Local 시뮬레이션"}
+          </div>
+        </div>
         <p className="muted">정식 과금 연동 전에는 테스트 승인 토글을 사용해 상태를 검증합니다.</p>
 
         <div className="grid2">
@@ -101,7 +213,13 @@ function BillingForm({ storeId }: { storeId: string }) {
           <button className="btn primary" type="button" onClick={onSave}>
             저장
           </button>
-          <span className="muted">{saveBadge === "saved" ? "저장됨 ✅" : ""}</span>
+          <span className="muted">
+            {saveBadge === "saved"
+              ? "저장됨 ✅"
+              : saveBadge === "error"
+                ? "DB 저장 실패 → Local 시뮬레이션으로 저장됨"
+                : ""}
+          </span>
         </div>
       </section>
 
@@ -206,6 +324,29 @@ const css = `
     color: var(--muted);
     margin: 0;
     font-size: 13px;
+  }
+  .rowWrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .mode {
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .modeDb {
+    background: #ecfdf3;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+  }
+  .modeLocal {
+    background: #fff7ed;
+    color: #9a3412;
+    border: 1px solid #fed7aa;
   }
   .pill {
     display: inline-block;
