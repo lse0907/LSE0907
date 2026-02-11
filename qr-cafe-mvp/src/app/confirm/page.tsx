@@ -16,6 +16,11 @@ type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
 type PaymentStatus = "not_required" | "pending" | "paid";
 
+type PgConfig = {
+  clientKey: string;
+  mid: string;
+};
+
 type SelectedOptionItem = {
   id: string;
   name: string;
@@ -69,6 +74,7 @@ type OrderRecord = {
 };
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
+const PREPAY_PENDING_KEY = "qrCafePrepayPending";
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString();
@@ -133,6 +139,14 @@ function isDuplicateDisplayNoError(msg: string) {
   );
 }
 
+function paymentOrderId() {
+  const raw = (globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`).replace(
+    /[^a-zA-Z0-9_-]/g,
+    ""
+  );
+  return `pay_${raw}`.slice(0, 64);
+}
+
 export default function ConfirmPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -166,6 +180,7 @@ export default function ConfirmPage() {
   const [submitting, setSubmitting] = useState(false);
   const [isPrepayStore, setIsPrepayStore] = useState(false);
   const [prepayLoading, setPrepayLoading] = useState(true);
+  const [pgConfig, setPgConfig] = useState<PgConfig>({ clientKey: "", mid: "" });
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -210,6 +225,32 @@ export default function ConfirmPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("store_pg_config")
+          .select("client_key, mid")
+          .eq("store_id", storeId)
+          .maybeSingle();
+
+        if (!mounted) return;
+        setPgConfig({
+          clientKey: String(data?.client_key || "").trim(),
+          mid: String(data?.mid || "").trim(),
+        });
+      } catch {
+        if (!mounted) return;
+        setPgConfig({ clientKey: "", mid: "" });
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
+
   const resolvePaymentStatus = async (): Promise<PaymentStatus> => {
     const active = await fetchPrepayAddonActive();
     return active ? "paid" : "not_required";
@@ -231,6 +272,20 @@ export default function ConfirmPage() {
     return supabase.from("orders").insert([fallbackRow]);
   };
 
+  const loadTossScript = async () => {
+    if (typeof window === "undefined") throw new Error("브라우저 환경에서만 결제창을 열 수 있습니다.");
+    if ((window as any).TossPayments) return;
+
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://js.tosspayments.com/v1/payment";
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("토스 결제 스크립트를 불러오지 못했습니다."));
+      document.head.appendChild(script);
+    });
+  };
+
   const onSubmit = async () => {
     if (!canSubmit) return;
 
@@ -241,6 +296,47 @@ export default function ConfirmPage() {
       const accessToken = uuid();
       const createdAtIso = new Date().toISOString();
       const orderDate = todayKey();
+
+      const paymentStatus = await resolvePaymentStatus();
+
+      if (paymentStatus === "paid") {
+        if (!pgConfig.clientKey) {
+          throw new Error("선결재 테스트용 Client Key가 없습니다. 관리자 결제/구독에서 키를 먼저 저장해주세요.");
+        }
+
+        const payOrderId = paymentOrderId();
+        const pending = {
+          createdAt: Date.now(),
+          storeId,
+          cartLines,
+          mode: effectiveMode,
+          table: effectiveMode === "dine-in" ? effectiveTable : "",
+          requestNote,
+          totalCount,
+          totalPrice,
+        };
+
+        localStorage.setItem(`${PREPAY_PENDING_KEY}:${payOrderId}`, JSON.stringify(pending));
+
+        await loadTossScript();
+        const tossPayments = (window as any).TossPayments(pgConfig.clientKey);
+        const orderName =
+          cartLines.length > 1 ? `${cartLines[0]?.name || "주문"} 외 ${cartLines.length - 1}건` : cartLines[0]?.name || "주문";
+        const base = window.location.origin;
+        const successUrl = `${base}/confirm/success?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}`;
+        const failUrl = `${base}/confirm/fail?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}`;
+
+        await tossPayments.requestPayment("카드", {
+          amount: Math.round(totalPrice),
+          orderId: payOrderId,
+          orderName,
+          customerName: "QR 고객",
+          successUrl,
+          failUrl,
+        });
+
+        return;
+      }
 
       let finalDisplayNo = "";
       const MAX_TRY = 5;
