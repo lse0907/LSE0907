@@ -340,6 +340,15 @@ export default function ConfirmPage() {
 
       let finalDisplayNo = "";
       const MAX_TRY = 5;
+      const paymentStatus = await resolvePaymentStatus();
+
+      if (paymentStatus === "paid") {
+        const ok = window.confirm("결제 시뮬레이션을 완료 처리하고 주문을 접수할까요?");
+        if (!ok) {
+          setSubmitting(false);
+          return;
+        }
+      }
 
       for (let attempt = 0; attempt < MAX_TRY; attempt++) {
         const seq = nextDailySequence();
