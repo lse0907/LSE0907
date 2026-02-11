@@ -1,7 +1,7 @@
 // src/app/confirm/page.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { nextDailySequence, format4, todayKey } from "../lib/orderNumber";
 import { supabase } from "@/app/lib/supabaseClient";
@@ -14,6 +14,12 @@ import {
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type PaymentStatus = "not_required" | "pending" | "paid";
+
+type PgConfig = {
+  clientKey: string;
+  mid: string;
+};
 
 type SelectedOptionItem = {
   id: string;
@@ -64,9 +70,11 @@ type OrderRecord = {
   totalCount: number;
   totalPrice: number;
   status: OrderStatus;
+  paymentStatus?: PaymentStatus;
 };
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
+const PREPAY_PENDING_KEY = "qrCafePrepayPending";
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString();
@@ -131,6 +139,14 @@ function isDuplicateDisplayNoError(msg: string) {
   );
 }
 
+function paymentOrderId() {
+  const raw = (globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`).replace(
+    /[^a-zA-Z0-9_-]/g,
+    ""
+  );
+  return `pay_${raw}`.slice(0, 64);
+}
+
 export default function ConfirmPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -162,6 +178,9 @@ export default function ConfirmPage() {
 
   const [requestNote, setRequestNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isPrepayStore, setIsPrepayStore] = useState(false);
+  const [prepayLoading, setPrepayLoading] = useState(true);
+  const [pgConfig, setPgConfig] = useState<PgConfig>({ clientKey: "", mid: "" });
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -174,7 +193,98 @@ export default function ConfirmPage() {
         : ""
       : "";
 
-  const canSubmit = totalCount > 0 && !submitting;
+  const canSubmit = totalCount > 0 && !submitting && !prepayLoading;
+
+  const fetchPrepayAddonActive = async (): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from("store_addons")
+        .select("prepay_addon_status")
+        .eq("store_id", storeId)
+        .maybeSingle();
+
+      if (error) return false;
+      return String(data?.prepay_addon_status || "inactive") === "active";
+    } catch {
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const active = await fetchPrepayAddonActive();
+      if (!mounted) return;
+      setIsPrepayStore(active);
+      setPrepayLoading(false);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("store_pg_config")
+          .select("client_key, mid")
+          .eq("store_id", storeId)
+          .maybeSingle();
+
+        if (!mounted) return;
+        setPgConfig({
+          clientKey: String(data?.client_key || "").trim(),
+          mid: String(data?.mid || "").trim(),
+        });
+      } catch {
+        if (!mounted) return;
+        setPgConfig({ clientKey: "", mid: "" });
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
+
+  const resolvePaymentStatus = async (): Promise<PaymentStatus> => {
+    const active = await fetchPrepayAddonActive();
+    return active ? "paid" : "not_required";
+  };
+
+  // NOTE: helper name intentionally unique to avoid duplicate-declaration merge regressions.
+  const insertOrderRowWithPaymentFallback = async (row: Record<string, unknown>) => {
+    const first = await supabase.from("orders").insert([row]);
+    if (!first.error) return first;
+
+    const msg = String(first.error.message || "").toLowerCase();
+    const missingPaymentColumn =
+      msg.includes("payment_status") && (msg.includes("column") || msg.includes("schema cache"));
+
+    if (!missingPaymentColumn) return first;
+
+    const fallbackRow = { ...row } as Record<string, unknown>;
+    delete fallbackRow.payment_status;
+    return supabase.from("orders").insert([fallbackRow]);
+  };
+
+  const loadTossScript = async () => {
+    if (typeof window === "undefined") throw new Error("브라우저 환경에서만 결제창을 열 수 있습니다.");
+    if ((window as any).TossPayments) return;
+
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://js.tosspayments.com/v1/payment";
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("토스 결제 스크립트를 불러오지 못했습니다."));
+      document.head.appendChild(script);
+    });
+  };
 
   const onSubmit = async () => {
     if (!canSubmit) return;
@@ -186,6 +296,47 @@ export default function ConfirmPage() {
       const accessToken = uuid();
       const createdAtIso = new Date().toISOString();
       const orderDate = todayKey();
+
+      const paymentStatus = await resolvePaymentStatus();
+
+      if (paymentStatus === "paid") {
+        if (!pgConfig.clientKey) {
+          throw new Error("선결재 테스트용 Client Key가 없습니다. 관리자 결제/구독에서 키를 먼저 저장해주세요.");
+        }
+
+        const payOrderId = paymentOrderId();
+        const pending = {
+          createdAt: Date.now(),
+          storeId,
+          cartLines,
+          mode: effectiveMode,
+          table: effectiveMode === "dine-in" ? effectiveTable : "",
+          requestNote,
+          totalCount,
+          totalPrice,
+        };
+
+        localStorage.setItem(`${PREPAY_PENDING_KEY}:${payOrderId}`, JSON.stringify(pending));
+
+        await loadTossScript();
+        const tossPayments = (window as any).TossPayments(pgConfig.clientKey);
+        const orderName =
+          cartLines.length > 1 ? `${cartLines[0]?.name || "주문"} 외 ${cartLines.length - 1}건` : cartLines[0]?.name || "주문";
+        const base = window.location.origin;
+        const successUrl = `${base}/confirm/success?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}`;
+        const failUrl = `${base}/confirm/fail?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}`;
+
+        await tossPayments.requestPayment("카드", {
+          amount: Math.round(totalPrice),
+          orderId: payOrderId,
+          orderName,
+          customerName: "QR 고객",
+          successUrl,
+          failUrl,
+        });
+
+        return;
+      }
 
       let finalDisplayNo = "";
       const MAX_TRY = 5;
@@ -208,10 +359,11 @@ export default function ConfirmPage() {
           total_count: totalCount,
           total_price: Math.round(totalPrice),
           status: "new",
+          payment_status: paymentStatus,
           store_id: storeId,
         };
 
-        const { error: oErr } = await supabase.from("orders").insert([orderRow]);
+        const { error: oErr } = await insertOrderRowWithPaymentFallback(orderRow);
 
         if (!oErr) break;
 
@@ -294,6 +446,7 @@ export default function ConfirmPage() {
         totalCount,
         totalPrice,
         status: "new",
+        paymentStatus,
       };
 
       const list = loadOrders(storeId);
@@ -513,9 +666,17 @@ export default function ConfirmPage() {
             fontWeight: 900,
           }}
         >
-          {submitting ? "저장 중..." : "주문 접수"}
+          {submitting ? "저장 중..." : isPrepayStore ? "결제하기" : "주문 접수"}
         </button>
       </div>
+
+      <p style={{ marginTop: 8, color: "#6b7280", fontWeight: 800, fontSize: 13 }}>
+        {prepayLoading
+          ? "매장 결제 옵션 확인 중..."
+          : isPrepayStore
+          ? "결제 완료 후 주문이 접수됩니다."
+          : "결제는 매장에서 진행됩니다."}
+      </p>
     </main>
   );
 }

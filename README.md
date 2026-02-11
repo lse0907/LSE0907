@@ -1,16 +1,25 @@
-## Hi there 👋
+# LSE0907 Workspace
 
-<!--
-**lse0907/LSE0907** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+This repository contains the `qr-cafe-mvp` Next.js project.
 
-Here are some ideas to get you started:
+## Quick start
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+```bash
+cd qr-cafe-mvp
+npm install
+npm run dev
+```
+
+Then open <http://localhost:3000>.
+
+## Project structure
+
+- `qr-cafe-mvp/`: main web application.
+- `qr-cafe-mvp/docs/`: planning notes and implementation checklists.
+
+## Useful references
+
+- Payment/subscription policy draft: `qr-cafe-mvp/docs/tosspayments-live-checklist.md`
+- Prepay next-step plan: `qr-cafe-mvp/docs/prepay-next-step-plan.md`
+- Supabase billing SQL: `qr-cafe-mvp/docs/sql/supabase-billing-setup.sql`
+- B-plan one-page summary: `qr-cafe-mvp/docs/b-plan-final-onepage.md`
