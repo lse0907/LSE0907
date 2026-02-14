@@ -20,12 +20,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "필수 파라미터가 누락되었습니다." }, { status: 400 });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
+    const serviceRole =
+      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_KEY || "").trim();
 
     if (!supabaseUrl || !serviceRole) {
+      const missing: string[] = [];
+      if (!supabaseUrl) missing.push("NEXT_PUBLIC_SUPABASE_URL(or SUPABASE_URL)");
+      if (!serviceRole) missing.push("SUPABASE_SERVICE_ROLE_KEY(or SUPABASE_SECRET_KEY)");
+
       return NextResponse.json(
-        { ok: false, message: "서버 환경변수(SUPABASE_SERVICE_ROLE_KEY)가 필요합니다." },
+        {
+          ok: false,
+          message: `서버 환경변수가 필요합니다: ${missing.join(", ")}`,
+        },
         { status: 500 }
       );
     }
