@@ -134,7 +134,7 @@ export function useStoreProfile(storeId?: string) {
       if (!sid) return;
       const { data, error } = await supabase
         .from("stores")
-        .select("main_image_url, logo_image_url")
+        .select("store_name, main_image_url, logo_image_url")
         .eq("store_id", sid)
         .maybeSingle();
 
@@ -148,11 +148,13 @@ export function useStoreProfile(storeId?: string) {
       const current = loadStoreProfile(sid);
       const next: StoreProfile = {
         ...current,
+        storeName: String(data.store_name || current.storeName || "").trim() || current.storeName,
         mainImage: data.main_image_url || current.mainImage,
         logoImage: data.logo_image_url || current.logoImage,
       };
 
       if (
+        current.storeName !== next.storeName ||
         current.mainImage !== next.mainImage ||
         current.logoImage !== next.logoImage
       ) {
