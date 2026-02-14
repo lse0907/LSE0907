@@ -4,14 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
-import {
-  BillingSettings,
-  loadBillingSettings,
-  maskToken,
-  saveBillingSettings,
-} from "@/app/lib/billingSettings";
+import { BillingSettings, maskToken } from "@/app/lib/billingSettings";
 
-type SaveMode = "db" | "local";
+type SaveMode = "db" | "unsynced";
+
+const EMPTY_BILLING: BillingSettings = {
+  baseApproved: false,
+  addonApproved: false,
+  pgMid: "",
+  pgClientKey: "",
+  pgSecretKey: "",
+  updatedAt: null,
+};
 
 async function loadBillingFromDb(storeId: string): Promise<BillingSettings | null> {
   try {
@@ -81,9 +85,9 @@ async function saveBillingToDb(storeId: string, form: BillingSettings): Promise<
 }
 
 function BillingForm({ storeId }: { storeId: string }) {
-  const [form, setForm] = useState<BillingSettings>(() => loadBillingSettings(storeId));
+  const [form, setForm] = useState<BillingSettings>(EMPTY_BILLING);
   const [saveBadge, setSaveBadge] = useState<"idle" | "saved" | "error">("idle");
-  const [saveMode, setSaveMode] = useState<SaveMode>("local");
+  const [saveMode, setSaveMode] = useState<SaveMode>("unsynced");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -95,8 +99,8 @@ function BillingForm({ storeId }: { storeId: string }) {
         setForm(dbData);
         setSaveMode("db");
       } else {
-        setForm(loadBillingSettings(storeId));
-        setSaveMode("local");
+        setForm(EMPTY_BILLING);
+        setSaveMode("unsynced");
       }
       setLoading(false);
     })();
@@ -118,8 +122,7 @@ function BillingForm({ storeId }: { storeId: string }) {
       return;
     }
 
-    saveBillingSettings(storeId, form);
-    setSaveMode("local");
+    setSaveMode("unsynced");
     setSaveBadge("error");
     setTimeout(() => setSaveBadge("idle"), 2000);
   };
@@ -137,11 +140,11 @@ function BillingForm({ storeId }: { storeId: string }) {
       <section className="card">
         <div className="rowWrap">
           <div className="pill">store: {storeId || "-"}</div>
-          <div className={saveMode === "db" ? "mode modeDb" : "mode modeLocal"}>
-            저장 위치: {saveMode === "db" ? "Supabase(DB)" : "Local 시뮬레이션"}
+          <div className={saveMode === "db" ? "mode modeDb" : "mode modeUnsynced"}>
+            저장 상태: {saveMode === "db" ? "Supabase(DB) 동기화 완료" : "DB 미동기화"}
           </div>
         </div>
-        <p className="muted">정식 과금 연동 전에는 테스트 승인 토글을 사용해 상태를 검증합니다.</p>
+        <p className="muted">선결제 주문 화면은 DB(store_addons, store_pg_config)를 기준으로 동작합니다.</p>
 
         <div className="grid2">
           <label className="toggleRow">
@@ -163,6 +166,14 @@ function BillingForm({ storeId }: { storeId: string }) {
           </label>
         </div>
       </section>
+
+      {saveMode !== "db" ? (
+        <section className="card warningCard">
+          <p className="warn">
+            현재 결제/구독 설정이 DB에 동기화되지 않았습니다. 이 상태에서는 주문 화면에서 선결제 매장으로 인식되지 않을 수 있습니다.
+          </p>
+        </section>
+      ) : null}
 
       <section className="card">
         <h2 className="h2">토스페이먼츠 PG 연결</h2>
@@ -215,9 +226,9 @@ function BillingForm({ storeId }: { storeId: string }) {
           </button>
           <span className="muted">
             {saveBadge === "saved"
-              ? "저장됨 ✅"
+              ? "DB 저장 완료 ✅"
               : saveBadge === "error"
-                ? "DB 저장 실패 → Local 시뮬레이션으로 저장됨"
+                ? "DB 저장 실패: 네트워크/권한/테이블 상태를 확인하세요"
                 : ""}
           </span>
         </div>
@@ -343,7 +354,7 @@ const css = `
     color: #065f46;
     border: 1px solid #a7f3d0;
   }
-  .modeLocal {
+  .modeUnsynced {
     background: #fff7ed;
     color: #9a3412;
     border: 1px solid #fed7aa;

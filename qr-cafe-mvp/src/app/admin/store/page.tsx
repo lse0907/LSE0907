@@ -153,6 +153,7 @@ export default function AdminStorePage() {
       const { error: imageErr } = await supabase
         .from("stores")
         .update({
+          store_name: (draft as any).storeName || null,
           main_image_url: (draft as any).mainImage || null,
           logo_image_url: (draft as any).logoImage || null,
         })
