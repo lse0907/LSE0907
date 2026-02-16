@@ -14,6 +14,7 @@ type OptionGroup = {
   min: number;
   max: number;
   scope?: "common" | "exclusive" | null;
+  linked_menu_id?: string | null;
 };
 
 type OptionItem = {
@@ -46,6 +47,7 @@ export default function AdminOptionsPage() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [items, setItems] = useState<OptionItem[]>([]);
   const [menus, setMenus] = useState<MenuSummary[]>([]);
+  const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
   const [loading, setLoading] = useState<boolean>(true);
 
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
@@ -53,6 +55,15 @@ export default function AdminOptionsPage() {
   const [badge, setBadge] = useState<"idle" | "saved" | "error">("idle");
   const badgeText = badge === "saved" ? "저장됨 ✅" : badge === "error" ? "저장 실패 ❗" : " ";
   const [activeScope, setActiveScope] = useState<"common" | "exclusive">("common");
+  const [groupDraft, setGroupDraft] = useState({
+    name: "",
+    required: false,
+    min: "0",
+    max: "1",
+    scope: "common" as "common" | "exclusive",
+    linkedMenuId: "",
+  });
+  const [itemDraftById, setItemDraftById] = useState<Record<string, string>>({});
 
   // 1) storeId 로드
   useEffect(() => {
@@ -84,13 +95,32 @@ export default function AdminOptionsPage() {
         return;
       }
 
+      let nextGroups: OptionGroup[] = [];
       const gRes = await supabase
         .from("option_groups")
-        .select("id, store_id, name, required, min, max, scope")
+        .select("id, store_id, name, required, min, max, scope, linked_menu_id")
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
 
-      if (gRes.error) throw gRes.error;
+      if (gRes.error) {
+        const missingLinkedMenuColumn =
+          gRes.error.code === "42703" && String(gRes.error.message || "").includes("linked_menu_id");
+
+        if (!missingLinkedMenuColumn) throw gRes.error;
+
+        const fallbackRes = await supabase
+          .from("option_groups")
+          .select("id, store_id, name, required, min, max, scope")
+          .eq("store_id", storeId)
+          .order("created_at", { ascending: false });
+        if (fallbackRes.error) throw fallbackRes.error;
+
+        setHasLinkedMenuColumn(false);
+        nextGroups = (fallbackRes.data || []).map((g) => ({ ...g, linked_menu_id: null })) as OptionGroup[];
+      } else {
+        setHasLinkedMenuColumn(true);
+        nextGroups = (gRes.data || []) as OptionGroup[];
+      }
 
       const iRes = await supabase
         .from("option_items")
@@ -108,7 +138,6 @@ export default function AdminOptionsPage() {
 
       if (mRes.error) throw mRes.error;
 
-      const nextGroups = (gRes.data || []) as OptionGroup[];
       const nextItems = (iRes.data || []) as OptionItem[];
       const nextMenus = (mRes.data || []) as MenuSummary[];
 
@@ -139,6 +168,29 @@ export default function AdminOptionsPage() {
     () => groups.find((g) => g.id === selectedGroupId) || null,
     [groups, selectedGroupId]
   );
+
+  useEffect(() => {
+    if (!selectedGroup) {
+      setGroupDraft({ name: "", required: false, min: "0", max: "1", scope: "common", linkedMenuId: "" });
+      setItemDraftById({});
+      return;
+    }
+    setGroupDraft({
+      name: selectedGroup.name || "",
+      required: Boolean(selectedGroup.required),
+      min: String(selectedGroup.min ?? 0),
+      max: String(selectedGroup.max ?? 1),
+      scope: selectedGroup.scope === "exclusive" ? "exclusive" : "common",
+      linkedMenuId: selectedGroup.linked_menu_id || "",
+    });
+    const nextDrafts: Record<string, string> = {};
+    items
+      .filter((it) => it.group_id === selectedGroup.id)
+      .forEach((it) => {
+        nextDrafts[it.id] = it.name || "";
+      });
+    setItemDraftById(nextDrafts);
+  }, [selectedGroup, items]);
 
   const groupItems = useMemo(
     () => items.filter((it) => it.group_id === selectedGroupId),
@@ -177,6 +229,10 @@ export default function AdminOptionsPage() {
   // ===== 그룹 CRUD =====
   const addGroup = async () => {
     if (!storeId) return alert("선택된 매장이 없습니다. 매장을 먼저 선택/생성하세요.");
+    if (!hasLinkedMenuColumn && activeScope === "exclusive") {
+      markError();
+      return alert("DB에 linked_menu_id 컬럼이 없어 전용옵션 그룹을 만들 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+    }
     try {
       setSaving(true);
       setBadge("idle");
@@ -190,6 +246,7 @@ export default function AdminOptionsPage() {
         min: 0,
         max: 1,
         scope: activeScope,
+        linked_menu_id: activeScope === "exclusive" ? menus[0]?.id || null : null,
       };
 
       const { error } = await supabase.from("option_groups").insert([row]);
@@ -209,6 +266,11 @@ export default function AdminOptionsPage() {
 
   const updateGroup = async (patch: Partial<OptionGroup>) => {
     if (!selectedGroup) return;
+    const nextScope = patch.scope ?? selectedGroup.scope ?? "common";
+    if (!hasLinkedMenuColumn && (nextScope === "exclusive" || patch.linked_menu_id != null)) {
+      markError();
+      return alert("DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가능합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+    }
     try {
       setSaving(true);
       setBadge("idle");
@@ -221,6 +283,10 @@ export default function AdminOptionsPage() {
           min: typeof patch.min === "number" ? patch.min : selectedGroup.min,
           max: typeof patch.max === "number" ? patch.max : selectedGroup.max,
           scope: patch.scope ?? selectedGroup.scope ?? "common",
+          linked_menu_id:
+            patch.scope === "exclusive" || (patch.scope == null && (selectedGroup.scope ?? "common") === "exclusive")
+              ? patch.linked_menu_id ?? selectedGroup.linked_menu_id ?? null
+              : null,
         })
         .eq("id", selectedGroup.id)
         .eq("store_id", storeId);
@@ -675,16 +741,18 @@ export default function AdminOptionsPage() {
                   <div className="label">옵션 유형</div>
                   <div className="scopeRow">
                     <button
-                      className={`scopeBtn ${selectedGroup.scope !== "exclusive" ? "scopeBtnOn" : ""}`}
-                      onClick={() => updateGroup({ scope: "common" })}
+                      className={`scopeBtn ${groupDraft.scope !== "exclusive" ? "scopeBtnOn" : ""}`}
+                      onClick={() => setGroupDraft((prev) => ({ ...prev, scope: "common", linkedMenuId: "" }))}
                       disabled={saving || loading}
                       type="button"
                     >
                       공통옵션
                     </button>
                     <button
-                      className={`scopeBtn ${selectedGroup.scope === "exclusive" ? "scopeBtnOn" : ""}`}
-                      onClick={() => updateGroup({ scope: "exclusive" })}
+                      className={`scopeBtn ${groupDraft.scope === "exclusive" ? "scopeBtnOn" : ""}`}
+                      onClick={() =>
+                        setGroupDraft((prev) => ({ ...prev, scope: "exclusive", linkedMenuId: prev.linkedMenuId || menus[0]?.id || "" }))
+                      }
                       disabled={saving || loading}
                       type="button"
                     >
@@ -700,8 +768,8 @@ export default function AdminOptionsPage() {
                   <div className="label">그룹명</div>
                   <input
                     className="input"
-                    value={selectedGroup.name}
-                    onChange={(e) => updateGroup({ name: e.target.value })}
+                    value={groupDraft.name}
+                    onChange={(e) => setGroupDraft((prev) => ({ ...prev, name: e.target.value }))}
                     disabled={saving || loading}
                   />
                 </div>
@@ -711,9 +779,9 @@ export default function AdminOptionsPage() {
                   <label style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 900 }}>
                     <input
                       type="checkbox"
-                      checked={selectedGroup.required}
+                      checked={groupDraft.required}
                       onChange={(e) =>
-                        updateGroup({ required: e.target.checked, min: e.target.checked ? 1 : 0 })
+                        setGroupDraft((prev) => ({ ...prev, required: e.target.checked, min: e.target.checked ? "1" : "0" }))
                       }
                       disabled={saving || loading}
                     />
@@ -727,8 +795,8 @@ export default function AdminOptionsPage() {
                     <input
                       className="input"
                       inputMode="numeric"
-                      value={String(selectedGroup.min)}
-                      onChange={(e) => updateGroup({ min: toInt(e.target.value, selectedGroup.min) })}
+                      value={groupDraft.min}
+                      onChange={(e) => setGroupDraft((prev) => ({ ...prev, min: e.target.value }))}
                       disabled={saving || loading}
                     />
                   </div>
@@ -737,12 +805,8 @@ export default function AdminOptionsPage() {
                     <input
                       className="input"
                       inputMode="numeric"
-                      value={String(selectedGroup.max)}
-                      onChange={(e) =>
-                        updateGroup({
-                          max: Math.max(toInt(e.target.value, selectedGroup.max), selectedGroup.min),
-                        })
-                      }
+                      value={groupDraft.max}
+                      onChange={(e) => setGroupDraft((prev) => ({ ...prev, max: e.target.value }))}
                       disabled={saving || loading}
                     />
                   </div>
@@ -752,7 +816,50 @@ export default function AdminOptionsPage() {
                   </div>
                 </div>
 
+                {groupDraft.scope === "exclusive" && hasLinkedMenuColumn ? (
+                  <div className="field">
+                    <div className="label">전용 대상 메뉴</div>
+                    <select
+                      className="input"
+                      value={groupDraft.linkedMenuId}
+                      onChange={(e) => setGroupDraft((prev) => ({ ...prev, linkedMenuId: e.target.value }))}
+                      disabled={saving || loading}
+                    >
+                      <option value="">메뉴 선택</option>
+                      {menus.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+
+                {groupDraft.scope === "exclusive" && !hasLinkedMenuColumn ? (
+                  <div className="muted" style={{ marginTop: 8 }}>
+                    linked_menu_id 컬럼이 없어 전용 대상 메뉴를 지정할 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.
+                  </div>
+                ) : null}
+
                 <div className="btnRow">
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      const min = toInt(groupDraft.min, selectedGroup.min);
+                      const max = Math.max(toInt(groupDraft.max, selectedGroup.max), min);
+                      updateGroup({
+                        name: groupDraft.name.trim() || selectedGroup.name,
+                        required: groupDraft.required,
+                        min,
+                        max,
+                        scope: groupDraft.scope,
+                        linked_menu_id: groupDraft.scope === "exclusive" ? groupDraft.linkedMenuId || null : null,
+                      });
+                    }}
+                    disabled={saving || loading || !groupDraft.name.trim()}
+                  >
+                    그룹 저장
+                  </button>
                   <button className="btn btnPrimary" onClick={addItem} disabled={saving || loading}>
                     + 옵션 추가
                   </button>
@@ -802,10 +909,25 @@ export default function AdminOptionsPage() {
                             <div className="label">옵션명</div>
                             <input
                               className="input"
-                              value={it.name}
-                              onChange={(e) => updateItem(it.id, { name: e.target.value })}
+                              value={itemDraftById[it.id] ?? it.name}
+                              onChange={(e) =>
+                                setItemDraftById((prev) => ({
+                                  ...prev,
+                                  [it.id]: e.target.value,
+                                }))
+                              }
                               disabled={saving || loading}
                             />
+                          </div>
+                          <div className="field" style={{ marginTop: 0 }}>
+                            <div className="label">저장</div>
+                            <button
+                              className="btn"
+                              onClick={() => updateItem(it.id, { name: (itemDraftById[it.id] ?? "").trim() || it.name })}
+                              disabled={saving || loading}
+                            >
+                              항목 저장
+                            </button>
                           </div>
                           <div className="field" style={{ marginTop: 0 }}>
                             <div className="label">옵션 ID</div>
