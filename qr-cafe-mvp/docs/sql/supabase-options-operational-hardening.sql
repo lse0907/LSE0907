@@ -8,22 +8,44 @@ begin;
 alter table public.option_groups
   add column if not exists linked_menu_id text null;
 
--- FK to menu_items by linked_menu_id.
--- NOTE: Some projects have menu_items PK/UNIQUE only on (id), not (store_id, id).
--- Using single-column FK avoids the 42830 error in those schemas.
+-- linked_menu_id FK is created only when menu_items(id) is uniquely constrained.
+-- Some projects use composite PK/UNIQUE (e.g. store_id + id), so forcing FK can fail with 42830.
 do $$
+declare
+  has_unique_on_id boolean;
 begin
-  if not exists (
+  select exists (
     select 1
-    from pg_constraint
-    where conname = 'option_groups_linked_menu_fk'
-  ) then
-    alter table public.option_groups
-      add constraint option_groups_linked_menu_fk
-      foreign key (linked_menu_id)
-      references public.menu_items (id)
-      on update cascade
-      on delete set null;
+    from pg_constraint c
+    where c.conrelid = 'public.menu_items'::regclass
+      and c.contype in ('p', 'u')
+      and c.conkey = array[
+        (select a.attnum
+         from pg_attribute a
+         where a.attrelid = 'public.menu_items'::regclass
+           and a.attname = 'id'
+           and a.attnum > 0
+           and not a.attisdropped)
+      ]
+  )
+  into has_unique_on_id;
+
+  if has_unique_on_id then
+    if not exists (
+      select 1
+      from pg_constraint
+      where conname = 'option_groups_linked_menu_fk'
+        and conrelid = 'public.option_groups'::regclass
+    ) then
+      alter table public.option_groups
+        add constraint option_groups_linked_menu_fk
+        foreign key (linked_menu_id)
+        references public.menu_items (id)
+        on update cascade
+        on delete set null;
+    end if;
+  else
+    raise notice 'Skip FK option_groups_linked_menu_fk: public.menu_items(id) is not UNIQUE/PK in this schema.';
   end if;
 end $$;
 
