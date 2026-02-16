@@ -105,7 +105,7 @@ export default function AdminMenuPage() {
   const badgeText = badge === "saved" ? "저장됨 ✅" : badge === "error" ? "저장 실패 ❗" : " ";
   const [uploadingImage, setUploadingImage] = useState(false);
   const [msg, setMsg] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showExclusiveCreateForm, setShowExclusiveCreateForm] = useState(false);
   const [newExclusiveGroup, setNewExclusiveGroup] = useState({
     name: "",
     required: false,
@@ -257,6 +257,7 @@ export default function AdminMenuPage() {
     setSelectedId("");
     setDraft(emptyDraft);
     setMsg("");
+    setShowExclusiveCreateForm(false);
   };
 
   const onSave = async () => {
@@ -472,6 +473,7 @@ export default function AdminMenuPage() {
       }));
       setNewExclusiveGroup({ name: "", required: false, min: "0", max: "1" });
       setNewExclusiveItems([""]);
+      setShowExclusiveCreateForm(false);
       await refresh();
       setMsg("전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
     } catch (e: any) {
@@ -697,6 +699,20 @@ export default function AdminMenuPage() {
           font-size: 12px;
           font-weight: 800;
         }
+        .sectionTitle {
+          margin: 0;
+          font-size: 15px;
+          font-weight: 950;
+        }
+        .createBox {
+          margin-top: 8px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          padding: 10px;
+          display: grid;
+          gap: 8px;
+          background: #fafafa;
+        }
         .divider {
           height: 1px;
           background: var(--line);
@@ -859,26 +875,26 @@ export default function AdminMenuPage() {
             </div>
 
             <div className="field">
-              <button className="btn" type="button" onClick={() => setShowAdvanced((p) => !p)}>
-                {showAdvanced ? "고급설정 접기" : "고급설정 열기"}
-              </button>
-              {showAdvanced ? (
-                <>
-                  <div className="label">메뉴 ID</div>
-                  <input
-                    className="input"
-                    value={draft.id}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
-                    placeholder="예: americano"
-                    disabled={saving || loading || isEditing}
-                  />
-                  <div className="hint">이미 등록된 메뉴를 수정할 때는 ID 변경을 막아두었어요.</div>
-                </>
-              ) : null}
+              <div className="label">메뉴 ID</div>
+              <input
+                className="input"
+                value={draft.id}
+                onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
+                placeholder="예: americano"
+                disabled={saving || loading || isEditing}
+              />
+              <div className="hint">이미 등록된 메뉴를 수정할 때는 ID 변경을 막아두었어요.</div>
+            </div>
+
+            <div className="divider" style={{ marginTop: 14, marginBottom: 14 }} />
+
+            <div className="field" style={{ marginTop: 0 }}>
+              <h3 className="sectionTitle">옵션 연결</h3>
+              <div className="hint">메뉴 상세와 분리해서, 이 메뉴에 연결할 옵션을 선택합니다.</div>
             </div>
 
             <div className="field">
-              <div className="label">공통옵션 연결</div>
+              <div className="label">공통옵션</div>
               {commonGroups.length === 0 ? (
                 <div className="muted">등록된 옵션 그룹이 없습니다.</div>
               ) : (
@@ -919,82 +935,91 @@ export default function AdminMenuPage() {
                 ))}
               </div>
 
-              <div className="divider" />
-              <div className="hint">메뉴 화면에서 전용옵션을 바로 만들 수 있어요.</div>
-              <input
-                className="input"
-                value={newExclusiveGroup.name}
-                onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
-                placeholder="전용옵션 그룹명 (예: 당도)"
-                disabled={saving || loading}
-              />
-              <label className="optionRow">
-                <input
-                  type="checkbox"
-                  checked={newExclusiveGroup.required}
-                  onChange={(e) =>
-                    setNewExclusiveGroup((p) => ({ ...p, required: e.target.checked, min: e.target.checked ? "1" : p.min }))
-                  }
-                  disabled={saving || loading}
-                />
-                필수 선택
-              </label>
-              <div className="optionRow">
-                <input
-                  className="input"
-                  style={{ maxWidth: 120 }}
-                  inputMode="numeric"
-                  value={newExclusiveGroup.min}
-                  onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, min: e.target.value }))}
-                  placeholder="최소"
-                  disabled={saving || loading}
-                />
-                <input
-                  className="input"
-                  style={{ maxWidth: 120 }}
-                  inputMode="numeric"
-                  value={newExclusiveGroup.max}
-                  onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }))}
-                  placeholder="최대"
-                  disabled={saving || loading}
-                />
+              <div className="btnRow" style={{ marginTop: 8 }}>
+                <button className="btn" type="button" onClick={() => setShowExclusiveCreateForm((p) => !p)} disabled={saving || loading}>
+                  {showExclusiveCreateForm ? "전용옵션 등록 닫기" : "+ 전용옵션 등록"}
+                </button>
               </div>
-              {newExclusiveItems.map((row, idx) => (
-                <div className="optionRow" key={`new-item-${idx}`}>
+
+              {showExclusiveCreateForm ? (
+                <div className="createBox">
+                  <div className="hint">이 메뉴 전용 옵션 그룹을 생성하고 자동으로 연결합니다.</div>
                   <input
                     className="input"
-                    value={row}
-                    onChange={(e) =>
-                      setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))
-                    }
-                    placeholder={`옵션 항목 ${idx + 1}`}
+                    value={newExclusiveGroup.name}
+                    onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="전용옵션 그룹명 (예: 당도)"
                     disabled={saving || loading}
                   />
-                  {newExclusiveItems.length > 1 ? (
+                  <label className="optionRow">
+                    <input
+                      type="checkbox"
+                      checked={newExclusiveGroup.required}
+                      onChange={(e) =>
+                        setNewExclusiveGroup((p) => ({ ...p, required: e.target.checked, min: e.target.checked ? "1" : p.min }))
+                      }
+                      disabled={saving || loading}
+                    />
+                    필수 선택
+                  </label>
+                  <div className="optionRow">
+                    <input
+                      className="input"
+                      style={{ maxWidth: 120 }}
+                      inputMode="numeric"
+                      value={newExclusiveGroup.min}
+                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, min: e.target.value }))}
+                      placeholder="최소"
+                      disabled={saving || loading}
+                    />
+                    <input
+                      className="input"
+                      style={{ maxWidth: 120 }}
+                      inputMode="numeric"
+                      value={newExclusiveGroup.max}
+                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }))}
+                      placeholder="최대"
+                      disabled={saving || loading}
+                    />
+                  </div>
+                  {newExclusiveItems.map((row, idx) => (
+                    <div className="optionRow" key={`new-item-${idx}`}>
+                      <input
+                        className="input"
+                        value={row}
+                        onChange={(e) =>
+                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))
+                        }
+                        placeholder={`옵션 항목 ${idx + 1}`}
+                        disabled={saving || loading}
+                      />
+                      {newExclusiveItems.length > 1 ? (
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx))}
+                          disabled={saving || loading}
+                        >
+                          제거
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                  <div className="btnRow" style={{ marginTop: 6 }}>
                     <button
                       className="btn"
                       type="button"
-                      onClick={() => setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx))}
+                      onClick={() => setNewExclusiveItems((prev) => [...prev, ""])}
                       disabled={saving || loading}
                     >
-                      제거
+                      항목 추가
                     </button>
-                  ) : null}
+                    <button className="btn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
+                      전용옵션 생성
+                    </button>
+                  </div>
                 </div>
-              ))}
-              <div className="btnRow" style={{ marginTop: 6 }}>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => setNewExclusiveItems((prev) => [...prev, ""])}
-                  disabled={saving || loading}
-                >
-                  항목 추가
-                </button>
-                <button className="btn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
-                  전용옵션 생성
-                </button>
-              </div>
+              ) : null}
             </div>
 
             <div className="field">

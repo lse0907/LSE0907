@@ -216,6 +216,8 @@ export default function AdminOptionsPage() {
     );
   }, [menus, selectedGroup]);
 
+  const isExclusiveSelected = (selectedGroup?.scope || "common") === "exclusive";
+
   // 공통: 뱃지 처리
   const markSaved = () => {
     setBadge("saved");
@@ -229,6 +231,10 @@ export default function AdminOptionsPage() {
   // ===== 그룹 CRUD =====
   const addGroup = async () => {
     if (!storeId) return alert("선택된 매장이 없습니다. 매장을 먼저 선택/생성하세요.");
+    if (activeScope === "exclusive") {
+      markError();
+      return alert("전용옵션 그룹 등록은 메뉴관리에서만 가능합니다.");
+    }
     if (!hasLinkedMenuColumn && activeScope === "exclusive") {
       markError();
       return alert("DB에 linked_menu_id 컬럼이 없어 전용옵션 그룹을 만들 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.");
@@ -266,6 +272,10 @@ export default function AdminOptionsPage() {
 
   const updateGroup = async (patch: Partial<OptionGroup>) => {
     if (!selectedGroup) return;
+    if (isExclusiveSelected) {
+      markError();
+      return alert("전용옵션 그룹은 옵션관리에서 수정할 수 없습니다. 메뉴관리에서 수정하거나 여기서는 삭제만 해주세요.");
+    }
     const nextScope = patch.scope ?? selectedGroup.scope ?? "common";
     if (!hasLinkedMenuColumn && (nextScope === "exclusive" || patch.linked_menu_id != null)) {
       markError();
@@ -344,6 +354,10 @@ export default function AdminOptionsPage() {
   // ===== 아이템 CRUD =====
   const addItem = async () => {
     if (!selectedGroup) return alert("그룹을 먼저 선택하세요.");
+    if (isExclusiveSelected) {
+      markError();
+      return alert("전용옵션 항목 등록은 메뉴관리에서만 가능합니다.");
+    }
     try {
       setSaving(true);
       setBadge("idle");
@@ -372,6 +386,10 @@ export default function AdminOptionsPage() {
   const updateItem = async (id: string, patch: Partial<OptionItem>) => {
     const cur = items.find((x) => x.id === id);
     if (!cur) return;
+    if (isExclusiveSelected) {
+      markError();
+      return alert("전용옵션 항목 수정은 메뉴관리에서만 가능합니다. 여기서는 삭제만 가능합니다.");
+    }
 
     try {
       setSaving(true);
@@ -695,7 +713,7 @@ export default function AdminOptionsPage() {
             </h2>
 
             <div className="btnRow">
-              <button className="btn btnPrimary" onClick={addGroup} disabled={saving || loading}>
+              <button className="btn btnPrimary" onClick={addGroup} disabled={saving || loading || activeScope === "exclusive"}>
                 + 새 그룹
               </button>
               <button className="btn" onClick={refresh} disabled={saving || loading}>
@@ -721,7 +739,9 @@ export default function AdminOptionsPage() {
               ))}
               {!loading && scopedGroups.length === 0 ? (
                 <div className="muted" style={{ marginTop: 10 }}>
-                  아직 옵션 그룹이 없습니다. “+ 새 그룹”으로 시작하세요.
+                  {activeScope === "exclusive"
+                    ? "전용옵션 그룹 등록은 메뉴관리에서 해주세요. 여기서는 조회/삭제만 가능합니다."
+                    : "아직 옵션 그룹이 없습니다. “+ 새 그룹”으로 시작하세요."}
                 </div>
               ) : null}
             </div>
@@ -739,28 +759,13 @@ export default function AdminOptionsPage() {
               <>
                 <div className="field" style={{ marginTop: 0 }}>
                   <div className="label">옵션 유형</div>
-                  <div className="scopeRow">
-                    <button
-                      className={`scopeBtn ${groupDraft.scope !== "exclusive" ? "scopeBtnOn" : ""}`}
-                      onClick={() => setGroupDraft((prev) => ({ ...prev, scope: "common", linkedMenuId: "" }))}
-                      disabled={saving || loading}
-                      type="button"
-                    >
-                      공통옵션
-                    </button>
-                    <button
-                      className={`scopeBtn ${groupDraft.scope === "exclusive" ? "scopeBtnOn" : ""}`}
-                      onClick={() =>
-                        setGroupDraft((prev) => ({ ...prev, scope: "exclusive", linkedMenuId: prev.linkedMenuId || menus[0]?.id || "" }))
-                      }
-                      disabled={saving || loading}
-                      type="button"
-                    >
-                      전용옵션
-                    </button>
+                  <div className="muted" style={{ marginTop: 2 }}>
+                    {isExclusiveSelected ? "전용옵션" : "공통옵션"}
                   </div>
                   <div className="muted" style={{ marginTop: 6 }}>
-                    공통옵션은 여러 메뉴에 붙일 수 있고, 전용옵션은 특정 메뉴에만 붙이는 것을 권장해요.
+                    {isExclusiveSelected
+                      ? "전용옵션은 옵션관리에서 조회/삭제만 가능합니다. 등록·수정은 메뉴관리에서 해주세요."
+                      : "공통옵션은 옵션관리에서 등록/수정/삭제할 수 있습니다."}
                   </div>
                 </div>
 
@@ -770,7 +775,7 @@ export default function AdminOptionsPage() {
                     className="input"
                     value={groupDraft.name}
                     onChange={(e) => setGroupDraft((prev) => ({ ...prev, name: e.target.value }))}
-                    disabled={saving || loading}
+                    disabled={saving || loading || isExclusiveSelected}
                   />
                 </div>
 
@@ -783,7 +788,7 @@ export default function AdminOptionsPage() {
                       onChange={(e) =>
                         setGroupDraft((prev) => ({ ...prev, required: e.target.checked, min: e.target.checked ? "1" : "0" }))
                       }
-                      disabled={saving || loading}
+                      disabled={saving || loading || isExclusiveSelected}
                     />
                     필수
                   </label>
@@ -797,7 +802,7 @@ export default function AdminOptionsPage() {
                       inputMode="numeric"
                       value={groupDraft.min}
                       onChange={(e) => setGroupDraft((prev) => ({ ...prev, min: e.target.value }))}
-                      disabled={saving || loading}
+                      disabled={saving || loading || isExclusiveSelected}
                     />
                   </div>
                   <div className="field">
@@ -807,7 +812,7 @@ export default function AdminOptionsPage() {
                       inputMode="numeric"
                       value={groupDraft.max}
                       onChange={(e) => setGroupDraft((prev) => ({ ...prev, max: e.target.value }))}
-                      disabled={saving || loading}
+                      disabled={saving || loading || isExclusiveSelected}
                     />
                   </div>
                   <div className="field">
@@ -823,7 +828,7 @@ export default function AdminOptionsPage() {
                       className="input"
                       value={groupDraft.linkedMenuId}
                       onChange={(e) => setGroupDraft((prev) => ({ ...prev, linkedMenuId: e.target.value }))}
-                      disabled={saving || loading}
+                      disabled
                     >
                       <option value="">메뉴 선택</option>
                       {menus.map((m) => (
@@ -856,11 +861,11 @@ export default function AdminOptionsPage() {
                         linked_menu_id: groupDraft.scope === "exclusive" ? groupDraft.linkedMenuId || null : null,
                       });
                     }}
-                    disabled={saving || loading || !groupDraft.name.trim()}
+                    disabled={saving || loading || !groupDraft.name.trim() || isExclusiveSelected}
                   >
                     그룹 저장
                   </button>
-                  <button className="btn btnPrimary" onClick={addItem} disabled={saving || loading}>
+                  <button className="btn btnPrimary" onClick={addItem} disabled={saving || loading || isExclusiveSelected}>
                     + 옵션 추가
                   </button>
                   <button className="btn btnDanger" onClick={deleteGroup} disabled={saving || loading}>
@@ -916,7 +921,7 @@ export default function AdminOptionsPage() {
                                   [it.id]: e.target.value,
                                 }))
                               }
-                              disabled={saving || loading}
+                              disabled={saving || loading || isExclusiveSelected}
                             />
                           </div>
                           <div className="field" style={{ marginTop: 0 }}>
@@ -924,7 +929,7 @@ export default function AdminOptionsPage() {
                             <button
                               className="btn"
                               onClick={() => updateItem(it.id, { name: (itemDraftById[it.id] ?? "").trim() || it.name })}
-                              disabled={saving || loading}
+                              disabled={saving || loading || isExclusiveSelected}
                             >
                               항목 저장
                             </button>
