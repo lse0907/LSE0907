@@ -104,6 +104,7 @@ export default function AdminMenuPage() {
   const [badge, setBadge] = useState<"idle" | "saved" | "error">("idle");
   const badgeText = badge === "saved" ? "저장됨 ✅" : badge === "error" ? "저장 실패 ❗" : " ";
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageFileName, setImageFileName] = useState("");
   const [msg, setMsg] = useState("");
   const [showExclusiveCreateForm, setShowExclusiveCreateForm] = useState(false);
   const [commonGroupToAdd, setCommonGroupToAdd] = useState("");
@@ -113,7 +114,7 @@ export default function AdminMenuPage() {
     min: "0",
     max: "1",
   });
-  const [newExclusiveItems, setNewExclusiveItems] = useState<string[]>([""]);
+  const [newExclusiveItems, setNewExclusiveItems] = useState<Array<{ name: string; price: string }>>([{ name: "", price: "0" }]);
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -257,6 +258,7 @@ export default function AdminMenuPage() {
   const onNew = () => {
     setSelectedId("");
     setDraft(emptyDraft);
+    setImageFileName("");
     setMsg("");
     setShowExclusiveCreateForm(false);
   };
@@ -432,7 +434,9 @@ export default function AdminMenuPage() {
       return;
     }
 
-    const cleanedItems = newExclusiveItems.map((x) => x.trim()).filter(Boolean);
+    const cleanedItems = newExclusiveItems
+      .map((x) => ({ name: x.name.trim(), price: toInt(x.price, 0) }))
+      .filter((x) => Boolean(x.name));
     if (cleanedItems.length === 0) {
       setMsg("전용옵션 항목을 1개 이상 입력해주세요.");
       return;
@@ -459,11 +463,12 @@ export default function AdminMenuPage() {
       ]);
       if (groupInsert.error) throw groupInsert.error;
 
-      const itemRows = cleanedItems.map((itemName) => ({
+      const itemRows = cleanedItems.map((item) => ({
         id: `item_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`,
         store_id: storeId,
         group_id: groupId,
-        name: itemName,
+        name: item.name,
+        price_delta: item.price,
       }));
       const itemInsert = await supabase.from("option_items").insert(itemRows);
       if (itemInsert.error) throw itemInsert.error;
@@ -473,7 +478,7 @@ export default function AdminMenuPage() {
         optionGroupIds: prev.optionGroupIds.includes(groupId) ? prev.optionGroupIds : [...prev.optionGroupIds, groupId],
       }));
       setNewExclusiveGroup({ name: "", required: false, min: "0", max: "1" });
-      setNewExclusiveItems([""]);
+      setNewExclusiveItems([{ name: "", price: "0" }]);
       setShowExclusiveCreateForm(false);
       await refresh();
       setMsg("전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
@@ -493,7 +498,6 @@ export default function AdminMenuPage() {
   };
 
   const isEditing = Boolean(selectedId);
-  const selectedGroups = groups.filter((g) => draft.optionGroupIds.includes(g.id));
   const commonGroups = groups.filter((g) => (g.scope || "common") !== "exclusive");
   const selectedCommonGroups = commonGroups.filter((g) => draft.optionGroupIds.includes(g.id));
   const unselectedCommonGroups = commonGroups.filter((g) => !draft.optionGroupIds.includes(g.id));
@@ -534,6 +538,7 @@ export default function AdminMenuPage() {
     setUploadingImage(true);
     setMsg("");
     try {
+      setImageFileName(file.name || "");
       const ext = getFileExt(file.name) || "png";
       const path = `${storeId}/${draft.id.trim()}-${Date.now()}.${ext}`;
       const { error } = await supabase.storage.from(MENU_IMAGE_BUCKET).upload(path, file, { upsert: true });
@@ -729,6 +734,16 @@ export default function AdminMenuPage() {
           align-items: center;
           flex-wrap: wrap;
         }
+        .imageUploadRow {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .fileNameInput {
+          min-width: 220px;
+          max-width: 340px;
+        }
         .previewThumb {
           margin-top: 8px;
           width: 84px;
@@ -762,6 +777,17 @@ export default function AdminMenuPage() {
           display: grid;
           gap: 8px;
           background: #fafafa;
+        }
+        .optionSectionBox {
+          margin-top: 14px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 12px;
+          background: #fff;
+        }
+        .fullWidthBtn {
+          width: 100%;
+          justify-content: center;
         }
         .divider {
           height: 1px;
@@ -888,7 +914,7 @@ export default function AdminMenuPage() {
 
             <div className="field">
               <div className="label">메뉴 이미지</div>
-              <div className="btnRow" style={{ marginTop: 4 }}>
+              <div className="imageUploadRow" style={{ marginTop: 4 }}>
                 <label className="btn">
                   {uploadingImage ? "업로드 중..." : "이미지 업로드"}
                   <input
@@ -899,9 +925,11 @@ export default function AdminMenuPage() {
                     disabled={saving || loading || uploadingImage}
                   />
                 </label>
+                <input className="input fileNameInput" value={imageFileName} readOnly placeholder="선택된 파일명" />
               </div>
               <input className="input" value={draft.image} readOnly placeholder="이미지 업로드 후 자동 입력" />
               {draft.image ? <img src={draft.image} alt={`${draft.name || draft.id || "menu"} preview`} className="previewThumb" /> : null}
+              <div className="hint">업로드된 이미지는 Supabase Storage(menu-assets)에 저장됩니다.</div>
             </div>
 
             <div className="field">
@@ -941,16 +969,15 @@ export default function AdminMenuPage() {
               <div className="hint">이미 등록된 메뉴를 수정할 때는 ID 변경을 막아두었어요.</div>
             </div>
 
-            <div className="divider" style={{ marginTop: 14, marginBottom: 14 }} />
+            <div className="optionSectionBox">
+              <div className="field" style={{ marginTop: 0 }}>
+                <h3 className="sectionTitle">옵션 연결</h3>
+                <div className="hint">메뉴 상세와 분리된 별도 박스입니다. 옵션 연결과 단가를 이 안에서 함께 설정하세요.</div>
+              </div>
 
-            <div className="field" style={{ marginTop: 0 }}>
-              <h3 className="sectionTitle">옵션 연결</h3>
-              <div className="hint">메뉴 상세와 분리해서, 이 메뉴에 연결할 옵션을 선택합니다.</div>
-            </div>
-
-            <div className="field">
-              <div className="label">공통옵션</div>
-              <div className="optionConnectCard">
+              <div className="field">
+                <div className="label">공통옵션</div>
+                <div className="optionConnectCard">
                 <div className="inlineSelectRow">
                   <select
                     className="input"
@@ -991,7 +1018,22 @@ export default function AdminMenuPage() {
                             groupOptions.map((item) => (
                               <div key={item.id} className="groupOptionItem">
                                 <span>{item.name}</span>
-                                <span className="muted">기본 +{Number(item.price_delta ?? 0).toLocaleString()}원</span>
+                                <input
+                                  className="input"
+                                  style={{ maxWidth: 140 }}
+                                  inputMode="numeric"
+                                  value={getOptionPrice(item)}
+                                  onChange={(e) =>
+                                    setDraft((prev) => ({
+                                      ...prev,
+                                      optionPriceByItem: {
+                                        ...prev.optionPriceByItem,
+                                        [item.id]: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  disabled={saving || loading}
+                                />
                               </div>
                             ))
                           )}
@@ -1000,13 +1042,13 @@ export default function AdminMenuPage() {
                     })}
                   </div>
                 )}
+                </div>
               </div>
-            </div>
 
-            <div className="field">
-              <div className="label">전용옵션 (현재 메뉴 전용)</div>
-              {exclusiveGroups.length === 0 ? <div className="muted">아직 전용옵션이 없습니다.</div> : null}
-              <div className="optionGrid">
+              <div className="field">
+                <div className="label">전용옵션 (현재 메뉴 전용)</div>
+                {exclusiveGroups.length === 0 ? <div className="muted">아직 전용옵션이 없습니다.</div> : null}
+                <div className="optionGrid">
                 {exclusiveGroups.map((g) => (
                   <label key={g.id} className="optionRow">
                     <input
@@ -1019,10 +1061,54 @@ export default function AdminMenuPage() {
                     <span className="muted">· 전용옵션</span>
                   </label>
                 ))}
+                </div>
+
+                {exclusiveGroups.length > 0 ? (
+                  <div className="optionGrid" style={{ marginTop: 8 }}>
+                    {exclusiveGroups.map((group) => {
+                      const groupOptions = itemsByGroup.get(group.id) || [];
+                      return (
+                        <div className="groupOptionDetail" key={`exclusive-price-${group.id}`}>
+                          <div className="name">{group.name}</div>
+                          {groupOptions.length === 0 ? (
+                            <div className="muted">옵션 항목이 없습니다.</div>
+                          ) : (
+                            groupOptions.map((item) => (
+                              <div key={item.id} className="groupOptionItem">
+                                <span>{item.name}</span>
+                                <input
+                                  className="input"
+                                  style={{ maxWidth: 140 }}
+                                  inputMode="numeric"
+                                  value={getOptionPrice(item)}
+                                  onChange={(e) =>
+                                    setDraft((prev) => ({
+                                      ...prev,
+                                      optionPriceByItem: {
+                                        ...prev.optionPriceByItem,
+                                        [item.id]: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  disabled={saving || loading}
+                                />
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
 
-              <div className="btnRow" style={{ marginTop: 8 }}>
-                <button className="btn" type="button" onClick={() => setShowExclusiveCreateForm((p) => !p)} disabled={saving || loading}>
+              <div className="field" style={{ marginTop: 16 }}>
+                <button
+                  className="btn fullWidthBtn"
+                  type="button"
+                  onClick={() => setShowExclusiveCreateForm((p) => !p)}
+                  disabled={saving || loading}
+                >
                   {effectiveExclusiveCreateOpen ? "전용옵션 등록 닫기" : "+ 전용옵션 등록"}
                 </button>
               </div>
@@ -1087,116 +1173,22 @@ export default function AdminMenuPage() {
                     <div className="optionRow" key={`new-item-${idx}`}>
                       <input
                         className="input"
-                        value={row}
+                        value={row.name}
                         onChange={(e) =>
-                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))
+                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, name: e.target.value } : v)))
                         }
                         placeholder={`옵션 항목 ${idx + 1}`}
                         disabled={saving || loading}
                       />
-                      {newExclusiveItems.length > 1 ? (
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx))}
-                          disabled={saving || loading}
-                        >
-                          제거
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                  <div className="btnRow" style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={() => setNewExclusiveItems((prev) => [...prev, ""])}
-                      disabled={saving || loading}
-                    >
-                      항목 추가
-                    </button>
-                    <button className="btn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
-                      전용옵션 생성
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="field">
-              <div className="label">전용옵션 (현재 메뉴 전용)</div>
-              {exclusiveGroups.length === 0 ? <div className="muted">아직 전용옵션이 없습니다.</div> : null}
-              <div className="optionGrid">
-                {exclusiveGroups.map((g) => (
-                  <label key={g.id} className="optionRow">
-                    <input
-                      type="checkbox"
-                      checked={draft.optionGroupIds.includes(g.id)}
-                      onChange={() => toggleGroup(g.id)}
-                      disabled={saving || loading}
-                    />
-                    {g.name}
-                    <span className="muted">· 전용옵션</span>
-                  </label>
-                ))}
-              </div>
-
-              <div className="btnRow" style={{ marginTop: 8 }}>
-                <button className="btn" type="button" onClick={() => setShowExclusiveCreateForm((p) => !p)} disabled={saving || loading}>
-                  {showExclusiveCreateForm ? "전용옵션 등록 닫기" : "+ 전용옵션 등록"}
-                </button>
-              </div>
-
-              {showExclusiveCreateForm ? (
-                <div className="createBox">
-                  <div className="hint">이 메뉴 전용 옵션 그룹을 생성하고 자동으로 연결합니다.</div>
-                  <input
-                    className="input"
-                    value={newExclusiveGroup.name}
-                    onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
-                    placeholder="전용옵션 그룹명 (예: 당도)"
-                    disabled={saving || loading}
-                  />
-                  <label className="optionRow">
-                    <input
-                      type="checkbox"
-                      checked={newExclusiveGroup.required}
-                      onChange={(e) =>
-                        setNewExclusiveGroup((p) => ({ ...p, required: e.target.checked, min: e.target.checked ? "1" : p.min }))
-                      }
-                      disabled={saving || loading}
-                    />
-                    필수 선택
-                  </label>
-                  <div className="optionRow">
-                    <input
-                      className="input"
-                      style={{ maxWidth: 120 }}
-                      inputMode="numeric"
-                      value={newExclusiveGroup.min}
-                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, min: e.target.value }))}
-                      placeholder="최소"
-                      disabled={saving || loading}
-                    />
-                    <input
-                      className="input"
-                      style={{ maxWidth: 120 }}
-                      inputMode="numeric"
-                      value={newExclusiveGroup.max}
-                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }))}
-                      placeholder="최대"
-                      disabled={saving || loading}
-                    />
-                  </div>
-                  {newExclusiveItems.map((row, idx) => (
-                    <div className="optionRow" key={`new-item-${idx}`}>
                       <input
                         className="input"
-                        value={row}
+                        style={{ maxWidth: 120 }}
+                        inputMode="numeric"
+                        value={row.price}
                         onChange={(e) =>
-                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))
+                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, price: e.target.value } : v)))
                         }
-                        placeholder={`옵션 항목 ${idx + 1}`}
+                        placeholder="단가"
                         disabled={saving || loading}
                       />
                       {newExclusiveItems.length > 1 ? (
@@ -1211,72 +1203,21 @@ export default function AdminMenuPage() {
                       ) : null}
                     </div>
                   ))}
-                  <div className="btnRow" style={{ marginTop: 6 }}>
+                  <div className="btnRow" style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 1fr", width: "100%" }}>
                     <button
-                      className="btn"
+                      className="btn fullWidthBtn"
                       type="button"
-                      onClick={() => setNewExclusiveItems((prev) => [...prev, ""])}
+                      onClick={() => setNewExclusiveItems((prev) => [...prev, { name: "", price: "0" }])}
                       disabled={saving || loading}
                     >
                       항목 추가
                     </button>
-                    <button className="btn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
+                    <button className="btn fullWidthBtn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
                       전용옵션 생성
                     </button>
                   </div>
                 </div>
               ) : null}
-            </div>
-
-            <div className="field">
-              <div className="label">옵션 추가금 설정</div>
-              <div className="hint">메뉴마다 다른 옵션 가격을 설정할 수 있습니다.</div>
-              {selectedGroups.length === 0 ? (
-                <div className="muted" style={{ marginTop: 8 }}>
-                  연결된 옵션 그룹이 없습니다.
-                </div>
-              ) : (
-                <div className="optionGrid" style={{ marginTop: 10 }}>
-                  {selectedGroups.map((group) => {
-                    const groupOptions = itemsByGroup.get(group.id) || [];
-                    return (
-                      <div key={group.id} className="card" style={{ padding: 12 }}>
-                        <div className="name" style={{ marginBottom: 6 }}>
-                          {group.name}
-                          <span className="muted" style={{ marginLeft: 6 }}>
-                            ({group.scope === "exclusive" ? "전용옵션" : "공통옵션"})
-                          </span>
-                        </div>
-                        {groupOptions.length === 0 ? (
-                          <div className="muted">옵션 항목이 없습니다.</div>
-                        ) : (
-                          groupOptions.map((item) => (
-                            <div key={item.id} className="optionRow" style={{ justifyContent: "space-between" }}>
-                              <span>{item.name}</span>
-                              <input
-                                className="input"
-                                style={{ maxWidth: 120 }}
-                                inputMode="numeric"
-                                value={getOptionPrice(item)}
-                                onChange={(e) =>
-                                  setDraft((prev) => ({
-                                    ...prev,
-                                    optionPriceByItem: {
-                                      ...prev.optionPriceByItem,
-                                      [item.id]: e.target.value,
-                                    },
-                                  }))
-                                }
-                                disabled={saving || loading}
-                              />
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             <div className="btnRow">
