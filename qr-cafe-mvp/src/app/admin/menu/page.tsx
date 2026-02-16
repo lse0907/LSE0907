@@ -23,6 +23,10 @@ type OptionGroup = {
   store_id: string;
   name: string;
   scope?: "common" | "exclusive" | null;
+  linked_menu_id?: string | null;
+  required?: boolean;
+  min?: number;
+  max?: number;
 };
 
 type OptionItem = {
@@ -94,12 +98,23 @@ export default function AdminMenuPage() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [optionItems, setOptionItems] = useState<OptionItem[]>([]);
   const [optionPrices, setOptionPrices] = useState<MenuOptionPrice[]>([]);
+  const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [badge, setBadge] = useState<"idle" | "saved" | "error">("idle");
   const badgeText = badge === "saved" ? "저장됨 ✅" : badge === "error" ? "저장 실패 ❗" : " ";
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageFileName, setImageFileName] = useState("");
   const [msg, setMsg] = useState("");
+  const [showExclusiveCreateForm, setShowExclusiveCreateForm] = useState(false);
+  const [commonGroupToAdd, setCommonGroupToAdd] = useState("");
+  const [newExclusiveGroup, setNewExclusiveGroup] = useState({
+    name: "",
+    required: false,
+    min: "0",
+    max: "1",
+  });
+  const [newExclusiveItems, setNewExclusiveItems] = useState<Array<{ name: string; price: string }>>([{ name: "", price: "0" }]);
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -139,13 +154,32 @@ export default function AdminMenuPage() {
 
       if (menuRes.error) throw menuRes.error;
 
+      let groupData: OptionGroup[] = [];
       const groupRes = await supabase
         .from("option_groups")
-        .select("id,store_id,name,scope")
+        .select("id,store_id,name,scope,linked_menu_id,required,min,max")
         .eq("store_id", storeId)
         .order("created_at", { ascending: true });
 
-      if (groupRes.error) throw groupRes.error;
+      if (groupRes.error) {
+        const missingLinkedMenuColumn =
+          groupRes.error.code === "42703" && String(groupRes.error.message || "").includes("linked_menu_id");
+
+        if (!missingLinkedMenuColumn) throw groupRes.error;
+
+        const fallbackRes = await supabase
+          .from("option_groups")
+          .select("id,store_id,name,scope,required,min,max")
+          .eq("store_id", storeId)
+          .order("created_at", { ascending: true });
+        if (fallbackRes.error) throw fallbackRes.error;
+
+        setHasLinkedMenuColumn(false);
+        groupData = (fallbackRes.data || []).map((g) => ({ ...g, linked_menu_id: null })) as OptionGroup[];
+      } else {
+        setHasLinkedMenuColumn(true);
+        groupData = (groupRes.data || []) as OptionGroup[];
+      }
 
       const itemRes = await supabase
         .from("option_items")
@@ -163,7 +197,7 @@ export default function AdminMenuPage() {
       if (priceRes.error) throw priceRes.error;
 
       setItems((menuRes.data || []) as MenuItem[]);
-      setGroups((groupRes.data || []) as OptionGroup[]);
+      setGroups(groupData);
       setOptionItems((itemRes.data || []) as OptionItem[]);
       setOptionPrices((priceRes.data || []) as MenuOptionPrice[]);
 
@@ -224,7 +258,9 @@ export default function AdminMenuPage() {
   const onNew = () => {
     setSelectedId("");
     setDraft(emptyDraft);
+    setImageFileName("");
     setMsg("");
+    setShowExclusiveCreateForm(false);
   };
 
   const onSave = async () => {
@@ -255,6 +291,27 @@ export default function AdminMenuPage() {
     setBadge("idle");
 
     try {
+      if (!hasLinkedMenuColumn) {
+        const hasExclusiveSelection = draft.optionGroupIds.some((gid) => {
+          const group = groups.find((g) => g.id === gid);
+          return group?.scope === "exclusive";
+        });
+
+        if (hasExclusiveSelection) {
+          setBadge("error");
+          setTimeout(() => setBadge("idle"), 1600);
+          setMsg("DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+          return;
+        }
+      }
+
+      const filteredGroups = draft.optionGroupIds.filter((gid) => {
+        const group = groups.find((g) => g.id === gid);
+        if (!group) return false;
+        if (group.scope !== "exclusive") return true;
+        return !group.linked_menu_id || group.linked_menu_id === id;
+      });
+
       const payload = {
         id,
         store_id: storeId,
@@ -262,7 +319,7 @@ export default function AdminMenuPage() {
         price,
         image: draft.image.trim(),
         is_sold_out: draft.isSoldOut,
-        option_group_ids: draft.optionGroupIds,
+        option_group_ids: filteredGroups,
         sort_order: draft.sortOrder ? toInt(draft.sortOrder, 0) : null,
       };
 
@@ -280,7 +337,7 @@ export default function AdminMenuPage() {
       }
 
       const activeOptionItemIds = new Set(
-        draft.optionGroupIds.flatMap((gid) =>
+        filteredGroups.flatMap((gid) =>
           optionItems.filter((it) => it.group_id === gid).map((it) => it.id)
         )
       );
@@ -364,6 +421,74 @@ export default function AdminMenuPage() {
     });
   };
 
+  const createExclusiveGroupInMenu = async () => {
+    if (!storeId) return;
+    const menuId = draft.id.trim();
+    if (!menuId) {
+      setMsg("전용옵션을 만들기 전에 메뉴명을 입력해 메뉴 ID를 먼저 만들어주세요.");
+      return;
+    }
+    const groupName = newExclusiveGroup.name.trim();
+    if (!groupName) {
+      setMsg("전용옵션 그룹명을 입력해주세요.");
+      return;
+    }
+
+    const cleanedItems = newExclusiveItems
+      .map((x) => ({ name: x.name.trim(), price: toInt(x.price, 0) }))
+      .filter((x) => Boolean(x.name));
+    if (cleanedItems.length === 0) {
+      setMsg("전용옵션 항목을 1개 이상 입력해주세요.");
+      return;
+    }
+
+    setSaving(true);
+    setMsg("");
+    try {
+      const groupId = `group_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
+      const min = newExclusiveGroup.required ? Math.max(1, toInt(newExclusiveGroup.min, 1)) : toInt(newExclusiveGroup.min, 0);
+      const max = Math.max(toInt(newExclusiveGroup.max, 1), min);
+
+      const groupInsert = await supabase.from("option_groups").insert([
+        {
+          id: groupId,
+          store_id: storeId,
+          name: groupName,
+          required: newExclusiveGroup.required,
+          min,
+          max,
+          scope: "exclusive",
+          linked_menu_id: menuId,
+        },
+      ]);
+      if (groupInsert.error) throw groupInsert.error;
+
+      const itemRows = cleanedItems.map((item) => ({
+        id: `item_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`,
+        store_id: storeId,
+        group_id: groupId,
+        name: item.name,
+        price_delta: item.price,
+      }));
+      const itemInsert = await supabase.from("option_items").insert(itemRows);
+      if (itemInsert.error) throw itemInsert.error;
+
+      setDraft((prev) => ({
+        ...prev,
+        optionGroupIds: prev.optionGroupIds.includes(groupId) ? prev.optionGroupIds : [...prev.optionGroupIds, groupId],
+      }));
+      setNewExclusiveGroup({ name: "", required: false, min: "0", max: "1" });
+      setNewExclusiveItems([{ name: "", price: "0" }]);
+      setShowExclusiveCreateForm(false);
+      await refresh();
+      setMsg("전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
+    } catch (e: any) {
+      setMsg(`전용옵션 생성 실패: ${String(e?.message || e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const onBack = () => {
     if (storeId) {
       router.push(`/admin?store=${encodeURIComponent(storeId)}`);
@@ -373,7 +498,13 @@ export default function AdminMenuPage() {
   };
 
   const isEditing = Boolean(selectedId);
-  const selectedGroups = groups.filter((g) => draft.optionGroupIds.includes(g.id));
+  const commonGroups = groups.filter((g) => (g.scope || "common") !== "exclusive");
+  const selectedCommonGroups = commonGroups.filter((g) => draft.optionGroupIds.includes(g.id));
+  const unselectedCommonGroups = commonGroups.filter((g) => !draft.optionGroupIds.includes(g.id));
+  const exclusiveGroups = groups.filter(
+    (g) => (g.scope || "common") === "exclusive" && (!draft.id.trim() || g.linked_menu_id === draft.id.trim())
+  );
+  const effectiveExclusiveCreateOpen = showExclusiveCreateForm || exclusiveGroups.length > 0;
   const itemsByGroup = useMemo(() => {
     const map = new Map<string, OptionItem[]>();
     optionItems.forEach((it) => {
@@ -388,6 +519,15 @@ export default function AdminMenuPage() {
     return String(item.price_delta ?? 0);
   };
 
+  const addCommonGroup = () => {
+    if (!commonGroupToAdd) return;
+    setDraft((prev) => {
+      if (prev.optionGroupIds.includes(commonGroupToAdd)) return prev;
+      return { ...prev, optionGroupIds: [...prev.optionGroupIds, commonGroupToAdd] };
+    });
+    setCommonGroupToAdd("");
+  };
+
   const onUploadMenuImage = async (file: File | null) => {
     if (!file) return;
     if (!draft.id.trim()) {
@@ -398,6 +538,7 @@ export default function AdminMenuPage() {
     setUploadingImage(true);
     setMsg("");
     try {
+      setImageFileName(file.name || "");
       const ext = getFileExt(file.name) || "png";
       const path = `${storeId}/${draft.id.trim()}-${Date.now()}.${ext}`;
       const { error } = await supabase.storage.from(MENU_IMAGE_BUCKET).upload(path, file, { upsert: true });
@@ -565,6 +706,53 @@ export default function AdminMenuPage() {
           gap: 8px;
           margin-top: 8px;
         }
+        .optionConnectCard {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          padding: 12px;
+          background: #fcfcfd;
+          display: grid;
+          gap: 10px;
+        }
+        .groupOptionDetail {
+          border: 1px dashed var(--line);
+          border-radius: 10px;
+          padding: 10px;
+          background: #fff;
+          display: grid;
+          gap: 6px;
+        }
+        .groupOptionItem {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .inlineSelectRow {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .imageUploadRow {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .fileNameInput {
+          min-width: 220px;
+          max-width: 340px;
+        }
+        .previewThumb {
+          margin-top: 8px;
+          width: 84px;
+          height: 84px;
+          border-radius: 10px;
+          border: 1px solid var(--line);
+          object-fit: cover;
+          background: #f9fafb;
+        }
         .optionRow {
           display: flex;
           align-items: center;
@@ -576,9 +764,43 @@ export default function AdminMenuPage() {
           font-size: 12px;
           font-weight: 800;
         }
+        .sectionTitle {
+          margin: 0;
+          font-size: 15px;
+          font-weight: 950;
+        }
+        .createBox {
+          margin-top: 8px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          padding: 10px;
+          display: grid;
+          gap: 8px;
+          background: #fafafa;
+        }
+        .optionSectionBox {
+          margin-top: 14px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 12px;
+          background: #fff;
+        }
+        .fullWidthBtn {
+          width: 100%;
+          justify-content: center;
+        }
+        .divider {
+          height: 1px;
+          background: var(--line);
+          margin: 10px 0;
+        }
         @media (max-width: 980px) {
           .grid {
             grid-template-columns: 1fr;
+          }
+          .previewThumb {
+            width: 72px;
+            height: 72px;
           }
         }
       `}</style>
@@ -661,18 +883,6 @@ export default function AdminMenuPage() {
             <h2 className="cardTitle">메뉴 상세</h2>
 
             <div className="field">
-              <div className="label">메뉴 ID</div>
-              <input
-                className="input"
-                value={draft.id}
-                onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
-                placeholder="예: americano"
-                disabled={saving || loading || isEditing}
-              />
-              <div className="hint">이미 등록된 메뉴를 수정할 때는 ID 변경을 막아두었어요.</div>
-            </div>
-
-            <div className="field">
               <div className="label">메뉴명</div>
               <input
                 className="input"
@@ -704,7 +914,7 @@ export default function AdminMenuPage() {
 
             <div className="field">
               <div className="label">메뉴 이미지</div>
-              <div className="btnRow" style={{ marginTop: 4 }}>
+              <div className="imageUploadRow" style={{ marginTop: 4 }}>
                 <label className="btn">
                   {uploadingImage ? "업로드 중..." : "이미지 업로드"}
                   <input
@@ -715,8 +925,11 @@ export default function AdminMenuPage() {
                     disabled={saving || loading || uploadingImage}
                   />
                 </label>
+                <input className="input fileNameInput" value={imageFileName} readOnly placeholder="선택된 파일명" />
               </div>
               <input className="input" value={draft.image} readOnly placeholder="이미지 업로드 후 자동 입력" />
+              {draft.image ? <img src={draft.image} alt={`${draft.name || draft.id || "menu"} preview`} className="previewThumb" /> : null}
+              <div className="hint">업로드된 이미지는 Supabase Storage(menu-assets)에 저장됩니다.</div>
             </div>
 
             <div className="field">
@@ -745,78 +958,266 @@ export default function AdminMenuPage() {
             </div>
 
             <div className="field">
-              <div className="label">옵션 그룹 연결</div>
-              {groups.length === 0 ? (
-                <div className="muted">등록된 옵션 그룹이 없습니다.</div>
-              ) : (
-                <div className="optionGrid">
-                  {groups.map((g) => (
-                    <label key={g.id} className="optionRow">
-                      <input
-                        type="checkbox"
-                        checked={draft.optionGroupIds.includes(g.id)}
-                        onChange={() => toggleGroup(g.id)}
-                        disabled={saving || loading}
-                      />
-                      {g.name}
-                      <span className="muted">
-                        · {g.scope === "exclusive" ? "전용옵션" : "공통옵션"}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
+              <div className="label">메뉴 ID</div>
+              <input
+                className="input"
+                value={draft.id}
+                onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
+                placeholder="예: americano"
+                disabled={saving || loading || isEditing}
+              />
+              <div className="hint">이미 등록된 메뉴를 수정할 때는 ID 변경을 막아두었어요.</div>
             </div>
 
-            <div className="field">
-              <div className="label">옵션 추가금 설정</div>
-              <div className="hint">메뉴마다 다른 옵션 가격을 설정할 수 있습니다.</div>
-              {selectedGroups.length === 0 ? (
-                <div className="muted" style={{ marginTop: 8 }}>
-                  연결된 옵션 그룹이 없습니다.
+            <div className="optionSectionBox">
+              <div className="field" style={{ marginTop: 0 }}>
+                <h3 className="sectionTitle">옵션 연결</h3>
+                <div className="hint">메뉴 상세와 분리된 별도 박스입니다. 옵션 연결과 단가를 이 안에서 함께 설정하세요.</div>
+              </div>
+
+              <div className="field">
+                <div className="label">공통옵션</div>
+                <div className="optionConnectCard">
+                <div className="inlineSelectRow">
+                  <select
+                    className="input"
+                    style={{ minWidth: 220, maxWidth: 420 }}
+                    value={commonGroupToAdd}
+                    onChange={(e) => setCommonGroupToAdd(e.target.value)}
+                    disabled={saving || loading || unselectedCommonGroups.length === 0}
+                  >
+                    <option value="">추가할 공통옵션 그룹 선택</option>
+                    {unselectedCommonGroups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="btn" type="button" onClick={addCommonGroup} disabled={saving || loading || !commonGroupToAdd}>
+                    + 옵션연결
+                  </button>
                 </div>
-              ) : (
-                <div className="optionGrid" style={{ marginTop: 10 }}>
-                  {selectedGroups.map((group) => {
-                    const groupOptions = itemsByGroup.get(group.id) || [];
-                    return (
-                      <div key={group.id} className="card" style={{ padding: 12 }}>
-                        <div className="name" style={{ marginBottom: 6 }}>
-                          {group.name}
-                          <span className="muted" style={{ marginLeft: 6 }}>
-                            ({group.scope === "exclusive" ? "전용옵션" : "공통옵션"})
-                          </span>
+
+                {selectedCommonGroups.length === 0 ? (
+                  <div className="muted">아직 연결된 공통옵션이 없습니다.</div>
+                ) : (
+                  <div className="optionGrid">
+                    {selectedCommonGroups.map((group) => {
+                      const groupOptions = itemsByGroup.get(group.id) || [];
+                      return (
+                        <div className="groupOptionDetail" key={group.id}>
+                          <div className="groupOptionItem">
+                            <div className="name">{group.name}</div>
+                            <button className="btn" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
+                              연결해제
+                            </button>
+                          </div>
+                          {groupOptions.length === 0 ? (
+                            <div className="muted">옵션 항목이 없습니다.</div>
+                          ) : (
+                            groupOptions.map((item) => (
+                              <div key={item.id} className="groupOptionItem">
+                                <span>{item.name}</span>
+                                <input
+                                  className="input"
+                                  style={{ maxWidth: 140 }}
+                                  inputMode="numeric"
+                                  value={getOptionPrice(item)}
+                                  onChange={(e) =>
+                                    setDraft((prev) => ({
+                                      ...prev,
+                                      optionPriceByItem: {
+                                        ...prev.optionPriceByItem,
+                                        [item.id]: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  disabled={saving || loading}
+                                />
+                              </div>
+                            ))
+                          )}
                         </div>
-                        {groupOptions.length === 0 ? (
-                          <div className="muted">옵션 항목이 없습니다.</div>
-                        ) : (
-                          groupOptions.map((item) => (
-                            <div key={item.id} className="optionRow" style={{ justifyContent: "space-between" }}>
-                              <span>{item.name}</span>
-                              <input
-                                className="input"
-                                style={{ maxWidth: 120 }}
-                                inputMode="numeric"
-                                value={getOptionPrice(item)}
-                                onChange={(e) =>
-                                  setDraft((prev) => ({
-                                    ...prev,
-                                    optionPriceByItem: {
-                                      ...prev.optionPriceByItem,
-                                      [item.id]: e.target.value,
-                                    },
-                                  }))
-                                }
-                                disabled={saving || loading}
-                              />
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                )}
                 </div>
-              )}
+              </div>
+
+              <div className="field">
+                <div className="label">전용옵션 (현재 메뉴 전용)</div>
+                {exclusiveGroups.length === 0 ? <div className="muted">아직 전용옵션이 없습니다.</div> : null}
+                <div className="optionGrid">
+                {exclusiveGroups.map((g) => (
+                  <label key={g.id} className="optionRow">
+                    <input
+                      type="checkbox"
+                      checked={draft.optionGroupIds.includes(g.id)}
+                      onChange={() => toggleGroup(g.id)}
+                      disabled={saving || loading}
+                    />
+                    {g.name}
+                    <span className="muted">· 전용옵션</span>
+                  </label>
+                ))}
+                </div>
+
+                {exclusiveGroups.length > 0 ? (
+                  <div className="optionGrid" style={{ marginTop: 8 }}>
+                    {exclusiveGroups.map((group) => {
+                      const groupOptions = itemsByGroup.get(group.id) || [];
+                      return (
+                        <div className="groupOptionDetail" key={`exclusive-price-${group.id}`}>
+                          <div className="name">{group.name}</div>
+                          {groupOptions.length === 0 ? (
+                            <div className="muted">옵션 항목이 없습니다.</div>
+                          ) : (
+                            groupOptions.map((item) => (
+                              <div key={item.id} className="groupOptionItem">
+                                <span>{item.name}</span>
+                                <input
+                                  className="input"
+                                  style={{ maxWidth: 140 }}
+                                  inputMode="numeric"
+                                  value={getOptionPrice(item)}
+                                  onChange={(e) =>
+                                    setDraft((prev) => ({
+                                      ...prev,
+                                      optionPriceByItem: {
+                                        ...prev.optionPriceByItem,
+                                        [item.id]: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  disabled={saving || loading}
+                                />
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="field" style={{ marginTop: 16 }}>
+                <button
+                  className="btn fullWidthBtn"
+                  type="button"
+                  onClick={() => setShowExclusiveCreateForm((p) => !p)}
+                  disabled={saving || loading}
+                >
+                  {effectiveExclusiveCreateOpen ? "전용옵션 등록 닫기" : "+ 전용옵션 등록"}
+                </button>
+              </div>
+
+              {effectiveExclusiveCreateOpen ? (
+                <div className="createBox">
+                  {exclusiveGroups.length > 0 ? (
+                    <div>
+                      <div className="label">등록된 전용옵션</div>
+                      <div className="optionGrid" style={{ marginTop: 6 }}>
+                        {exclusiveGroups.map((g) => (
+                          <div key={`exclusive-pill-${g.id}`} className="groupOptionItem" style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "8px 10px", background: "#fff" }}>
+                            <span>{g.name}</span>
+                            <button className="btn" type="button" onClick={() => !draft.optionGroupIds.includes(g.id) && toggleGroup(g.id)} disabled={saving || loading || draft.optionGroupIds.includes(g.id)}>
+                              {draft.optionGroupIds.includes(g.id) ? "연결됨" : "연결"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="hint">이 메뉴 전용 옵션 그룹을 생성하고 자동으로 연결합니다.</div>
+                  <input
+                    className="input"
+                    value={newExclusiveGroup.name}
+                    onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="전용옵션 그룹명 (예: 당도)"
+                    disabled={saving || loading}
+                  />
+                  <label className="optionRow">
+                    <input
+                      type="checkbox"
+                      checked={newExclusiveGroup.required}
+                      onChange={(e) =>
+                        setNewExclusiveGroup((p) => ({ ...p, required: e.target.checked, min: e.target.checked ? "1" : p.min }))
+                      }
+                      disabled={saving || loading}
+                    />
+                    필수 선택
+                  </label>
+                  <div className="optionRow">
+                    <input
+                      className="input"
+                      style={{ maxWidth: 120 }}
+                      inputMode="numeric"
+                      value={newExclusiveGroup.min}
+                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, min: e.target.value }))}
+                      placeholder="최소"
+                      disabled={saving || loading}
+                    />
+                    <input
+                      className="input"
+                      style={{ maxWidth: 120 }}
+                      inputMode="numeric"
+                      value={newExclusiveGroup.max}
+                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }))}
+                      placeholder="최대"
+                      disabled={saving || loading}
+                    />
+                  </div>
+                  {newExclusiveItems.map((row, idx) => (
+                    <div className="optionRow" key={`new-item-${idx}`}>
+                      <input
+                        className="input"
+                        value={row.name}
+                        onChange={(e) =>
+                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, name: e.target.value } : v)))
+                        }
+                        placeholder={`옵션 항목 ${idx + 1}`}
+                        disabled={saving || loading}
+                      />
+                      <input
+                        className="input"
+                        style={{ maxWidth: 120 }}
+                        inputMode="numeric"
+                        value={row.price}
+                        onChange={(e) =>
+                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, price: e.target.value } : v)))
+                        }
+                        placeholder="단가"
+                        disabled={saving || loading}
+                      />
+                      {newExclusiveItems.length > 1 ? (
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx))}
+                          disabled={saving || loading}
+                        >
+                          제거
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                  <div className="btnRow" style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 1fr", width: "100%" }}>
+                    <button
+                      className="btn fullWidthBtn"
+                      type="button"
+                      onClick={() => setNewExclusiveItems((prev) => [...prev, { name: "", price: "0" }])}
+                      disabled={saving || loading}
+                    >
+                      항목 추가
+                    </button>
+                    <button className="btn fullWidthBtn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
+                      전용옵션 생성
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="btnRow">
