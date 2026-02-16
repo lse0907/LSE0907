@@ -8,7 +8,9 @@ begin;
 alter table public.option_groups
   add column if not exists linked_menu_id text null;
 
--- FK to menu_items (composite by store + id) for stronger tenancy safety.
+-- FK to menu_items by linked_menu_id.
+-- NOTE: Some projects have menu_items PK/UNIQUE only on (id), not (store_id, id).
+-- Using single-column FK avoids the 42830 error in those schemas.
 do $$
 begin
   if not exists (
@@ -18,8 +20,8 @@ begin
   ) then
     alter table public.option_groups
       add constraint option_groups_linked_menu_fk
-      foreign key (store_id, linked_menu_id)
-      references public.menu_items (store_id, id)
+      foreign key (linked_menu_id)
+      references public.menu_items (id)
       on update cascade
       on delete set null;
   end if;
