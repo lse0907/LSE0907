@@ -1124,6 +1124,111 @@ export default function AdminMenuPage() {
             </div>
 
             <div className="field">
+              <div className="label">전용옵션 (현재 메뉴 전용)</div>
+              {exclusiveGroups.length === 0 ? <div className="muted">아직 전용옵션이 없습니다.</div> : null}
+              <div className="optionGrid">
+                {exclusiveGroups.map((g) => (
+                  <label key={g.id} className="optionRow">
+                    <input
+                      type="checkbox"
+                      checked={draft.optionGroupIds.includes(g.id)}
+                      onChange={() => toggleGroup(g.id)}
+                      disabled={saving || loading}
+                    />
+                    {g.name}
+                    <span className="muted">· 전용옵션</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="btnRow" style={{ marginTop: 8 }}>
+                <button className="btn" type="button" onClick={() => setShowExclusiveCreateForm((p) => !p)} disabled={saving || loading}>
+                  {showExclusiveCreateForm ? "전용옵션 등록 닫기" : "+ 전용옵션 등록"}
+                </button>
+              </div>
+
+              {showExclusiveCreateForm ? (
+                <div className="createBox">
+                  <div className="hint">이 메뉴 전용 옵션 그룹을 생성하고 자동으로 연결합니다.</div>
+                  <input
+                    className="input"
+                    value={newExclusiveGroup.name}
+                    onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="전용옵션 그룹명 (예: 당도)"
+                    disabled={saving || loading}
+                  />
+                  <label className="optionRow">
+                    <input
+                      type="checkbox"
+                      checked={newExclusiveGroup.required}
+                      onChange={(e) =>
+                        setNewExclusiveGroup((p) => ({ ...p, required: e.target.checked, min: e.target.checked ? "1" : p.min }))
+                      }
+                      disabled={saving || loading}
+                    />
+                    필수 선택
+                  </label>
+                  <div className="optionRow">
+                    <input
+                      className="input"
+                      style={{ maxWidth: 120 }}
+                      inputMode="numeric"
+                      value={newExclusiveGroup.min}
+                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, min: e.target.value }))}
+                      placeholder="최소"
+                      disabled={saving || loading}
+                    />
+                    <input
+                      className="input"
+                      style={{ maxWidth: 120 }}
+                      inputMode="numeric"
+                      value={newExclusiveGroup.max}
+                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }))}
+                      placeholder="최대"
+                      disabled={saving || loading}
+                    />
+                  </div>
+                  {newExclusiveItems.map((row, idx) => (
+                    <div className="optionRow" key={`new-item-${idx}`}>
+                      <input
+                        className="input"
+                        value={row}
+                        onChange={(e) =>
+                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))
+                        }
+                        placeholder={`옵션 항목 ${idx + 1}`}
+                        disabled={saving || loading}
+                      />
+                      {newExclusiveItems.length > 1 ? (
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx))}
+                          disabled={saving || loading}
+                        >
+                          제거
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                  <div className="btnRow" style={{ marginTop: 6 }}>
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => setNewExclusiveItems((prev) => [...prev, ""])}
+                      disabled={saving || loading}
+                    >
+                      항목 추가
+                    </button>
+                    <button className="btn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
+                      전용옵션 생성
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="field">
               <div className="label">옵션 추가금 설정</div>
               <div className="hint">메뉴마다 다른 옵션 가격을 설정할 수 있습니다.</div>
               {selectedGroups.length === 0 ? (
