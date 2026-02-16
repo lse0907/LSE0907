@@ -1,12 +1,63 @@
 -- Operational hardening for menu/options management
 -- 1) Add linked_menu_id to option_groups for exclusive option enforcement
--- 2) Add constraints to keep exclusive/common rules consistent
--- 3) Add indexes and helper view for admin screens
+-- 2) Backfill/normalize legacy rows so new constraint can be applied safely
+-- 3) Add constraints/index/view for admin screens
 
 begin;
 
 alter table public.option_groups
   add column if not exists linked_menu_id text null;
+
+-- Normalize legacy scope values first (null/unknown -> common).
+update public.option_groups
+set scope = case
+  when lower(coalesce(scope, 'common')) = 'exclusive' then 'exclusive'
+  else 'common'
+end
+where coalesce(scope, '') not in ('common', 'exclusive');
+
+-- If linked_menu_id already exists, force scope to exclusive (consistent pair).
+update public.option_groups
+set scope = 'exclusive'
+where linked_menu_id is not null
+  and coalesce(scope, 'common') <> 'exclusive';
+
+-- Backfill linked_menu_id for legacy exclusive groups by inferring from menu_items.option_group_ids.
+-- Only auto-link when exactly one menu references that group.
+with group_usage as (
+  select
+    g.store_id,
+    g.id as group_id,
+    min(m.id) as inferred_menu_id,
+    count(distinct m.id) as menu_ref_count
+  from public.option_groups g
+  left join public.menu_items m
+    on m.store_id = g.store_id
+   and g.id = any(coalesce(m.option_group_ids, array[]::text[]))
+  group by g.store_id, g.id
+)
+update public.option_groups og
+set linked_menu_id = gu.inferred_menu_id
+from group_usage gu
+where og.store_id = gu.store_id
+  and og.id = gu.group_id
+  and coalesce(og.scope, 'common') = 'exclusive'
+  and og.linked_menu_id is null
+  and gu.menu_ref_count = 1;
+
+-- Exclusive groups that still have no menu linkage cannot satisfy the new rule.
+-- Convert those leftovers to common so migration does not fail.
+update public.option_groups
+set scope = 'common',
+    linked_menu_id = null
+where coalesce(scope, 'common') = 'exclusive'
+  and linked_menu_id is null;
+
+-- Common groups must not keep linked_menu_id.
+update public.option_groups
+set linked_menu_id = null
+where coalesce(scope, 'common') = 'common'
+  and linked_menu_id is not null;
 
 -- linked_menu_id FK is created only when menu_items(id) is uniquely constrained.
 -- Some projects use composite PK/UNIQUE (e.g. store_id + id), so forcing FK can fail with 42830.
