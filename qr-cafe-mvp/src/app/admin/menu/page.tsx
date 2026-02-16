@@ -98,6 +98,7 @@ export default function AdminMenuPage() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [optionItems, setOptionItems] = useState<OptionItem[]>([]);
   const [optionPrices, setOptionPrices] = useState<MenuOptionPrice[]>([]);
+  const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [badge, setBadge] = useState<"idle" | "saved" | "error">("idle");
@@ -151,13 +152,32 @@ export default function AdminMenuPage() {
 
       if (menuRes.error) throw menuRes.error;
 
+      let groupData: OptionGroup[] = [];
       const groupRes = await supabase
         .from("option_groups")
         .select("id,store_id,name,scope,linked_menu_id,required,min,max")
         .eq("store_id", storeId)
         .order("created_at", { ascending: true });
 
-      if (groupRes.error) throw groupRes.error;
+      if (groupRes.error) {
+        const missingLinkedMenuColumn =
+          groupRes.error.code === "42703" && String(groupRes.error.message || "").includes("linked_menu_id");
+
+        if (!missingLinkedMenuColumn) throw groupRes.error;
+
+        const fallbackRes = await supabase
+          .from("option_groups")
+          .select("id,store_id,name,scope,required,min,max")
+          .eq("store_id", storeId)
+          .order("created_at", { ascending: true });
+        if (fallbackRes.error) throw fallbackRes.error;
+
+        setHasLinkedMenuColumn(false);
+        groupData = (fallbackRes.data || []).map((g) => ({ ...g, linked_menu_id: null })) as OptionGroup[];
+      } else {
+        setHasLinkedMenuColumn(true);
+        groupData = (groupRes.data || []) as OptionGroup[];
+      }
 
       const itemRes = await supabase
         .from("option_items")
@@ -175,7 +195,7 @@ export default function AdminMenuPage() {
       if (priceRes.error) throw priceRes.error;
 
       setItems((menuRes.data || []) as MenuItem[]);
-      setGroups((groupRes.data || []) as OptionGroup[]);
+      setGroups(groupData);
       setOptionItems((itemRes.data || []) as OptionItem[]);
       setOptionPrices((priceRes.data || []) as MenuOptionPrice[]);
 
@@ -267,6 +287,20 @@ export default function AdminMenuPage() {
     setBadge("idle");
 
     try {
+      if (!hasLinkedMenuColumn) {
+        const hasExclusiveSelection = draft.optionGroupIds.some((gid) => {
+          const group = groups.find((g) => g.id === gid);
+          return group?.scope === "exclusive";
+        });
+
+        if (hasExclusiveSelection) {
+          setBadge("error");
+          setTimeout(() => setBadge("idle"), 1600);
+          setMsg("DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+          return;
+        }
+      }
+
       const filteredGroups = draft.optionGroupIds.filter((gid) => {
         const group = groups.find((g) => g.id === gid);
         if (!group) return false;

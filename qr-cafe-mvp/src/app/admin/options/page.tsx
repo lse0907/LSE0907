@@ -47,6 +47,7 @@ export default function AdminOptionsPage() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [items, setItems] = useState<OptionItem[]>([]);
   const [menus, setMenus] = useState<MenuSummary[]>([]);
+  const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
   const [loading, setLoading] = useState<boolean>(true);
 
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
@@ -94,13 +95,32 @@ export default function AdminOptionsPage() {
         return;
       }
 
+      let nextGroups: OptionGroup[] = [];
       const gRes = await supabase
         .from("option_groups")
         .select("id, store_id, name, required, min, max, scope, linked_menu_id")
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
 
-      if (gRes.error) throw gRes.error;
+      if (gRes.error) {
+        const missingLinkedMenuColumn =
+          gRes.error.code === "42703" && String(gRes.error.message || "").includes("linked_menu_id");
+
+        if (!missingLinkedMenuColumn) throw gRes.error;
+
+        const fallbackRes = await supabase
+          .from("option_groups")
+          .select("id, store_id, name, required, min, max, scope")
+          .eq("store_id", storeId)
+          .order("created_at", { ascending: false });
+        if (fallbackRes.error) throw fallbackRes.error;
+
+        setHasLinkedMenuColumn(false);
+        nextGroups = (fallbackRes.data || []).map((g) => ({ ...g, linked_menu_id: null })) as OptionGroup[];
+      } else {
+        setHasLinkedMenuColumn(true);
+        nextGroups = (gRes.data || []) as OptionGroup[];
+      }
 
       const iRes = await supabase
         .from("option_items")
@@ -118,7 +138,6 @@ export default function AdminOptionsPage() {
 
       if (mRes.error) throw mRes.error;
 
-      const nextGroups = (gRes.data || []) as OptionGroup[];
       const nextItems = (iRes.data || []) as OptionItem[];
       const nextMenus = (mRes.data || []) as MenuSummary[];
 
@@ -210,6 +229,10 @@ export default function AdminOptionsPage() {
   // ===== 그룹 CRUD =====
   const addGroup = async () => {
     if (!storeId) return alert("선택된 매장이 없습니다. 매장을 먼저 선택/생성하세요.");
+    if (!hasLinkedMenuColumn && activeScope === "exclusive") {
+      markError();
+      return alert("DB에 linked_menu_id 컬럼이 없어 전용옵션 그룹을 만들 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+    }
     try {
       setSaving(true);
       setBadge("idle");
@@ -243,6 +266,11 @@ export default function AdminOptionsPage() {
 
   const updateGroup = async (patch: Partial<OptionGroup>) => {
     if (!selectedGroup) return;
+    const nextScope = patch.scope ?? selectedGroup.scope ?? "common";
+    if (!hasLinkedMenuColumn && (nextScope === "exclusive" || patch.linked_menu_id != null)) {
+      markError();
+      return alert("DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가능합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+    }
     try {
       setSaving(true);
       setBadge("idle");
@@ -788,7 +816,7 @@ export default function AdminOptionsPage() {
                   </div>
                 </div>
 
-                {groupDraft.scope === "exclusive" ? (
+                {groupDraft.scope === "exclusive" && hasLinkedMenuColumn ? (
                   <div className="field">
                     <div className="label">전용 대상 메뉴</div>
                     <select
@@ -804,6 +832,12 @@ export default function AdminOptionsPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                ) : null}
+
+                {groupDraft.scope === "exclusive" && !hasLinkedMenuColumn ? (
+                  <div className="muted" style={{ marginTop: 8 }}>
+                    linked_menu_id 컬럼이 없어 전용 대상 메뉴를 지정할 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.
                   </div>
                 ) : null}
 
