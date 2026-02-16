@@ -504,7 +504,7 @@ export default function AdminMenuPage() {
   const exclusiveGroups = groups.filter(
     (g) => (g.scope || "common") === "exclusive" && (!draft.id.trim() || g.linked_menu_id === draft.id.trim())
   );
-  const effectiveExclusiveCreateOpen = showExclusiveCreateForm || exclusiveGroups.length > 0;
+  const effectiveExclusiveCreateOpen = showExclusiveCreateForm;
   const itemsByGroup = useMemo(() => {
     const map = new Map<string, OptionItem[]>();
     optionItems.forEach((it) => {
@@ -608,6 +608,10 @@ export default function AdminMenuPage() {
           display: grid;
           grid-template-columns: 1.2fr 1fr;
           gap: 12px;
+        }
+        .detailColumn {
+          display: grid;
+          gap: 10px;
         }
         .cardTitle {
           margin: 0;
@@ -729,29 +733,31 @@ export default function AdminMenuPage() {
           gap: 10px;
         }
         .inlineSelectRow {
-          display: flex;
+          display: grid;
+          grid-template-columns: 1fr auto;
           gap: 8px;
           align-items: center;
-          flex-wrap: wrap;
         }
         .imageUploadRow {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          flex-wrap: wrap;
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 8px;
         }
         .fileNameInput {
-          min-width: 220px;
-          max-width: 340px;
+          width: 100%;
         }
         .previewThumb {
           margin-top: 8px;
-          width: 84px;
-          height: 84px;
+          width: 112px;
+          height: 112px;
           border-radius: 10px;
           border: 1px solid var(--line);
           object-fit: cover;
           background: #f9fafb;
+        }
+        .previewWrap {
+          display: flex;
+          justify-content: center;
         }
         .optionRow {
           display: flex;
@@ -798,9 +804,12 @@ export default function AdminMenuPage() {
           .grid {
             grid-template-columns: 1fr;
           }
+          .inlineSelectRow {
+            grid-template-columns: 1fr;
+          }
           .previewThumb {
-            width: 72px;
-            height: 72px;
+            width: 120px;
+            height: 120px;
           }
         }
       `}</style>
@@ -853,6 +862,9 @@ export default function AdminMenuPage() {
               <button className="btn" onClick={refresh} disabled={saving || loading}>
                 새로고침
               </button>
+              <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                옵션관리 바로가기
+              </a>
               <button className="btn" onClick={onBack}>
                 관리자 홈
               </button>
@@ -879,8 +891,9 @@ export default function AdminMenuPage() {
             </div>
           </div>
 
-          <div className="card">
-            <h2 className="cardTitle">메뉴 상세</h2>
+          <div className="detailColumn">
+            <div className="card">
+              <h2 className="cardTitle">메뉴 상세</h2>
 
             <div className="field">
               <div className="label">메뉴명</div>
@@ -927,9 +940,11 @@ export default function AdminMenuPage() {
                 </label>
                 <input className="input fileNameInput" value={imageFileName} readOnly placeholder="선택된 파일명" />
               </div>
-              <input className="input" value={draft.image} readOnly placeholder="이미지 업로드 후 자동 입력" />
-              {draft.image ? <img src={draft.image} alt={`${draft.name || draft.id || "menu"} preview`} className="previewThumb" /> : null}
-              <div className="hint">업로드된 이미지는 Supabase Storage(menu-assets)에 저장됩니다.</div>
+              {draft.image ? (
+                <div className="previewWrap">
+                  <img src={draft.image} alt={`${draft.name || draft.id || "menu"} preview`} className="previewThumb" />
+                </div>
+              ) : null}
             </div>
 
             <div className="field">
@@ -969,11 +984,23 @@ export default function AdminMenuPage() {
               <div className="hint">이미 등록된 메뉴를 수정할 때는 ID 변경을 막아두었어요.</div>
             </div>
 
-            <div className="optionSectionBox">
-              <div className="field" style={{ marginTop: 0 }}>
-                <h3 className="sectionTitle">옵션 연결</h3>
-                <div className="hint">메뉴 상세와 분리된 별도 박스입니다. 옵션 연결과 단가를 이 안에서 함께 설정하세요.</div>
-              </div>
+            <div className="btnRow">
+              <button className="btn btnPrimary" onClick={onSave} disabled={saving || loading}>
+                {saving ? "저장 중..." : "저장"}
+              </button>
+              <button className="btn" onClick={onNew} disabled={saving || loading}>
+                새로 작성
+              </button>
+              <button className="btn" onClick={onDelete} disabled={saving || loading || !draft.id}>
+                삭제
+              </button>
+            </div>
+          </div>
+
+          <div className="card optionSectionBox">
+            <div className="field" style={{ marginTop: 0 }}>
+              <h3 className="sectionTitle">옵션 연결</h3>
+            </div>
 
               <div className="field">
                 <div className="label">공통옵션</div>
@@ -1220,17 +1247,6 @@ export default function AdminMenuPage() {
               ) : null}
             </div>
 
-            <div className="btnRow">
-              <button className="btn btnPrimary" onClick={onSave} disabled={saving || loading}>
-                {saving ? "저장 중..." : "저장"}
-              </button>
-              <button className="btn" onClick={onNew} disabled={saving || loading}>
-                새로 작성
-              </button>
-              <button className="btn" onClick={onDelete} disabled={saving || loading || !draft.id}>
-                삭제
-              </button>
-            </div>
           </div>
         </section>
       )}
