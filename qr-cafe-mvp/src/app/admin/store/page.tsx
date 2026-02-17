@@ -634,12 +634,7 @@ export default function AdminStorePage() {
             border-radius: 14px;
           }
 
-          .settingsCard {
-            order: 1;
-          }
-
           .previewWrap {
-            order: 2;
             gap: 8px;
           }
 
