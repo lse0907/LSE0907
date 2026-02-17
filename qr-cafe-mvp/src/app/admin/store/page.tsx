@@ -451,6 +451,17 @@ export default function AdminStorePage() {
           gap: 10px;
         }
 
+        .settingsCard {
+          display: grid;
+          align-content: start;
+        }
+
+        .detailBlock {
+          margin-top: 14px;
+          padding-top: 10px;
+          border-top: 1px dashed var(--line);
+        }
+
         .hero {
           position: relative;
           height: 220px;
@@ -609,6 +620,8 @@ export default function AdminStorePage() {
 
           .badgeRow {
             gap: 6px;
+            display: grid;
+            grid-template-columns: 1fr;
           }
 
           .badge {
@@ -619,6 +632,15 @@ export default function AdminStorePage() {
           .card {
             padding: 12px;
             border-radius: 14px;
+          }
+
+          .settingsCard {
+            order: 1;
+          }
+
+          .previewWrap {
+            order: 2;
+            gap: 8px;
           }
 
           .cardTitle {
@@ -642,7 +664,7 @@ export default function AdminStorePage() {
 
           .input,
           .textarea {
-            padding: 9px 10px;
+            padding: 10px;
             font-size: 14px;
           }
 
@@ -668,17 +690,38 @@ export default function AdminStorePage() {
 
           .btnRow {
             gap: 8px;
+            margin-top: 14px;
           }
 
           .btnRow .btn {
             flex: 1 1 auto;
           }
 
-          .hero {
-            height: 188px;
+          .detailBlock {
+            margin-top: 12px;
+            padding-top: 8px;
           }
+
+          .hero {
+            height: 172px;
+          }
+
+          .previewCard {
+            padding: 10px;
+          }
+
+          .descText {
+            font-size: 13px;
+            line-height: 1.45;
+          }
+
+          .hint {
+            font-size: 11px;
+            word-break: break-all;
+          }
+
           .storeName {
-            font-size: 17px;
+            font-size: 16px;
           }
         }
       `}</style>
@@ -761,7 +804,7 @@ export default function AdminStorePage() {
         </div>
 
         {/* 설정 */}
-        <div className="card">
+        <div className="card settingsCard">
           <h2 className="cardTitle">기본 정보</h2>
 
           <div className="field">
@@ -860,7 +903,7 @@ export default function AdminStorePage() {
 
           </div>
 
-          <div style={{ marginTop: 14 }}>
+          <div className="detailBlock">
             <h3 className="cardTitle">매장 상세 정보</h3>
 
             <div className="field">
