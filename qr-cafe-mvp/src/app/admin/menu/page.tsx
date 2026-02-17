@@ -817,7 +817,7 @@ export default function AdminMenuPage() {
         }
         .groupTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-columns: minmax(0, 1.6fr) auto;
           gap: 10px;
           align-items: end;
         }
@@ -1051,7 +1051,7 @@ export default function AdminMenuPage() {
 
             <div className="sortIdRow">
               <div className="field">
-                <div className="label">노출 순서 (작을수록 위로)</div>
+                <div className="label">노출 순서</div>
                 <input
                   className="input sortOrderInput"
                   inputMode="numeric"
@@ -1071,7 +1071,7 @@ export default function AdminMenuPage() {
                   placeholder="예: americano"
                   disabled={saving || loading || isEditing}
                 />
-                <div className="hint">이미 등록된 메뉴를 수정할 때는 ID 변경을 막아두었어요.</div>
+                <div className="hint">등록 된 메뉴는 ID변경 불가</div>
               </div>
             </div>
 
@@ -1254,15 +1254,18 @@ export default function AdminMenuPage() {
                       </div>
                     </div>
                   ) : null}
-                  <div className="hint">이 메뉴 전용 옵션 그룹을 생성하고 자동으로 연결합니다.</div>
+                  <div className="hint">메뉴의 전용 옵션 생성 및 연결</div>
                   <div className="groupTopRow">
-                    <input
-                      className="input"
-                      value={newExclusiveGroup.name}
-                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
-                      placeholder="전용옵션 그룹명 (예: 당도)"
-                      disabled={saving || loading}
-                    />
+                    <div className="field" style={{ marginTop: 0 }}>
+                      <div className="label">전용옵션 그룹</div>
+                      <input
+                        className="input"
+                        value={newExclusiveGroup.name}
+                        onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="전용옵션 그룹명 (예: 당도)"
+                        disabled={saving || loading}
+                      />
+                    </div>
                     <div className="field" style={{ marginTop: 0 }}>
                       <div className="label">최대 선택 수량</div>
                       <input
