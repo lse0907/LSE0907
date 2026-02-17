@@ -889,7 +889,24 @@ export default function AdminOptionsPage() {
                       <div className="label">그룹 ID</div>
                       <input className="input" value={selectedGroup.id} readOnly />
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="field" style={{ marginTop: 0 }}>
+                      <div className="label">연결된 메뉴</div>
+                      {linkedMenus.length === 0 ? (
+                        <div className="muted" style={{ marginTop: 6 }}>
+                          아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
+                        </div>
+                      ) : (
+                        <div className="scopeRow" style={{ marginTop: 0 }}>
+                          {linkedMenus.map((m) => (
+                            <span key={m.id} className="pill">
+                              {m.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="btnRow">
@@ -918,22 +935,32 @@ export default function AdminOptionsPage() {
                   </button>
                 </div>
 
-                <div style={{ marginTop: 12 }}>
-                  <div className="label">연결된 메뉴</div>
-                  {linkedMenus.length === 0 ? (
-                    <div className="muted" style={{ marginTop: 6 }}>
-                      아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
-                    </div>
-                  ) : (
-                    <div className="scopeRow">
-                      {linkedMenus.map((m) => (
-                        <span key={m.id} className="pill">
-                          {m.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                {!isExclusiveSelected ? (
+                  <div style={{ marginTop: 12 }}>
+                    <div className="label">연결된 메뉴</div>
+                    {linkedMenus.length === 0 ? (
+                      <div className="muted" style={{ marginTop: 6 }}>
+                        아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
+                      </div>
+                    ) : (
+                      <div className="scopeRow">
+                        {linkedMenus.map((m) => (
+                          <span key={m.id} className="pill">
+                            {m.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {!isExclusiveSelected ? (
+                  <div className="btnRow" style={{ marginTop: 12 }}>
+                    <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={saving || loading}>
+                      + 옵션 추가
+                    </button>
+                  </div>
+                ) : null}
 
                 {!isExclusiveSelected ? (
                   <div className="btnRow" style={{ marginTop: 12 }}>
@@ -970,31 +997,6 @@ export default function AdminOptionsPage() {
                         {isExclusiveSelected
                           ? "이 그룹에는 옵션 항목이 없습니다."
                           : "이 그룹에는 옵션 항목이 없습니다. “+ 옵션 추가”를 눌러주세요."}
-                      </div>
-                    ) : null}
-
-                    {!isExclusiveSelected && showCreateItemForm ? (
-                      <div className="itemCard">
-                        <div className="itemLine">
-                          <input
-                            className="input"
-                            value={newItemDraft.name}
-                            onChange={(e) => setNewItemDraft((p) => ({ ...p, name: e.target.value }))}
-                            placeholder="옵션 항목명"
-                            disabled={saving || loading}
-                          />
-                          <input
-                            className="input"
-                            inputMode="numeric"
-                            value={newItemDraft.price}
-                            onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
-                            placeholder="단가 입력"
-                            disabled={saving || loading}
-                          />
-                          <button className="btn itemSaveBtn" onClick={addItem} disabled={saving || loading}>
-                            항목 저장
-                          </button>
-                        </div>
                       </div>
                     ) : null}
 
