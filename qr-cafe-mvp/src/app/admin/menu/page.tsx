@@ -1436,11 +1436,11 @@ export default function AdminMenuPage() {
                     </div>
 
                     <div className="btnRow" style={{ marginTop: 8 }}>
-                      <button className="btn" type="button" onClick={updateSelectedExclusiveGroupInMenu} disabled={saving || loading}>
-                        옵션수정
+                      <button className="btn btnPrimary" type="button" onClick={updateSelectedExclusiveGroupInMenu} disabled={saving || loading}>
+                        그룹 저장
                       </button>
                       <button className="btn btnDanger" type="button" onClick={() => deleteExclusiveGroupInMenu(selectedExclusiveGroup.id)} disabled={saving || loading}>
-                        삭제
+                        그룹 삭제
                       </button>
                     </div>
 
@@ -1473,7 +1473,7 @@ export default function AdminMenuPage() {
                             onClick={() => deleteExclusiveItemInMenu(item.id)}
                             disabled={saving || loading}
                           >
-                            삭제
+                            항목 삭제
                           </button>
                         </div>
                       ))
@@ -1605,11 +1605,6 @@ export default function AdminMenuPage() {
                 ) : null}
               </div>
 
-              <div className="btnRow">
-                <button className="btn btnPrimary" onClick={onSave} disabled={saving || loading}>
-                  {saving ? "저장 중..." : "저장"}
-                </button>
-              </div>
             </div>
 
           </div>
