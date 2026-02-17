@@ -402,7 +402,7 @@ export default function MenuPage() {
       const min = Math.max(0, Number(g.min ?? (g.required ? 1 : 0)));
       const max = Math.max(min, Number(g.max ?? min));
 
-      if (g.required && selectedQty < min) {
+      if (selectedQty < min) {
         return { ok: false, msg: `“${g.name}” 옵션은 최소 ${min}개 선택이 필요합니다.` };
       }
       if (selectedQty > max) {
@@ -506,6 +506,14 @@ export default function MenuPage() {
     setOptSel({});
     setOptQty(1);
   };
+
+  const selectedOptionSummary = useMemo(() => {
+    if (!optTarget) return { selectedQty: 0, optionTotal: 0 };
+    const { optionTotal } = buildSelectedGroups(optTarget);
+    const selectedQty = Object.keys(optSel || {}).reduce((sum, gid) => sum + getSelectedQty(gid), 0);
+    return { selectedQty, optionTotal };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optTarget, optSel, optionsData]);
 
   const goConfirm = () => {
     if (totals.totalCount === 0) return;
@@ -853,6 +861,16 @@ export default function MenuPage() {
           align-items: center;
           min-width: 0;
         }
+        .iState {
+          color: #2563eb;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 900;
+          padding: 2px 8px;
+          white-space: nowrap;
+        }
         .iName {
           font-weight: 900;
         }
@@ -1129,6 +1147,8 @@ export default function MenuPage() {
                 const min = Math.max(0, Number(g.min ?? (g.required ? 1 : 0)));
                 const max = Math.max(min, Number(g.max ?? min));
                 const isSingle = max === 1;
+                const selectedQty = getSelectedQty(gid);
+                const remaining = Math.max(0, max - selectedQty);
 
                 return (
                   <div key={gid} className="gCard">
@@ -1137,7 +1157,7 @@ export default function MenuPage() {
                         {g.name} {g.required ? "(필수)" : "(선택)"}
                       </div>
                       <div className="gHint">
-                        {min}~{max}개 선택 · 현재 {getSelectedQty(gid)}개
+                        {min}~{max}개 선택 · 현재 {selectedQty}개 · 남은 선택 {remaining}개
                       </div>
                     </div>
 
@@ -1148,14 +1168,7 @@ export default function MenuPage() {
                         return (
                           <div key={it.id} className="iRow">
                             <div className="iLeft">
-                              <input
-                                type={isSingle ? "radio" : "checkbox"}
-                                name={isSingle ? `g_${gid}` : undefined}
-                                checked={checked}
-                                onChange={() => {
-                                  setOptionItemQty(gid, it.id, checked ? 0 : 1, max, isSingle);
-                                }}
-                              />
+                              {checked ? <span className="iState">선택됨</span> : null}
                               <div className="iName">{it.name}</div>
                             </div>
 
@@ -1199,6 +1212,14 @@ export default function MenuPage() {
               <div className="mini">
                 <span>예상 가격({optQty}개)</span>
                 <b>{fmt(modalPrice * Math.max(1, optQty))}원</b>
+              </div>
+
+              <div className="mini" style={{ color: "#475569", fontWeight: 850 }}>
+                <span>선택 옵션 합계</span>
+                <b>
+                  {selectedOptionSummary.selectedQty}개 · +
+                  {fmt(selectedOptionSummary.optionTotal)}원/개
+                </b>
               </div>
 
               <div className="orderQtyRow">
