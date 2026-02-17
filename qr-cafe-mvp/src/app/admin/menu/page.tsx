@@ -420,6 +420,59 @@ export default function AdminMenuPage() {
     });
   };
 
+  const deleteExclusiveGroupInMenu = async (groupId: string) => {
+    if (!storeId) return;
+    if (!confirm(`등록된 전용옵션 그룹을 삭제할까요?\n연결된 옵션 항목도 함께 삭제됩니다.`)) return;
+
+    setSaving(true);
+    setMsg("");
+    try {
+      const groupItems = itemsByGroup.get(groupId) || [];
+      const itemIds = groupItems.map((it) => it.id);
+
+      if (itemIds.length > 0) {
+        const delPrices = await supabase
+          .from("menu_option_prices")
+          .delete()
+          .eq("store_id", storeId)
+          .eq("menu_id", draft.id.trim())
+          .in("option_item_id", itemIds);
+        if (delPrices.error) throw delPrices.error;
+      }
+
+      const delItems = await supabase
+        .from("option_items")
+        .delete()
+        .eq("store_id", storeId)
+        .eq("group_id", groupId);
+      if (delItems.error) throw delItems.error;
+
+      const delGroup = await supabase
+        .from("option_groups")
+        .delete()
+        .eq("store_id", storeId)
+        .eq("id", groupId);
+      if (delGroup.error) throw delGroup.error;
+
+      setDraft((prev) => {
+        const nextPrices = { ...prev.optionPriceByItem };
+        itemIds.forEach((id) => delete nextPrices[id]);
+        return {
+          ...prev,
+          optionGroupIds: prev.optionGroupIds.filter((id) => id !== groupId),
+          optionPriceByItem: nextPrices,
+        };
+      });
+
+      await refresh();
+      setMsg("전용옵션을 삭제했습니다.");
+    } catch (e: any) {
+      setMsg(`전용옵션 삭제 실패: ${String(e?.message || e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const createExclusiveGroupInMenu = async () => {
     if (!storeId) return;
     const menuId = draft.id.trim();
@@ -590,6 +643,17 @@ export default function AdminMenuPage() {
           font-size: 26px;
           font-weight: 950;
         }
+        .topbarMain {
+          width: 100%;
+        }
+        .titleRow {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 10px;
+          flex-wrap: wrap;
+          width: 100%;
+        }
         .sub {
           margin: 4px 0 0 0;
           color: var(--muted);
@@ -651,8 +715,9 @@ export default function AdminMenuPage() {
         .headerActionRow {
           display: flex;
           gap: 8px;
-          margin-top: 8px;
+          margin-top: 0;
           flex-wrap: wrap;
+          justify-content: flex-end;
         }
         .btn {
           border: 1px solid var(--line);
@@ -672,6 +737,11 @@ export default function AdminMenuPage() {
           background: var(--brand);
           color: #fff;
           border-color: var(--brand);
+        }
+        .btnDanger {
+          border-color: #fecaca;
+          color: #b91c1c;
+          background: #fff;
         }
         .btn:disabled {
           opacity: 0.5;
@@ -893,6 +963,13 @@ export default function AdminMenuPage() {
           .groupTopRow {
             grid-template-columns: minmax(0, 1fr) auto;
           }
+          .titleRow {
+            align-items: stretch;
+          }
+          .headerActionRow {
+            width: 100%;
+            justify-content: flex-start;
+          }
           .previewThumb,
           .previewPlaceholder {
             width: 96px;
@@ -902,8 +979,18 @@ export default function AdminMenuPage() {
       `}</style>
 
       <header className="topbar">
-        <div>
-          <h1 className="h1">메뉴 관리</h1>
+        <div className="topbarMain">
+          <div className="titleRow">
+            <h1 className="h1">메뉴 관리</h1>
+            <div className="headerActionRow">
+              <button className="btn" onClick={onBack}>
+                관리자 홈
+              </button>
+              <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                옵션관리
+              </a>
+            </div>
+          </div>
           <p className="sub">메뉴 기본정보와 옵션 가격을 관리합니다.</p>
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
@@ -1086,7 +1173,7 @@ export default function AdminMenuPage() {
               <button className="btn" onClick={onNew} disabled={saving || loading}>
                 새로 작성
               </button>
-              <button className="btn" onClick={onDelete} disabled={saving || loading || !draft.id}>
+              <button className="btn btnDanger" onClick={onDelete} disabled={saving || loading || !draft.id}>
                 삭제
               </button>
             </div>
@@ -1130,7 +1217,7 @@ export default function AdminMenuPage() {
                         <div className="groupOptionDetail" key={group.id}>
                           <div className="groupOptionItem">
                             <div className="name">{group.name}</div>
-                            <button className="btn" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
+                            <button className="btn btnDanger" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
                               연결해제
                             </button>
                           </div>
@@ -1250,9 +1337,14 @@ export default function AdminMenuPage() {
                         {exclusiveGroups.map((g) => (
                           <div key={`exclusive-pill-${g.id}`} className="groupOptionItem" style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "8px 10px", background: "#fff" }}>
                             <span>{g.name}</span>
-                            <button className="btn" type="button" onClick={() => !draft.optionGroupIds.includes(g.id) && toggleGroup(g.id)} disabled={saving || loading || draft.optionGroupIds.includes(g.id)}>
-                              {draft.optionGroupIds.includes(g.id) ? "연결됨" : "연결"}
-                            </button>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button className="btn btnDanger" type="button" onClick={() => !draft.optionGroupIds.includes(g.id) && toggleGroup(g.id)} disabled={saving || loading || draft.optionGroupIds.includes(g.id)}>
+                                {draft.optionGroupIds.includes(g.id) ? "연결됨" : "연결해"}
+                              </button>
+                              <button className="btn btnDanger" type="button" onClick={() => deleteExclusiveGroupInMenu(g.id)} disabled={saving || loading}>
+                                삭제
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
