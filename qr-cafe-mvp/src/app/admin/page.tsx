@@ -283,7 +283,7 @@ export default function AdminHomePage() {
           <h2 className="cardTitle">매장 만들기</h2>
         </div>
         <p className="muted">매장을 먼저 생성해 주세요.</p>
-        <div className="btnRow">
+        <div className="btnRow createBtnRow">
           <button className="btn btnPrimary" onClick={goCreate}>
             매장 만들기
           </button>
@@ -543,6 +543,9 @@ body {
   flex-wrap:wrap;
   margin-top:12px;
 }
+.createBtnRow{
+  justify-content:flex-end;
+}
 .btn{
   border:1px solid var(--line);
   background:#fff;
@@ -673,6 +676,15 @@ body {
 @media (max-width: 640px){
   .wrap{ padding:12px; }
   .topbar{ align-items:center; }
+  .topActions{
+    flex-wrap:nowrap;
+    gap:6px;
+  }
+  .topActions .btn{
+    padding:8px 10px;
+    font-size:12px;
+    white-space:nowrap;
+  }
   .cardBtnTitle{ font-size:16px; }
   .btnGroup{
     flex-direction:row;
