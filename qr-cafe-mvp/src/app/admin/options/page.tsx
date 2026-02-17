@@ -631,9 +631,23 @@ export default function AdminOptionsPage() {
         }
         .itemLine {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 110px auto auto;
+          grid-template-columns: minmax(0, 1fr) 110px auto;
           gap: 8px;
           align-items: end;
+        }
+        .savedItemRow {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          padding: 10px 12px;
+          background: #fff;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 10px;
+          align-items: center;
+        }
+        .savedItemMeta {
+          display: grid;
+          gap: 4px;
         }
 
         .itemCard {
@@ -907,34 +921,18 @@ export default function AdminOptionsPage() {
 
                   <div className="list" style={{ marginTop: 10 }}>
                     {groupItems.map((it) => (
-                      <div key={it.id} className="itemCard">
-                        <div className="row2">
-                          <div>
-                            <div style={{ fontWeight: 950 }}>{it.name}</div>
-                            <div className="muted" style={{ marginTop: 4 }}>
-                              단가: {Number(it.price_delta ?? 0).toLocaleString()}원
-                            </div>
-                          </div>
-                          <button
-                            className="btn btnDanger"
-                            onClick={() => deleteItem(it.id)}
-                            disabled={saving || loading}
-                          />
-                          <input
-                            className="input"
-                            inputMode="numeric"
-                            value={newItemDraft.price}
-                            onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
-                            placeholder="단가"
-                            disabled={saving || loading}
-                          />
-                          <button className="btn" onClick={addItem} disabled={saving || loading}>
-                            항목 저장
-                          </button>
-                          <button className="btn" onClick={() => setShowCreateItemForm(false)} disabled={saving || loading}>
-                            취소
-                          </button>
+                      <div key={it.id} className="savedItemRow">
+                        <div className="savedItemMeta">
+                          <div style={{ fontWeight: 950 }}>{it.name}</div>
+                          <div className="muted">단가: {Number(it.price_delta ?? 0).toLocaleString()}원</div>
                         </div>
+                        <button
+                          className="btn btnDanger"
+                          onClick={() => deleteItem(it.id)}
+                          disabled={saving || loading}
+                        >
+                          삭제
+                        </button>
                       </div>
                     ))}
 
@@ -959,14 +957,11 @@ export default function AdminOptionsPage() {
                             inputMode="numeric"
                             value={newItemDraft.price}
                             onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
-                            placeholder="단가"
+                            placeholder="단가 입력"
                             disabled={saving || loading}
                           />
                           <button className="btn" onClick={addItem} disabled={saving || loading}>
-                            저장
-                          </button>
-                          <button className="btn" onClick={() => setShowCreateItemForm(false)} disabled={saving || loading}>
-                            취소
+                            항목 저장
                           </button>
                         </div>
                       </div>
