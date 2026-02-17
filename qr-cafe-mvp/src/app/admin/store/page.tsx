@@ -609,13 +609,15 @@ export default function AdminStorePage() {
 
           .topbar {
             align-items: flex-start;
-            flex-direction: column;
+            flex-direction: row;
+            justify-content: space-between;
             gap: 8px;
           }
 
           .topActions {
-            width: 100%;
+            width: auto;
             justify-content: flex-end;
+            flex-wrap: nowrap;
           }
 
           .badgeRow {
@@ -842,7 +844,7 @@ export default function AdminStorePage() {
               {uploadingMain
                 ? "업로드 중..."
                 : (draft as any).mainImage
-                  ? `등록됨: ${(draft as any).mainImage}`
+                  ? "대표 이미지 등록됨"
                   : "아직 등록된 이미지가 없습니다."}
             </div>
           </div>
@@ -860,7 +862,7 @@ export default function AdminStorePage() {
               {uploadingLogo
                 ? "업로드 중..."
                 : (draft as any).logoImage
-                  ? `등록됨: ${(draft as any).logoImage}`
+                  ? "로고 이미지 등록됨"
                   : "아직 등록된 이미지가 없습니다."}
             </div>
           </div>
