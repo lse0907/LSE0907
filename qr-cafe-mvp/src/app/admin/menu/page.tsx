@@ -116,6 +116,7 @@ export default function AdminMenuPage() {
   const [showExclusiveItemInputs, setShowExclusiveItemInputs] = useState(false);
   const [selectedExclusiveGroupId, setSelectedExclusiveGroupId] = useState("");
   const [exclusiveEdit, setExclusiveEdit] = useState({ name: "", max: "1" });
+  const [newSelectedExclusiveItem, setNewSelectedExclusiveItem] = useState({ name: "", price: "" });
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -445,7 +446,40 @@ export default function AdminMenuPage() {
       await refresh();
       setMsg("전용옵션 그룹을 수정했습니다.");
     } catch (e: any) {
-      setMsg(`전용옵션 수정 실패: ${String(e?.message || e)}`);
+      setMsg(`옵션수정 실패: ${String(e?.message || e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addItemToSelectedExclusiveGroupInMenu = async () => {
+    if (!storeId || !selectedExclusiveGroup) return;
+
+    const name = newSelectedExclusiveItem.name.trim();
+    if (!name) {
+      setMsg("추가할 옵션 항목명을 입력해주세요.");
+      return;
+    }
+
+    setSaving(true);
+    setMsg("");
+    try {
+      const row = {
+        id: `item_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`,
+        store_id: storeId,
+        group_id: selectedExclusiveGroup.id,
+        name,
+        price_delta: toInt(newSelectedExclusiveItem.price, 0),
+      };
+
+      const { error } = await supabase.from("option_items").insert([row]);
+      if (error) throw error;
+
+      setNewSelectedExclusiveItem({ name: "", price: "" });
+      await refresh();
+      setMsg("옵션 항목을 추가했습니다.");
+    } catch (e: any) {
+      setMsg(`옵션 항목 추가 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -613,12 +647,14 @@ export default function AdminMenuPage() {
   useEffect(() => {
     if (!selectedExclusiveGroup) {
       setExclusiveEdit({ name: "", max: "1" });
+      setNewSelectedExclusiveItem({ name: "", price: "" });
       return;
     }
     setExclusiveEdit({
       name: selectedExclusiveGroup.name || "",
       max: String(Math.max(Number(selectedExclusiveGroup.max ?? 1), 1)),
     });
+    setNewSelectedExclusiveItem({ name: "", price: "" });
   }, [selectedExclusiveGroup]);
 
   const effectiveExclusiveCreateOpen = showExclusiveCreateForm;
@@ -1031,11 +1067,11 @@ export default function AdminMenuPage() {
             grid-template-columns: minmax(0, 1fr) auto;
           }
           .titleRow {
-            align-items: stretch;
+            align-items: flex-start;
           }
           .headerActionRow {
-            width: 100%;
-            justify-content: flex-start;
+            width: auto;
+            justify-content: flex-end;
           }
           .previewThumb,
           .previewPlaceholder {
@@ -1364,7 +1400,7 @@ export default function AdminMenuPage() {
 
                     <div className="btnRow" style={{ marginTop: 8 }}>
                       <button className="btn" type="button" onClick={updateSelectedExclusiveGroupInMenu} disabled={saving || loading}>
-                        전용옵션 수정
+                        옵션수정
                       </button>
                       <button className="btn btnDanger" type="button" onClick={() => deleteExclusiveGroupInMenu(selectedExclusiveGroup.id)} disabled={saving || loading}>
                         삭제
@@ -1397,6 +1433,29 @@ export default function AdminMenuPage() {
                         </div>
                       ))
                     )}
+
+                    <div className="label" style={{ marginTop: 8 }}>옵션 항목 추가</div>
+                    <div className="optionRow" style={{ marginTop: 4 }}>
+                      <input
+                        className="input"
+                        value={newSelectedExclusiveItem.name}
+                        onChange={(e) => setNewSelectedExclusiveItem((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="옵션 항목명"
+                        disabled={saving || loading}
+                      />
+                      <input
+                        className="input"
+                        style={{ maxWidth: 120 }}
+                        inputMode="numeric"
+                        value={newSelectedExclusiveItem.price}
+                        onChange={(e) => setNewSelectedExclusiveItem((p) => ({ ...p, price: e.target.value }))}
+                        placeholder="단가 입력"
+                        disabled={saving || loading}
+                      />
+                      <button className="btn" type="button" onClick={addItemToSelectedExclusiveGroupInMenu} disabled={saving || loading}>
+                        항목추가
+                      </button>
+                    </div>
                   </div>
                 ) : null}
 
