@@ -210,6 +210,15 @@ export default function AdminOptionsPage() {
       Array.isArray(m.option_group_ids) ? m.option_group_ids.includes(selectedGroup.id) : false
     );
   }, [menus, selectedGroup]);
+  const linkedMenuNamesByGroupId = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const g of groups) {
+      map[g.id] = menus
+        .filter((m) => (Array.isArray(m.option_group_ids) ? m.option_group_ids.includes(g.id) : false))
+        .map((m) => m.name);
+    }
+    return map;
+  }, [groups, menus]);
 
   const isExclusiveSelected = (selectedGroup?.scope || "common") === "exclusive";
 
@@ -775,15 +784,16 @@ export default function AdminOptionsPage() {
               {activeScope === "common" ? "공통옵션 그룹" : "전용옵션 그룹"} ({scopedGroups.length})
             </h2>
 
-            <div className="btnRow">
-              <button className="btn btnPrimary" onClick={addGroup} disabled={saving || loading || activeScope === "exclusive"}>
-                + 새 그룹
-              </button>
-              <button className="btn" onClick={refresh} disabled={saving || loading}>
-                새로고침
-              </button>
-
-            </div>
+            {activeScope === "common" ? (
+              <div className="btnRow">
+                <button className="btn btnPrimary" onClick={addGroup} disabled={saving || loading}>
+                  + 새 그룹
+                </button>
+                <button className="btn" onClick={refresh} disabled={saving || loading}>
+                  새로고침
+                </button>
+              </div>
+            ) : null}
 
             <div className="list">
               {scopedGroups.map((g) => (
@@ -796,6 +806,11 @@ export default function AdminOptionsPage() {
                   <div className="muted">
                     {g.required ? "필수" : "선택"} · {g.min}~{g.max}개
                   </div>
+                  {activeScope === "exclusive" ? (
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      연결 메뉴: {(linkedMenuNamesByGroupId[g.id] || []).join(", ") || "없음"}
+                    </div>
+                  ) : null}
                 </button>
               ))}
               {!loading && scopedGroups.length === 0 ? (
@@ -820,9 +835,14 @@ export default function AdminOptionsPage() {
               <>
                 <div className="field" style={{ marginTop: 0 }}>
                   <div className="muted" style={{ marginTop: 2 }}>
-                    {isExclusiveSelected
-                      ? "전용옵션은 옵션관리에서 조회/삭제만 가능합니다. 등록·수정은 메뉴관리에서 해주세요."
-                      : "공통옵션 그룹과 항목을 등록/수정/삭제할 수 있습니다."}
+                    {isExclusiveSelected ? (
+                      <>
+                        <div>옵션관리에서는 조회/삭제만 가능합니다.</div>
+                        <div>등록.수정은 메뉴관리에서 해주세요.</div>
+                      </>
+                    ) : (
+                      "공통옵션 그룹과 항목을 등록/수정/삭제할 수 있습니다."
+                    )}
                   </div>
                 </div>
 
@@ -872,50 +892,27 @@ export default function AdminOptionsPage() {
                   ) : null}
                 </div>
 
-                {groupDraft.scope === "exclusive" && hasLinkedMenuColumn ? (
-                  <div className="field">
-                    <div className="label">전용 대상 메뉴</div>
-                    <select
-                      className="input"
-                      value={groupDraft.linkedMenuId}
-                      onChange={(e) => setGroupDraft((prev) => ({ ...prev, linkedMenuId: e.target.value }))}
-                      disabled
-                    >
-                      <option value="">메뉴 선택</option>
-                      {menus.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                {groupDraft.scope === "exclusive" && !hasLinkedMenuColumn ? (
-                  <div className="muted" style={{ marginTop: 8 }}>
-                    linked_menu_id 컬럼이 없어 전용 대상 메뉴를 지정할 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.
-                  </div>
-                ) : null}
-
                 <div className="btnRow">
-                  <button
-                    className="btn"
-                    onClick={() => {
-                      const min = 0;
-                      const max = Math.max(toInt(groupDraft.max, selectedGroup.max), 0);
-                      updateGroup({
-                        name: groupDraft.name.trim() || selectedGroup.name,
-                        required: groupDraft.required,
-                        min,
-                        max,
-                        scope: groupDraft.scope,
-                        linked_menu_id: groupDraft.scope === "exclusive" ? groupDraft.linkedMenuId || null : null,
-                      });
-                    }}
-                    disabled={saving || loading || !groupDraft.name.trim() || isExclusiveSelected}
-                  >
-                    그룹 저장
-                  </button>
+                  {!isExclusiveSelected ? (
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        const min = 0;
+                        const max = Math.max(toInt(groupDraft.max, selectedGroup.max), 0);
+                        updateGroup({
+                          name: groupDraft.name.trim() || selectedGroup.name,
+                          required: groupDraft.required,
+                          min,
+                          max,
+                          scope: groupDraft.scope,
+                          linked_menu_id: groupDraft.scope === "exclusive" ? groupDraft.linkedMenuId || null : null,
+                        });
+                      }}
+                      disabled={saving || loading || !groupDraft.name.trim()}
+                    >
+                      그룹 저장
+                    </button>
+                  ) : null}
                   <button className="btn btnDanger" onClick={deleteGroup} disabled={saving || loading}>
                     그룹 삭제
                   </button>
@@ -938,11 +935,13 @@ export default function AdminOptionsPage() {
                   )}
                 </div>
 
-                <div className="btnRow" style={{ marginTop: 12 }}>
-                  <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={saving || loading || isExclusiveSelected}>
-                    + 옵션 추가
-                  </button>
-                </div>
+                {!isExclusiveSelected ? (
+                  <div className="btnRow" style={{ marginTop: 12 }}>
+                    <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={saving || loading}>
+                      + 옵션 추가
+                    </button>
+                  </div>
+                ) : null}
 
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 950 }}>
@@ -968,7 +967,34 @@ export default function AdminOptionsPage() {
 
                     {!loading && groupItems.length === 0 ? (
                       <div className="muted" style={{ marginTop: 10 }}>
-                        이 그룹에는 옵션 항목이 없습니다. “+ 옵션 추가”를 눌러주세요.
+                        {isExclusiveSelected
+                          ? "이 그룹에는 옵션 항목이 없습니다."
+                          : "이 그룹에는 옵션 항목이 없습니다. “+ 옵션 추가”를 눌러주세요."}
+                      </div>
+                    ) : null}
+
+                    {!isExclusiveSelected && showCreateItemForm ? (
+                      <div className="itemCard">
+                        <div className="itemLine">
+                          <input
+                            className="input"
+                            value={newItemDraft.name}
+                            onChange={(e) => setNewItemDraft((p) => ({ ...p, name: e.target.value }))}
+                            placeholder="옵션 항목명"
+                            disabled={saving || loading}
+                          />
+                          <input
+                            className="input"
+                            inputMode="numeric"
+                            value={newItemDraft.price}
+                            onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
+                            placeholder="단가 입력"
+                            disabled={saving || loading}
+                          />
+                          <button className="btn itemSaveBtn" onClick={addItem} disabled={saving || loading}>
+                            항목 저장
+                          </button>
+                        </div>
                       </div>
                     ) : null}
 
