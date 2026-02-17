@@ -112,7 +112,7 @@ export default function AdminMenuPage() {
     name: "",
     max: "1",
   });
-  const [newExclusiveItems, setNewExclusiveItems] = useState<Array<{ name: string; price: string }>>([{ name: "", price: "0" }]);
+  const [newExclusiveItems, setNewExclusiveItems] = useState<Array<{ name: string; price: string }>>([{ name: "", price: "" }]);
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -476,7 +476,7 @@ export default function AdminMenuPage() {
         optionGroupIds: prev.optionGroupIds.includes(groupId) ? prev.optionGroupIds : [...prev.optionGroupIds, groupId],
       }));
       setNewExclusiveGroup({ name: "", max: "1" });
-      setNewExclusiveItems([{ name: "", price: "0" }]);
+      setNewExclusiveItems([{ name: "", price: "" }]);
       setShowExclusiveCreateForm(false);
       await refresh();
       setMsg("전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
@@ -659,6 +659,12 @@ export default function AdminMenuPage() {
           border-radius: 12px;
           cursor: pointer;
           font-weight: 950;
+          font-size: 14px;
+          line-height: 1.2;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          text-decoration: none;
         }
         .btnPrimary {
           background: var(--brand);
@@ -744,7 +750,7 @@ export default function AdminMenuPage() {
         }
         .twoColRow {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: minmax(0, 1fr) auto;
           gap: 10px;
           align-items: end;
         }
@@ -786,6 +792,11 @@ export default function AdminMenuPage() {
           font-size: 11px;
           font-weight: 800;
           background: #fff;
+        }
+        .maxSelectInput {
+          width: 34%;
+          min-width: 90px;
+          max-width: 130px;
         }
         .optionRow {
           display: flex;
@@ -836,15 +847,19 @@ export default function AdminMenuPage() {
             grid-template-columns: 1fr;
           }
           .twoColRow {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr) auto;
           }
           .imageUploadRow {
-            grid-template-columns: 1fr;
+            grid-template-columns: 96px 1fr;
+          }
+          .maxSelectInput {
+            width: 34%;
+            min-width: 90px;
           }
           .previewThumb,
           .previewPlaceholder {
-            width: 120px;
-            height: 120px;
+            width: 96px;
+            height: 96px;
           }
         }
       `}</style>
@@ -999,7 +1014,7 @@ export default function AdminMenuPage() {
                 />
               </div>
 
-              <div className="field">
+              <div className="field" style={{ minWidth: 92 }}>
                 <div className="label">품절</div>
                 <label className="optionRow" style={{ minHeight: 42 }}>
                   <input
@@ -1209,7 +1224,7 @@ export default function AdminMenuPage() {
                   <div className="field">
                     <div className="label">최대 선택 수량</div>
                     <input
-                      className="input"
+                      className="input maxSelectInput"
                       inputMode="numeric"
                       value={newExclusiveGroup.max}
                       onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }))}
@@ -1255,7 +1270,7 @@ export default function AdminMenuPage() {
                     <button
                       className="btn fullWidthBtn"
                       type="button"
-                      onClick={() => setNewExclusiveItems((prev) => [...prev, { name: "", price: "0" }])}
+                      onClick={() => setNewExclusiveItems((prev) => [...prev, { name: "", price: "" }])}
                       disabled={saving || loading}
                     >
                       옵션항목 추가
