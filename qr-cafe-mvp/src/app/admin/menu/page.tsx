@@ -112,7 +112,8 @@ export default function AdminMenuPage() {
     name: "",
     max: "1",
   });
-  const [newExclusiveItems, setNewExclusiveItems] = useState<Array<{ name: string; price: string }>>([{ name: "", price: "" }]);
+  const [newExclusiveItems, setNewExclusiveItems] = useState<Array<{ name: string; price: string }>>([]);
+  const [showExclusiveItemInputs, setShowExclusiveItemInputs] = useState(false);
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -476,7 +477,8 @@ export default function AdminMenuPage() {
         optionGroupIds: prev.optionGroupIds.includes(groupId) ? prev.optionGroupIds : [...prev.optionGroupIds, groupId],
       }));
       setNewExclusiveGroup({ name: "", max: "1" });
-      setNewExclusiveItems([{ name: "", price: "" }]);
+      setNewExclusiveItems([]);
+      setShowExclusiveItemInputs(false);
       setShowExclusiveCreateForm(false);
       await refresh();
       setMsg("전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
@@ -798,6 +800,14 @@ export default function AdminMenuPage() {
           min-width: 90px;
           max-width: 130px;
         }
+        .sortOrderInput {
+          width: 34%;
+          min-width: 90px;
+          max-width: 130px;
+        }
+        .menuIdInput {
+          min-width: 180px;
+        }
         .optionRow {
           display: flex;
           align-items: center;
@@ -853,6 +863,10 @@ export default function AdminMenuPage() {
             grid-template-columns: 96px 1fr;
           }
           .maxSelectInput {
+            width: 34%;
+            min-width: 90px;
+          }
+          .sortOrderInput {
             width: 34%;
             min-width: 90px;
           }
@@ -965,16 +979,31 @@ export default function AdminMenuPage() {
               />
             </div>
 
-            <div className="field">
-              <div className="label">기본 가격</div>
-              <input
-                className="input"
-                inputMode="numeric"
-                value={draft.price}
-                onChange={(e) => setDraft((prev) => ({ ...prev, price: e.target.value }))}
-                placeholder="예: 4500"
-                disabled={saving || loading}
-              />
+            <div className="twoColRow">
+              <div className="field">
+                <div className="label">기본 가격</div>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  value={draft.price}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, price: e.target.value }))}
+                  placeholder="예: 4500"
+                  disabled={saving || loading}
+                />
+              </div>
+
+              <div className="field" style={{ minWidth: 92 }}>
+                <div className="label">품절</div>
+                <label className="optionRow" style={{ minHeight: 42 }}>
+                  <input
+                    type="checkbox"
+                    checked={draft.isSoldOut}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, isSoldOut: e.target.checked }))}
+                    disabled={saving || loading}
+                  />
+                  품절 처리
+                </label>
+              </div>
             </div>
 
             <div className="field">
@@ -1005,7 +1034,7 @@ export default function AdminMenuPage() {
               <div className="field">
                 <div className="label">노출 순서 (작을수록 위로)</div>
                 <input
-                  className="input"
+                  className="input sortOrderInput"
                   inputMode="numeric"
                   value={draft.sortOrder}
                   onChange={(e) => setDraft((prev) => ({ ...prev, sortOrder: e.target.value }))}
@@ -1014,30 +1043,17 @@ export default function AdminMenuPage() {
                 />
               </div>
 
-              <div className="field" style={{ minWidth: 92 }}>
-                <div className="label">품절</div>
-                <label className="optionRow" style={{ minHeight: 42 }}>
-                  <input
-                    type="checkbox"
-                    checked={draft.isSoldOut}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, isSoldOut: e.target.checked }))}
-                    disabled={saving || loading}
-                  />
-                  품절 처리
-                </label>
+              <div className="field menuIdInput">
+                <div className="label">메뉴 ID</div>
+                <input
+                  className="input"
+                  value={draft.id}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
+                  placeholder="예: americano"
+                  disabled={saving || loading || isEditing}
+                />
+                <div className="hint">이미 등록된 메뉴를 수정할 때는 ID 변경을 막아두었어요.</div>
               </div>
-            </div>
-
-            <div className="field">
-              <div className="label">메뉴 ID</div>
-              <input
-                className="input"
-                value={draft.id}
-                onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
-                placeholder="예: americano"
-                disabled={saving || loading || isEditing}
-              />
-              <div className="hint">이미 등록된 메뉴를 수정할 때는 ID 변경을 막아두었어요.</div>
             </div>
 
             <div className="btnRow">
@@ -1189,7 +1205,13 @@ export default function AdminMenuPage() {
                 <button
                   className="btn fullWidthBtn"
                   type="button"
-                  onClick={() => setShowExclusiveCreateForm((p) => !p)}
+                  onClick={() =>
+                    setShowExclusiveCreateForm((p) => {
+                      const next = !p;
+                      if (!next) setShowExclusiveItemInputs(false);
+                      return next;
+                    })
+                  }
                   disabled={saving || loading}
                 >
                   {effectiveExclusiveCreateOpen ? "전용옵션 등록 닫기" : "+ 전용옵션 등록"}
@@ -1214,6 +1236,17 @@ export default function AdminMenuPage() {
                     </div>
                   ) : null}
                   <div className="hint">이 메뉴 전용 옵션 그룹을 생성하고 자동으로 연결합니다.</div>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      setShowExclusiveItemInputs(true);
+                      setNewExclusiveItems((prev) => [...prev, { name: "", price: "" }]);
+                    }}
+                    disabled={saving || loading}
+                  >
+                    옵션항목 추가
+                  </button>
                   <input
                     className="input"
                     value={newExclusiveGroup.name}
@@ -1221,6 +1254,42 @@ export default function AdminMenuPage() {
                     placeholder="전용옵션 그룹명 (예: 당도)"
                     disabled={saving || loading}
                   />
+                  {showExclusiveItemInputs ? (
+                    newExclusiveItems.map((row, idx) => (
+                      <div className="optionRow" key={`new-item-${idx}`}>
+                        <input
+                          className="input"
+                          value={row.name}
+                          onChange={(e) =>
+                            setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, name: e.target.value } : v)))
+                          }
+                          placeholder={`옵션 항목 ${idx + 1}`}
+                          disabled={saving || loading}
+                        />
+                        <input
+                          className="input"
+                          style={{ maxWidth: 120 }}
+                          inputMode="numeric"
+                          value={row.price}
+                          onChange={(e) =>
+                            setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, price: e.target.value } : v)))
+                          }
+                          placeholder="단가 입력"
+                          disabled={saving || loading}
+                        />
+                        {newExclusiveItems.length > 1 ? (
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx))}
+                            disabled={saving || loading}
+                          >
+                            제거
+                          </button>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : null}
                   <div className="field">
                     <div className="label">최대 선택 수량</div>
                     <input
@@ -1232,50 +1301,8 @@ export default function AdminMenuPage() {
                       disabled={saving || loading}
                     />
                   </div>
-                  {newExclusiveItems.map((row, idx) => (
-                    <div className="optionRow" key={`new-item-${idx}`}>
-                      <input
-                        className="input"
-                        value={row.name}
-                        onChange={(e) =>
-                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, name: e.target.value } : v)))
-                        }
-                        placeholder={`옵션 항목 ${idx + 1}`}
-                        disabled={saving || loading}
-                      />
-                      <input
-                        className="input"
-                        style={{ maxWidth: 120 }}
-                        inputMode="numeric"
-                        value={row.price}
-                        onChange={(e) =>
-                          setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, price: e.target.value } : v)))
-                        }
-                        placeholder="단가 입력"
-                        disabled={saving || loading}
-                      />
-                      {newExclusiveItems.length > 1 ? (
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx))}
-                          disabled={saving || loading}
-                        >
-                          제거
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                  <div className="btnRow" style={{ marginTop: 6, display: "grid", gridTemplateColumns: "1fr 1fr", width: "100%" }}>
-                    <button
-                      className="btn fullWidthBtn"
-                      type="button"
-                      onClick={() => setNewExclusiveItems((prev) => [...prev, { name: "", price: "" }])}
-                      disabled={saving || loading}
-                    >
-                      옵션항목 추가
-                    </button>
-                    <button className="btn fullWidthBtn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
+                  <div className="btnRow" style={{ marginTop: 6, width: "100%" }}>
+                    <button className="btn btnPrimary fullWidthBtn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
                       전용옵션 생성
                     </button>
                   </div>
