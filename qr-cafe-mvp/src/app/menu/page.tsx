@@ -86,6 +86,20 @@ function toInt(v: any, fallback = 0) {
   return Math.floor(n);
 }
 
+function buildOptionSignature(groups: SelectedGroup[]) {
+  const normalized = groups
+    .map((g) => ({
+      groupId: String(g.groupId || ""),
+      itemIds: (Array.isArray(g.items) ? g.items : [])
+        .map((it) => String(it.id || ""))
+        .filter(Boolean)
+        .sort(),
+    }))
+    .sort((a, b) => a.groupId.localeCompare(b.groupId));
+
+  return JSON.stringify(normalized);
+}
+
 export default function MenuPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -424,19 +438,33 @@ export default function MenuPage() {
 
     const { groups, optionTotal } = buildSelectedGroups(optTarget);
 
-    setCartLines((prev) => [
-      ...prev,
-      {
-        lineId: uid("line"),
-        menuId: optTarget.id,
-        name: optTarget.name,
-        basePrice: Number((optTarget as any).price || 0),
-        qty: 1,
-        image: (optTarget as any).image || "",
-        options: groups,
-        optionTotal,
-      },
-    ]);
+    const nextSig = buildOptionSignature(groups);
+
+    setCartLines((prev) => {
+      const idx = prev.findIndex(
+        (x) => x.menuId === optTarget.id && buildOptionSignature(x.options) === nextSig
+      );
+
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], qty: Math.max(1, (next[idx].qty || 0) + 1) };
+        return next;
+      }
+
+      return [
+        ...prev,
+        {
+          lineId: uid("line"),
+          menuId: optTarget.id,
+          name: optTarget.name,
+          basePrice: Number((optTarget as any).price || 0),
+          qty: 1,
+          image: (optTarget as any).image || "",
+          options: groups,
+          optionTotal,
+        },
+      ];
+    });
 
     setOptOpen(false);
     setOptTarget(null);
