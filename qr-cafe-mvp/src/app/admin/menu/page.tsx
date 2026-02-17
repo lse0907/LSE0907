@@ -1202,6 +1202,14 @@ export default function AdminMenuPage() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
+          <div className="headerActionRow">
+            <button className="btn" onClick={onBack}>
+              관리자 홈
+            </button>
+            <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              옵션관리
+            </a>
+          </div>
           {msg ? (
             <p className="sub" style={{ marginTop: 6, color: "#b91c1c" }}>
               {msg}
