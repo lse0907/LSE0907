@@ -610,7 +610,7 @@ export default function AdminOptionsPage() {
         }
         .row3 {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr);
           gap: 10px;
           align-items: end;
         }
@@ -627,13 +627,17 @@ export default function AdminOptionsPage() {
           align-items: end;
         }
         .maxInput {
-          width: 110px;
+          width: 100%;
         }
         .itemLine {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 110px auto;
+          grid-template-columns: minmax(0, 1fr) minmax(120px, 0.8fr);
           gap: 8px;
           align-items: end;
+        }
+        .itemSaveBtn {
+          grid-column: 1 / -1;
+          justify-self: end;
         }
         .savedItemRow {
           border: 1px solid var(--line);
@@ -670,7 +674,7 @@ export default function AdminOptionsPage() {
             grid-template-columns: 1fr;
           }
           .row3 {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(72px, 1fr) minmax(0, 3fr);
           }
           .row2 {
             grid-template-columns: 1fr;
@@ -679,10 +683,11 @@ export default function AdminOptionsPage() {
             grid-template-columns: 70% auto;
           }
           .itemLine {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr);
           }
-          .maxInput {
+          .itemSaveBtn {
             width: 100%;
+            justify-self: stretch;
           }
         }
       `}</style>
@@ -699,9 +704,6 @@ export default function AdminOptionsPage() {
           <div className="headerActionRow">
             <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
               관리자 홈
-            </a>
-            <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-              메뉴관리
             </a>
           </div>
           <div className="scopeRow">
@@ -960,7 +962,7 @@ export default function AdminOptionsPage() {
                             placeholder="단가 입력"
                             disabled={saving || loading}
                           />
-                          <button className="btn" onClick={addItem} disabled={saving || loading}>
+                          <button className="btn itemSaveBtn" onClick={addItem} disabled={saving || loading}>
                             항목 저장
                           </button>
                         </div>
