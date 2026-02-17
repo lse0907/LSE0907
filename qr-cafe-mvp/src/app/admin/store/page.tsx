@@ -406,6 +406,16 @@ export default function AdminStorePage() {
           align-items: center;
         }
 
+        .addressRow {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .addressRow .input {
+          min-width: 0;
+        }
+
         .btn {
           border: 1px solid var(--line);
           background: var(--card);
@@ -439,6 +449,17 @@ export default function AdminStorePage() {
         .previewWrap {
           display: grid;
           gap: 10px;
+        }
+
+        .settingsCard {
+          display: grid;
+          align-content: start;
+        }
+
+        .detailBlock {
+          margin-top: 14px;
+          padding-top: 10px;
+          border-top: 1px dashed var(--line);
         }
 
         .hero {
@@ -582,16 +603,122 @@ export default function AdminStorePage() {
         }
         @media (max-width: 640px) {
           .wrap {
-            padding: 12px;
+            padding: 10px;
+            gap: 8px;
           }
+
           .topbar {
-            align-items: center;
+            align-items: flex-start;
+            flex-direction: row;
+            justify-content: space-between;
+            gap: 8px;
           }
+
+          .topActions {
+            width: auto;
+            justify-content: flex-end;
+            flex-wrap: nowrap;
+          }
+
+          .badgeRow {
+            gap: 6px;
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .badge {
+            font-size: 11px;
+            padding: 7px 9px;
+          }
+
+          .card {
+            padding: 12px;
+            border-radius: 14px;
+          }
+
+          .previewWrap {
+            gap: 8px;
+          }
+
+          .cardTitle {
+            font-size: 15px;
+          }
+
+          .field {
+            margin-top: 9px;
+            gap: 5px;
+          }
+
+          .label {
+            font-size: 11px;
+            gap: 6px;
+          }
+
+          .pill {
+            font-size: 10px;
+            padding: 3px 7px;
+          }
+
+          .input,
+          .textarea {
+            padding: 10px;
+            font-size: 14px;
+          }
+
+          .btn {
+            font-size: 13px;
+            padding: 9px 11px;
+          }
+
+          .sliderRow {
+            grid-template-columns: 1fr 74px;
+            gap: 8px;
+          }
+
+          .addressRow {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+          }
+
+          .addressRow .btn {
+            width: 100%;
+          }
+
+          .btnRow {
+            gap: 8px;
+            margin-top: 14px;
+          }
+
+          .btnRow .btn {
+            flex: 1 1 auto;
+          }
+
+          .detailBlock {
+            margin-top: 12px;
+            padding-top: 8px;
+          }
+
           .hero {
-            height: 200px;
+            height: 172px;
           }
+
+          .previewCard {
+            padding: 10px;
+          }
+
+          .descText {
+            font-size: 13px;
+            line-height: 1.45;
+          }
+
+          .hint {
+            font-size: 11px;
+            word-break: break-all;
+          }
+
           .storeName {
-            font-size: 18px;
+            font-size: 16px;
           }
         }
       `}</style>
@@ -674,7 +801,7 @@ export default function AdminStorePage() {
         </div>
 
         {/* 설정 */}
-        <div className="card">
+        <div className="card settingsCard">
           <h2 className="cardTitle">기본 정보</h2>
 
           <div className="field">
@@ -717,7 +844,7 @@ export default function AdminStorePage() {
               {uploadingMain
                 ? "업로드 중..."
                 : (draft as any).mainImage
-                  ? `등록됨: ${(draft as any).mainImage}`
+                  ? "대표 이미지 등록됨"
                   : "아직 등록된 이미지가 없습니다."}
             </div>
           </div>
@@ -735,7 +862,7 @@ export default function AdminStorePage() {
               {uploadingLogo
                 ? "업로드 중..."
                 : (draft as any).logoImage
-                  ? `등록됨: ${(draft as any).logoImage}`
+                  ? "로고 이미지 등록됨"
                   : "아직 등록된 이미지가 없습니다."}
             </div>
           </div>
@@ -773,7 +900,7 @@ export default function AdminStorePage() {
 
           </div>
 
-          <div style={{ marginTop: 14 }}>
+          <div className="detailBlock">
             <h3 className="cardTitle">매장 상세 정보</h3>
 
             <div className="field">
@@ -831,7 +958,7 @@ export default function AdminStorePage() {
               <div className="label">
                 매장 주소 <span className="pill">필수</span>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="addressRow">
                 <input
                   className="input"
                   value={(draft as any)?.extra?.address || ""}
