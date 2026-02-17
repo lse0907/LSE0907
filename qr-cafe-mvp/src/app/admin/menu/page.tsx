@@ -522,6 +522,46 @@ export default function AdminMenuPage() {
     }
   };
 
+  const saveCommonPricesInMenu = async () => {
+    if (!storeId) return;
+    const menuId = draft.id.trim();
+    if (!menuId) {
+      setMsg("메뉴를 먼저 저장한 뒤 단가를 수정해주세요.");
+      return;
+    }
+
+    const commonItemIds = selectedCommonGroups.flatMap((group) =>
+      (itemsByGroup.get(group.id) || []).map((item) => item.id)
+    );
+    if (commonItemIds.length === 0) {
+      setMsg("저장할 공통옵션 항목이 없습니다.");
+      return;
+    }
+
+    setSaving(true);
+    setMsg("");
+    try {
+      const rows = commonItemIds.map((optionItemId) => ({
+        store_id: storeId,
+        menu_id: menuId,
+        option_item_id: optionItemId,
+        price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
+      }));
+
+      const { error } = await supabase
+        .from("menu_option_prices")
+        .upsert(rows, { onConflict: "store_id,menu_id,option_item_id" });
+      if (error) throw error;
+
+      await refresh();
+      setMsg("공통옵션 단가를 수정했습니다.");
+    } catch (e: any) {
+      setMsg(`공통옵션 단가 수정 실패: ${String(e?.message || e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveSelectedExclusivePricesInMenu = async () => {
     if (!storeId || !selectedExclusiveGroup) return;
     const menuId = draft.id.trim();
@@ -1415,52 +1455,60 @@ export default function AdminMenuPage() {
                 {selectedCommonGroups.length === 0 ? (
                   <div className="muted">아직 연결된 공통옵션이 없습니다.</div>
                 ) : (
-                  <div className="optionGrid">
-                    {selectedCommonGroups.map((group) => {
-                      const groupOptions = itemsByGroup.get(group.id) || [];
-                      return (
-                        <div className="groupOptionDetail" key={group.id}>
-                          <div className="groupOptionItem">
-                            <div className="name">{group.name}</div>
-                            <button className="btn btnDanger" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
-                              연결해제
-                            </button>
+                  <>
+                    <div className="optionGrid">
+                      {selectedCommonGroups.map((group) => {
+                        const groupOptions = itemsByGroup.get(group.id) || [];
+                        return (
+                          <div className="groupOptionDetail" key={group.id}>
+                            <div className="groupOptionItem">
+                              <div className="name">{group.name}</div>
+                              <button className="btn btnDanger" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
+                                연결해제
+                              </button>
+                            </div>
+                            {groupOptions.length === 0 ? (
+                              <div className="muted">옵션 항목이 없습니다.</div>
+                            ) : (
+                              groupOptions.map((item) => (
+                                <div key={item.id} className="groupOptionItem">
+                                  <span>{item.name}</span>
+                                  <input
+                                    className="input"
+                                    style={{ maxWidth: 140 }}
+                                    inputMode="numeric"
+                                    value={getOptionPrice(item)}
+                                    onChange={(e) =>
+                                      setDraft((prev) => ({
+                                        ...prev,
+                                        optionPriceByItem: {
+                                          ...prev.optionPriceByItem,
+                                          [item.id]: e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    disabled={saving || loading}
+                                  />
+                                </div>
+                              ))
+                            )}
                           </div>
-                          {groupOptions.length === 0 ? (
-                            <div className="muted">옵션 항목이 없습니다.</div>
-                          ) : (
-                            groupOptions.map((item) => (
-                              <div key={item.id} className="groupOptionItem">
-                                <span>{item.name}</span>
-                                <input
-                                  className="input"
-                                  style={{ maxWidth: 140 }}
-                                  inputMode="numeric"
-                                  value={getOptionPrice(item)}
-                                  onChange={(e) =>
-                                    setDraft((prev) => ({
-                                      ...prev,
-                                      optionPriceByItem: {
-                                        ...prev.optionPriceByItem,
-                                        [item.id]: e.target.value,
-                                      },
-                                    }))
-                                  }
-                                  disabled={saving || loading}
-                                />
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                    <div className="btnRow" style={{ marginTop: 6 }}>
+                      <button className="btn" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading}>
+                        단가 수정
+                      </button>
+                    </div>
+                  </>
                 )}
                 </div>
               </div>
 
               <div className="field">
                 <div className="label">전용옵션 (현재 메뉴 전용)</div>
+                <div className="optionConnectCard">
                 {exclusiveGroups.length === 0 ? <div className="muted">아직 전용옵션이 없습니다.</div> : null}
 
                 <div className="optionGrid" style={{ marginTop: 6 }}>
@@ -1504,7 +1552,7 @@ export default function AdminMenuPage() {
 
                     <div className="btnRow" style={{ marginTop: 8 }}>
                       <button className="btn btnPrimary" type="button" onClick={updateSelectedExclusiveGroupInMenu} disabled={saving || loading}>
-                        그룹 저장
+                        그룹 수정
                       </button>
                       <button className="btn btnDanger" type="button" onClick={() => deleteExclusiveGroupInMenu(selectedExclusiveGroup.id)} disabled={saving || loading}>
                         그룹 삭제
@@ -1679,6 +1727,7 @@ export default function AdminMenuPage() {
                     </div>
                   </div>
                 ) : null}
+                </div>
               </div>
 
             </div>
