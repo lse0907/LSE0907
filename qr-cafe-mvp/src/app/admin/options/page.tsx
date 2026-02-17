@@ -743,6 +743,14 @@ export default function AdminOptionsPage() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
+          <div className="headerActionRow">
+            <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              관리자 홈
+            </a>
+            <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              메뉴관리
+            </a>
+          </div>
           <div className="scopeRow">
             {[
               { key: "common", label: "공통옵션" },
