@@ -42,7 +42,7 @@ export default function AdminHomePage() {
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [msg, setMsg] = useState<string>("");
-  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | null>(null);
+  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | null>("stats");
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
@@ -281,7 +281,6 @@ export default function AdminHomePage() {
       <section className="card stickyCard">
         <div className="cardHead">
           <h2 className="cardTitle">매장 만들기</h2>
-          <span className="pill">상단 고정</span>
         </div>
         <p className="muted">매장을 먼저 생성해 주세요.</p>
         <div className="btnRow">
@@ -551,6 +550,12 @@ body {
   border-radius:12px;
   cursor:pointer;
   font-weight:950;
+  font-size:14px;
+  line-height:1.2;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
 }
 .btnGroup{
   display:flex;
