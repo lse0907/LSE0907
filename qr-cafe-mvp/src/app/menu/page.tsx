@@ -124,6 +124,7 @@ export default function MenuPage() {
   const [optTarget, setOptTarget] = useState<MenuItem | null>(null);
 
   const [optSel, setOptSel] = useState<Record<string, Record<string, number>>>({});
+  const [optQty, setOptQty] = useState(1);
 
   const fetchOptionsFromDb = async () => {
     setOptionsLoading(true);
@@ -193,6 +194,7 @@ export default function MenuPage() {
     setOptOpen(false);
     setOptTarget(null);
     setOptSel({});
+    setOptQty(1);
 
     const onFocus = () => {
       fetchOptionsFromDb();
@@ -317,6 +319,7 @@ export default function MenuPage() {
     const init: Record<string, Record<string, number>> = {};
     groupIds.forEach((gid) => (init[gid] = {}));
     setOptSel(init);
+    setOptQty(1);
     setOptTarget(m);
     setOptOpen(true);
   };
@@ -479,7 +482,7 @@ export default function MenuPage() {
 
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], qty: Math.max(1, (next[idx].qty || 0) + 1) };
+        next[idx] = { ...next[idx], qty: Math.max(1, (next[idx].qty || 0) + Math.max(1, optQty)) };
         return next;
       }
 
@@ -490,7 +493,7 @@ export default function MenuPage() {
           menuId: optTarget.id,
           name: optTarget.name,
           basePrice: Number((optTarget as any).price || 0),
-          qty: 1,
+          qty: Math.max(1, optQty),
           image: (optTarget as any).image || "",
           options: groups,
           optionTotal,
@@ -501,6 +504,7 @@ export default function MenuPage() {
     setOptOpen(false);
     setOptTarget(null);
     setOptSel({});
+    setOptQty(1);
   };
 
   const goConfirm = () => {
@@ -903,6 +907,22 @@ export default function MenuPage() {
           gap: 10px;
           font-weight: 900;
         }
+        .orderQtyRow {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          font-weight: 900;
+        }
+        .orderQtyBox {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border: 1px solid var(--line);
+          border-radius: 999px;
+          padding: 2px 6px;
+          background: #f8fafc;
+        }
 
         @media (max-width: 520px) {
           .hero {
@@ -1048,6 +1068,7 @@ export default function MenuPage() {
             setOptOpen(false);
             setOptTarget(null);
             setOptSel({});
+            setOptQty(1);
           }}
         >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -1059,6 +1080,7 @@ export default function MenuPage() {
                   setOptOpen(false);
                   setOptTarget(null);
                   setOptSel({});
+                  setOptQty(1);
                 }}
               >
                 닫기
@@ -1175,12 +1197,25 @@ export default function MenuPage() {
 
             <div className="modalFoot">
               <div className="mini">
-                <span>예상 가격(1개)</span>
-                <b>{fmt(modalPrice)}원</b>
+                <span>예상 가격({optQty}개)</span>
+                <b>{fmt(modalPrice * Math.max(1, optQty))}원</b>
+              </div>
+
+              <div className="orderQtyRow">
+                <span>주문 수량</span>
+                <div className="orderQtyBox">
+                  <button type="button" className="miniBtn" onClick={() => setOptQty((q) => Math.max(1, q - 1))}>
+                    -
+                  </button>
+                  <b className="iQtyNum">{optQty}</b>
+                  <button type="button" className="miniBtn" onClick={() => setOptQty((q) => Math.min(99, q + 1))}>
+                    +
+                  </button>
+                </div>
               </div>
 
               <button className="btnPrimary" onClick={onConfirmOptions}>
-                담기 ({fmt(modalPrice)}원)
+                담기 ({fmt(modalPrice * Math.max(1, optQty))}원)
               </button>
             </div>
           </div>
