@@ -525,9 +525,17 @@ export default function AdminMenuPage() {
       const itemInsert = await supabase.from("option_items").insert(itemRows);
       if (itemInsert.error) throw itemInsert.error;
 
+      const nextGroupIds = Array.from(new Set([...(draft.optionGroupIds || []), groupId]));
+      const menuUpdate = await supabase
+        .from("menu_items")
+        .update({ option_group_ids: nextGroupIds })
+        .eq("store_id", storeId)
+        .eq("id", menuId);
+      if (menuUpdate.error) throw menuUpdate.error;
+
       setDraft((prev) => ({
         ...prev,
-        optionGroupIds: prev.optionGroupIds.includes(groupId) ? prev.optionGroupIds : [...prev.optionGroupIds, groupId],
+        optionGroupIds: nextGroupIds,
       }));
       setNewExclusiveGroup({ name: "", max: "1" });
       setNewExclusiveItems([]);
@@ -718,6 +726,9 @@ export default function AdminMenuPage() {
           margin-top: 0;
           flex-wrap: wrap;
           justify-content: flex-end;
+        }
+        .sub + .sub + .headerActionRow {
+          display: none;
         }
         .btn {
           border: 1px solid var(--line);
@@ -1014,9 +1025,7 @@ export default function AdminMenuPage() {
           <span className="badge badgeSaved">{badgeText}</span>
         ) : badge === "error" ? (
           <span className="badge badgeError">{badgeText}</span>
-        ) : (
-          <span className="badge">{badgeText}</span>
-        )}
+        ) : null}
       </header>
 
       {!storeId ? (
@@ -1337,10 +1346,8 @@ export default function AdminMenuPage() {
                         {exclusiveGroups.map((g) => (
                           <div key={`exclusive-pill-${g.id}`} className="groupOptionItem" style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "8px 10px", background: "#fff" }}>
                             <span>{g.name}</span>
-                            <div style={{ display: "flex", gap: 8 }}>
-                              <button className="btn btnDanger" type="button" onClick={() => !draft.optionGroupIds.includes(g.id) && toggleGroup(g.id)} disabled={saving || loading || draft.optionGroupIds.includes(g.id)}>
-                                {draft.optionGroupIds.includes(g.id) ? "연결됨" : "연결해"}
-                              </button>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <span className="muted">연결됨</span>
                               <button className="btn btnDanger" type="button" onClick={() => deleteExclusiveGroupInMenu(g.id)} disabled={saving || loading}>
                                 삭제
                               </button>
