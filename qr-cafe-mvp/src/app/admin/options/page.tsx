@@ -710,23 +710,19 @@ export default function AdminOptionsPage() {
             </a>
           </div>
           <div className="scopeRow">
-            <button
-              className={`scopeBtn ${activeScope === "common" ? "scopeBtnOn" : ""}`}
-              onClick={() => setActiveScope("common")}
-              type="button"
-            >
-              공통옵션
-            </button>
-            <button
-              className={`scopeBtn ${activeScope === "exclusive" ? "scopeBtnOn" : ""}`}
-              onClick={() => setActiveScope("exclusive")}
-              type="button"
-            >
-              전용옵션
-            </button>
-            <a className="scopeBtn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-              메뉴관리 바로가기
-            </a>
+            {[
+              { key: "common", label: "공통옵션" },
+              { key: "exclusive", label: "전용옵션" },
+            ].map((scope) => (
+              <button
+                key={scope.key}
+                className={`scopeBtn ${activeScope === scope.key ? "scopeBtnOn" : ""}`}
+                onClick={() => setActiveScope(scope.key as "common" | "exclusive")}
+                type="button"
+              >
+                {scope.label}
+              </button>
+            ))}
           </div>
         </div>
 
