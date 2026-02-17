@@ -22,6 +22,7 @@ type OptionItem = {
   store_id: string;
   group_id: string;
   name: string;
+  price_delta?: number | null;
 };
 
 type MenuSummary = {
@@ -64,6 +65,7 @@ export default function AdminOptionsPage() {
     linkedMenuId: "",
   });
   const [itemDraftById, setItemDraftById] = useState<Record<string, string>>({});
+  const [itemPriceDraftById, setItemPriceDraftById] = useState<Record<string, string>>({});
 
   // 1) storeId 로드
   useEffect(() => {
@@ -124,7 +126,7 @@ export default function AdminOptionsPage() {
 
       const iRes = await supabase
         .from("option_items")
-        .select("id, store_id, group_id, name")
+        .select("id, store_id, group_id, name, price_delta")
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
 
@@ -173,6 +175,7 @@ export default function AdminOptionsPage() {
     if (!selectedGroup) {
       setGroupDraft({ name: "", required: false, min: "0", max: "1", scope: "common", linkedMenuId: "" });
       setItemDraftById({});
+      setItemPriceDraftById({});
       return;
     }
     setGroupDraft({
@@ -184,12 +187,15 @@ export default function AdminOptionsPage() {
       linkedMenuId: selectedGroup.linked_menu_id || "",
     });
     const nextDrafts: Record<string, string> = {};
+    const nextPriceDrafts: Record<string, string> = {};
     items
       .filter((it) => it.group_id === selectedGroup.id)
       .forEach((it) => {
         nextDrafts[it.id] = it.name || "";
+        nextPriceDrafts[it.id] = String(it.price_delta ?? 0);
       });
     setItemDraftById(nextDrafts);
+    setItemPriceDraftById(nextPriceDrafts);
   }, [selectedGroup, items]);
 
   const groupItems = useMemo(
@@ -367,6 +373,7 @@ export default function AdminOptionsPage() {
         store_id: storeId,
         group_id: selectedGroup.id,
         name: "새 옵션",
+        price_delta: 0,
       };
 
       const { error } = await supabase.from("option_items").insert([row]);
@@ -399,6 +406,8 @@ export default function AdminOptionsPage() {
         .from("option_items")
         .update({
           name: patch.name ?? cur.name,
+          price_delta:
+            typeof patch.price_delta === "number" ? patch.price_delta : cur.price_delta ?? 0,
         })
         .eq("id", id)
         .eq("store_id", storeId);
@@ -626,8 +635,14 @@ export default function AdminOptionsPage() {
         }
         .row3 {
           display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
+          grid-template-columns: 1fr 1fr;
           gap: 10px;
+        }
+        .row2 {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 10px;
+          align-items: end;
         }
 
         .itemCard {
@@ -650,6 +665,9 @@ export default function AdminOptionsPage() {
             grid-template-columns: 1fr;
           }
           .row3 {
+            grid-template-columns: 1fr;
+          }
+          .row2 {
             grid-template-columns: 1fr;
           }
         }
@@ -679,6 +697,9 @@ export default function AdminOptionsPage() {
             >
               전용옵션
             </button>
+            <a className="scopeBtn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              메뉴관리 바로가기
+            </a>
           </div>
         </div>
 
@@ -719,6 +740,9 @@ export default function AdminOptionsPage() {
               <button className="btn" onClick={refresh} disabled={saving || loading}>
                 새로고침
               </button>
+              <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                메뉴관리
+              </a>
               <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
                 관리자 홈
               </a>
@@ -733,7 +757,7 @@ export default function AdminOptionsPage() {
                 >
                   <div className="name">{g.name}</div>
                   <div className="muted">
-                    {g.required ? "필수" : "선택"} · {g.min}~{g.max}개 · id: {g.id}
+                    {g.required ? "필수" : "선택"} · {g.min}~{g.max}개
                   </div>
                 </button>
               ))}
@@ -815,11 +839,14 @@ export default function AdminOptionsPage() {
                       disabled={saving || loading || isExclusiveSelected}
                     />
                   </div>
+                </div>
+
+                {!isExclusiveSelected ? (
                   <div className="field">
                     <div className="label">그룹 ID</div>
                     <input className="input" value={selectedGroup.id} readOnly />
                   </div>
-                </div>
+                ) : null}
 
                 {groupDraft.scope === "exclusive" && hasLinkedMenuColumn ? (
                   <div className="field">
@@ -898,47 +925,82 @@ export default function AdminOptionsPage() {
                   <div className="list" style={{ marginTop: 10 }}>
                     {groupItems.map((it) => (
                       <div key={it.id} className="itemCard">
-                        <div className="itemTop">
-                          <div style={{ fontWeight: 950 }}>{it.name}</div>
-                          <button
-                            className="btn btnDanger"
-                            onClick={() => deleteItem(it.id)}
-                            disabled={saving || loading}
-                          >
-                            삭제
-                          </button>
-                        </div>
-
-                        <div className="row3">
-                          <div className="field" style={{ marginTop: 0 }}>
-                            <div className="label">옵션명</div>
-                            <input
-                              className="input"
-                              value={itemDraftById[it.id] ?? it.name}
-                              onChange={(e) =>
-                                setItemDraftById((prev) => ({
-                                  ...prev,
-                                  [it.id]: e.target.value,
-                                }))
-                              }
-                              disabled={saving || loading || isExclusiveSelected}
-                            />
-                          </div>
-                          <div className="field" style={{ marginTop: 0 }}>
-                            <div className="label">저장</div>
+                        {isExclusiveSelected ? (
+                          <div className="row2">
+                            <div>
+                              <div style={{ fontWeight: 950 }}>{it.name}</div>
+                              <div className="muted" style={{ marginTop: 4 }}>
+                                단가: {Number(it.price_delta ?? 0).toLocaleString()}원
+                              </div>
+                            </div>
                             <button
-                              className="btn"
-                              onClick={() => updateItem(it.id, { name: (itemDraftById[it.id] ?? "").trim() || it.name })}
-                              disabled={saving || loading || isExclusiveSelected}
+                              className="btn btnDanger"
+                              onClick={() => deleteItem(it.id)}
+                              disabled={saving || loading}
                             >
-                              항목 저장
+                              삭제
                             </button>
                           </div>
-                          <div className="field" style={{ marginTop: 0 }}>
-                            <div className="label">옵션 ID</div>
-                            <input className="input" value={it.id} readOnly />
-                          </div>
-                        </div>
+                        ) : (
+                          <>
+                            <div className="itemTop">
+                              <div style={{ fontWeight: 950 }}>{it.name}</div>
+                              <button
+                                className="btn btnDanger"
+                                onClick={() => deleteItem(it.id)}
+                                disabled={saving || loading}
+                              >
+                                삭제
+                              </button>
+                            </div>
+
+                            <div className="row3">
+                              <div className="field" style={{ marginTop: 0 }}>
+                                <div className="label">옵션명</div>
+                                <input
+                                  className="input"
+                                  value={itemDraftById[it.id] ?? it.name}
+                                  onChange={(e) =>
+                                    setItemDraftById((prev) => ({
+                                      ...prev,
+                                      [it.id]: e.target.value,
+                                    }))
+                                  }
+                                  disabled={saving || loading || isExclusiveSelected}
+                                />
+                              </div>
+                              <div className="field" style={{ marginTop: 0 }}>
+                                <div className="label">단가(원)</div>
+                                <input
+                                  className="input"
+                                  inputMode="numeric"
+                                  value={itemPriceDraftById[it.id] ?? String(it.price_delta ?? 0)}
+                                  onChange={(e) =>
+                                    setItemPriceDraftById((prev) => ({
+                                      ...prev,
+                                      [it.id]: e.target.value,
+                                    }))
+                                  }
+                                  disabled={saving || loading}
+                                />
+                              </div>
+                            </div>
+                            <div className="btnRow" style={{ marginTop: 0 }}>
+                              <button
+                                className="btn"
+                                onClick={() =>
+                                  updateItem(it.id, {
+                                    name: (itemDraftById[it.id] ?? "").trim() || it.name,
+                                    price_delta: toInt(itemPriceDraftById[it.id] ?? String(it.price_delta ?? 0), Number(it.price_delta ?? 0)),
+                                  })
+                                }
+                                disabled={saving || loading || isExclusiveSelected}
+                              >
+                                항목 저장
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
 
