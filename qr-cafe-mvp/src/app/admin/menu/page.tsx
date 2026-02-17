@@ -522,6 +522,44 @@ export default function AdminMenuPage() {
     }
   };
 
+  const saveSelectedExclusivePricesInMenu = async () => {
+    if (!storeId || !selectedExclusiveGroup) return;
+    const menuId = draft.id.trim();
+    if (!menuId) {
+      setMsg("메뉴를 먼저 저장한 뒤 단가를 저장해주세요.");
+      return;
+    }
+
+    const itemIds = (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => item.id);
+    if (itemIds.length === 0) {
+      setMsg("저장할 옵션 항목이 없습니다.");
+      return;
+    }
+
+    setSaving(true);
+    setMsg("");
+    try {
+      const rows = itemIds.map((optionItemId) => ({
+        store_id: storeId,
+        menu_id: menuId,
+        option_item_id: optionItemId,
+        price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
+      }));
+
+      const { error } = await supabase
+        .from("menu_option_prices")
+        .upsert(rows, { onConflict: "store_id,menu_id,option_item_id" });
+      if (error) throw error;
+
+      await refresh();
+      setMsg("옵션 단가를 저장했습니다.");
+    } catch (e: any) {
+      setMsg(`옵션 단가 저장 실패: ${String(e?.message || e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const deleteExclusiveGroupInMenu = async (groupId: string) => {
     if (!storeId) return;
     if (!confirm(`등록된 전용옵션 그룹을 삭제할까요?\n연결된 옵션 항목도 함께 삭제됩니다.`)) return;
@@ -954,6 +992,26 @@ export default function AdminMenuPage() {
           justify-content: space-between;
           gap: 10px;
         }
+        .exclusiveItemCard {
+          border: 1px dashed var(--line);
+          border-radius: 10px;
+          padding: 10px;
+          background: #fff;
+          display: grid;
+          gap: 8px;
+        }
+        .exclusiveItemTop {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 104px;
+          gap: 8px;
+          align-items: center;
+        }
+        .exclusiveItemName {
+          min-width: 0;
+          font-weight: 800;
+          line-height: 1.35;
+          word-break: break-word;
+        }
         .inlineSelectRow {
           display: grid;
           grid-template-columns: 1fr auto;
@@ -1102,6 +1160,9 @@ export default function AdminMenuPage() {
           }
           .groupTopRow {
             grid-template-columns: minmax(0, 1fr) auto;
+          }
+          .exclusiveItemTop {
+            grid-template-columns: minmax(0, 1fr) 96px;
           }
           .titleRow {
             align-items: flex-start;
@@ -1439,34 +1500,40 @@ export default function AdminMenuPage() {
                       <button className="btn btnPrimary" type="button" onClick={updateSelectedExclusiveGroupInMenu} disabled={saving || loading}>
                         그룹 저장
                       </button>
+                      <button className="btn" type="button" onClick={saveSelectedExclusivePricesInMenu} disabled={saving || loading}>
+                        단가 저장
+                      </button>
                       <button className="btn btnDanger" type="button" onClick={() => deleteExclusiveGroupInMenu(selectedExclusiveGroup.id)} disabled={saving || loading}>
                         그룹 삭제
                       </button>
                     </div>
 
                     <div className="label" style={{ marginTop: 6 }}>옵션 항목/단가</div>
+                    <div className="hint">단가를 수정한 뒤에는 단가 저장 버튼을 눌러주세요.</div>
                     {(itemsByGroup.get(selectedExclusiveGroup.id) || []).length === 0 ? (
                       <div className="muted">옵션 항목이 없습니다.</div>
                     ) : (
                       (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => (
-                        <div key={item.id} className="groupOptionItem">
-                          <span>{item.name}</span>
-                          <input
-                            className="input"
-                            style={{ maxWidth: 140 }}
-                            inputMode="numeric"
-                            value={getOptionPrice(item)}
-                            onChange={(e) =>
-                              setDraft((prev) => ({
-                                ...prev,
-                                optionPriceByItem: {
-                                  ...prev.optionPriceByItem,
-                                  [item.id]: e.target.value,
-                                },
-                              }))
-                            }
-                            disabled={saving || loading}
-                          />
+                        <div key={item.id} className="exclusiveItemCard">
+                          <div className="exclusiveItemTop">
+                            <span className="exclusiveItemName">{item.name}</span>
+                            <input
+                              className="input"
+                              inputMode="numeric"
+                              value={getOptionPrice(item)}
+                              onChange={(e) =>
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  optionPriceByItem: {
+                                    ...prev.optionPriceByItem,
+                                    [item.id]: e.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="단가 입력"
+                              disabled={saving || loading}
+                            />
+                          </div>
                           <button
                             className="btn btnDanger"
                             type="button"
