@@ -485,6 +485,43 @@ export default function AdminMenuPage() {
     }
   };
 
+  const deleteExclusiveItemInMenu = async (itemId: string) => {
+    if (!storeId || !draft.id.trim()) return;
+    if (!confirm("옵션 항목을 삭제할까요?")) return;
+
+    setSaving(true);
+    setMsg("");
+    try {
+      const delPrice = await supabase
+        .from("menu_option_prices")
+        .delete()
+        .eq("store_id", storeId)
+        .eq("menu_id", draft.id.trim())
+        .eq("option_item_id", itemId);
+      if (delPrice.error) throw delPrice.error;
+
+      const delItem = await supabase
+        .from("option_items")
+        .delete()
+        .eq("store_id", storeId)
+        .eq("id", itemId);
+      if (delItem.error) throw delItem.error;
+
+      setDraft((prev) => {
+        const nextPrices = { ...prev.optionPriceByItem };
+        delete nextPrices[itemId];
+        return { ...prev, optionPriceByItem: nextPrices };
+      });
+
+      await refresh();
+      setMsg("옵션 항목을 삭제했습니다.");
+    } catch (e: any) {
+      setMsg(`옵션 항목 삭제 실패: ${String(e?.message || e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const deleteExclusiveGroupInMenu = async (groupId: string) => {
     if (!storeId) return;
     if (!confirm(`등록된 전용옵션 그룹을 삭제할까요?\n연결된 옵션 항목도 함께 삭제됩니다.`)) return;
@@ -1430,6 +1467,14 @@ export default function AdminMenuPage() {
                             }
                             disabled={saving || loading}
                           />
+                          <button
+                            className="btn btnDanger"
+                            type="button"
+                            onClick={() => deleteExclusiveItemInMenu(item.id)}
+                            disabled={saving || loading}
+                          >
+                            삭제
+                          </button>
                         </div>
                       ))
                     )}
@@ -1452,7 +1497,9 @@ export default function AdminMenuPage() {
                         placeholder="단가 입력"
                         disabled={saving || loading}
                       />
-                      <button className="btn" type="button" onClick={addItemToSelectedExclusiveGroupInMenu} disabled={saving || loading}>
+                    </div>
+                    <div className="btnRow" style={{ marginTop: 6 }}>
+                      <button className="btn fullWidthBtn" type="button" onClick={addItemToSelectedExclusiveGroupInMenu} disabled={saving || loading}>
                         항목추가
                       </button>
                     </div>
