@@ -12,6 +12,7 @@ type SelectedOptionItem = {
   id: string;
   name: string;
   priceDelta: number;
+  qty: number;
 };
 
 type SelectedGroup = {
@@ -70,12 +71,6 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString();
 }
 
-function clampMaxSelection(arr: string[], max: number) {
-  if (max <= 0) return arr;
-  if (arr.length <= max) return arr;
-  return arr.slice(0, max);
-}
-
 function toStr(v: any) {
   return typeof v === "string" ? v : v == null ? "" : String(v);
 }
@@ -84,6 +79,20 @@ function toInt(v: any, fallback = 0) {
   const n = Number(v);
   if (!Number.isFinite(n)) return fallback;
   return Math.floor(n);
+}
+
+function buildOptionSignature(groups: SelectedGroup[]) {
+  const normalized = groups
+    .map((g) => ({
+      groupId: String(g.groupId || ""),
+      items: (Array.isArray(g.items) ? g.items : [])
+        .map((it) => ({ id: String(it.id || ""), qty: Math.max(0, Number(it.qty || 0)) }))
+        .filter((it) => it.id && it.qty > 0)
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    }))
+    .sort((a, b) => a.groupId.localeCompare(b.groupId));
+
+  return JSON.stringify(normalized);
 }
 
 export default function MenuPage() {
@@ -114,7 +123,8 @@ export default function MenuPage() {
   const [optOpen, setOptOpen] = useState(false);
   const [optTarget, setOptTarget] = useState<MenuItem | null>(null);
 
-  const [optSel, setOptSel] = useState<Record<string, string[]>>({});
+  const [optSel, setOptSel] = useState<Record<string, Record<string, number>>>({});
+  const [optQty, setOptQty] = useState(1);
 
   const fetchOptionsFromDb = async () => {
     setOptionsLoading(true);
@@ -184,6 +194,7 @@ export default function MenuPage() {
     setOptOpen(false);
     setOptTarget(null);
     setOptSel({});
+    setOptQty(1);
 
     const onFocus = () => {
       fetchOptionsFromDb();
@@ -305,9 +316,10 @@ export default function MenuPage() {
       return;
     }
 
-    const init: Record<string, string[]> = {};
-    groupIds.forEach((gid) => (init[gid] = []));
+    const init: Record<string, Record<string, number>> = {};
+    groupIds.forEach((gid) => (init[gid] = {}));
     setOptSel(init);
+    setOptQty(1);
     setOptTarget(m);
     setOptOpen(true);
   };
@@ -341,7 +353,42 @@ export default function MenuPage() {
     return item.priceDelta || 0;
   };
 
+  const getSelectedQty = (gid: string) => {
+    const picked = optSel[gid] || {};
+    return Object.values(picked).reduce((sum, n) => sum + Math.max(0, Number(n || 0)), 0);
+  };
+
+  const setOptionItemQty = (
+    gid: string,
+    itemId: string,
+    nextQtyRaw: number,
+    max: number,
+    isSingle: boolean
+  ) => {
+    setOptSel((prev) => {
+      const groupMap = { ...(prev[gid] || {}) };
+      const nextQty = Math.max(0, Math.floor(Number(nextQtyRaw) || 0));
+
+      if (isSingle) {
+        if (nextQty <= 0) return { ...prev, [gid]: {} };
+        return { ...prev, [gid]: { [itemId]: 1 } };
+      }
+
+      const othersTotal = Object.entries(groupMap)
+        .filter(([id]) => id !== itemId)
+        .reduce((sum, [, q]) => sum + Math.max(0, Number(q || 0)), 0);
+
+      const allowed = Math.max(0, Math.min(nextQty, Math.max(0, max - othersTotal)));
+
+      if (allowed <= 0) delete groupMap[itemId];
+      else groupMap[itemId] = allowed;
+
+      return { ...prev, [gid]: groupMap };
+    });
+  };
+
   const validateOpt = () => {
+
     if (!optTarget) return { ok: false, msg: "대상 메뉴가 없습니다." };
     const groupIds: string[] = Array.isArray((optTarget as any).optionGroupIds)
       ? (optTarget as any).optionGroupIds
@@ -350,14 +397,15 @@ export default function MenuPage() {
     for (const gid of groupIds) {
       const g = findGroup(gid);
       if (!g) continue;
-      const picked = optSel[gid] || [];
+      const picked = optSel[gid] || {};
+      const selectedQty = Object.values(picked).reduce((sum, n) => sum + Math.max(0, Number(n || 0)), 0);
       const min = Math.max(0, Number(g.min ?? (g.required ? 1 : 0)));
       const max = Math.max(min, Number(g.max ?? min));
 
-      if (g.required && picked.length < min) {
+      if (g.required && selectedQty < min) {
         return { ok: false, msg: `“${g.name}” 옵션은 최소 ${min}개 선택이 필요합니다.` };
       }
-      if (picked.length > max) {
+      if (selectedQty > max) {
         return { ok: false, msg: `“${g.name}” 옵션은 최대 ${max}개까지 선택 가능합니다.` };
       }
     }
@@ -378,19 +426,20 @@ export default function MenuPage() {
       const g = findGroup(gid);
       if (!g) continue;
 
-      const pickedIds = optSel[gid] || [];
+      const pickedMap = optSel[gid] || {};
       const allItems = groupItems(gid);
 
-      const selectedItems: SelectedOptionItem[] = pickedIds
-        .map((id) => allItems.find((x) => x.id === id))
-        .filter(Boolean)
+      const selectedItems: SelectedOptionItem[] = Object.entries(pickedMap)
+        .map(([id, qty]) => ({ item: allItems.find((x) => x.id === id), qty: Math.max(0, Number(qty || 0)) }))
+        .filter((x) => !!x.item && x.qty > 0)
         .map((x: any) => ({
-          id: x.id,
-          name: x.name,
-          priceDelta: resolveOptionPrice(m.id, x),
+          id: x.item.id,
+          name: x.item.name,
+          priceDelta: resolveOptionPrice(m.id, x.item),
+          qty: x.qty,
         }));
 
-      const sum = selectedItems.reduce((s, x) => s + Number(x.priceDelta || 0), 0);
+      const sum = selectedItems.reduce((s, x) => s + Number(x.priceDelta || 0) * Math.max(1, Number(x.qty || 0)), 0);
       optionTotal += sum;
 
       groups.push({
@@ -424,23 +473,38 @@ export default function MenuPage() {
 
     const { groups, optionTotal } = buildSelectedGroups(optTarget);
 
-    setCartLines((prev) => [
-      ...prev,
-      {
-        lineId: uid("line"),
-        menuId: optTarget.id,
-        name: optTarget.name,
-        basePrice: Number((optTarget as any).price || 0),
-        qty: 1,
-        image: (optTarget as any).image || "",
-        options: groups,
-        optionTotal,
-      },
-    ]);
+    const nextSig = buildOptionSignature(groups);
+
+    setCartLines((prev) => {
+      const idx = prev.findIndex(
+        (x) => x.menuId === optTarget.id && buildOptionSignature(x.options) === nextSig
+      );
+
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], qty: Math.max(1, (next[idx].qty || 0) + Math.max(1, optQty)) };
+        return next;
+      }
+
+      return [
+        ...prev,
+        {
+          lineId: uid("line"),
+          menuId: optTarget.id,
+          name: optTarget.name,
+          basePrice: Number((optTarget as any).price || 0),
+          qty: Math.max(1, optQty),
+          image: (optTarget as any).image || "",
+          options: groups,
+          optionTotal,
+        },
+      ];
+    });
 
     setOptOpen(false);
     setOptTarget(null);
     setOptSel({});
+    setOptQty(1);
   };
 
   const goConfirm = () => {
@@ -798,6 +862,38 @@ export default function MenuPage() {
           font-size: 12px;
           white-space: nowrap;
         }
+        .iRight {
+          display: grid;
+          gap: 6px;
+          justify-items: end;
+        }
+        .iQtyBox {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border: 1px solid var(--line);
+          border-radius: 999px;
+          padding: 2px 6px;
+          background: #f8fafc;
+        }
+        .miniBtn {
+          width: 24px;
+          height: 24px;
+          border-radius: 999px;
+          border: 1px solid #cbd5e1;
+          background: #fff;
+          font-weight: 900;
+          cursor: pointer;
+        }
+        .miniBtn:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+        .iQtyNum {
+          min-width: 14px;
+          text-align: center;
+          font-size: 12px;
+        }
         .modalFoot {
           padding: 12px 14px;
           border-top: 1px solid var(--line);
@@ -810,6 +906,22 @@ export default function MenuPage() {
           justify-content: space-between;
           gap: 10px;
           font-weight: 900;
+        }
+        .orderQtyRow {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          font-weight: 900;
+        }
+        .orderQtyBox {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border: 1px solid var(--line);
+          border-radius: 999px;
+          padding: 2px 6px;
+          background: #f8fafc;
         }
 
         @media (max-width: 520px) {
@@ -825,6 +937,12 @@ export default function MenuPage() {
           }
           .sumMain {
             font-size: 15px;
+          }
+          .iRow {
+            align-items: flex-start;
+          }
+          .iRight {
+            justify-items: end;
           }
         }
       `}</style>
@@ -950,6 +1068,7 @@ export default function MenuPage() {
             setOptOpen(false);
             setOptTarget(null);
             setOptSel({});
+            setOptQty(1);
           }}
         >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -961,6 +1080,7 @@ export default function MenuPage() {
                   setOptOpen(false);
                   setOptTarget(null);
                   setOptSel({});
+                  setOptQty(1);
                 }}
               >
                 닫기
@@ -1005,7 +1125,7 @@ export default function MenuPage() {
                   );
                 }
 
-                const picked = optSel[gid] || [];
+                const picked = optSel[gid] || {};
                 const min = Math.max(0, Number(g.min ?? (g.required ? 1 : 0)));
                 const max = Math.max(min, Number(g.max ?? min));
                 const isSingle = max === 1;
@@ -1017,49 +1137,56 @@ export default function MenuPage() {
                         {g.name} {g.required ? "(필수)" : "(선택)"}
                       </div>
                       <div className="gHint">
-                        {min}~{max}개 선택
+                        {min}~{max}개 선택 · 현재 {getSelectedQty(gid)}개
                       </div>
                     </div>
 
                     <div className="iList">
                       {items.map((it) => {
-                        const checked = picked.includes(it.id);
+                        const qty = Math.max(0, Number(picked[it.id] || 0));
+                        const checked = qty > 0;
                         return (
-                          <label key={it.id} className="iRow">
+                          <div key={it.id} className="iRow">
                             <div className="iLeft">
                               <input
                                 type={isSingle ? "radio" : "checkbox"}
                                 name={isSingle ? `g_${gid}` : undefined}
                                 checked={checked}
                                 onChange={() => {
-                                  setOptSel((prev) => {
-                                    const cur = prev[gid] || [];
-                                    let nextArr: string[] = [];
-
-                                    if (isSingle) {
-                                      nextArr = checked ? [] : [it.id];
-                                    } else {
-                                      const set = new Set(cur);
-                                      if (set.has(it.id)) set.delete(it.id);
-                                      else set.add(it.id);
-                                      nextArr = Array.from(set);
-                                      nextArr = clampMaxSelection(nextArr, max);
-                                    }
-
-                                    return { ...prev, [gid]: nextArr };
-                                  });
+                                  setOptionItemQty(gid, it.id, checked ? 0 : 1, max, isSingle);
                                 }}
                               />
                               <div className="iName">{it.name}</div>
                             </div>
 
-                            <div className="iPrice">
-                              {resolveOptionPrice(optTarget.id, it) >= 0
-                                ? `+${fmt(resolveOptionPrice(optTarget.id, it))}`
-                                : `-${fmt(Math.abs(resolveOptionPrice(optTarget.id, it)))}`}
-                              원
+                            <div className="iRight">
+                              <div className="iPrice">
+                                {resolveOptionPrice(optTarget.id, it) >= 0
+                                  ? `+${fmt(resolveOptionPrice(optTarget.id, it))}`
+                                  : `-${fmt(Math.abs(resolveOptionPrice(optTarget.id, it)))}`}
+                                원
+                              </div>
+                              <div className="iQtyBox">
+                                <button
+                                  type="button"
+                                  className="miniBtn"
+                                  onClick={() => setOptionItemQty(gid, it.id, qty - 1, max, isSingle)}
+                                  disabled={qty <= 0}
+                                >
+                                  -
+                                </button>
+                                <b className="iQtyNum">{qty}</b>
+                                <button
+                                  type="button"
+                                  className="miniBtn"
+                                  onClick={() => setOptionItemQty(gid, it.id, qty + 1, max, isSingle)}
+                                  disabled={isSingle ? qty >= 1 : getSelectedQty(gid) >= max}
+                                >
+                                  +
+                                </button>
+                              </div>
                             </div>
-                          </label>
+                          </div>
                         );
                       })}
                     </div>
@@ -1070,12 +1197,25 @@ export default function MenuPage() {
 
             <div className="modalFoot">
               <div className="mini">
-                <span>예상 가격(1개)</span>
-                <b>{fmt(modalPrice)}원</b>
+                <span>예상 가격({optQty}개)</span>
+                <b>{fmt(modalPrice * Math.max(1, optQty))}원</b>
+              </div>
+
+              <div className="orderQtyRow">
+                <span>주문 수량</span>
+                <div className="orderQtyBox">
+                  <button type="button" className="miniBtn" onClick={() => setOptQty((q) => Math.max(1, q - 1))}>
+                    -
+                  </button>
+                  <b className="iQtyNum">{optQty}</b>
+                  <button type="button" className="miniBtn" onClick={() => setOptQty((q) => Math.min(99, q + 1))}>
+                    +
+                  </button>
+                </div>
               </div>
 
               <button className="btnPrimary" onClick={onConfirmOptions}>
-                담기 ({fmt(modalPrice)}원)
+                담기 ({fmt(modalPrice * Math.max(1, optQty))}원)
               </button>
             </div>
           </div>
