@@ -796,9 +796,9 @@ export default function AdminMenuPage() {
           background: #fff;
         }
         .maxSelectInput {
-          width: 34%;
-          min-width: 90px;
-          max-width: 130px;
+          width: 100%;
+          min-width: 88px;
+          max-width: 96px;
         }
         .sortOrderInput {
           width: 34%;
@@ -817,9 +817,13 @@ export default function AdminMenuPage() {
         }
         .groupTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1.6fr) auto;
+          grid-template-columns: minmax(0, 1fr) 96px;
           gap: 10px;
           align-items: end;
+        }
+        .maxSelectField {
+          justify-self: end;
+          width: 96px;
         }
         .optionRow {
           display: flex;
@@ -876,8 +880,8 @@ export default function AdminMenuPage() {
             grid-template-columns: 96px 1fr;
           }
           .maxSelectInput {
-            width: 34%;
-            min-width: 90px;
+            width: 100%;
+            min-width: 88px;
           }
           .sortOrderInput {
             width: 100%;
@@ -1266,7 +1270,7 @@ export default function AdminMenuPage() {
                         disabled={saving || loading}
                       />
                     </div>
-                    <div className="field" style={{ marginTop: 0 }}>
+                    <div className="field maxSelectField" style={{ marginTop: 0 }}>
                       <div className="label">최대 선택 수량</div>
                       <input
                         className="input maxSelectInput"
