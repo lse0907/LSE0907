@@ -987,6 +987,19 @@ export default function AdminMenuPage() {
           font-weight: 900;
           font-size: 14px;
         }
+        .soldOutChip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2px 8px;
+          border-radius: 999px;
+          border: 1px solid #fecaca;
+          background: #fff1f2;
+          color: #b91c1c;
+          font-size: 11px;
+          font-weight: 900;
+          margin-left: 6px;
+        }
         .field {
           display: grid;
           gap: 6px;
@@ -1292,18 +1305,32 @@ export default function AdminMenuPage() {
             </div>
 
             <div className="list">
-              {sortedItems.map((m) => (
-                <button
-                  key={m.id}
-                  className={`rowBtn ${m.id === selectedId ? "rowBtnOn" : ""}`}
-                  onClick={() => setSelectedId(m.id)}
-                >
-                  <div className="name">{m.name}</div>
-                  <div className="muted">
-                    {Number(m.price || 0).toLocaleString()}원 · 옵션 {m.option_group_ids?.length || 0}개
-                  </div>
-                </button>
-              ))}
+              {sortedItems.map((m) => {
+                const groupIds = Array.isArray(m.option_group_ids) ? m.option_group_ids : [];
+                const commonCount = groupIds.filter((gid) => {
+                  const group = groups.find((g) => g.id === gid);
+                  return (group?.scope || "common") !== "exclusive";
+                }).length;
+                const exclusiveCount = groupIds.filter((gid) => {
+                  const group = groups.find((g) => g.id === gid);
+                  return (group?.scope || "common") === "exclusive";
+                }).length;
+                return (
+                  <button
+                    key={m.id}
+                    className={`rowBtn ${m.id === selectedId ? "rowBtnOn" : ""}`}
+                    onClick={() => setSelectedId(m.id)}
+                  >
+                    <div className="name">
+                      {m.name}
+                      {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
+                    </div>
+                    <div className="muted">
+                      {Number(m.price || 0).toLocaleString()}원 · 공통옵션 {commonCount}개 · 전용옵션 {exclusiveCount}개
+                    </div>
+                  </button>
+                );
+              })}
               {!loading && items.length === 0 ? (
                 <div className="muted" style={{ marginTop: 10 }}>
                   아직 메뉴가 없습니다. “+ 새 메뉴”로 시작하세요.
