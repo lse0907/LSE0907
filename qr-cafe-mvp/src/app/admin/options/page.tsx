@@ -446,12 +446,16 @@ export default function AdminOptionsPage() {
           font-weight: 950;
           letter-spacing: -0.02em;
         }
+        .topbarMain {
+          width: 100%;
+        }
         .titleRow {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
           gap: 10px;
           flex-wrap: wrap;
+          width: 100%;
         }
         .sub {
           margin: 6px 0 0 0;
@@ -705,7 +709,7 @@ export default function AdminOptionsPage() {
       `}</style>
 
       <header className="topbar">
-        <div>
+        <div className="topbarMain">
           <div className="titleRow">
             <h1 className="h1">옵션 관리</h1>
             <div className="headerActionRow">
