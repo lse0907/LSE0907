@@ -806,7 +806,20 @@ export default function AdminMenuPage() {
           max-width: 130px;
         }
         .menuIdInput {
-          min-width: 180px;
+          min-width: 0;
+          max-width: 220px;
+        }
+        .sortIdRow {
+          display: grid;
+          grid-template-columns: 120px minmax(0, 1fr);
+          gap: 10px;
+          align-items: start;
+        }
+        .groupTopRow {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 10px;
+          align-items: end;
         }
         .optionRow {
           display: flex;
@@ -867,8 +880,14 @@ export default function AdminMenuPage() {
             min-width: 90px;
           }
           .sortOrderInput {
-            width: 34%;
-            min-width: 90px;
+            width: 100%;
+            min-width: 0;
+          }
+          .sortIdRow {
+            grid-template-columns: 110px minmax(0, 1fr);
+          }
+          .groupTopRow {
+            grid-template-columns: minmax(0, 1fr) auto;
           }
           .previewThumb,
           .previewPlaceholder {
@@ -1030,7 +1049,7 @@ export default function AdminMenuPage() {
               </div>
             </div>
 
-            <div className="twoColRow">
+            <div className="sortIdRow">
               <div className="field">
                 <div className="label">노출 순서 (작을수록 위로)</div>
                 <input
@@ -1236,6 +1255,26 @@ export default function AdminMenuPage() {
                     </div>
                   ) : null}
                   <div className="hint">이 메뉴 전용 옵션 그룹을 생성하고 자동으로 연결합니다.</div>
+                  <div className="groupTopRow">
+                    <input
+                      className="input"
+                      value={newExclusiveGroup.name}
+                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="전용옵션 그룹명 (예: 당도)"
+                      disabled={saving || loading}
+                    />
+                    <div className="field" style={{ marginTop: 0 }}>
+                      <div className="label">최대 선택 수량</div>
+                      <input
+                        className="input maxSelectInput"
+                        inputMode="numeric"
+                        value={newExclusiveGroup.max}
+                        onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }))}
+                        placeholder="최대 선택 수량"
+                        disabled={saving || loading}
+                      />
+                    </div>
+                  </div>
                   <button
                     className="btn"
                     type="button"
@@ -1247,13 +1286,6 @@ export default function AdminMenuPage() {
                   >
                     옵션항목 추가
                   </button>
-                  <input
-                    className="input"
-                    value={newExclusiveGroup.name}
-                    onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
-                    placeholder="전용옵션 그룹명 (예: 당도)"
-                    disabled={saving || loading}
-                  />
                   {showExclusiveItemInputs ? (
                     newExclusiveItems.map((row, idx) => (
                       <div className="optionRow" key={`new-item-${idx}`}>
@@ -1290,17 +1322,6 @@ export default function AdminMenuPage() {
                       </div>
                     ))
                   ) : null}
-                  <div className="field">
-                    <div className="label">최대 선택 수량</div>
-                    <input
-                      className="input maxSelectInput"
-                      inputMode="numeric"
-                      value={newExclusiveGroup.max}
-                      onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }))}
-                      placeholder="최대 선택 수량"
-                      disabled={saving || loading}
-                    />
-                  </div>
                   <div className="btnRow" style={{ marginTop: 6, width: "100%" }}>
                     <button className="btn btnPrimary fullWidthBtn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
                       전용옵션 생성
