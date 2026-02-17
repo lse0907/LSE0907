@@ -64,7 +64,7 @@ export default function AdminOptionsPage() {
     linkedMenuId: "",
   });
   const [showCreateItemForm, setShowCreateItemForm] = useState(false);
-  const [newItemDraft, setNewItemDraft] = useState({ name: "", price: "0" });
+  const [newItemDraft, setNewItemDraft] = useState({ name: "", price: "" });
 
   // 1) storeId 로드
   useEffect(() => {
@@ -174,7 +174,7 @@ export default function AdminOptionsPage() {
     if (!selectedGroup) {
       setGroupDraft({ name: "", required: false, min: "0", max: "1", scope: "common", linkedMenuId: "" });
       setShowCreateItemForm(false);
-      setNewItemDraft({ name: "", price: "0" });
+      setNewItemDraft({ name: "", price: "" });
       return;
     }
     setGroupDraft({
@@ -372,7 +372,7 @@ export default function AdminOptionsPage() {
 
       await refresh();
       setShowCreateItemForm(false);
-      setNewItemDraft({ name: "", price: "0" });
+      setNewItemDraft({ name: "", price: "" });
       markSaved();
     } catch (e: any) {
       console.error("[admin/options] addItem:", e?.message || e);
@@ -705,6 +705,9 @@ export default function AdminOptionsPage() {
             <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
               관리자 홈
             </a>
+            <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              메뉴관리
+            </a>
           </div>
           <div className="scopeRow">
             <button
@@ -891,9 +894,6 @@ export default function AdminOptionsPage() {
                   >
                     그룹 저장
                   </button>
-                  <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={saving || loading || isExclusiveSelected}>
-                    + 옵션 추가
-                  </button>
                   <button className="btn btnDanger" onClick={deleteGroup} disabled={saving || loading}>
                     그룹 삭제
                   </button>
@@ -914,6 +914,12 @@ export default function AdminOptionsPage() {
                       ))}
                     </div>
                   )}
+                </div>
+
+                <div className="btnRow" style={{ marginTop: 12 }}>
+                  <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={saving || loading || isExclusiveSelected}>
+                    + 옵션 추가
+                  </button>
                 </div>
 
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
