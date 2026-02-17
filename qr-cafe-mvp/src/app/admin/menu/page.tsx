@@ -1012,6 +1012,12 @@ export default function AdminMenuPage() {
           line-height: 1.35;
           word-break: break-word;
         }
+        .itemDeleteBtn {
+          width: auto;
+          justify-self: end;
+          padding: 7px 10px;
+          font-size: 12px;
+        }
         .inlineSelectRow {
           display: grid;
           grid-template-columns: 1fr auto;
@@ -1500,16 +1506,13 @@ export default function AdminMenuPage() {
                       <button className="btn btnPrimary" type="button" onClick={updateSelectedExclusiveGroupInMenu} disabled={saving || loading}>
                         그룹 저장
                       </button>
-                      <button className="btn" type="button" onClick={saveSelectedExclusivePricesInMenu} disabled={saving || loading}>
-                        단가 저장
-                      </button>
                       <button className="btn btnDanger" type="button" onClick={() => deleteExclusiveGroupInMenu(selectedExclusiveGroup.id)} disabled={saving || loading}>
                         그룹 삭제
                       </button>
                     </div>
 
-                    <div className="label" style={{ marginTop: 6 }}>옵션 항목/단가</div>
-                    <div className="hint">단가를 수정한 뒤에는 단가 저장 버튼을 눌러주세요.</div>
+                    <div className="label" style={{ marginTop: 6 }}>옵션 항목</div>
+                    <div className="hint">단가를 수정한 뒤에는 아래의 단가 수정 버튼을 눌러주세요.</div>
                     {(itemsByGroup.get(selectedExclusiveGroup.id) || []).length === 0 ? (
                       <div className="muted">옵션 항목이 없습니다.</div>
                     ) : (
@@ -1535,7 +1538,7 @@ export default function AdminMenuPage() {
                             />
                           </div>
                           <button
-                            className="btn btnDanger"
+                            className="btn btnDanger itemDeleteBtn"
                             type="button"
                             onClick={() => deleteExclusiveItemInMenu(item.id)}
                             disabled={saving || loading}
@@ -1545,6 +1548,12 @@ export default function AdminMenuPage() {
                         </div>
                       ))
                     )}
+
+                    <div className="btnRow" style={{ marginTop: 6 }}>
+                      <button className="btn" type="button" onClick={saveSelectedExclusivePricesInMenu} disabled={saving || loading}>
+                        단가 수정
+                      </button>
+                    </div>
 
                     <div className="label" style={{ marginTop: 8 }}>옵션 항목 추가</div>
                     <div className="optionRow" style={{ marginTop: 4 }}>
