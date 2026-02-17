@@ -406,6 +406,16 @@ export default function AdminStorePage() {
           align-items: center;
         }
 
+        .addressRow {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .addressRow .input {
+          min-width: 0;
+        }
+
         .btn {
           border: 1px solid var(--line);
           background: var(--card);
@@ -582,16 +592,93 @@ export default function AdminStorePage() {
         }
         @media (max-width: 640px) {
           .wrap {
-            padding: 12px;
+            padding: 10px;
+            gap: 8px;
           }
+
           .topbar {
-            align-items: center;
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 8px;
           }
+
+          .topActions {
+            width: 100%;
+            justify-content: flex-end;
+          }
+
+          .badgeRow {
+            gap: 6px;
+          }
+
+          .badge {
+            font-size: 11px;
+            padding: 7px 9px;
+          }
+
+          .card {
+            padding: 12px;
+            border-radius: 14px;
+          }
+
+          .cardTitle {
+            font-size: 15px;
+          }
+
+          .field {
+            margin-top: 9px;
+            gap: 5px;
+          }
+
+          .label {
+            font-size: 11px;
+            gap: 6px;
+          }
+
+          .pill {
+            font-size: 10px;
+            padding: 3px 7px;
+          }
+
+          .input,
+          .textarea {
+            padding: 9px 10px;
+            font-size: 14px;
+          }
+
+          .btn {
+            font-size: 13px;
+            padding: 9px 11px;
+          }
+
+          .sliderRow {
+            grid-template-columns: 1fr 74px;
+            gap: 8px;
+          }
+
+          .addressRow {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+          }
+
+          .addressRow .btn {
+            width: 100%;
+          }
+
+          .btnRow {
+            gap: 8px;
+          }
+
+          .btnRow .btn {
+            flex: 1 1 auto;
+          }
+
           .hero {
-            height: 200px;
+            height: 188px;
           }
           .storeName {
-            font-size: 18px;
+            font-size: 17px;
           }
         }
       `}</style>
@@ -831,7 +918,7 @@ export default function AdminStorePage() {
               <div className="label">
                 매장 주소 <span className="pill">필수</span>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="addressRow">
                 <input
                   className="input"
                   value={(draft as any)?.extra?.address || ""}
