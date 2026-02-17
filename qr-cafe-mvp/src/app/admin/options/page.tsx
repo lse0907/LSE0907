@@ -524,6 +524,10 @@ export default function AdminOptionsPage() {
           flex-wrap: wrap;
           justify-content: flex-end;
         }
+        /* 중복으로 내려오는 보조 액션 행이 있으면 숨기고 타이틀 옆 액션만 유지 */
+        .sub + .sub + .headerActionRow {
+          display: none;
+        }
         .btnPrimary {
           background: var(--brand);
           color: #fff;
