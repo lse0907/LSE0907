@@ -680,6 +680,12 @@ export default function AdminOptionsPage() {
           gap: 8px;
           align-items: end;
         }
+        .row2 {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 10px;
+          align-items: end;
+        }
 
         .itemCard {
           border: 1px solid var(--line);
@@ -750,6 +756,9 @@ export default function AdminOptionsPage() {
             >
               전용옵션
             </button>
+            <a className="scopeBtn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              메뉴관리 바로가기
+            </a>
           </div>
         </div>
 
@@ -1036,7 +1045,7 @@ export default function AdminOptionsPage() {
                               }
                               disabled={saving || loading || isExclusiveSelected}
                             >
-                              항목 저장
+                              삭제
                             </button>
                             <button
                               className="btn btnDanger"
