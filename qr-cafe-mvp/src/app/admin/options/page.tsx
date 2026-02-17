@@ -620,6 +620,13 @@ export default function AdminOptionsPage() {
           gap: 6px;
           margin-top: 10px;
         }
+        .linkedMenuField .scopeRow {
+          margin-top: 0;
+          justify-content: flex-end;
+        }
+        .linkedMenuField .muted {
+          text-align: right;
+        }
         .label {
           font-size: 12px;
           color: var(--muted);
@@ -890,14 +897,14 @@ export default function AdminOptionsPage() {
                       <input className="input" value={selectedGroup.id} readOnly />
                     </div>
                   ) : (
-                    <div className="field" style={{ marginTop: 0 }}>
+                    <div className="field linkedMenuField" style={{ marginTop: 0 }}>
                       <div className="label">연결된 메뉴</div>
                       {linkedMenus.length === 0 ? (
                         <div className="muted" style={{ marginTop: 6 }}>
                           아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
                         </div>
                       ) : (
-                        <div className="scopeRow" style={{ marginTop: 0 }}>
+                        <div className="scopeRow">
                           {linkedMenus.map((m) => (
                             <span key={m.id} className="pill">
                               {m.name}
@@ -951,14 +958,6 @@ export default function AdminOptionsPage() {
                         ))}
                       </div>
                     )}
-                  </div>
-                ) : null}
-
-                {!isExclusiveSelected ? (
-                  <div className="btnRow" style={{ marginTop: 12 }}>
-                    <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={saving || loading}>
-                      + 옵션 추가
-                    </button>
                   </div>
                 ) : null}
 
