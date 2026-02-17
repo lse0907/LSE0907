@@ -662,7 +662,7 @@ export default function AdminOptionsPage() {
           display: grid;
           grid-template-columns: 70% auto;
           gap: 10px;
-          align-items: end;
+          align-items: start;
         }
         .maxInput {
           width: 100%;
@@ -851,7 +851,7 @@ export default function AdminOptionsPage() {
                     {isExclusiveSelected ? (
                       <>
                         <div>옵션관리에서는 조회/삭제만 가능합니다.</div>
-                        <div>등록.수정은 메뉴관리에서 해주세요.</div>
+                        <div style={{ marginBottom: 10 }}>등록.수정은 메뉴관리에서 해주세요.</div>
                       </>
                     ) : (
                       "공통옵션 그룹과 항목을 등록/수정/삭제할 수 있습니다."
@@ -870,7 +870,7 @@ export default function AdminOptionsPage() {
                     />
                   </div>
 
-                  <div className="field" style={{ marginTop: 0, justifySelf: "end" }}>
+                  <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">필수 여부</div>
                     <label style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 900 }}>
                       <input
