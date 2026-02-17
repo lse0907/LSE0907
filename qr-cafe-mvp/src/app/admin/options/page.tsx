@@ -736,6 +736,14 @@ export default function AdminOptionsPage() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
+          <div className="headerActionRow">
+            <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              관리자 홈
+            </a>
+            <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              메뉴관리
+            </a>
+          </div>
           <div className="scopeRow">
             {[
               { key: "common", label: "공통옵션" },
@@ -962,6 +970,31 @@ export default function AdminOptionsPage() {
                         {isExclusiveSelected
                           ? "이 그룹에는 옵션 항목이 없습니다."
                           : "이 그룹에는 옵션 항목이 없습니다. “+ 옵션 추가”를 눌러주세요."}
+                      </div>
+                    ) : null}
+
+                    {!isExclusiveSelected && showCreateItemForm ? (
+                      <div className="itemCard">
+                        <div className="itemLine">
+                          <input
+                            className="input"
+                            value={newItemDraft.name}
+                            onChange={(e) => setNewItemDraft((p) => ({ ...p, name: e.target.value }))}
+                            placeholder="옵션 항목명"
+                            disabled={saving || loading}
+                          />
+                          <input
+                            className="input"
+                            inputMode="numeric"
+                            value={newItemDraft.price}
+                            onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
+                            placeholder="단가 입력"
+                            disabled={saving || loading}
+                          />
+                          <button className="btn itemSaveBtn" onClick={addItem} disabled={saving || loading}>
+                            항목 저장
+                          </button>
+                        </div>
                       </div>
                     ) : null}
 
