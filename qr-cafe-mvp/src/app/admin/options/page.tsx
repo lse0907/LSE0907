@@ -705,6 +705,9 @@ export default function AdminOptionsPage() {
             >
               전용옵션
             </button>
+            <a className="scopeBtn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              메뉴관리 바로가기
+            </a>
           </div>
         </div>
 
@@ -916,8 +919,20 @@ export default function AdminOptionsPage() {
                             className="btn btnDanger"
                             onClick={() => deleteItem(it.id)}
                             disabled={saving || loading}
-                          >
-                            삭제
+                          />
+                          <input
+                            className="input"
+                            inputMode="numeric"
+                            value={newItemDraft.price}
+                            onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
+                            placeholder="단가"
+                            disabled={saving || loading}
+                          />
+                          <button className="btn" onClick={addItem} disabled={saving || loading}>
+                            항목 저장
+                          </button>
+                          <button className="btn" onClick={() => setShowCreateItemForm(false)} disabled={saving || loading}>
+                            취소
                           </button>
                         </div>
                       </div>
