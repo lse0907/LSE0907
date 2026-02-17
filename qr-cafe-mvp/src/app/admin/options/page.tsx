@@ -620,6 +620,12 @@ export default function AdminOptionsPage() {
           gap: 6px;
           margin-top: 10px;
         }
+        .linkedMenuField {
+          justify-items: end;
+        }
+        .linkedMenuField .label {
+          text-align: right;
+        }
         .linkedMenuField .scopeRow {
           margin-top: 0;
           justify-content: flex-end;
@@ -880,7 +886,7 @@ export default function AdminOptionsPage() {
                   </div>
                 </div>
 
-                <div className="row3">
+                <div className="row3" style={{ alignItems: isExclusiveSelected ? "start" : "end" }}>
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">최대 선택</div>
                     <input
