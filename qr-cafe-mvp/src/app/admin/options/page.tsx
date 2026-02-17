@@ -446,6 +446,13 @@ export default function AdminOptionsPage() {
           font-weight: 950;
           letter-spacing: -0.02em;
         }
+        .titleRow {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
         .sub {
           margin: 6px 0 0 0;
           color: var(--muted);
@@ -513,8 +520,9 @@ export default function AdminOptionsPage() {
         .headerActionRow {
           display: flex;
           gap: 8px;
-          margin-top: 8px;
+          margin-top: 0;
           flex-wrap: wrap;
+          justify-content: flex-end;
         }
         .btnPrimary {
           background: var(--brand);
@@ -689,12 +697,29 @@ export default function AdminOptionsPage() {
             width: 100%;
             justify-self: stretch;
           }
+          .titleRow {
+            align-items: stretch;
+          }
+          .headerActionRow {
+            width: 100%;
+            justify-content: flex-start;
+          }
         }
       `}</style>
 
       <header className="topbar">
         <div>
-          <h1 className="h1">옵션 관리</h1>
+          <div className="titleRow">
+            <h1 className="h1">옵션 관리</h1>
+            <div className="headerActionRow">
+              <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                관리자 홈
+              </a>
+              <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                메뉴관리
+              </a>
+            </div>
+          </div>
           <p className="sub">
             메뉴에 연결되는 옵션을 등록 및 관리 합니다.
           </p>
