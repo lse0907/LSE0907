@@ -697,13 +697,6 @@ export default function AdminOptionsPage() {
             width: 100%;
             justify-self: stretch;
           }
-          .titleRow {
-            align-items: stretch;
-          }
-          .headerActionRow {
-            width: 100%;
-            justify-content: flex-start;
-          }
         }
       `}</style>
 
