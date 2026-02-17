@@ -721,6 +721,9 @@ export default function AdminOptionsPage() {
             >
               전용옵션
             </button>
+            <a className="scopeBtn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+              메뉴관리 바로가기
+            </a>
           </div>
         </div>
 
