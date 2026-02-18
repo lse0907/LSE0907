@@ -1181,7 +1181,13 @@ export default function StaffPage() {
                       it.options
                         ?.map((g) => {
                           if (!g.items?.length) return null;
-                          return `${g.groupName}: ${g.items.map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`).join(", ")}`;
+                          const cleanGroupName = String(g.groupName || "")
+                            .replace(/^\s*옵션\s*/g, "")
+                            .trim();
+                          const itemText = g.items
+                            .map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`)
+                            .join(", ");
+                          return cleanGroupName ? `${cleanGroupName}: ${itemText}` : itemText;
                         })
                         .filter(Boolean)
                         .join(" / ") || "";
