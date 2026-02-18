@@ -13,6 +13,7 @@ type SelectedOptionItem = {
   id: string;
   name: string;
   priceDelta: number;
+  qty: number;
 };
 
 type SelectedGroup = {
@@ -83,6 +84,7 @@ type DbOrderItemOptionRow = {
   option_id?: string | null;
   option_name?: string | null;
   price_delta?: number | null;
+  qty?: number | null;
 
   group_id?: string | null;
   group_name?: string | null;
@@ -231,16 +233,30 @@ function buildOptionsByOrderItem(
     }
 
     const g = map.get(gid)!;
+    const oid = getOptId(r);
+    const oqty = Math.max(1, Math.round(Number(r.qty ?? 1)));
+    const existing = g.items.find((it) => it.id === oid);
+    if (existing) {
+      existing.qty += oqty;
+      continue;
+    }
+
     g.items.push({
-      id: getOptId(r),
+      id: oid,
       name: getOptName(r),
       priceDelta: Math.round(getPriceDelta(r)),
+      qty: oqty,
     });
   }
 
   const groups = Array.from(map.values());
   const optionTotal = groups.reduce(
-    (sum, g) => sum + g.items.reduce((s, it) => s + Number(it.priceDelta || 0), 0),
+    (sum, g) =>
+      sum +
+      g.items.reduce(
+        (s, it) => s + Number(it.priceDelta || 0) * Math.max(1, Number(it.qty || 1)),
+        0
+      ),
     0
   );
 
@@ -1165,7 +1181,13 @@ export default function StaffPage() {
                       it.options
                         ?.map((g) => {
                           if (!g.items?.length) return null;
-                          return `${g.groupName}: ${g.items.map((x) => x.name).join(", ")}`;
+                          const cleanGroupName = String(g.groupName || "")
+                            .replace(/^\s*옵션\s*/g, "")
+                            .trim();
+                          const itemText = g.items
+                            .map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`)
+                            .join(", ");
+                          return cleanGroupName ? `${cleanGroupName}: ${itemText}` : itemText;
                         })
                         .filter(Boolean)
                         .join(" / ") || "";
