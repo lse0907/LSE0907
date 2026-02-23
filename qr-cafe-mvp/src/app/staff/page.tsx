@@ -1196,12 +1196,10 @@ export default function StaffPage() {
                       <div key={`${it.id}_${idx}`} className="menuItem">
                         <div className="menuTop">
                           <div>
-                            <div style={{ fontWeight: 900 }}>{it.name}</div>
+                            <div style={{ fontWeight: 900 }}>{it.name} x{it.qty}</div>
                             <div className="optMuted" style={{ marginTop: 4 }}>
                               기본 {fmt(it.price)}원
                               {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
-                              {" · "}
-                              {it.qty}개
                               {" · "}
                               1개당 {fmt(unit)}원
                             </div>
