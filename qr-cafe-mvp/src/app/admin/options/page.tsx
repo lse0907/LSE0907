@@ -239,7 +239,7 @@ export default function AdminOptionsPage() {
       markError();
       return alert("전용옵션 그룹 등록은 메뉴관리에서만 가능합니다.");
     }
-    if (!hasLinkedMenuColumn && activeScope === "exclusive") {
+    if (!hasLinkedMenuColumn) {
       markError();
       return alert("DB에 linked_menu_id 컬럼이 없어 전용옵션 그룹을 만들 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.");
     }
