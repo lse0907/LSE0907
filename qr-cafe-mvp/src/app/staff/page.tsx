@@ -330,7 +330,7 @@ export default function StaffPage() {
       .maybeSingle();
     setPrepayAddonActive(String(addonRes.data?.prepay_addon_status || "inactive") === "active");
 
-    let oRes = await supabase
+    const primaryOrdersRes = await supabase
       .from("orders")
       .select(
         "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, payment_status, store_id"
@@ -339,11 +339,14 @@ export default function StaffPage() {
       .order("created_at", { ascending: false })
       .limit(200);
 
-    if (oRes.error) {
-      const msg = String(oRes.error.message || "").toLowerCase();
+    let oErr = primaryOrdersRes.error;
+    let ordersRows = (Array.isArray(primaryOrdersRes.data) ? primaryOrdersRes.data : []) as DbOrderRow[];
+
+    if (oErr) {
+      const msg = String(oErr.message || "").toLowerCase();
       const missingPaymentColumn = msg.includes("payment_status") && (msg.includes("column") || msg.includes("schema cache"));
       if (missingPaymentColumn) {
-        oRes = await supabase
+        const fallbackOrdersRes = await supabase
           .from("orders")
           .select(
             "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, store_id"
@@ -351,10 +354,14 @@ export default function StaffPage() {
           .eq("store_id", sid)
           .order("created_at", { ascending: false })
           .limit(200);
+
+        oErr = fallbackOrdersRes.error;
+        ordersRows = (Array.isArray(fallbackOrdersRes.data) ? fallbackOrdersRes.data : []).map((row) => ({
+          ...row,
+          payment_status: null,
+        })) as DbOrderRow[];
       }
     }
-
-    const { data: oData, error: oErr } = oRes;
 
     if (oErr) {
       console.error("[staff] fetch orders error:", oErr.message);
@@ -364,7 +371,6 @@ export default function StaffPage() {
       return;
     }
 
-    const ordersRows = (Array.isArray(oData) ? oData : []) as DbOrderRow[];
     const orderIds = ordersRows.map((x) => x.id);
 
     if (!orderIds.length) {
