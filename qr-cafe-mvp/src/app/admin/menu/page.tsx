@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -90,7 +90,7 @@ const emptyDraft: MenuDraft = {
   optionPriceByItem: {},
 };
 
-export default function AdminMenuPage() {
+function AdminMenuPageContent() {
   const router = useRouter();
   const sp = useSearchParams();
   const [storeId, setStoreId] = useState("");
@@ -1757,3 +1757,18 @@ export default function AdminMenuPage() {
     </main>
   );
 }
+
+export default function AdminMenuPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
+          <p style={{ margin: 0, fontWeight: 900, color: "#6b7280" }}>메뉴 관리 페이지 로딩 중...</p>
+        </main>
+      }
+    >
+      <AdminMenuPageContent />
+    </Suspense>
+  );
+}
+
