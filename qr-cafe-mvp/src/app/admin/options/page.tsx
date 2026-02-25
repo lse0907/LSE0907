@@ -1,7 +1,7 @@
 // src/app/admin/options/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -41,7 +41,7 @@ function toInt(v: string, fallback: number) {
   return Math.max(0, Math.round(n));
 }
 
-export default function AdminOptionsPage() {
+function AdminOptionsPageContent() {
   const sp = useSearchParams();
   const [storeId, setStoreId] = useState<string>("");
 
@@ -1031,3 +1031,18 @@ export default function AdminOptionsPage() {
     </main>
   );
 }
+
+export default function AdminOptionsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
+          <p style={{ margin: 0, fontWeight: 900, color: "#6b7280" }}>옵션 관리 페이지 로딩 중...</p>
+        </main>
+      }
+    >
+      <AdminOptionsPageContent />
+    </Suspense>
+  );
+}
+
