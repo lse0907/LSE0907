@@ -13,6 +13,7 @@ type SelectedOptionItem = {
   id: string;
   name: string;
   priceDelta: number;
+  qty: number;
 };
 
 type SelectedGroup = {
@@ -83,6 +84,7 @@ type DbOrderItemOptionRow = {
   option_id?: string | null;
   option_name?: string | null;
   price_delta?: number | null;
+  qty?: number | null;
 
   group_id?: string | null;
   group_name?: string | null;
@@ -231,16 +233,30 @@ function buildOptionsByOrderItem(
     }
 
     const g = map.get(gid)!;
+    const oid = getOptId(r);
+    const oqty = Math.max(1, Math.round(Number(r.qty ?? 1)));
+    const existing = g.items.find((it) => it.id === oid);
+    if (existing) {
+      existing.qty += oqty;
+      continue;
+    }
+
     g.items.push({
-      id: getOptId(r),
+      id: oid,
       name: getOptName(r),
       priceDelta: Math.round(getPriceDelta(r)),
+      qty: oqty,
     });
   }
 
   const groups = Array.from(map.values());
   const optionTotal = groups.reduce(
-    (sum, g) => sum + g.items.reduce((s, it) => s + Number(it.priceDelta || 0), 0),
+    (sum, g) =>
+      sum +
+      g.items.reduce(
+        (s, it) => s + Number(it.priceDelta || 0) * Math.max(1, Number(it.qty || 1)),
+        0
+      ),
     0
   );
 
@@ -314,7 +330,7 @@ export default function StaffPage() {
       .maybeSingle();
     setPrepayAddonActive(String(addonRes.data?.prepay_addon_status || "inactive") === "active");
 
-    let oRes = await supabase
+    const primaryOrdersRes = await supabase
       .from("orders")
       .select(
         "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, payment_status, store_id"
@@ -323,11 +339,14 @@ export default function StaffPage() {
       .order("created_at", { ascending: false })
       .limit(200);
 
-    if (oRes.error) {
-      const msg = String(oRes.error.message || "").toLowerCase();
+    let oErr = primaryOrdersRes.error;
+    let ordersRows = (Array.isArray(primaryOrdersRes.data) ? primaryOrdersRes.data : []) as DbOrderRow[];
+
+    if (oErr) {
+      const msg = String(oErr.message || "").toLowerCase();
       const missingPaymentColumn = msg.includes("payment_status") && (msg.includes("column") || msg.includes("schema cache"));
       if (missingPaymentColumn) {
-        oRes = await supabase
+        const fallbackOrdersRes = await supabase
           .from("orders")
           .select(
             "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, store_id"
@@ -335,10 +354,14 @@ export default function StaffPage() {
           .eq("store_id", sid)
           .order("created_at", { ascending: false })
           .limit(200);
+
+        oErr = fallbackOrdersRes.error;
+        ordersRows = (Array.isArray(fallbackOrdersRes.data) ? fallbackOrdersRes.data : []).map((row) => ({
+          ...row,
+          payment_status: null,
+        })) as DbOrderRow[];
       }
     }
-
-    const { data: oData, error: oErr } = oRes;
 
     if (oErr) {
       console.error("[staff] fetch orders error:", oErr.message);
@@ -348,7 +371,6 @@ export default function StaffPage() {
       return;
     }
 
-    const ordersRows = (Array.isArray(oData) ? oData : []) as DbOrderRow[];
     const orderIds = ordersRows.map((x) => x.id);
 
     if (!orderIds.length) {
@@ -1165,7 +1187,13 @@ export default function StaffPage() {
                       it.options
                         ?.map((g) => {
                           if (!g.items?.length) return null;
-                          return `${g.groupName}: ${g.items.map((x) => x.name).join(", ")}`;
+                          const cleanGroupName = String(g.groupName || "")
+                            .replace(/^\s*옵션\s*/g, "")
+                            .trim();
+                          const itemText = g.items
+                            .map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`)
+                            .join(", ");
+                          return cleanGroupName ? `${cleanGroupName}: ${itemText}` : itemText;
                         })
                         .filter(Boolean)
                         .join(" / ") || "";
@@ -1174,12 +1202,10 @@ export default function StaffPage() {
                       <div key={`${it.id}_${idx}`} className="menuItem">
                         <div className="menuTop">
                           <div>
-                            <div style={{ fontWeight: 900 }}>{it.name}</div>
+                            <div style={{ fontWeight: 900 }}>{it.name} x{it.qty}</div>
                             <div className="optMuted" style={{ marginTop: 4 }}>
                               기본 {fmt(it.price)}원
                               {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
-                              {" · "}
-                              {it.qty}개
                               {" · "}
                               1개당 {fmt(unit)}원
                             </div>

@@ -1,7 +1,7 @@
 // src/app/admin/qr/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
 import { useStoreProfile } from "@/app/lib/storeProfile";
@@ -102,7 +102,7 @@ function withQuery(url: string, params: Record<string, string>) {
   return u.toString();
 }
 
-export default function AdminQrPage() {
+function AdminQrPageContent() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -899,6 +899,20 @@ export default function AdminQrPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function AdminQrPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
+          <p style={{ margin: 0, fontWeight: 900, color: "#6b7280" }}>QR 관리 페이지 로딩 중...</p>
+        </main>
+      }
+    >
+      <AdminQrPageContent />
+    </Suspense>
   );
 }
 

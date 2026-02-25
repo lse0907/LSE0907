@@ -1,7 +1,7 @@
 // src/app/admin/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app/lib/currentStore";
@@ -29,7 +29,7 @@ function calcRemainingDays(createdAt?: string | null) {
   return Math.max(0, FREE_TRIAL_DAYS - usedDays);
 }
 
-export default function AdminHomePage() {
+function AdminHomePageContent() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -42,7 +42,7 @@ export default function AdminHomePage() {
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [msg, setMsg] = useState<string>("");
-  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | null>(null);
+  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | null>("stats");
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
@@ -281,10 +281,9 @@ export default function AdminHomePage() {
       <section className="card stickyCard">
         <div className="cardHead">
           <h2 className="cardTitle">매장 만들기</h2>
-          <span className="pill">상단 고정</span>
         </div>
         <p className="muted">매장을 먼저 생성해 주세요.</p>
-        <div className="btnRow">
+        <div className="btnRow createBtnRow">
           <button className="btn btnPrimary" onClick={goCreate}>
             매장 만들기
           </button>
@@ -430,6 +429,22 @@ export default function AdminHomePage() {
   );
 }
 
+
+export default function AdminHomePage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ maxWidth: 920, margin: "0 auto", padding: 14 }}>
+          <p style={{ margin: 0, fontWeight: 900, color: "#6b7280" }}>관리자 홈 페이지 로딩 중...</p>
+        </main>
+      }
+    >
+      <AdminHomePageContent />
+    </Suspense>
+  );
+}
+
+
 const baseCss = `
 :root {
   --bg: #f6f7f9;
@@ -544,6 +559,9 @@ body {
   flex-wrap:wrap;
   margin-top:12px;
 }
+.createBtnRow{
+  justify-content:flex-end;
+}
 .btn{
   border:1px solid var(--line);
   background:#fff;
@@ -551,6 +569,12 @@ body {
   border-radius:12px;
   cursor:pointer;
   font-weight:950;
+  font-size:14px;
+  line-height:1.2;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
 }
 .btnGroup{
   display:flex;
@@ -668,6 +692,15 @@ body {
 @media (max-width: 640px){
   .wrap{ padding:12px; }
   .topbar{ align-items:center; }
+  .topActions{
+    flex-wrap:nowrap;
+    gap:6px;
+  }
+  .topActions .btn{
+    padding:8px 10px;
+    font-size:12px;
+    white-space:nowrap;
+  }
   .cardBtnTitle{ font-size:16px; }
   .btnGroup{
     flex-direction:row;

@@ -1,8 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function AdminOpsPage() {
+function AdminOpsPageContent() {
   const router = useRouter();
   const sp = useSearchParams();
   const storeId = (sp.get("store") || "").trim();
@@ -102,3 +103,18 @@ export default function AdminOpsPage() {
     </main>
   );
 }
+
+export default function AdminOpsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ maxWidth: 920, margin: "0 auto", padding: 14 }}>
+          <p style={{ margin: 0, fontWeight: 900, color: "#6b7280" }}>매장운영 페이지 로딩 중...</p>
+        </main>
+      }
+    >
+      <AdminOpsPageContent />
+    </Suspense>
+  );
+}
+

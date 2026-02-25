@@ -25,6 +25,7 @@ type SelectedOptionItem = {
   id: string;
   name: string;
   priceDelta: number;
+  qty: number;
 };
 
 type SelectedGroup = {
@@ -104,7 +105,21 @@ function parseCart(cartParam: string | null): CartLine[] {
         basePrice: Number(x.basePrice ?? x.price ?? 0),
         qty: Math.max(0, Number(x.qty ?? 0)),
         image: typeof x.image === "string" ? x.image : "",
-        options: Array.isArray(x.options) ? x.options : [],
+        options: Array.isArray(x.options)
+          ? x.options.map((g: any) => ({
+              ...g,
+              items: Array.isArray(g?.items)
+                ? g.items
+                    .map((it: any) => ({
+                      id: String(it?.id || ""),
+                      name: String(it?.name || ""),
+                      priceDelta: Number(it?.priceDelta ?? 0),
+                      qty: Math.max(1, Number(it?.qty ?? 1)),
+                    }))
+                    .filter((it: SelectedOptionItem) => it.id)
+                : [],
+            }))
+          : [],
         optionTotal: Number(x.optionTotal ?? 0),
       }))
       .filter((x) => x.menuId && x.qty > 0);
@@ -410,6 +425,7 @@ export default function ConfirmPage() {
               option_id: it.id,
               name: it.name,
               price_delta: Math.round(Number(it.priceDelta || 0)),
+              qty: Math.max(1, Math.round(Number(it.qty || 1))),
               store_id: storeId,
             });
           }
@@ -519,7 +535,7 @@ export default function ConfirmPage() {
                 ln.options
                   .map((g) => {
                     if (!g.items?.length) return null;
-                    return `${g.groupName}: ${g.items.map((x) => x.name).join(", ")}`;
+                    return `${g.groupName}: ${g.items.map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`).join(", ")}`;
                   })
                   .filter(Boolean)
                   .join(" / ") || "";
