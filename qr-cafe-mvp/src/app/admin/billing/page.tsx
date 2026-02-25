@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -246,7 +246,7 @@ function BillingForm({ storeId }: { storeId: string }) {
   );
 }
 
-export default function AdminBillingPage() {
+function AdminBillingPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -275,7 +275,11 @@ export default function AdminBillingPage() {
         </button>
       </header>
 
-      {storeId ? <BillingForm key={storeId} storeId={storeId} /> : null}
+      {storeId ? (
+       <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+        <BillingForm key={storeId} storeId={storeId} />
+       </Suspense>
+      ) : null}
     </main>
   );
 }
@@ -452,3 +456,10 @@ const css = `
     }
   }
 `;
+export default function AdminBillingPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <AdminBillingPageInner />
+    </Suspense>
+  );
+}

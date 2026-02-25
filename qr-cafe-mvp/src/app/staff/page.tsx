@@ -346,7 +346,7 @@ export default function StaffPage() {
         oRes = await supabase
           .from("orders")
           .select(
-            "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, store_id"
+            "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, payment_status, store_id"
           )
           .eq("store_id", sid)
           .order("created_at", { ascending: false })

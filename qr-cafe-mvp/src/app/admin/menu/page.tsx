@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -90,7 +90,7 @@ const emptyDraft: MenuDraft = {
   optionPriceByItem: {},
 };
 
-export default function AdminMenuPage() {
+function AdminMenuPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const [storeId, setStoreId] = useState("");
@@ -1763,5 +1763,12 @@ export default function AdminMenuPage() {
         </section>
       )}
     </main>
+  );
+}
+export default function AdminMenuPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <AdminMenuPageInner />
+    </Suspense>
   );
 }

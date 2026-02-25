@@ -256,7 +256,7 @@ export default function AdminOptionsPage() {
         min: 0,
         max: 1,
         scope: activeScope,
-        linked_menu_id: activeScope === "exclusive" ? menus[0]?.id || null : null,
+        linked_menu_id: null,
       };
 
       const { error } = await supabase.from("option_groups").insert([row]);
