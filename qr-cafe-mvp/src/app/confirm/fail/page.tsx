@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function ConfirmFailPage() {
+function ConfirmFailPageContent() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -37,3 +37,18 @@ export default function ConfirmFailPage() {
     </main>
   );
 }
+
+export default function ConfirmFailPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
+          <p style={{ margin: 0, color: "#6b7280", fontWeight: 900 }}>결제 실패 페이지 로딩 중...</p>
+        </main>
+      }
+    >
+      <ConfirmFailPageContent />
+    </Suspense>
+  );
+}
+
