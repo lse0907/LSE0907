@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
@@ -51,7 +51,7 @@ function calcRemainingDays(createdAt?: string | null) {
   return Math.max(0, FREE_TRIAL_DAYS - usedDays);
 }
 
-export default function AdminStorePage() {
+function AdminStorePageContent() {
   const router = useRouter();
   const sp = useSearchParams();
   const [storeId, setStoreId] = useState<string>("");
@@ -1053,3 +1053,19 @@ export default function AdminStorePage() {
     </main>
   );
 }
+
+
+export default function AdminStorePage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ maxWidth: 980, margin: "0 auto", padding: 14 }}>
+          <p style={{ margin: 0, fontWeight: 900, color: "#6b7280" }}>매장 관리 페이지 로딩 중...</p>
+        </main>
+      }
+    >
+      <AdminStorePageContent />
+    </Suspense>
+  );
+}
+
