@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function ConfirmFailPage() {
+function ConfirmFailPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -35,5 +35,12 @@ export default function ConfirmFailPage() {
         </button>
       </div>
     </main>
+  );
+}
+export default function ConfirmFailPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <ConfirmFailPageInner />
+    </Suspense>
   );
 }

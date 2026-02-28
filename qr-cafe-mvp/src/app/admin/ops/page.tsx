@@ -1,8 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function AdminOpsPage() {
+function AdminOpsPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const storeId = (sp.get("store") || "").trim();
@@ -100,5 +101,12 @@ export default function AdminOpsPage() {
         </div>
       </section>
     </main>
+  );
+}
+export default function AdminOpsPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <AdminOpsPageInner />
+    </Suspense>
   );
 }

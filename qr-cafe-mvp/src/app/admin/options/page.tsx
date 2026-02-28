@@ -1,7 +1,7 @@
 // src/app/admin/options/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -41,7 +41,7 @@ function toInt(v: string, fallback: number) {
   return Math.max(0, Math.round(n));
 }
 
-export default function AdminOptionsPage() {
+function AdminOptionsPageInner() {
   const sp = useSearchParams();
   const [storeId, setStoreId] = useState<string>("");
 
@@ -1037,5 +1037,12 @@ export default function AdminOptionsPage() {
         </section>
       )}
     </main>
+  );
+}
+export default function AdminOptionsPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <AdminOptionsPageInner />
+    </Suspense>
   );
 }

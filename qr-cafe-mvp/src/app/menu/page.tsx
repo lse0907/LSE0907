@@ -1,7 +1,7 @@
 // src/app/menu/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useMenuItems, MenuItem } from "@/app/lib/menuStore";
 import { useStoreProfile } from "@/app/lib/storeProfile";
@@ -95,7 +95,7 @@ function buildOptionSignature(groups: SelectedGroup[]) {
   return JSON.stringify(normalized);
 }
 
-export default function MenuPage() {
+function MenuPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -1243,5 +1243,12 @@ export default function MenuPage() {
         </div>
       ) : null}
     </main>
+  );
+}
+export default function MenuPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <MenuPageInner />
+    </Suspense>
   );
 }

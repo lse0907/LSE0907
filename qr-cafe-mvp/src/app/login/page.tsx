@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const initialError = sp.get("error");
@@ -99,3 +99,10 @@ const btnStyle: React.CSSProperties = {
   fontWeight: 900,
   cursor: "pointer",
 };
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}

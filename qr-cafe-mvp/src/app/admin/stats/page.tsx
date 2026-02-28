@@ -1,7 +1,7 @@
 // src/app/admin/stats/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
 import { supabase } from "@/app/lib/supabaseClient";
@@ -176,7 +176,7 @@ function dbOrderToRecord(row: any, storeId: string): OrderRecord {
   };
 }
 
-export default function AdminStatsPage() {
+function AdminstatsPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -1080,5 +1080,12 @@ export default function AdminStatsPage() {
         )}
       </section>
     </main>
+  );
+}
+export default function AdminstatsPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <AdminstatsPageInner />
+    </Suspense>
   );
 }

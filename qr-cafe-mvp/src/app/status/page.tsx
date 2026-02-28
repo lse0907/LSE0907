@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { lsLastOrderIdKey, lsLastOrderTokenKey, resolveStoreId } from "@/app/lib/storeScope";
@@ -79,7 +79,7 @@ function speakReadyOnce() {
   } catch {}
 }
 
-export default function StatusPage() {
+function StatusPageInner() {
   const sp = useSearchParams();
 
   const orderIdFromQuery = (sp.get("orderId") || "").trim();
@@ -478,5 +478,12 @@ export default function StatusPage() {
         </div>
       ) : null}
     </main>
+  );
+}
+export default function StatusPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <StatusPageInner />
+    </Suspense>
   );
 }

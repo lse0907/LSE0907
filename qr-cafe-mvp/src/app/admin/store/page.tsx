@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
@@ -51,7 +51,7 @@ function calcRemainingDays(createdAt?: string | null) {
   return Math.max(0, FREE_TRIAL_DAYS - usedDays);
 }
 
-export default function AdminStorePage() {
+function AdminstorePageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const [storeId, setStoreId] = useState<string>("");
@@ -1051,5 +1051,12 @@ export default function AdminStorePage() {
         </div>
       ) : null}
     </main>
+  );
+}
+export default function AdminstorePage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <AdminstorePageInner />
+    </Suspense>
   );
 }

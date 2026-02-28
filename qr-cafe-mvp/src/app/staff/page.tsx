@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -269,7 +269,7 @@ function isTodayLocal(ts: number) {
   return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
 }
 
-export default function StaffPage() {
+function StaffPageInner() {
   const searchParams = useSearchParams();
 
   // ✅ 현재 선택 매장
@@ -1291,5 +1291,12 @@ export default function StaffPage() {
         </section>
       </div>
     </main>
+  );
+}
+export default function StaffPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <StaffPageInner />
+    </Suspense>
   );
 }

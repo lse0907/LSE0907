@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   getStoreIdFromSearchParams,
@@ -44,7 +44,7 @@ function statusLabel(s: OrderStatus) {
   return "취소";
 }
 
-export default function MenuLayout({ children }: { children: React.ReactNode }) {
+function MenuLayoutInner({ children }: { children: React.ReactNode }) {
   const sp = useSearchParams();
   const currentStoreId = useMemo(() => getStoreIdFromSearchParams(sp), [sp]);
 
@@ -152,5 +152,12 @@ export default function MenuLayout({ children }: { children: React.ReactNode }) 
 
       {children}
     </div>
+  );
+}
+export default function MenuLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <MenuLayoutInner>{children}</MenuLayoutInner>
+    </Suspense>
   );
 }

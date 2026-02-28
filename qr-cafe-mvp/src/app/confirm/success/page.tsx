@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { nextDailySequence, format4, todayKey } from "@/app/lib/orderNumber";
 import { supabase } from "@/app/lib/supabaseClient";
@@ -61,7 +61,7 @@ function isDuplicateDisplayNoError(msg: string) {
   );
 }
 
-export default function ConfirmSuccessPage() {
+function ConfirmSuccessPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -241,5 +241,12 @@ export default function ConfirmSuccessPage() {
         </button>
       ) : null}
     </main>
+  );
+}
+export default function ConfirmSuccessPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <ConfirmSuccessPageInner />
+    </Suspense>
   );
 }

@@ -1,7 +1,7 @@
 // src/app/admin/qr/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
 import { useStoreProfile } from "@/app/lib/storeProfile";
@@ -102,7 +102,7 @@ function withQuery(url: string, params: Record<string, string>) {
   return u.toString();
 }
 
-export default function AdminQrPage() {
+function AdminQrPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -939,4 +939,11 @@ function roundedClipPath(ctx: CanvasRenderingContext2D, x: number, y: number, w:
   ctx.arcTo(x + w, y + h, x, y + h, rr);
   ctx.arcTo(x, y + h, x, y, rr);
   ctx.arcTo(x, y, x + w, y, rr);
+}
+export default function AdminQrPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <AdminQrPageInner />
+    </Suspense>
+  );
 }

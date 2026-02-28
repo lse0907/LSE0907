@@ -1,7 +1,7 @@
 // src/app/confirm/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { nextDailySequence, format4, todayKey } from "../lib/orderNumber";
 import { supabase } from "@/app/lib/supabaseClient";
@@ -162,7 +162,7 @@ function paymentOrderId() {
   return `pay_${raw}`.slice(0, 64);
 }
 
-export default function ConfirmPage() {
+function ConfirmPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -694,5 +694,12 @@ export default function ConfirmPage() {
           : "결제는 매장에서 진행됩니다."}
       </p>
     </main>
+  );
+}
+export default function ConfirmPage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <ConfirmPageInner />
+    </Suspense>
   );
 }
