@@ -63,9 +63,14 @@ create table if not exists public.store_addons (
   store_id text primary key references public.stores(store_id) on delete cascade,
   prepay_addon_status text not null default 'inactive' check (prepay_addon_status in ('inactive', 'active', 'past_due')),
   prepay_addon_price_krw integer not null default 5000,
+  addon_paid_until timestamptz,
+  current_plan_months integer,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.store_addons add column if not exists addon_paid_until timestamptz;
+alter table public.store_addons add column if not exists current_plan_months integer;
 
 -- 4) PG 연결 정보 테이블
 -- 주의: 파일럿 단계에서는 client_key/secret_key를 평문 저장함.
@@ -130,6 +135,9 @@ declare
   v_before_paid_until timestamptz;
   v_anchor timestamptz;
   v_after_paid_until timestamptz;
+  v_base_price integer := 8900;
+  v_addon_price integer := 5000;
+  v_expected_amount integer;
   v_row public.billing_payments;
 begin
   if not public.is_store_owner(p_store_id) then
@@ -151,6 +159,25 @@ begin
 
   v_anchor := greatest(coalesce(v_before_paid_until, v_now), v_now);
   v_after_paid_until := v_anchor + make_interval(months => p_plan_months);
+
+  select coalesce(sb.base_price_krw, 8900)
+    into v_base_price
+  from public.store_billing sb
+  where sb.store_id = p_store_id;
+
+  select coalesce(sa.prepay_addon_price_krw, 5000)
+    into v_addon_price
+  from public.store_addons sa
+  where sa.store_id = p_store_id;
+
+  v_expected_amount := p_plan_months * (
+    (case when coalesce(p_base_paid, false) then v_base_price else 0 end)
+    + (case when coalesce(p_addon_paid, false) then v_addon_price else 0 end)
+  );
+
+  if p_amount_krw is not null and p_amount_krw <> v_expected_amount then
+    raise exception 'amount_krw 불일치: expected=% provided=%', v_expected_amount, p_amount_krw;
+  end if;
 
   -- 기본 구독 결제가 포함되면 기본 플랜 활성화 + 기간 누적
   if coalesce(p_base_paid, false) then
@@ -180,15 +207,21 @@ begin
     insert into public.store_addons (
       store_id,
       prepay_addon_status,
+      addon_paid_until,
+      current_plan_months,
       updated_at
     ) values (
       p_store_id,
       'active',
+      v_after_paid_until,
+      p_plan_months,
       now()
     )
     on conflict (store_id)
     do update set
       prepay_addon_status = 'active',
+      addon_paid_until = excluded.addon_paid_until,
+      current_plan_months = excluded.current_plan_months,
       updated_at = now();
   end if;
 
@@ -213,7 +246,7 @@ begin
     p_plan_months,
     coalesce(p_base_paid, false),
     coalesce(p_addon_paid, false),
-    p_amount_krw,
+    v_expected_amount,
     now(),
     v_before_paid_until,
     v_after_paid_until,
@@ -326,7 +359,7 @@ commit;
 -- 실행 후 확인 쿼리 (선택)
 -- =========================================================
 -- select store_id, base_plan_status, paid_until, current_plan_months from public.store_billing limit 20;
--- select store_id, prepay_addon_status from public.store_addons limit 20;
+-- select store_id, prepay_addon_status, addon_paid_until, current_plan_months from public.store_addons limit 20;
 -- select id, store_id, plan_months, before_paid_until, after_paid_until, amount_krw, paid_at
 --   from public.billing_payments
 --  order by id desc
