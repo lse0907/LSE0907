@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { BillingSettings, maskToken } from "@/app/lib/billingSettings";
 
 type SaveMode = "db" | "unsynced";
+
+type BillingRuntimeStatus = {
+  basePaidUntil: string | null;
+  addonPaidUntil: string | null;
+  basePrice: number;
+  addonPrice: number;
+  baseMonths: number | null;
+  addonMonths: number | null;
+  addonStatus: string;
+};
 
 const EMPTY_BILLING: BillingSettings = {
   baseApproved: false,
@@ -89,6 +99,45 @@ function BillingForm({ storeId }: { storeId: string }) {
   const [saveBadge, setSaveBadge] = useState<"idle" | "saved" | "error">("idle");
   const [saveMode, setSaveMode] = useState<SaveMode>("unsynced");
   const [loading, setLoading] = useState(true);
+  const [planMonths, setPlanMonths] = useState<1 | 3 | 6 | 12>(1);
+  const [payBase, setPayBase] = useState(true);
+  const [payAddon, setPayAddon] = useState(true);
+  const [paying, setPaying] = useState(false);
+  const [payMsg, setPayMsg] = useState("");
+  const [runtime, setRuntime] = useState<BillingRuntimeStatus>({
+    basePaidUntil: null,
+    addonPaidUntil: null,
+    basePrice: 8900,
+    addonPrice: 5000,
+    baseMonths: null,
+    addonMonths: null,
+    addonStatus: "inactive",
+  });
+
+  const refreshRuntime = useCallback(async () => {
+    const [baseRes, addonRes] = await Promise.all([
+      supabase
+        .from("store_billing")
+        .select("paid_until, current_plan_months, base_price_krw")
+        .eq("store_id", storeId)
+        .maybeSingle(),
+      supabase
+        .from("store_addons")
+        .select("addon_paid_until, current_plan_months, prepay_addon_price_krw, prepay_addon_status")
+        .eq("store_id", storeId)
+        .maybeSingle(),
+    ]);
+
+    setRuntime({
+      basePaidUntil: String(baseRes.data?.paid_until || "").trim() || null,
+      addonPaidUntil: String(addonRes.data?.addon_paid_until || "").trim() || null,
+      basePrice: Math.max(0, Number(baseRes.data?.base_price_krw || 8900)),
+      addonPrice: Math.max(0, Number(addonRes.data?.prepay_addon_price_krw || 5000)),
+      baseMonths: Number.isFinite(Number(baseRes.data?.current_plan_months)) ? Number(baseRes.data?.current_plan_months) : null,
+      addonMonths: Number.isFinite(Number(addonRes.data?.current_plan_months)) ? Number(addonRes.data?.current_plan_months) : null,
+      addonStatus: String(addonRes.data?.prepay_addon_status || "inactive"),
+    });
+  }, [storeId]);
 
   useEffect(() => {
     let mounted = true;
@@ -103,11 +152,12 @@ function BillingForm({ storeId }: { storeId: string }) {
         setSaveMode("unsynced");
       }
       setLoading(false);
+      await refreshRuntime();
     })();
     return () => {
       mounted = false;
     };
-  }, [storeId]);
+  }, [storeId, refreshRuntime]);
 
   const activationReady = useMemo(() => {
     return form.baseApproved && form.addonApproved && !!form.pgMid && !!form.pgClientKey && !!form.pgSecretKey;
@@ -125,6 +175,53 @@ function BillingForm({ storeId }: { storeId: string }) {
     setSaveMode("unsynced");
     setSaveBadge("error");
     setTimeout(() => setSaveBadge("idle"), 2000);
+  };
+
+  const totalAmount = useMemo(() => {
+    const unit = (payBase ? runtime.basePrice : 0) + (payAddon ? runtime.addonPrice : 0);
+    return unit * planMonths;
+  }, [payAddon, payBase, planMonths, runtime.addonPrice, runtime.basePrice]);
+
+  const onApplyTestPayment = async () => {
+    setPayMsg("");
+    if (!payBase && !payAddon) {
+      setPayMsg("기본 또는 옵션 중 하나 이상 선택해 주세요.");
+      return;
+    }
+
+    setPaying(true);
+    const suffix = `${Date.now()}`;
+    const orderId = `bill_${storeId}_${suffix}`;
+    const paymentKey = `test_pay_${suffix}`;
+    const note = `관리자 테스트 결제 ${planMonths}개월`;
+
+    const { error } = await supabase.rpc("apply_store_billing_payment", {
+      p_store_id: storeId,
+      p_plan_months: planMonths,
+      p_base_paid: payBase,
+      p_addon_paid: payAddon,
+      p_payment_key: paymentKey,
+      p_order_id: orderId,
+      p_amount_krw: totalAmount,
+      p_note: note,
+    });
+
+    if (error) {
+      setPayMsg(`결제 반영 실패: ${error.message}`);
+      setPaying(false);
+      return;
+    }
+
+    await refreshRuntime();
+    setPayMsg(`결제 반영 완료 ✅ (${planMonths}개월 / ${totalAmount.toLocaleString()}원)`);
+    setPaying(false);
+  };
+
+  const fmt = (iso: string | null) => {
+    if (!iso) return "-";
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) return iso;
+    return new Date(t).toLocaleString("ko-KR", { hour12: false });
   };
 
   if (loading) {
@@ -241,6 +338,47 @@ function BillingForm({ storeId }: { storeId: string }) {
             ? "사용 가능: 기본/옵션 승인 + PG 입력이 완료되었습니다."
             : "사용 불가: 기본 승인, 옵션 승인, PG 입력을 모두 완료해야 합니다."}
         </p>
+      </section>
+
+      <section className="card">
+        <h2 className="h2">기간형 결제 테스트 (owner 전용)</h2>
+        <p className="muted">옵션도 기간제로 계산됩니다. 총액 = 개월수 × (기본 + 옵션선택금액)</p>
+
+        <div className="payGrid">
+          <label className="toggleRow">
+            <input type="checkbox" checked={payBase} onChange={(e) => setPayBase(e.target.checked)} />
+            <span>기본 구독 결제 포함 ({runtime.basePrice.toLocaleString()}원/월)</span>
+          </label>
+
+          <label className="toggleRow">
+            <input type="checkbox" checked={payAddon} onChange={(e) => setPayAddon(e.target.checked)} />
+            <span>선결제 옵션 결제 포함 ({runtime.addonPrice.toLocaleString()}원/월)</span>
+          </label>
+        </div>
+
+        <label className="field">
+          <span>결제 개월 수</span>
+          <select className="input" value={planMonths} onChange={(e) => setPlanMonths(Number(e.target.value) as 1 | 3 | 6 | 12)}>
+            <option value={1}>1개월</option>
+            <option value={3}>3개월</option>
+            <option value={6}>6개월</option>
+            <option value={12}>12개월</option>
+          </select>
+        </label>
+
+        <div className="card" style={{ gap: 6 }}>
+          <div className="muted">예상 결제금액</div>
+          <div style={{ fontWeight: 900, fontSize: 20 }}>{totalAmount.toLocaleString()}원</div>
+          <div className="muted">기본 만료일: {fmt(runtime.basePaidUntil)} (최근 {runtime.baseMonths ?? "-"}개월)</div>
+          <div className="muted">옵션 상태: {runtime.addonStatus} / 옵션 만료일: {fmt(runtime.addonPaidUntil)} (최근 {runtime.addonMonths ?? "-"}개월)</div>
+        </div>
+
+        <div className="row">
+          <button className="btn primary" type="button" onClick={onApplyTestPayment} disabled={paying}>
+            {paying ? "반영 중..." : "결제 반영 테스트 실행"}
+          </button>
+          {payMsg ? <span className="muted">{payMsg}</span> : null}
+        </div>
       </section>
     </>
   );
