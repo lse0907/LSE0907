@@ -98,6 +98,25 @@ create table if not exists public.platform_pg_config (
   updated_at timestamptz not null default now()
 );
 
+-- 4-2) 지원센터 티켓(점주 문의/장애/개선 요청)
+create table if not exists public.support_tickets (
+  id bigint generated always as identity primary key,
+  store_id text not null references public.stores(store_id) on delete cascade,
+  requester_user_id uuid not null,
+  category text not null default 'inquiry' check (category in ('inquiry', 'bug', 'improvement', 'billing', 'etc')),
+  priority text not null default 'normal' check (priority in ('low', 'normal', 'high', 'urgent')),
+  status text not null default 'open' check (status in ('open', 'in_progress', 'resolved', 'closed')),
+  title text not null,
+  body text,
+  ops_note text,
+  resolved_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_support_tickets_store_created on public.support_tickets(store_id, created_at desc);
+create index if not exists idx_support_tickets_status_created on public.support_tickets(status, created_at desc);
+
 -- 5) 결제 이력 테이블(운영자/정산/감사로그용)
 create table if not exists public.billing_payments (
   id bigint generated always as identity primary key,
@@ -296,6 +315,11 @@ create trigger trg_platform_pg_config_updated_at
 before update on public.platform_pg_config
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists trg_support_tickets_updated_at on public.support_tickets;
+create trigger trg_support_tickets_updated_at
+before update on public.support_tickets
+for each row execute procedure public.set_updated_at();
+
 drop trigger if exists trg_billing_payments_updated_at on public.billing_payments;
 create trigger trg_billing_payments_updated_at
 before update on public.billing_payments
@@ -306,6 +330,7 @@ alter table public.store_billing enable row level security;
 alter table public.store_addons enable row level security;
 alter table public.store_pg_config enable row level security;
 alter table public.platform_pg_config enable row level security;
+alter table public.support_tickets enable row level security;
 alter table public.billing_payments enable row level security;
 
 -- 9) 기존 정책 삭제(재실행 안전)
@@ -318,6 +343,9 @@ drop policy if exists "store_pg_config_owner_upsert" on public.store_pg_config;
 drop policy if exists "billing_payments_owner_select" on public.billing_payments;
 drop policy if exists "platform_pg_config_authenticated_select" on public.platform_pg_config;
 drop policy if exists "platform_pg_config_authenticated_upsert" on public.platform_pg_config;
+drop policy if exists "support_tickets_store_member_select" on public.support_tickets;
+drop policy if exists "support_tickets_store_member_insert" on public.support_tickets;
+drop policy if exists "support_tickets_authenticated_update" on public.support_tickets;
 
 -- 10) owner만 조회/수정 가능 정책
 create policy "store_billing_owner_select"
@@ -378,11 +406,47 @@ to authenticated
 using (true)
 with check (true);
 
+create policy "support_tickets_store_member_select"
+on public.support_tickets
+for select
+to authenticated
+using (
+  exists (
+    select 1
+      from public.store_members sm
+     where sm.store_id = support_tickets.store_id
+       and sm.user_id = auth.uid()
+  )
+  or auth.role() = 'service_role'
+);
+
+create policy "support_tickets_store_member_insert"
+on public.support_tickets
+for insert
+to authenticated
+with check (
+  requester_user_id = auth.uid()
+  and exists (
+    select 1
+      from public.store_members sm
+     where sm.store_id = support_tickets.store_id
+       and sm.user_id = auth.uid()
+  )
+);
+
+create policy "support_tickets_authenticated_update"
+on public.support_tickets
+for update
+to authenticated
+using (true)
+with check (true);
+
 -- 11) 권한 부여
 grant select, insert, update, delete on public.store_billing to authenticated;
 grant select, insert, update, delete on public.store_addons to authenticated;
 grant select, insert, update, delete on public.store_pg_config to authenticated;
 grant select, insert, update, delete on public.platform_pg_config to authenticated;
+grant select, insert, update on public.support_tickets to authenticated;
 grant select on public.billing_payments to authenticated;
 grant usage, select on sequence public.billing_payments_id_seq to authenticated;
 grant execute on function public.apply_store_billing_payment(text, integer, boolean, boolean, text, text, integer, text) to authenticated;

@@ -45,4 +45,13 @@
 - OPS 관리자 콘솔(PC 중심):
   - `/ops`에서 매장 가입/구독/구독매출 현황 확인.
   - 플랫폼 단일 PG 정보(MID/Client Key/Secret Key) 1회 입력.
-  - 문의/장애 티켓 보드는 다음 단계로 추가.
+  - 문의/장애 티켓 보드에서 상태(open/in_progress/resolved/closed)와 OPS 메모 처리.
+
+## 지원센터 워크플로(Phase 3)
+- 점주 admin `/admin/support`
+  - 매장 단위 티켓 등록(문의/오류/개선/결제/기타, 우선순위 포함)
+  - 티켓 상태 및 OPS 응답 조회
+- OPS `/ops`
+  - 최신 티켓 목록 확인
+  - 상태 전환(open/in_progress/resolved/closed)
+  - OPS 처리 메모 저장

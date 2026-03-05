@@ -18,6 +18,18 @@ type StoreBaseRow = { store_id: string; store_name: string | null };
 type BillingBaseRow = { store_id: string; base_plan_status: string | null; paid_until: string | null };
 type AddonBaseRow = { store_id: string; prepay_addon_status: string | null; addon_paid_until: string | null };
 type PaymentBaseRow = { store_id: string; amount_krw: number | null };
+type SupportTicketRow = {
+  id: number;
+  store_id: string;
+  category: string;
+  priority: string;
+  status: string;
+  title: string;
+  body: string | null;
+  ops_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export default function OpsPage() {
   const router = useRouter();
@@ -26,6 +38,8 @@ export default function OpsPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [pgForm, setPgForm] = useState({ mid: "", clientKey: "", secretKey: "" });
+  const [tickets, setTickets] = useState<SupportTicketRow[]>([]);
+  const [ticketMsg, setTicketMsg] = useState("");
 
   const loadOps = useCallback(async () => {
     setLoading(true);
@@ -97,6 +111,21 @@ export default function OpsPage() {
     })();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("support_tickets")
+        .select("id, store_id, category, priority, status, title, body, ops_note, created_at, updated_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) {
+        setTicketMsg(`티켓 로드 실패: ${error.message}`);
+        return;
+      }
+      setTickets((data || []) as SupportTicketRow[]);
+    })();
+  }, []);
+
   const savePg = async () => {
     const { error } = await supabase.from("platform_pg_config").upsert(
       {
@@ -109,6 +138,41 @@ export default function OpsPage() {
       { onConflict: "id" }
     );
     setMsg(error ? `PG 저장 실패: ${error.message}` : "PG 저장 완료");
+  };
+
+  const updateTicket = async (ticketId: number, patch: Partial<Pick<SupportTicketRow, "status" | "ops_note">>) => {
+    setTicketMsg("");
+    const payload: { status?: string; ops_note?: string; resolved_at?: string | null } = {
+      ...(patch.status != null ? { status: patch.status } : {}),
+      ...(patch.ops_note != null ? { ops_note: patch.ops_note } : {}),
+    };
+    if (patch.status === "resolved" || patch.status === "closed") {
+      payload.resolved_at = new Date().toISOString();
+    }
+    const { error } = await supabase.from("support_tickets").update(payload).eq("id", ticketId);
+    if (error) {
+      setTicketMsg(`티켓 업데이트 실패: ${error.message}`);
+      return;
+    }
+    setTickets((prev) =>
+      prev.map((t) =>
+        t.id === ticketId
+          ? {
+              ...t,
+              ...(patch.status != null ? { status: patch.status } : {}),
+              ...(patch.ops_note != null ? { ops_note: patch.ops_note } : {}),
+              updated_at: new Date().toISOString(),
+            }
+          : t
+      )
+    );
+    setTicketMsg("티켓 업데이트 완료");
+  };
+
+  const fmt = (iso: string) => {
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) return iso;
+    return new Date(t).toLocaleString("ko-KR", { hour12: false });
   };
 
   return (
@@ -190,8 +254,35 @@ export default function OpsPage() {
             </button>
           </div>
           <hr />
-          <h3>문의/장애 관리 (다음 단계)</h3>
-          <p className="muted">점주 문의 티켓 보드(접수/처리중/해결)를 이 영역에 연결 예정입니다.</p>
+          <h3>문의/장애 관리</h3>
+          {ticketMsg ? <p className="muted">{ticketMsg}</p> : null}
+          {tickets.length === 0 ? <p className="muted">등록된 티켓이 없습니다.</p> : null}
+          <div style={{ display: "grid", gap: 8 }}>
+            {tickets.slice(0, 8).map((t) => (
+              <div key={t.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10, display: "grid", gap: 6 }}>
+                <div style={{ fontWeight: 800 }}>#{t.id} [{t.store_id}] {t.title}</div>
+                <div className="muted">{t.category} · {t.priority} · 등록 {fmt(t.created_at)}</div>
+                {t.body ? <div style={{ fontSize: 13 }}>{t.body}</div> : null}
+                <input
+                  className="input"
+                  placeholder="OPS 답변/처리 메모"
+                  defaultValue={t.ops_note || ""}
+                  onBlur={(e) => {
+                    const note = e.target.value.trim();
+                    if (note === String(t.ops_note || "")) return;
+                    void updateTicket(t.id, { ops_note: note || null });
+                  }}
+                />
+                <div className="row">
+                  <span className="muted">상태: {t.status}</span>
+                  <button className="btn" onClick={() => void updateTicket(t.id, { status: "open" })}>open</button>
+                  <button className="btn" onClick={() => void updateTicket(t.id, { status: "in_progress" })}>in_progress</button>
+                  <button className="btn" onClick={() => void updateTicket(t.id, { status: "resolved" })}>resolved</button>
+                  <button className="btn" onClick={() => void updateTicket(t.id, { status: "closed" })}>closed</button>
+                </div>
+              </div>
+            ))}
+          </div>
         </article>
       </section>
     </main>
