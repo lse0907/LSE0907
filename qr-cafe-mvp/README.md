@@ -44,3 +44,5 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - Supabase 결제 스키마/정책 SQL(복붙용): `docs/sql/supabase-billing-setup.sql`
 
 - B안(결제 성공 후 주문 생성) 1페이지 확정본: `docs/b-plan-final-onepage.md`
+
+vercel 배포 오류테스트 목적으로 임의 글 작성(삭제해도 무방)
