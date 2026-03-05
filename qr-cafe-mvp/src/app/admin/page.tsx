@@ -18,6 +18,12 @@ type MemberRow = {
   role: string | null;
 };
 
+type StoreBillingSummary = {
+  basePlanStatus: string;
+  paidUntil: string | null;
+  lastPaidAt: string | null;
+};
+
 const FREE_TRIAL_DAYS = 30;
 
 function calcRemainingDays(createdAt?: string | null) {
@@ -46,6 +52,7 @@ function AdminPageInner() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
+  const [billingByStore, setBillingByStore] = useState<Record<string, StoreBillingSummary>>({});
 
   const selectedStore = useMemo(() => {
     if (!selectedStoreId) return null;
@@ -101,21 +108,66 @@ function AdminPageInner() {
     const ids = memRows.map((m) => m.store_id).filter(Boolean);
     if (!ids.length) {
       setStores([]);
+      setBillingByStore({});
       setStoresLoaded(true);
       return;
     }
 
-    const storeRes = await supabase
-      .from("stores")
-      .select("store_id, store_name, created_at, updated_at")
-      .in("store_id", ids);
+    const [storeRes, billingRes, paymentRes] = await Promise.all([
+      supabase.from("stores").select("store_id, store_name, created_at, updated_at").in("store_id", ids),
+      supabase.from("store_billing").select("store_id, base_plan_status, paid_until").in("store_id", ids),
+      supabase.from("billing_payments").select("store_id, paid_at, status").in("store_id", ids).eq("status", "paid").order("paid_at", { ascending: false }),
+    ]);
 
     if (storeRes.error) throw storeRes.error;
+    if (billingRes.error) throw billingRes.error;
+    if (paymentRes.error) throw paymentRes.error;
 
     const list = (storeRes.data || []) as StoreRow[];
     list.sort((a, b) => String(a.store_name || "").localeCompare(String(b.store_name || "")));
+
+    const nextBilling: Record<string, StoreBillingSummary> = {};
+    for (const row of billingRes.data || []) {
+      const storeId = String((row as { store_id: string }).store_id || "");
+      if (!storeId) continue;
+      nextBilling[storeId] = {
+        basePlanStatus: String((row as { base_plan_status?: string | null }).base_plan_status || "inactive"),
+        paidUntil: String((row as { paid_until?: string | null }).paid_until || "").trim() || null,
+        lastPaidAt: null,
+      };
+    }
+
+    for (const row of paymentRes.data || []) {
+      const storeId = String((row as { store_id: string }).store_id || "");
+      if (!storeId) continue;
+      if (nextBilling[storeId]?.lastPaidAt) continue;
+      const paidAt = String((row as { paid_at?: string | null }).paid_at || "").trim() || null;
+      nextBilling[storeId] = {
+        basePlanStatus: nextBilling[storeId]?.basePlanStatus || "inactive",
+        paidUntil: nextBilling[storeId]?.paidUntil || null,
+        lastPaidAt: paidAt,
+      };
+    }
+
     setStores(list);
+    setBillingByStore(nextBilling);
     setStoresLoaded(true);
+  };
+
+  const fmtDate = (iso: string | null | undefined) => {
+    const raw = String(iso || "").trim();
+    if (!raw) return "-";
+    const t = new Date(raw).getTime();
+    if (!Number.isFinite(t)) return raw;
+    return new Date(t).toLocaleDateString("ko-KR");
+  };
+
+  const calcPaidRemainingDays = (paidUntil: string | null | undefined) => {
+    const raw = String(paidUntil || "").trim();
+    if (!raw) return null;
+    const t = new Date(raw).getTime();
+    if (!Number.isFinite(t)) return null;
+    return Math.max(0, Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24)));
   };
 
   const fetchStatsSummaryForStore = async (storeId: string) => {
@@ -264,6 +316,9 @@ function AdminPageInner() {
         </div>
 
         <div className="topActions">
+          <button className="btn" onClick={() => router.push("/ops")}>
+            OPS
+          </button>
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
             고객화면
           </button>
@@ -309,6 +364,8 @@ function AdminPageInner() {
                 const on = s.store_id === selectedStoreId;
                 const role = members.find((m) => m.store_id === s.store_id)?.role || "-";
                 const remaining = calcRemainingDays(s.created_at);
+                const billing = billingByStore[s.store_id];
+                const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
                 const trialText =
                   remaining === null
                     ? `무료 사용기간 ${FREE_TRIAL_DAYS}일`
@@ -324,7 +381,14 @@ function AdminPageInner() {
                         {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
                       </div>
                       <div className="muted">권한: {role}</div>
-                      <div className="muted">{trialText}</div>
+                      {billing?.basePlanStatus === "active" ? (
+                        <>
+                          <div className="muted">유료 구독: active · 만료 {fmtDate(billing.paidUntil)}</div>
+                          <div className="muted">최근 결제일: {fmtDate(billing.lastPaidAt)} · 남은 {paidRemaining == null ? "-" : `${paidRemaining}일`}</div>
+                        </>
+                      ) : (
+                        <div className="muted">{trialText}</div>
+                      )}
                       {idx > 0 ? <div className="muted">추가 매장은 결제 후 생성 (예정)</div> : null}
                     </div>
                     <div className="pill">{on ? "선택됨" : "선택"}</div>
@@ -332,6 +396,13 @@ function AdminPageInner() {
                 );
               })}
             </div>
+            {selectedStoreId ? (
+              <div className="btnRow" style={{ marginTop: 10 }}>
+                <button className="btn btnPrimary" onClick={() => go("/admin/billing/pay")}>
+                  선택 매장 결제/구독 실행
+                </button>
+              </div>
+            ) : null}
           </>
         )}
       </section>
