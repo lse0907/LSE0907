@@ -33,6 +33,7 @@ type SupportTicketRow = {
 
 export default function OpsPage() {
   const router = useRouter();
+  const [isOps, setIsOps] = useState<boolean | null>(null);
   const [rows, setRows] = useState<StoreBillingRow[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -89,13 +90,29 @@ export default function OpsPage() {
   }, []);
 
   useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const roleFromApp = String(data?.user?.app_metadata?.role || "");
+      const roleFromUser = String(data?.user?.user_metadata?.role || "");
+      const allowed = roleFromApp === "ops" || roleFromUser === "ops";
+      setIsOps(allowed);
+      if (!allowed) {
+        setLoading(false);
+        setMsg("OPS 권한(role=ops)이 필요합니다.");
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (isOps !== true) return;
     const timer = setTimeout(() => {
       void loadOps();
     }, 0);
     return () => clearTimeout(timer);
-  }, [loadOps]);
+  }, [isOps, loadOps]);
 
   useEffect(() => {
+    if (isOps !== true) return;
     (async () => {
       const { data, error } = await supabase
         .from("platform_pg_config")
@@ -109,9 +126,10 @@ export default function OpsPage() {
         secretKey: String(data?.secret_key || ""),
       });
     })();
-  }, []);
+  }, [isOps]);
 
   useEffect(() => {
+    if (isOps !== true) return;
     (async () => {
       const { data, error } = await supabase
         .from("support_tickets")
@@ -124,7 +142,19 @@ export default function OpsPage() {
       }
       setTickets((data || []) as SupportTicketRow[]);
     })();
-  }, []);
+  }, [isOps]);
+
+  if (isOps === false) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
+        <h1 style={{ marginTop: 0 }}>OPS 관리자 콘솔</h1>
+        <p style={{ color: "#6b7280" }}>접근 권한이 없습니다. 관리자에게 OPS role 부여를 요청해 주세요.</p>
+        <button onClick={() => router.push("/admin")} style={{ border: "1px solid #d1d5db", borderRadius: 8, background: "#fff", padding: "8px 12px", cursor: "pointer" }}>
+          admin으로 돌아가기
+        </button>
+      </main>
+    );
+  }
 
   const savePg = async () => {
     const { error } = await supabase.from("platform_pg_config").upsert(

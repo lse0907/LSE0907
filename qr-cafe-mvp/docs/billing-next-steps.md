@@ -46,6 +46,7 @@
   - `/ops`에서 매장 가입/구독/구독매출 현황 확인.
   - 플랫폼 단일 PG 정보(MID/Client Key/Secret Key) 1회 입력.
   - 문의/장애 티켓 보드에서 상태(open/in_progress/resolved/closed)와 OPS 메모 처리.
+  - 권한은 JWT `role=ops` 사용자로 제한(ops가 아닌 인증 사용자는 접근/수정 불가).
 
 ## 지원센터 워크플로(Phase 3)
 - 점주 admin `/admin/support`

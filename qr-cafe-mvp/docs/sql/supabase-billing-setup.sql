@@ -42,6 +42,19 @@ as $$
   );
 $$;
 
+-- 1-1) OPS 권한 확인 함수: JWT role=ops 인지 검사
+create or replace function public.is_ops_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'ops', false)
+    or coalesce((auth.jwt() -> 'user_metadata' ->> 'role') = 'ops', false);
+$$;
+
 -- 2) 기본 구독 상태 테이블
 create table if not exists public.store_billing (
   store_id text primary key references public.stores(store_id) on delete cascade,
@@ -343,9 +356,12 @@ drop policy if exists "store_pg_config_owner_upsert" on public.store_pg_config;
 drop policy if exists "billing_payments_owner_select" on public.billing_payments;
 drop policy if exists "platform_pg_config_authenticated_select" on public.platform_pg_config;
 drop policy if exists "platform_pg_config_authenticated_upsert" on public.platform_pg_config;
+drop policy if exists "platform_pg_config_ops_select" on public.platform_pg_config;
+drop policy if exists "platform_pg_config_ops_upsert" on public.platform_pg_config;
 drop policy if exists "support_tickets_store_member_select" on public.support_tickets;
 drop policy if exists "support_tickets_store_member_insert" on public.support_tickets;
 drop policy if exists "support_tickets_authenticated_update" on public.support_tickets;
+drop policy if exists "support_tickets_ops_update" on public.support_tickets;
 
 -- 10) owner만 조회/수정 가능 정책
 create policy "store_billing_owner_select"
@@ -393,18 +409,18 @@ for select
 to authenticated
 using (public.is_store_owner(store_id));
 
-create policy "platform_pg_config_authenticated_select"
+create policy "platform_pg_config_ops_select"
 on public.platform_pg_config
 for select
 to authenticated
-using (true);
+using (public.is_ops_user() or auth.role() = 'service_role');
 
-create policy "platform_pg_config_authenticated_upsert"
+create policy "platform_pg_config_ops_upsert"
 on public.platform_pg_config
 for all
 to authenticated
-using (true)
-with check (true);
+using (public.is_ops_user() or auth.role() = 'service_role')
+with check (public.is_ops_user() or auth.role() = 'service_role');
 
 create policy "support_tickets_store_member_select"
 on public.support_tickets
@@ -434,12 +450,12 @@ with check (
   )
 );
 
-create policy "support_tickets_authenticated_update"
+create policy "support_tickets_ops_update"
 on public.support_tickets
 for update
 to authenticated
-using (true)
-with check (true);
+using (public.is_ops_user() or auth.role() = 'service_role')
+with check (public.is_ops_user() or auth.role() = 'service_role');
 
 -- 11) 권한 부여
 grant select, insert, update, delete on public.store_billing to authenticated;
