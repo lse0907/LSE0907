@@ -37,3 +37,12 @@
 2. owner 계정으로 샘플 결제 적용 함수(`apply_store_billing_payment`)를 테스트.
 3. UI에서 남은 기간/만료 상태를 읽어 노출.
 4. owner 전용 결제 페이지(1/3/6/12개월 선택) 연결.
+
+## 화면/역할 분리(확정 방향)
+- 점주 admin:
+  - `/admin/billing`은 설정 전용(PG 연결/승인 토글)으로 유지.
+  - `/admin/billing/pay`는 결제 실행 전용 페이지로 분리.
+- OPS 관리자 콘솔(PC 중심):
+  - `/ops`에서 매장 가입/구독/구독매출 현황 확인.
+  - 매장별 PG 정보(MID/Client Key/Secret Key) 지원 입력.
+  - 문의/장애 티켓 보드는 다음 단계로 추가.

@@ -341,43 +341,12 @@ function BillingForm({ storeId }: { storeId: string }) {
       </section>
 
       <section className="card">
-        <h2 className="h2">기간형 결제 테스트 (owner 전용)</h2>
-        <p className="muted">옵션도 기간제로 계산됩니다. 총액 = 개월수 × (기본 + 옵션선택금액)</p>
-
-        <div className="payGrid">
-          <label className="toggleRow">
-            <input type="checkbox" checked={payBase} onChange={(e) => setPayBase(e.target.checked)} />
-            <span>기본 구독 결제 포함 ({runtime.basePrice.toLocaleString()}원/월)</span>
-          </label>
-
-          <label className="toggleRow">
-            <input type="checkbox" checked={payAddon} onChange={(e) => setPayAddon(e.target.checked)} />
-            <span>선결제 옵션 결제 포함 ({runtime.addonPrice.toLocaleString()}원/월)</span>
-          </label>
-        </div>
-
-        <label className="field">
-          <span>결제 개월 수</span>
-          <select className="input" value={planMonths} onChange={(e) => setPlanMonths(Number(e.target.value) as 1 | 3 | 6 | 12)}>
-            <option value={1}>1개월</option>
-            <option value={3}>3개월</option>
-            <option value={6}>6개월</option>
-            <option value={12}>12개월</option>
-          </select>
-        </label>
-
-        <div className="card" style={{ gap: 6 }}>
-          <div className="muted">예상 결제금액</div>
-          <div style={{ fontWeight: 900, fontSize: 20 }}>{totalAmount.toLocaleString()}원</div>
-          <div className="muted">기본 만료일: {fmt(runtime.basePaidUntil)} (최근 {runtime.baseMonths ?? "-"}개월)</div>
-          <div className="muted">옵션 상태: {runtime.addonStatus} / 옵션 만료일: {fmt(runtime.addonPaidUntil)} (최근 {runtime.addonMonths ?? "-"}개월)</div>
-        </div>
-
+        <h2 className="h2">매장 결제/구독 실행</h2>
+        <p className="muted">결제 실행은 별도 페이지에서 진행해 주세요.</p>
         <div className="row">
-          <button className="btn primary" type="button" onClick={onApplyTestPayment} disabled={paying}>
-            {paying ? "반영 중..." : "결제 반영 테스트 실행"}
+          <button className="btn primary" type="button" onClick={() => window.location.assign(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>
+            결제 실행 페이지로 이동
           </button>
-          {payMsg ? <span className="muted">{payMsg}</span> : null}
         </div>
       </section>
     </>
