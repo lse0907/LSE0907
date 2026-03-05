@@ -14,6 +14,9 @@ type BillingRuntimeStatus = {
   addonMonths: number | null;
   baseStatus: string;
   addonStatus: string;
+  lastPaidAt: string | null;
+  lastAfterPaidUntil: string | null;
+  lastPlanMonths: number | null;
 };
 
 function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: string }) {
@@ -25,6 +28,7 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
   const [payAddon, setPayAddon] = useState(true);
   const [paying, setPaying] = useState(false);
   const [payMsg, setPayMsg] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [runtime, setRuntime] = useState<BillingRuntimeStatus>({
     basePaidUntil: null,
     addonPaidUntil: null,
@@ -34,15 +38,26 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
     addonMonths: null,
     baseStatus: "inactive",
     addonStatus: "inactive",
+    lastPaidAt: null,
+    lastAfterPaidUntil: null,
+    lastPlanMonths: null,
   });
 
   const refreshRuntime = useCallback(async () => {
-    const [baseRes, addonRes] = await Promise.all([
+    const [baseRes, addonRes, paymentRes] = await Promise.all([
       supabase.from("store_billing").select("paid_until, current_plan_months, base_price_krw, base_plan_status").eq("store_id", storeId).maybeSingle(),
       supabase
         .from("store_addons")
         .select("addon_paid_until, current_plan_months, prepay_addon_price_krw, prepay_addon_status")
         .eq("store_id", storeId)
+        .maybeSingle(),
+      supabase
+        .from("billing_payments")
+        .select("paid_at, after_paid_until, plan_months")
+        .eq("store_id", storeId)
+        .eq("status", "paid")
+        .order("paid_at", { ascending: false })
+        .limit(1)
         .maybeSingle(),
     ]);
 
@@ -55,6 +70,9 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
       addonMonths: Number.isFinite(Number(addonRes.data?.current_plan_months)) ? Number(addonRes.data?.current_plan_months) : null,
       baseStatus: String(baseRes.data?.base_plan_status || "inactive"),
       addonStatus: String(addonRes.data?.prepay_addon_status || "inactive"),
+      lastPaidAt: String(paymentRes.data?.paid_at || "").trim() || null,
+      lastAfterPaidUntil: String(paymentRes.data?.after_paid_until || "").trim() || null,
+      lastPlanMonths: Number.isFinite(Number(paymentRes.data?.plan_months)) ? Number(paymentRes.data?.plan_months) : null,
     });
 
     setBaseApproved(String(baseRes.data?.base_plan_status || "inactive") === "active");
@@ -67,6 +85,11 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
     }, 0);
     return () => clearTimeout(timer);
   }, [refreshRuntime]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const totalAmount = useMemo(() => {
     const unit = (payBase ? runtime.basePrice : 0) + (payAddon ? runtime.addonPrice : 0);
@@ -132,6 +155,16 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
     return new Date(t).toLocaleString("ko-KR", { hour12: false });
   };
 
+  const calcRemainDays = (iso: string | null) => {
+    if (!iso) return null;
+    const target = new Date(iso).getTime();
+    if (!Number.isFinite(target)) return null;
+    const diff = target - nowMs;
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  };
+
+  const remainDays = calcRemainDays(runtime.lastAfterPaidUntil);
+
   return (
     <section className="card">
       <div className="pill">결제 대상 매장: {storeName} ({storeId})</div>
@@ -181,6 +214,9 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
       <div className="card" style={{ gap: 6 }}>
         <div className="muted">예상 결제금액</div>
         <div style={{ fontWeight: 900, fontSize: 20 }}>{totalAmount.toLocaleString()}원</div>
+        <div className="muted">최근 결제일자: {fmt(runtime.lastPaidAt)}</div>
+        <div className="muted">최근 사용기간: {fmt(runtime.lastPaidAt)} ~ {fmt(runtime.lastAfterPaidUntil)} ({runtime.lastPlanMonths ?? "-"}개월 결제)</div>
+        <div className="muted">최근 결제 기준 남은일자: {remainDays == null ? "-" : `${remainDays}일`}</div>
         <div className="muted">기본 상태: {runtime.baseStatus} / 기본 만료일: {fmt(runtime.basePaidUntil)} (최근 {runtime.baseMonths ?? "-"}개월)</div>
         <div className="muted">옵션 상태: {runtime.addonStatus} / 옵션 만료일: {fmt(runtime.addonPaidUntil)} (최근 {runtime.addonMonths ?? "-"}개월)</div>
       </div>
