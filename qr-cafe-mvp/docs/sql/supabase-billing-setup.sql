@@ -86,6 +86,18 @@ create table if not exists public.store_pg_config (
   updated_at timestamptz not null default now()
 );
 
+-- 4-1) 플랫폼 단일 PG 연결 정보(공통 MID 모델)
+create table if not exists public.platform_pg_config (
+  id integer primary key default 1 check (id = 1),
+  pg_provider text not null default 'tosspayments',
+  mid text,
+  client_key text,
+  secret_key text,
+  pg_verified_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- 5) 결제 이력 테이블(운영자/정산/감사로그용)
 create table if not exists public.billing_payments (
   id bigint generated always as identity primary key,
@@ -279,6 +291,11 @@ create trigger trg_store_pg_config_updated_at
 before update on public.store_pg_config
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists trg_platform_pg_config_updated_at on public.platform_pg_config;
+create trigger trg_platform_pg_config_updated_at
+before update on public.platform_pg_config
+for each row execute procedure public.set_updated_at();
+
 drop trigger if exists trg_billing_payments_updated_at on public.billing_payments;
 create trigger trg_billing_payments_updated_at
 before update on public.billing_payments
@@ -288,6 +305,7 @@ for each row execute procedure public.set_updated_at();
 alter table public.store_billing enable row level security;
 alter table public.store_addons enable row level security;
 alter table public.store_pg_config enable row level security;
+alter table public.platform_pg_config enable row level security;
 alter table public.billing_payments enable row level security;
 
 -- 9) 기존 정책 삭제(재실행 안전)
@@ -298,6 +316,8 @@ drop policy if exists "store_addons_owner_upsert" on public.store_addons;
 drop policy if exists "store_pg_config_owner_select" on public.store_pg_config;
 drop policy if exists "store_pg_config_owner_upsert" on public.store_pg_config;
 drop policy if exists "billing_payments_owner_select" on public.billing_payments;
+drop policy if exists "platform_pg_config_authenticated_select" on public.platform_pg_config;
+drop policy if exists "platform_pg_config_authenticated_upsert" on public.platform_pg_config;
 
 -- 10) owner만 조회/수정 가능 정책
 create policy "store_billing_owner_select"
@@ -345,10 +365,24 @@ for select
 to authenticated
 using (public.is_store_owner(store_id));
 
+create policy "platform_pg_config_authenticated_select"
+on public.platform_pg_config
+for select
+to authenticated
+using (true);
+
+create policy "platform_pg_config_authenticated_upsert"
+on public.platform_pg_config
+for all
+to authenticated
+using (true)
+with check (true);
+
 -- 11) 권한 부여
 grant select, insert, update, delete on public.store_billing to authenticated;
 grant select, insert, update, delete on public.store_addons to authenticated;
 grant select, insert, update, delete on public.store_pg_config to authenticated;
+grant select, insert, update, delete on public.platform_pg_config to authenticated;
 grant select on public.billing_payments to authenticated;
 grant usage, select on sequence public.billing_payments_id_seq to authenticated;
 grant execute on function public.apply_store_billing_payment(text, integer, boolean, boolean, text, text, integer, text) to authenticated;

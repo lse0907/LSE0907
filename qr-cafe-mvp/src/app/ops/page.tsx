@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 
@@ -26,8 +26,6 @@ export default function OpsPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [pgForm, setPgForm] = useState({ mid: "", clientKey: "", secretKey: "" });
-
-  const selected = useMemo(() => rows.find((x) => x.store_id === selectedStoreId) || null, [rows, selectedStoreId]);
 
   const loadOps = useCallback(async () => {
     setLoading(true);
@@ -84,12 +82,11 @@ export default function OpsPage() {
   }, [loadOps]);
 
   useEffect(() => {
-    if (!selectedStoreId) return;
     (async () => {
       const { data, error } = await supabase
-        .from("store_pg_config")
+        .from("platform_pg_config")
         .select("mid, client_key, secret_key")
-        .eq("store_id", selectedStoreId)
+        .eq("id", 1)
         .maybeSingle();
       if (error) return;
       setPgForm({
@@ -98,19 +95,18 @@ export default function OpsPage() {
         secretKey: String(data?.secret_key || ""),
       });
     })();
-  }, [selectedStoreId]);
+  }, []);
 
   const savePg = async () => {
-    if (!selectedStoreId) return;
-    const { error } = await supabase.from("store_pg_config").upsert(
+    const { error } = await supabase.from("platform_pg_config").upsert(
       {
-        store_id: selectedStoreId,
+        id: 1,
         mid: pgForm.mid.trim(),
         client_key: pgForm.clientKey.trim(),
         secret_key: pgForm.secretKey.trim(),
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "store_id" }
+      { onConflict: "id" }
     );
     setMsg(error ? `PG 저장 실패: ${error.message}` : "PG 저장 완료");
   };
@@ -137,7 +133,6 @@ export default function OpsPage() {
       <header className="top">
         <h1 className="h1">OPS 관리자 콘솔</h1>
         <div className="row">
-          <button className="btn" onClick={() => router.push("/admin")}>점주 admin 이동</button>
           <button className="btn" onClick={loadOps}>새로고침</button>
         </div>
       </header>
@@ -183,13 +178,13 @@ export default function OpsPage() {
         </article>
 
         <article className="card">
-          <h2>매장 PG 연결 (OPS 지원)</h2>
-          <p className="muted">선택 매장: {selected?.store_name || selected?.store_id || "-"}</p>
+          <h2>플랫폼 PG 연결 (단일 MID)</h2>
+          <p className="muted">점주 구독 결제는 플랫폼 사업자 PG(공통 MID) 기준으로 처리합니다.</p>
           <div className="row"><input className="input" placeholder="MID" value={pgForm.mid} onChange={(e) => setPgForm((p) => ({ ...p, mid: e.target.value }))} /></div>
           <div className="row"><input className="input" placeholder="Client Key" value={pgForm.clientKey} onChange={(e) => setPgForm((p) => ({ ...p, clientKey: e.target.value }))} /></div>
           <div className="row"><input className="input" placeholder="Secret Key" value={pgForm.secretKey} onChange={(e) => setPgForm((p) => ({ ...p, secretKey: e.target.value }))} /></div>
           <div className="row">
-            <button className="btn primary" onClick={savePg} disabled={!selectedStoreId}>PG 저장</button>
+            <button className="btn primary" onClick={savePg}>PG 저장</button>
             <button className="btn" onClick={() => selectedStoreId && router.push(`/admin/billing/pay?store=${encodeURIComponent(selectedStoreId)}`)} disabled={!selectedStoreId}>
               결제/구독 테스트로 이동
             </button>

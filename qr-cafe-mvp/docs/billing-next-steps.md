@@ -40,9 +40,9 @@
 
 ## 화면/역할 분리(확정 방향)
 - 점주 admin:
-  - `/admin/billing`은 설정 전용(PG 연결/승인 토글)으로 유지.
-  - `/admin/billing/pay`는 결제 실행 전용 페이지로 분리.
+  - `/admin/billing`은 설정 전용(PG 연결)으로 유지.
+  - `/admin/billing/pay`에서 테스트 승인 체크 + 결제 실행을 처리.
 - OPS 관리자 콘솔(PC 중심):
   - `/ops`에서 매장 가입/구독/구독매출 현황 확인.
-  - 매장별 PG 정보(MID/Client Key/Secret Key) 지원 입력.
+  - 플랫폼 단일 PG 정보(MID/Client Key/Secret Key) 1회 입력.
   - 문의/장애 티켓 보드는 다음 단계로 추가.

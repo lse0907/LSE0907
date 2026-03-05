@@ -29,32 +29,23 @@ const EMPTY_BILLING: BillingSettings = {
 
 async function loadBillingFromDb(storeId: string): Promise<BillingSettings | null> {
   try {
-    const [baseRes, addonRes, pgRes] = await Promise.all([
-      supabase.from("store_billing").select("base_plan_status, updated_at").eq("store_id", storeId).maybeSingle(),
-      supabase.from("store_addons").select("prepay_addon_status").eq("store_id", storeId).maybeSingle(),
-      supabase
-        .from("store_pg_config")
-        .select("mid, client_key, secret_key, updated_at")
-        .eq("store_id", storeId)
-        .maybeSingle(),
-    ]);
+    const { data: pgRow, error } = await supabase
+      .from("store_pg_config")
+      .select("mid, client_key, secret_key, updated_at")
+      .eq("store_id", storeId)
+      .maybeSingle();
 
-    if (baseRes.error || addonRes.error || pgRes.error) return null;
-
-    const baseRow = baseRes.data;
-    const addonRow = addonRes.data;
-    const pgRow = pgRes.data;
-
-    if (!baseRow && !addonRow && !pgRow) return null;
+    if (error) return null;
+    if (!pgRow) return null;
 
     return {
-      baseApproved: String(baseRow?.base_plan_status || "inactive") === "active",
-      addonApproved: String(addonRow?.prepay_addon_status || "inactive") === "active",
+      baseApproved: false,
+      addonApproved: false,
       pgMid: String(pgRow?.mid || ""),
       pgClientKey: String(pgRow?.client_key || ""),
       pgSecretKey: String(pgRow?.secret_key || ""),
-      updatedAt: Number.isFinite(new Date(String(pgRow?.updated_at || baseRow?.updated_at || "")).getTime())
-        ? new Date(String(pgRow?.updated_at || baseRow?.updated_at || "")).getTime()
+      updatedAt: Number.isFinite(new Date(String(pgRow?.updated_at || "")).getTime())
+        ? new Date(String(pgRow?.updated_at || "")).getTime()
         : null,
     };
   } catch {
@@ -64,16 +55,6 @@ async function loadBillingFromDb(storeId: string): Promise<BillingSettings | nul
 
 async function saveBillingToDb(storeId: string, form: BillingSettings): Promise<boolean> {
   try {
-    const basePayload = {
-      store_id: storeId,
-      base_plan_status: form.baseApproved ? "active" : "inactive",
-      updated_at: new Date().toISOString(),
-    };
-    const addonPayload = {
-      store_id: storeId,
-      prepay_addon_status: form.addonApproved ? "active" : "inactive",
-      updated_at: new Date().toISOString(),
-    };
     const pgPayload = {
       store_id: storeId,
       mid: form.pgMid.trim(),
@@ -82,13 +63,8 @@ async function saveBillingToDb(storeId: string, form: BillingSettings): Promise<
       updated_at: new Date().toISOString(),
     };
 
-    const [baseUpsert, addonUpsert, pgUpsert] = await Promise.all([
-      supabase.from("store_billing").upsert(basePayload, { onConflict: "store_id" }),
-      supabase.from("store_addons").upsert(addonPayload, { onConflict: "store_id" }),
-      supabase.from("store_pg_config").upsert(pgPayload, { onConflict: "store_id" }),
-    ]);
-
-    return !baseUpsert.error && !addonUpsert.error && !pgUpsert.error;
+    const { error } = await supabase.from("store_pg_config").upsert(pgPayload, { onConflict: "store_id" });
+    return !error;
   } catch {
     return false;
   }
@@ -159,9 +135,7 @@ function BillingForm({ storeId }: { storeId: string }) {
     };
   }, [storeId, refreshRuntime]);
 
-  const activationReady = useMemo(() => {
-    return form.baseApproved && form.addonApproved && !!form.pgMid && !!form.pgClientKey && !!form.pgSecretKey;
-  }, [form]);
+  const activationReady = useMemo(() => !!form.pgMid && !!form.pgClientKey && !!form.pgSecretKey, [form]);
 
   const onSave = async () => {
     const savedToDb = await saveBillingToDb(storeId, form);
@@ -243,25 +217,7 @@ function BillingForm({ storeId }: { storeId: string }) {
         </div>
         <p className="muted">선결제 주문 화면은 DB(store_addons, store_pg_config)를 기준으로 동작합니다.</p>
 
-        <div className="grid2">
-          <label className="toggleRow">
-            <input
-              type="checkbox"
-              checked={form.baseApproved}
-              onChange={(e) => setForm((prev) => ({ ...prev, baseApproved: e.target.checked }))}
-            />
-            <span>기본 구독 테스트 승인</span>
-          </label>
-
-          <label className="toggleRow">
-            <input
-              type="checkbox"
-              checked={form.addonApproved}
-              onChange={(e) => setForm((prev) => ({ ...prev, addonApproved: e.target.checked }))}
-            />
-            <span>선결재 옵션 테스트 승인</span>
-          </label>
-        </div>
+        <p className="muted">테스트 승인/결제 체크는 [결제 실행 페이지]에서 매장별로 진행합니다.</p>
       </section>
 
       {saveMode !== "db" ? (
@@ -332,11 +288,11 @@ function BillingForm({ storeId }: { storeId: string }) {
       </section>
 
       <section className="card">
-        <h2 className="h2">선결재 기능 활성화 상태</h2>
+        <h2 className="h2">PG 연결 활성화 상태</h2>
         <p className={activationReady ? "ok" : "warn"}>
           {activationReady
-            ? "사용 가능: 기본/옵션 승인 + PG 입력이 완료되었습니다."
-            : "사용 불가: 기본 승인, 옵션 승인, PG 입력을 모두 완료해야 합니다."}
+            ? "사용 가능: PG 입력이 완료되었습니다."
+            : "사용 불가: MID/Client Key/Secret Key 입력을 완료해야 합니다."}
         </p>
       </section>
 

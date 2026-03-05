@@ -12,10 +12,14 @@ type BillingRuntimeStatus = {
   addonPrice: number;
   baseMonths: number | null;
   addonMonths: number | null;
+  baseStatus: string;
   addonStatus: string;
 };
 
-function BillingPayForm({ storeId }: { storeId: string }) {
+function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: string }) {
+  const [baseApproved, setBaseApproved] = useState(false);
+  const [addonApproved, setAddonApproved] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
   const [planMonths, setPlanMonths] = useState<1 | 3 | 6 | 12>(1);
   const [payBase, setPayBase] = useState(true);
   const [payAddon, setPayAddon] = useState(true);
@@ -28,12 +32,13 @@ function BillingPayForm({ storeId }: { storeId: string }) {
     addonPrice: 5000,
     baseMonths: null,
     addonMonths: null,
+    baseStatus: "inactive",
     addonStatus: "inactive",
   });
 
   const refreshRuntime = useCallback(async () => {
     const [baseRes, addonRes] = await Promise.all([
-      supabase.from("store_billing").select("paid_until, current_plan_months, base_price_krw").eq("store_id", storeId).maybeSingle(),
+      supabase.from("store_billing").select("paid_until, current_plan_months, base_price_krw, base_plan_status").eq("store_id", storeId).maybeSingle(),
       supabase
         .from("store_addons")
         .select("addon_paid_until, current_plan_months, prepay_addon_price_krw, prepay_addon_status")
@@ -48,8 +53,12 @@ function BillingPayForm({ storeId }: { storeId: string }) {
       addonPrice: Math.max(0, Number(addonRes.data?.prepay_addon_price_krw || 5000)),
       baseMonths: Number.isFinite(Number(baseRes.data?.current_plan_months)) ? Number(baseRes.data?.current_plan_months) : null,
       addonMonths: Number.isFinite(Number(addonRes.data?.current_plan_months)) ? Number(addonRes.data?.current_plan_months) : null,
+      baseStatus: String(baseRes.data?.base_plan_status || "inactive"),
       addonStatus: String(addonRes.data?.prepay_addon_status || "inactive"),
     });
+
+    setBaseApproved(String(baseRes.data?.base_plan_status || "inactive") === "active");
+    setAddonApproved(String(addonRes.data?.prepay_addon_status || "inactive") === "active");
   }, [storeId]);
 
   useEffect(() => {
@@ -63,6 +72,23 @@ function BillingPayForm({ storeId }: { storeId: string }) {
     const unit = (payBase ? runtime.basePrice : 0) + (payAddon ? runtime.addonPrice : 0);
     return unit * planMonths;
   }, [payAddon, payBase, planMonths, runtime.addonPrice, runtime.basePrice]);
+
+  const onSaveApproval = async () => {
+    setSaveMsg("");
+    const nowIso = new Date().toISOString();
+    const [baseRes, addonRes] = await Promise.all([
+      supabase.from("store_billing").upsert({ store_id: storeId, base_plan_status: baseApproved ? "active" : "inactive", updated_at: nowIso }, { onConflict: "store_id" }),
+      supabase.from("store_addons").upsert({ store_id: storeId, prepay_addon_status: addonApproved ? "active" : "inactive", updated_at: nowIso }, { onConflict: "store_id" }),
+    ]);
+
+    if (baseRes.error || addonRes.error) {
+      setSaveMsg(`테스트 승인 저장 실패: ${baseRes.error?.message || addonRes.error?.message}`);
+      return;
+    }
+
+    setSaveMsg("테스트 승인 저장 완료");
+    await refreshRuntime();
+  };
 
   const onApplyTestPayment = async () => {
     setPayMsg("");
@@ -108,6 +134,25 @@ function BillingPayForm({ storeId }: { storeId: string }) {
 
   return (
     <section className="card">
+      <div className="pill">결제 대상 매장: {storeName} ({storeId})</div>
+
+      <h2 className="h2">테스트 승인 체크</h2>
+      <div className="payGrid">
+        <label className="toggleRow">
+          <input type="checkbox" checked={baseApproved} onChange={(e) => setBaseApproved(e.target.checked)} />
+          <span>기본 구독 테스트 승인</span>
+        </label>
+
+        <label className="toggleRow">
+          <input type="checkbox" checked={addonApproved} onChange={(e) => setAddonApproved(e.target.checked)} />
+          <span>선결재 옵션 테스트 승인</span>
+        </label>
+      </div>
+      <div className="row">
+        <button className="btn" type="button" onClick={onSaveApproval}>승인 상태 저장</button>
+        {saveMsg ? <span className="muted">{saveMsg}</span> : null}
+      </div>
+
       <h2 className="h2">기간형 결제 테스트 (owner 전용)</h2>
       <p className="muted">옵션도 기간제로 계산됩니다. 총액 = 개월수 × (기본 + 옵션선택금액)</p>
 
@@ -136,7 +181,7 @@ function BillingPayForm({ storeId }: { storeId: string }) {
       <div className="card" style={{ gap: 6 }}>
         <div className="muted">예상 결제금액</div>
         <div style={{ fontWeight: 900, fontSize: 20 }}>{totalAmount.toLocaleString()}원</div>
-        <div className="muted">기본 만료일: {fmt(runtime.basePaidUntil)} (최근 {runtime.baseMonths ?? "-"}개월)</div>
+        <div className="muted">기본 상태: {runtime.baseStatus} / 기본 만료일: {fmt(runtime.basePaidUntil)} (최근 {runtime.baseMonths ?? "-"}개월)</div>
         <div className="muted">옵션 상태: {runtime.addonStatus} / 옵션 만료일: {fmt(runtime.addonPaidUntil)} (최근 {runtime.addonMonths ?? "-"}개월)</div>
       </div>
 
@@ -159,6 +204,7 @@ function AdminBillingPayPageInner() {
     const savedStore = (getCurrentStoreId() || "").trim();
     return queryStore || savedStore;
   }, [sp]);
+  const [storeName, setStoreName] = useState("-");
 
   useEffect(() => {
     if (!storeId) {
@@ -167,6 +213,15 @@ function AdminBillingPayPageInner() {
     }
     setCurrentStoreId(storeId);
   }, [router, storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    (async () => {
+      const { data } = await supabase.from("stores").select("store_name").eq("store_id", storeId).maybeSingle();
+      const name = String(data?.store_name || "").trim();
+      setStoreName(name || storeId);
+    })();
+  }, [storeId]);
 
   return (
     <main className="wrap">
@@ -183,7 +238,7 @@ function AdminBillingPayPageInner() {
         </div>
       </header>
 
-      {storeId ? <BillingPayForm key={storeId} storeId={storeId} /> : null}
+      {storeId ? <BillingPayForm key={storeId} storeId={storeId} storeName={storeName} /> : null}
     </main>
   );
 }
