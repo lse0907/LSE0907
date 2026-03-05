@@ -242,6 +242,16 @@ function BillingForm({ storeId }: { storeId: string }) {
             : "사용 불가: 기본 승인, 옵션 승인, PG 입력을 모두 완료해야 합니다."}
         </p>
       </section>
+
+      <section className="card">
+        <h2 className="h2">매장 결제/구독 실행</h2>
+        <p className="muted">결제 실행은 별도 페이지에서 진행해 주세요.</p>
+        <div className="row">
+          <button className="btn primary" type="button" onClick={() => window.location.assign(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>
+            결제 실행 페이지로 이동
+          </button>
+        </div>
+      </section>
     </>
   );
 }
