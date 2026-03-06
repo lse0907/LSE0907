@@ -312,7 +312,7 @@ function AdminPageInner() {
       <header className="topbar">
         <div>
           <h1 className="h1">관리자</h1>
-          <p className="desc">매장을 선택해 주세요.</p>
+          
         </div>
 
         <div className="topActions">
@@ -361,6 +361,8 @@ function AdminPageInner() {
           </div>
         </div>
 
+        <p className="muted">매장을 선택해 주세요.</p>
+
         {stores.length === 0 ? (
           <div className="emptyBox">
             <p className="muted">매장이 없습니다. 먼저 매장을 만들어주세요.</p>
@@ -402,21 +404,17 @@ function AdminPageInner() {
                     </div>
                     <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                       {on ? <div className="pill pillOn">선택됨</div> : null}
-                      <button className="btn btnPrimary" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
-                        결제/구독
-                      </button>
+                      {on ? (
+                        <button className="btn btnPrimary btnSmall" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
+                          구독결제
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 );
               })}
             </div>
-            {selectedStoreId ? (
-              <div className="btnRow" style={{ marginTop: 10 }}>
-                <button className="btn btnPrimary" onClick={() => go("/admin/billing/pay")}>
-                  선택 매장 결제/구독 실행
-                </button>
-              </div>
-            ) : null}
+            <p className="hint" style={{ marginTop: 6 }}>구독 사용 기간이 만료되면 주문/직원/관리 기능 사용이 제한될 수 있습니다. 만료 전에 구독결제를 진행해 주세요.</p>
           </>
         )}
       </section>
@@ -675,6 +673,11 @@ body {
   background:var(--brand);
   color:#fff;
   border-color:var(--brand);
+}
+.btnSmall{
+  padding:8px 11px;
+  font-size:13px;
+  border-radius:10px;
 }
 .btn:disabled, .btnPrimary:disabled{
   opacity:.5;
