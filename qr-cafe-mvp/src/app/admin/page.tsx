@@ -48,7 +48,7 @@ function AdminPageInner() {
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [msg, setMsg] = useState<string>("");
-  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | null>("stats");
+  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | "support" | null>("stats");
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
@@ -316,6 +316,9 @@ function AdminPageInner() {
         </div>
 
         <div className="topActions">
+          <button className="btn" onClick={() => router.push("/ops")}>
+            OPS
+          </button>
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
             고객화면
           </button>
@@ -407,6 +410,13 @@ function AdminPageInner() {
                 );
               })}
             </div>
+            {selectedStoreId ? (
+              <div className="btnRow" style={{ marginTop: 10 }}>
+                <button className="btn btnPrimary" onClick={() => go("/admin/billing/pay")}>
+                  선택 매장 결제/구독 실행
+                </button>
+              </div>
+            ) : null}
           </>
         )}
       </section>
@@ -498,6 +508,14 @@ function AdminPageInner() {
             </div>
             <button className="subBtn subBtnPrimary" onClick={() => go("/admin/stats")}>
               자세히보기
+            </button>
+          </div>
+        ) : null}
+
+        {activeSection === "support" ? (
+          <div className="subPanel">
+            <button className="subBtn subBtnPrimary" onClick={() => go("/admin/support")}>
+              지원센터 이동
             </button>
           </div>
         ) : null}
