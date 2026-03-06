@@ -316,9 +316,6 @@ function AdminPageInner() {
         </div>
 
         <div className="topActions">
-          <button className="btn" onClick={() => router.push("/ops")}>
-            OPS
-          </button>
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
             고객화면
           </button>
