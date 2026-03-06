@@ -19,32 +19,23 @@ const EMPTY_BILLING: BillingSettings = {
 
 async function loadBillingFromDb(storeId: string): Promise<BillingSettings | null> {
   try {
-    const [baseRes, addonRes, pgRes] = await Promise.all([
-      supabase.from("store_billing").select("base_plan_status, updated_at").eq("store_id", storeId).maybeSingle(),
-      supabase.from("store_addons").select("prepay_addon_status").eq("store_id", storeId).maybeSingle(),
-      supabase
-        .from("store_pg_config")
-        .select("mid, client_key, secret_key, updated_at")
-        .eq("store_id", storeId)
-        .maybeSingle(),
-    ]);
+    const { data: pgRow, error } = await supabase
+      .from("store_pg_config")
+      .select("mid, client_key, secret_key, updated_at")
+      .eq("store_id", storeId)
+      .maybeSingle();
 
-    if (baseRes.error || addonRes.error || pgRes.error) return null;
-
-    const baseRow = baseRes.data;
-    const addonRow = addonRes.data;
-    const pgRow = pgRes.data;
-
-    if (!baseRow && !addonRow && !pgRow) return null;
+    if (error) return null;
+    if (!pgRow) return null;
 
     return {
-      baseApproved: String(baseRow?.base_plan_status || "inactive") === "active",
-      addonApproved: String(addonRow?.prepay_addon_status || "inactive") === "active",
+      baseApproved: false,
+      addonApproved: false,
       pgMid: String(pgRow?.mid || ""),
       pgClientKey: String(pgRow?.client_key || ""),
       pgSecretKey: String(pgRow?.secret_key || ""),
-      updatedAt: Number.isFinite(new Date(String(pgRow?.updated_at || baseRow?.updated_at || "")).getTime())
-        ? new Date(String(pgRow?.updated_at || baseRow?.updated_at || "")).getTime()
+      updatedAt: Number.isFinite(new Date(String(pgRow?.updated_at || "")).getTime())
+        ? new Date(String(pgRow?.updated_at || "")).getTime()
         : null,
     };
   } catch {
@@ -54,16 +45,6 @@ async function loadBillingFromDb(storeId: string): Promise<BillingSettings | nul
 
 async function saveBillingToDb(storeId: string, form: BillingSettings): Promise<boolean> {
   try {
-    const basePayload = {
-      store_id: storeId,
-      base_plan_status: form.baseApproved ? "active" : "inactive",
-      updated_at: new Date().toISOString(),
-    };
-    const addonPayload = {
-      store_id: storeId,
-      prepay_addon_status: form.addonApproved ? "active" : "inactive",
-      updated_at: new Date().toISOString(),
-    };
     const pgPayload = {
       store_id: storeId,
       mid: form.pgMid.trim(),
@@ -72,13 +53,8 @@ async function saveBillingToDb(storeId: string, form: BillingSettings): Promise<
       updated_at: new Date().toISOString(),
     };
 
-    const [baseUpsert, addonUpsert, pgUpsert] = await Promise.all([
-      supabase.from("store_billing").upsert(basePayload, { onConflict: "store_id" }),
-      supabase.from("store_addons").upsert(addonPayload, { onConflict: "store_id" }),
-      supabase.from("store_pg_config").upsert(pgPayload, { onConflict: "store_id" }),
-    ]);
-
-    return !baseUpsert.error && !addonUpsert.error && !pgUpsert.error;
+    const { error } = await supabase.from("store_pg_config").upsert(pgPayload, { onConflict: "store_id" });
+    return !error;
   } catch {
     return false;
   }
@@ -109,9 +85,7 @@ function BillingForm({ storeId }: { storeId: string }) {
     };
   }, [storeId]);
 
-  const activationReady = useMemo(() => {
-    return form.baseApproved && form.addonApproved && !!form.pgMid && !!form.pgClientKey && !!form.pgSecretKey;
-  }, [form]);
+  const activationReady = useMemo(() => !!form.pgMid && !!form.pgClientKey && !!form.pgSecretKey, [form]);
 
   const onSave = async () => {
     const savedToDb = await saveBillingToDb(storeId, form);
@@ -130,7 +104,7 @@ function BillingForm({ storeId }: { storeId: string }) {
   if (loading) {
     return (
       <section className="card">
-        <p className="muted">결제/구독 설정 로딩 중...</p>
+        <p className="muted">PG 설정 로딩 중...</p>
       </section>
     );
   }
@@ -144,33 +118,13 @@ function BillingForm({ storeId }: { storeId: string }) {
             저장 상태: {saveMode === "db" ? "Supabase(DB) 동기화 완료" : "DB 미동기화"}
           </div>
         </div>
-        <p className="muted">선결제 주문 화면은 DB(store_addons, store_pg_config)를 기준으로 동작합니다.</p>
-
-        <div className="grid2">
-          <label className="toggleRow">
-            <input
-              type="checkbox"
-              checked={form.baseApproved}
-              onChange={(e) => setForm((prev) => ({ ...prev, baseApproved: e.target.checked }))}
-            />
-            <span>기본 구독 테스트 승인</span>
-          </label>
-
-          <label className="toggleRow">
-            <input
-              type="checkbox"
-              checked={form.addonApproved}
-              onChange={(e) => setForm((prev) => ({ ...prev, addonApproved: e.target.checked }))}
-            />
-            <span>선결재 옵션 테스트 승인</span>
-          </label>
-        </div>
+        <p className="muted">이 페이지는 매장 PG 연결 정보 저장과 연결 상태 확인 전용입니다.</p>
       </section>
 
       {saveMode !== "db" ? (
         <section className="card warningCard">
           <p className="warn">
-            현재 결제/구독 설정이 DB에 동기화되지 않았습니다. 이 상태에서는 주문 화면에서 선결제 매장으로 인식되지 않을 수 있습니다.
+            현재 PG 설정이 DB에 동기화되지 않았습니다. 저장 후 다시 확인해 주세요.
           </p>
         </section>
       ) : null}
@@ -235,13 +189,14 @@ function BillingForm({ storeId }: { storeId: string }) {
       </section>
 
       <section className="card">
-        <h2 className="h2">선결재 기능 활성화 상태</h2>
+        <h2 className="h2">PG 연결 활성화 상태</h2>
         <p className={activationReady ? "ok" : "warn"}>
           {activationReady
-            ? "사용 가능: 기본/옵션 승인 + PG 입력이 완료되었습니다."
-            : "사용 불가: 기본 승인, 옵션 승인, PG 입력을 모두 완료해야 합니다."}
+            ? "사용 가능: PG 입력이 완료되었습니다."
+            : "사용 불가: MID/Client Key/Secret Key 입력을 완료해야 합니다."}
         </p>
       </section>
+
     </>
   );
 }
@@ -269,7 +224,7 @@ function AdminBillingPageInner() {
       <style jsx global>{css}</style>
 
       <header className="topbar">
-        <h1 className="h1">결제/구독 설정</h1>
+        <h1 className="h1">PG 설정</h1>
         <button className="btn" type="button" onClick={() => router.back()}>
           뒤로가기
         </button>
