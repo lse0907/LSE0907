@@ -201,7 +201,7 @@ function BillingForm({ storeId }: { storeId: string }) {
   if (loading) {
     return (
       <section className="card">
-        <p className="muted">결제/구독 설정 로딩 중...</p>
+        <p className="muted">PG 설정 로딩 중...</p>
       </section>
     );
   }
@@ -215,15 +215,13 @@ function BillingForm({ storeId }: { storeId: string }) {
             저장 상태: {saveMode === "db" ? "Supabase(DB) 동기화 완료" : "DB 미동기화"}
           </div>
         </div>
-        <p className="muted">선결제 주문 화면은 DB(store_addons, store_pg_config)를 기준으로 동작합니다.</p>
-
-        <p className="muted">테스트 승인/결제 체크는 [결제 실행 페이지]에서 매장별로 진행합니다.</p>
+        <p className="muted">이 페이지는 매장 PG 연결 정보 저장과 연결 상태 확인 전용입니다.</p>
       </section>
 
       {saveMode !== "db" ? (
         <section className="card warningCard">
           <p className="warn">
-            현재 결제/구독 설정이 DB에 동기화되지 않았습니다. 이 상태에서는 주문 화면에서 선결제 매장으로 인식되지 않을 수 있습니다.
+            현재 PG 설정이 DB에 동기화되지 않았습니다. 저장 후 다시 확인해 주세요.
           </p>
         </section>
       ) : null}
@@ -296,15 +294,6 @@ function BillingForm({ storeId }: { storeId: string }) {
         </p>
       </section>
 
-      <section className="card">
-        <h2 className="h2">매장 결제/구독 실행</h2>
-        <p className="muted">결제 실행은 별도 페이지에서 진행해 주세요.</p>
-        <div className="row">
-          <button className="btn primary" type="button" onClick={() => window.location.assign(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>
-            결제 실행 페이지로 이동
-          </button>
-        </div>
-      </section>
     </>
   );
 }
@@ -332,7 +321,7 @@ function AdminBillingPageInner() {
       <style jsx global>{css}</style>
 
       <header className="topbar">
-        <h1 className="h1">결제/구독 설정</h1>
+        <h1 className="h1">PG 설정</h1>
         <button className="btn" type="button" onClick={() => router.back()}>
           뒤로가기
         </button>

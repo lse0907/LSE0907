@@ -48,7 +48,7 @@ function AdminPageInner() {
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [msg, setMsg] = useState<string>("");
-  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | null>("stats");
+  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | "support" | null>("stats");
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
@@ -333,23 +333,32 @@ function AdminPageInner() {
 
       {msg ? <div className="alert">{msg}</div> : null}
 
-      <section className="card stickyCard">
-        <div className="cardHead">
-          <h2 className="cardTitle">매장 만들기</h2>
-        </div>
-        <p className="muted">매장을 먼저 생성해 주세요.</p>
-        <div className="btnRow createBtnRow">
-          <button className="btn btnPrimary" onClick={goCreate}>
-            매장 만들기
-          </button>
-        </div>
-      </section>
+      {stores.length === 0 ? (
+        <section className="card stickyCard">
+          <div className="cardHead">
+            <h2 className="cardTitle">매장 만들기</h2>
+          </div>
+          <p className="muted">매장을 먼저 생성해 주세요.</p>
+          <div className="btnRow createBtnRow">
+            <button className="btn btnPrimary" onClick={goCreate}>
+              매장 만들기
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {/* ===== 매장 선택 ===== */}
       <section className="card">
         <div className="cardHead">
           <h2 className="cardTitle">매장 리스트</h2>
-          <span className="pill">{stores.length}개</span>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="pill">{stores.length}개</span>
+            {stores.length > 0 ? (
+              <button className="btn" onClick={goCreate}>
+                매장 추가
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {stores.length === 0 ? (
@@ -360,7 +369,7 @@ function AdminPageInner() {
           <>
             {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
             <div className="storeList">
-              {stores.map((s, idx) => {
+              {stores.map((s) => {
                 const on = s.store_id === selectedStoreId;
                 const role = members.find((m) => m.store_id === s.store_id)?.role || "-";
                 const remaining = calcRemainingDays(s.created_at);
@@ -371,11 +380,12 @@ function AdminPageInner() {
                     ? `무료 사용기간 ${FREE_TRIAL_DAYS}일`
                     : `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remaining}일`;
                 return (
-                  <button
-                    key={s.store_id}
-                    className={`storeRow ${on ? "storeRowOn" : ""}`}
-                    onClick={() => setSelectedStoreId(s.store_id)}
-                  >
+                  <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedStoreId(s.store_id);
+                    }
+                  }}>
                     <div style={{ minWidth: 0 }}>
                       <div className="storeName">
                         {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
@@ -389,10 +399,14 @@ function AdminPageInner() {
                       ) : (
                         <div className="muted">{trialText}</div>
                       )}
-                      {idx > 0 ? <div className="muted">추가 매장은 결제 후 생성 (예정)</div> : null}
                     </div>
-                    <div className="pill">{on ? "선택됨" : "선택"}</div>
-                  </button>
+                    <div className="storeActions" onClick={(e) => e.stopPropagation()}>
+                      {on ? <div className="pill pillOn">선택됨</div> : null}
+                      <button className="btn btnPrimary" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
+                        이 매장 결제 실행
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -440,6 +454,14 @@ function AdminPageInner() {
           >
             <div className="cardBtnTitle">매출통계</div>
           </button>
+
+          <button
+            className={`cardBtn ${activeSection === "support" ? "cardBtnOn" : ""}`}
+            onClick={() => setActiveSection((prev) => (prev === "support" ? null : "support"))}
+            disabled={!selectedStoreId}
+          >
+            <div className="cardBtnTitle">지원센터</div>
+          </button>
         </div>
 
         {activeSection === "store" ? (
@@ -448,7 +470,7 @@ function AdminPageInner() {
               매장정보
             </button>
             <button className="subBtn" onClick={() => go("/admin/billing")}>
-              결제/구독
+              PG 설정
             </button>
             <button className="subBtn" onClick={() => go("/admin/support")}>
               지원센터
@@ -489,6 +511,14 @@ function AdminPageInner() {
             </div>
             <button className="subBtn subBtnPrimary" onClick={() => go("/admin/stats")}>
               자세히보기
+            </button>
+          </div>
+        ) : null}
+
+        {activeSection === "support" ? (
+          <div className="subPanel">
+            <button className="subBtn subBtnPrimary" onClick={() => go("/admin/support")}>
+              지원센터 이동
             </button>
           </div>
         ) : null}
@@ -561,6 +591,10 @@ body {
   border-radius:var(--radius);
   padding:14px;
   box-shadow:0 1px 0 rgba(0,0,0,0.03);
+}
+.row{
+  display:flex;
+  align-items:center;
 }
 .cardHead{
   display:flex;
@@ -667,6 +701,21 @@ body {
 }
 .storeRowOn{
   border:2px solid var(--brand);
+  background:#eef4ff;
+}
+.storeRow:focus-visible{
+  outline:2px solid #93c5fd;
+  outline-offset:2px;
+}
+.storeActions{
+  display:grid;
+  gap:8px;
+  justify-items:end;
+}
+.pillOn{
+  background:#dbeafe;
+  border-color:#bfdbfe;
+  color:#1d4ed8;
 }
 .storeName{
   font-weight:950;
