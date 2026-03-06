@@ -316,6 +316,9 @@ function AdminPageInner() {
         </div>
 
         <div className="topActions">
+          <button className="btn" onClick={() => router.push("/ops")}>
+            OPS
+          </button>
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
             고객화면
           </button>
@@ -407,6 +410,13 @@ function AdminPageInner() {
                 );
               })}
             </div>
+            {selectedStoreId ? (
+              <div className="btnRow" style={{ marginTop: 10 }}>
+                <button className="btn btnPrimary" onClick={() => go("/admin/billing/pay")}>
+                  선택 매장 결제/구독 실행
+                </button>
+              </div>
+            ) : null}
           </>
         )}
       </section>
@@ -461,6 +471,9 @@ function AdminPageInner() {
             </button>
             <button className="subBtn" onClick={() => go("/admin/billing")}>
               PG 설정
+            </button>
+            <button className="subBtn" onClick={() => go("/admin/support")}>
+              지원센터
             </button>
           </div>
         ) : null}
