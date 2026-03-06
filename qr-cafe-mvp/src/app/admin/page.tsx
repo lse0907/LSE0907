@@ -403,7 +403,7 @@ function AdminPageInner() {
                     <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                       {on ? <div className="pill pillOn">선택됨</div> : null}
                       <button className="btn btnPrimary" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
-                        이 매장 결제 실행
+                        결제/구독
                       </button>
                     </div>
                   </div>
@@ -456,8 +456,8 @@ function AdminPageInner() {
           </button>
 
           <button
-            className={`cardBtn ${activeSection === "support" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "support" ? null : "support"))}
+            className="cardBtn"
+            onClick={() => go("/admin/support")}
             disabled={!selectedStoreId}
           >
             <div className="cardBtnTitle">지원센터</div>
@@ -471,9 +471,6 @@ function AdminPageInner() {
             </button>
             <button className="subBtn" onClick={() => go("/admin/billing")}>
               PG 설정
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/support")}>
-              지원센터
             </button>
           </div>
         ) : null}
@@ -556,7 +553,7 @@ body {
 }
 .topbar{
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   justify-content:space-between;
   gap:12px;
 }
@@ -669,8 +666,9 @@ body {
   text-decoration:none;
 }
 .btnGroup{
-  display:flex;
-  gap:10px;
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap:8px;
   margin-top:12px;
 }
 .btnPrimary{
@@ -696,7 +694,7 @@ body {
   cursor:pointer;
   display:flex;
   justify-content:space-between;
-  align-items:center;
+  align-items:flex-start;
   gap:10px;
 }
 .storeRowOn{
@@ -708,9 +706,10 @@ body {
   outline-offset:2px;
 }
 .storeActions{
-  display:grid;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
   gap:8px;
-  justify-items:end;
 }
 .pillOn{
   background:#dbeafe;
@@ -722,11 +721,11 @@ body {
   font-size:14px;
 }
 .cardBtn{
-  text-align:left;
+  text-align:center;
   border:1px solid var(--line);
   background:#fff;
-  border-radius:16px;
-  padding:14px;
+  border-radius:14px;
+  padding:10px 8px;
   cursor:pointer;
 }
 .cardBtn:disabled{
@@ -743,7 +742,7 @@ body {
 }
 .cardBtnTitle{
   margin:0;
-  font-size:18px;
+  font-size:16px;
   font-weight:950;
 }
 .subPanel{
@@ -808,14 +807,10 @@ body {
     font-size:12px;
     white-space:nowrap;
   }
-  .cardBtnTitle{ font-size:16px; }
+  .cardBtnTitle{ font-size:14px; }
   .btnGroup{
-    flex-direction:row;
-    flex-wrap:wrap;
-  }
-  .storeRow{
-    flex-direction:column;
-    align-items:flex-start;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap:6px;
   }
 }
 `;
