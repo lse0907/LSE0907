@@ -8,6 +8,7 @@ import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
 type PaymentStatus = "not_required" | "pending" | "paid";
+type StaffViewMode = "basic" | "collab";
 
 type SelectedOptionItem = {
   id: string;
@@ -99,6 +100,10 @@ type DbOrderItemOptionRow = {
 
 const LAST_SPOKEN_KEY = "qrCafeStaffLastSpokenOrderId";
 const STAFF_POLL_INTERVAL_MS = 5000;
+
+function staffModeKey(storeId: string) {
+  return `qrCafeStaffViewMode:${storeId || "default"}`;
+}
 
 /**
  * ✅ 선택 매장 결정 우선순위
@@ -303,6 +308,28 @@ function StaffPageInner() {
 
   const [listTab, setListTab] = useState<"active" | "completed" | "all">("active");
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
+  const [staffViewMode, setStaffViewMode] = useState<StaffViewMode>("basic");
+
+  useEffect(() => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid || typeof window === "undefined") return;
+    try {
+      const saved = String(localStorage.getItem(staffModeKey(sid)) || "").trim();
+      if (saved === "collab" || saved === "basic") setStaffViewMode(saved);
+      else setStaffViewMode("basic");
+    } catch {
+      setStaffViewMode("basic");
+    }
+  }, [storeId]);
+
+  const updateStaffViewMode = (next: StaffViewMode) => {
+    setStaffViewMode(next);
+    const sid = storeIdRef.current || storeId;
+    if (!sid || typeof window === "undefined") return;
+    try {
+      localStorage.setItem(staffModeKey(sid), next);
+    } catch {}
+  };
 
   // ✅ 로딩 UX 개선:
   // - 첫 로딩만 화면에 표시
@@ -665,14 +692,6 @@ function StaffPageInner() {
           width: 100%;
         }
 
-        .titleTop {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          width: 100%;
-        }
-
         .topActions {
           display: flex;
           gap: 8px;
@@ -789,6 +808,21 @@ function StaffPageInner() {
           align-items: center;
           gap: 8px;
           flex-wrap: wrap;
+        }
+
+        .modeRow {
+          margin-top: 10px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .modeLabel {
+          margin: 0;
+          font-size: 12px;
+          color: var(--muted);
+          font-weight: 800;
         }
 
         .chip {
@@ -1067,6 +1101,46 @@ function StaffPageInner() {
           margin-top: 10px;
         }
 
+        .orderItemsBox {
+          margin-top: 10px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          overflow: hidden;
+        }
+
+        .orderItemLine {
+          padding: 12px;
+          display: grid;
+          gap: 6px;
+        }
+
+        .orderItemLine + .orderItemLine {
+          border-top: 1px solid var(--line);
+        }
+
+        .orderItemLineTop {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .orderItemName {
+          font-size: 22px;
+          line-height: 1.2;
+          font-weight: 900;
+          letter-spacing: -0.01em;
+        }
+
+        .orderItemPrice {
+          font-weight: 900;
+          white-space: nowrap;
+          line-height: 1.1;
+          text-align: right;
+          flex-shrink: 0;
+        }
+
         .itemsScroll {
           margin-top: 10px;
           max-height: none;
@@ -1276,6 +1350,15 @@ function StaffPageInner() {
             font-size: 11px;
           }
 
+          .orderItemName {
+            font-size: 19px;
+          }
+
+          .modeRow {
+            margin-top: 8px;
+            gap: 6px;
+          }
+
           .buzzerRow {
             gap: 8px;
           }
@@ -1389,6 +1472,22 @@ function StaffPageInner() {
         </div>
       </div>
 
+      <div className="modeRow">
+        <p className="modeLabel">직원화면 모드</p>
+        <button
+          className={`chip ${staffViewMode === "basic" ? "chipOn" : ""}`}
+          onClick={() => updateStaffViewMode("basic")}
+        >
+          기본 모드
+        </button>
+        <button
+          className={`chip ${staffViewMode === "collab" ? "chipOn" : ""}`}
+          onClick={() => updateStaffViewMode("collab")}
+        >
+          협업 모드
+        </button>
+      </div>
+
       <p className="tabHint">완료/취소·전체는 당일 주문만 표시</p>
 
       <div className="panel">
@@ -1448,7 +1547,7 @@ function StaffPageInner() {
                       <span className="badge">총 수량 {totalQty}</span>
                     </div>
 
-                    {isActive(o.status) ? (
+                    {staffViewMode === "collab" && isActive(o.status) ? (
                       <div className="itemQuickActions">
                         <span
                           className="quickActionBtn quickActionBtnPrimary"
@@ -1536,7 +1635,7 @@ function StaffPageInner() {
               <div className="section">
                 <h3 className="sectionTitle">주문 내역</h3>
                 <div className="itemsScroll">
-                  <div className="menuRow">
+                  <div className="orderItemsBox">
                     {selected.items.map((it, idx) => {
                       const optionTotal = Number(it.optionTotal || 0);
                       const unit = Number(it.price || 0) + optionTotal;
@@ -1561,10 +1660,10 @@ function StaffPageInner() {
                           .join(" / ") || "";
 
                       return (
-                        <div key={`${it.id}_${idx}`} className="menuItem">
-                          <div className="menuTop">
+                        <div key={`${it.id}_${idx}`} className="orderItemLine">
+                          <div className="orderItemLineTop">
                             <div>
-                              <div className="menuName">{it.name} x{it.qty}</div>
+                              <div className="orderItemName">{it.name} x{it.qty}</div>
                               <div className="optMuted" style={{ marginTop: 4 }}>
                                 기본 {fmt(it.price)}원
                                 {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
@@ -1573,7 +1672,7 @@ function StaffPageInner() {
                               </div>
                             </div>
 
-                            <div className="price">{fmt(lineTotal)}원</div>
+                            <div className="orderItemPrice">{fmt(lineTotal)}원</div>
                           </div>
 
                           {optText ? (
