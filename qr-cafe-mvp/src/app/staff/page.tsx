@@ -714,6 +714,12 @@ function StaffPageInner() {
           font-size: 13px;
         }
 
+        .topActionBtn {
+          padding: 8px 12px;
+          font-size: 14px;
+          border-radius: 10px;
+        }
+
         .titleBlock {
           display: grid;
           gap: 8px;
