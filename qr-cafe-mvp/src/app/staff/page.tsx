@@ -98,6 +98,7 @@ type DbOrderItemOptionRow = {
 };
 
 const LAST_SPOKEN_KEY = "qrCafeStaffLastSpokenOrderId";
+const STAFF_POLL_INTERVAL_MS = 5000;
 
 /**
  * ✅ 선택 매장 결정 우선순위
@@ -492,7 +493,7 @@ function StaffPageInner() {
         }
         return next;
       });
-    }, 1200);
+    }, STAFF_POLL_INTERVAL_MS);
 
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -650,7 +651,7 @@ function StaffPageInner() {
         }
 
         .h1 {
-          font-size: 28px;
+          font-size: 30px;
           font-weight: 900;
           margin: 0;
           letter-spacing: -0.02em;
@@ -661,7 +662,7 @@ function StaffPageInner() {
           color: var(--muted);
           line-height: 1.45;
           font-size: 14px;
-          max-width: 520px;
+          max-width: 720px;
           word-break: keep-all;
         }
 
@@ -698,10 +699,11 @@ function StaffPageInner() {
         .chip {
           border: 1px solid var(--line);
           background: #fff;
-          padding: 10px 12px;
+          padding: 10px 14px;
           border-radius: 999px;
           font-weight: 800;
           cursor: pointer;
+          font-size: 14px;
         }
         .chipOn {
           border-color: var(--brand);
@@ -712,32 +714,50 @@ function StaffPageInner() {
         .tabHint {
           margin: 8px 0 0 0;
           color: var(--muted);
-          font-size: 13px;
+          font-size: 12px;
           line-height: 1.4;
-          font-weight: 800;
+          font-weight: 700;
           word-break: keep-all;
         }
 
         .panel {
-          margin-top: 14px;
+          margin-top: 16px;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 14px;
+          gap: 16px;
         }
 
         .card {
           background: var(--card);
           border: 1px solid var(--line);
           border-radius: var(--radius);
-          padding: 14px;
+          padding: 16px;
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
           min-height: 520px;
         }
 
         .cardTitle {
-          margin: 0 0 10px 0;
-          font-size: 18px;
+          margin: 0;
+          font-size: 20px;
           font-weight: 900;
+        }
+
+        .cardTitleRow {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+
+        .backBtn {
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 999px;
+          padding: 8px 12px;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
         }
 
         .list {
@@ -829,9 +849,10 @@ function StaffPageInner() {
         }
 
         .detailNo {
-          font-size: 24px;
+          font-size: 30px;
           font-weight: 950;
           margin: 0;
+          line-height: 1.1;
         }
 
         .section {
@@ -967,12 +988,20 @@ function StaffPageInner() {
           }
 
           .h1 {
-            font-size: 24px;
+            font-size: 26px;
           }
 
           .desc {
             font-size: 13px;
             max-width: 100%;
+          }
+
+          .cardTitle {
+            font-size: 18px;
+          }
+
+          .detailNo {
+            font-size: 34px;
           }
 
           .btnRow {
@@ -993,7 +1022,7 @@ function StaffPageInner() {
       <header className="topbar">
         <div className="titleBlock">
           <h1 className="h1">직원 화면</h1>
-          <p className="desc">주문 리스트 확인 → 벨번호 입력(선택) → 상태 변경 / 취소</p>
+          <p className="desc">주문 접수 확인, 상세 확인, 제조 상태 변경까지 한 화면에서 처리하세요.</p>
 
           {/* ✅ 현재 매장 표시 */}
           <p className="muted" style={{ margin: 0, fontWeight: 900 }}>
@@ -1063,19 +1092,12 @@ function StaffPageInner() {
       {/* ✅ A문구 확정 */}
       <p className="tabHint">완료/취소 및 전체 목록은 오늘 접수된 주문만 표시됩니다.</p>
 
-      <div className="tabs" style={{ marginTop: 8 }}>
-        <button
-          className="btn"
-          onClick={() => setMobileView("list")}
-          style={{ display: mobileView === "detail" ? "inline-flex" : "none" }}
-        >
-          ← 목록으로
-        </button>
-      </div>
-
       <div className="panel">
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
-          <h2 className="cardTitle">주문 목록 ({filteredOrders.length})</h2>
+          <div className="cardTitleRow">
+            <h2 className="cardTitle">주문 목록</h2>
+            <span className="badge">{filteredOrders.length}건</span>
+          </div>
 
           {!storeId ? (
             <p className="muted">매장이 선택되지 않았습니다. 관리자에서 매장을 선택하고 다시 들어와 주세요.</p>
@@ -1125,7 +1147,16 @@ function StaffPageInner() {
         </section>
 
         <section className={`card ${mobileView === "list" ? "mobileHide" : ""}`}>
-          <h2 className="cardTitle">주문 상세</h2>
+          <div className="cardTitleRow">
+            <h2 className="cardTitle">주문 상세</h2>
+            <button
+              className="backBtn"
+              onClick={() => setMobileView("list")}
+              style={{ display: mobileView === "detail" ? "inline-flex" : "none" }}
+            >
+              주문 목록
+            </button>
+          </div>
 
           {!selected ? (
             <p className="muted">주문을 선택하세요.</p>
