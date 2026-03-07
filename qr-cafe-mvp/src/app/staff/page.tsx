@@ -672,9 +672,10 @@ function StaffPageInner() {
         .desc {
           margin: 0;
           color: var(--muted);
-          line-height: 1.45;
-          font-size: 14px;
+          line-height: 1.35;
+          font-size: 13px;
           max-width: 720px;
+          font-weight: 700;
           word-break: keep-all;
         }
 
@@ -722,7 +723,6 @@ function StaffPageInner() {
           box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.08);
         }
 
-        /* ✅ 탭 아래 안내 문구 */
         .tabHint {
           margin: 8px 0 0 0;
           color: var(--muted);
@@ -846,7 +846,6 @@ function StaffPageInner() {
           color: #991b1b;
         }
 
-        /* ✅ NEW 뱃지 */
         .badgeHot {
           border-color: #fecaca;
           background: #fff1f2;
@@ -950,6 +949,53 @@ function StaffPageInner() {
           letter-spacing: -0.01em;
         }
 
+        .itemsCount {
+          margin: 8px 0 0 0;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 800;
+        }
+
+        .extraWrap {
+          margin-top: 14px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px 12px;
+        }
+
+        .extraSummary {
+          cursor: pointer;
+          list-style: none;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          font-size: 14px;
+          font-weight: 900;
+          color: #0f172a;
+        }
+
+        .extraSummary::-webkit-details-marker {
+          display: none;
+        }
+
+        .extraSummary::after {
+          content: "▾";
+          color: var(--muted);
+          font-weight: 900;
+        }
+
+        details[open] > .extraSummary::after {
+          content: "▴";
+        }
+
+        .extraBody {
+          margin-top: 10px;
+          display: grid;
+          gap: 12px;
+        }
+
         .menuItem {
           border: 1px solid var(--line);
           border-radius: 12px;
@@ -973,7 +1019,6 @@ function StaffPageInner() {
           align-items: center;
         }
 
-        /* ✅ 금액(원) 줄바꿈 방지 */
         .price {
           font-weight: 900;
           white-space: nowrap;
@@ -1088,6 +1133,10 @@ function StaffPageInner() {
             font-size: 18px;
           }
 
+          .itemsCount {
+            font-size: 12px;
+          }
+
           .itemsScroll {
             max-height: min(38vh, 320px);
           }
@@ -1133,9 +1182,9 @@ function StaffPageInner() {
             border: 1px solid var(--line);
             border-radius: 14px;
             background: rgba(255, 255, 255, 0.98);
-            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
             z-index: 30;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(2px);
           }
 
           .actionDockTriple {
@@ -1151,14 +1200,12 @@ function StaffPageInner() {
       <header className="topbar">
         <div className="titleBlock">
           <h1 className="h1">직원 화면</h1>
-          <p className="desc">주문접수 및 제조 상태 변경</p>
+          <p className="desc">주문 접수·제조 상태 변경</p>
 
-          {/* ✅ 현재 매장 표시 */}
           <p className="muted" style={{ margin: 0, fontWeight: 900 }}>
             현재 매장: <b>{storeId || "미선택"}</b>
           </p>
 
-          {/* ✅ 최초 로드에서만 표시 */}
           {initialLoading ? <p className="muted" style={{ margin: 0 }}>불러오는 중...</p> : null}
 
           {errMsg ? <p className="err">오류: {errMsg}</p> : null}
@@ -1315,41 +1362,8 @@ function StaffPageInner() {
               ) : null}
 
               <div className="section">
-                <h3 style={{ margin: "0 0 8px 0" }}>요약 정보</h3>
-                <div className="sum" style={{ marginTop: 0 }}>
-                  <div>
-                    총 수량: <b>{selected.totalCount}</b>
-                  </div>
-                  <div>
-                    총 금액: <b>{fmt(selected.totalPrice)}원</b>
-                  </div>
-                </div>
-              </div>
-
-              <div className="section">
-                <h3 style={{ margin: "0 0 8px 0" }}>진동벨 번호 (선택)</h3>
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <input
-                    className="input"
-                    value={selected.buzzerNo ?? ""}
-                    onChange={(e) => updateOrderInDb(selected.id, { buzzerNo: e.target.value.trim() })}
-                    placeholder="예: 12"
-                  />
-                  <span className="muted" style={{ fontSize: 13 }}>
-                    * 벨을 지급한 경우에만 입력
-                  </span>
-                </div>
-              </div>
-
-              <div className="section">
-                <h3 style={{ margin: "0 0 8px 0" }}>요청사항</h3>
-                <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
-                  {selected.requestNote || "요청사항 없음"}
-                </div>
-              </div>
-
-              <div className="section">
                 <h3 className="orderItemsTitle">주문 내역</h3>
+                <p className="itemsCount">총 메뉴 수 <b>{selected.items.length}</b>개</p>
                 <div className="itemsScroll">
                   <div className="menuRow">
                     {selected.items.map((it, idx) => {
@@ -1402,6 +1416,33 @@ function StaffPageInner() {
                   </div>
                 </div>
               </div>
+
+              <details className="extraWrap">
+                <summary className="extraSummary">추가 정보</summary>
+                <div className="extraBody">
+                  <div>
+                    <h3 style={{ margin: "0 0 8px 0" }}>진동벨 번호 (선택)</h3>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <input
+                        className="input"
+                        value={selected.buzzerNo ?? ""}
+                        onChange={(e) => updateOrderInDb(selected.id, { buzzerNo: e.target.value.trim() })}
+                        placeholder="예: 12"
+                      />
+                      <span className="muted" style={{ fontSize: 13 }}>
+                        * 벨 지급 시에만 입력
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 style={{ margin: "0 0 8px 0" }}>요청사항</h3>
+                    <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
+                      {selected.requestNote || "요청사항 없음"}
+                    </div>
+                  </div>
+                </div>
+              </details>
 
               <div className="actionRow">
                 <button
@@ -1487,6 +1528,7 @@ function StaffPageInner() {
     </main>
   );
 }
+
 export default function StaffPage() {
   return (
     <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
