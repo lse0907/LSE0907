@@ -330,94 +330,78 @@ function AdminPageInner() {
 
       {msg ? <div className="alert">{msg}</div> : null}
 
-      {stores.length === 0 ? (
-        <section className="card stickyCard">
+      <div className="adminLayout">
+        <section className="card listCard">
           <div className="cardHead">
-            <h2 className="cardTitle">매장 만들기</h2>
-          </div>
-          <p className="muted">매장을 먼저 생성해 주세요.</p>
-          <div className="btnRow createBtnRow">
-            <button className="btn btnPrimary" onClick={goCreate}>
-              매장 만들기
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      {/* ===== 매장 선택 ===== */}
-      <section className="card">
-        <div className="cardHead">
-          <h2 className="cardTitle">매장 리스트</h2>
-          <div className="row" style={{ gap: 8 }}>
-            <span className="pill">{stores.length}개</span>
-            {stores.length > 0 ? (
+            <h2 className="cardTitle">매장 리스트</h2>
+            <div className="row" style={{ gap: 8 }}>
+              <span className="pill">{stores.length}개</span>
               <button className="btn" onClick={goCreate}>
-                매장 추가
+                {stores.length > 0 ? "매장 추가" : "매장 만들기"}
               </button>
-            ) : null}
-          </div>
-        </div>
-
-        <p className="muted">매장을 선택해 주세요.</p>
-
-        {stores.length === 0 ? (
-          <div className="emptyBox">
-            <p className="muted">매장이 없습니다. 먼저 매장을 만들어주세요.</p>
-          </div>
-        ) : (
-          <>
-            {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
-            <div className="storeList">
-              {stores.map((s) => {
-                const on = s.store_id === selectedStoreId;
-                const role = members.find((m) => m.store_id === s.store_id)?.role || "-";
-                const remaining = calcRemainingDays(s.created_at);
-                const billing = billingByStore[s.store_id];
-                const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
-                const trialText =
-                  remaining === null
-                    ? `무료 사용기간 ${FREE_TRIAL_DAYS}일`
-                    : `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remaining}일`;
-                return (
-                  <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setSelectedStoreId(s.store_id);
-                    }
-                  }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="storeName">
-                        {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
-                      </div>
-                      <div className="muted">권한: {role}</div>
-                      {billing?.basePlanStatus === "active" ? (
-                        <>
-                          <div className="muted">유료 구독: active · 만료 {fmtDate(billing.paidUntil)}</div>
-                          <div className="muted">최근 결제일: {fmtDate(billing.lastPaidAt)} · 남은 {paidRemaining == null ? "-" : `${paidRemaining}일`}</div>
-                        </>
-                      ) : (
-                        <div className="muted">{trialText}</div>
-                      )}
-                    </div>
-                    <div className="storeActions" onClick={(e) => e.stopPropagation()}>
-                      {on ? <div className="pill pillOn">선택됨</div> : null}
-                      {on ? (
-                        <button className="btn btnPrimary btnSmall" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
-                          구독결제
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
-            <p className="hint" style={{ marginTop: 6 }}>구독 사용 기간이 만료되면 주문/직원/관리 기능 사용이 제한될 수 있습니다. 만료 전에 구독결제를 진행해 주세요.</p>
-          </>
-        )}
-      </section>
+          </div>
 
-      {/* ===== 관리자 메뉴 ===== */}
-      <section className="card">
+          <p className="muted">매장을 선택해 주세요.</p>
+
+          {stores.length === 0 ? (
+            <div className="emptyBox">
+              <p className="muted">매장이 없습니다. 먼저 매장을 만들어주세요.</p>
+            </div>
+          ) : (
+            <>
+              {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
+              <div className="storeList">
+                {stores.map((s) => {
+                  const on = s.store_id === selectedStoreId;
+                  const role = members.find((m) => m.store_id === s.store_id)?.role || "-";
+                  const remaining = calcRemainingDays(s.created_at);
+                  const billing = billingByStore[s.store_id];
+                  const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
+                  const trialText =
+                    remaining === null
+                      ? `무료 사용기간 ${FREE_TRIAL_DAYS}일`
+                      : `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remaining}일`;
+                  return (
+                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedStoreId(s.store_id);
+                      }
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="storeName">
+                          {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
+                        </div>
+                        <div className="muted">권한: {role}</div>
+                        {billing?.basePlanStatus === "active" ? (
+                          <>
+                            <div className="muted">유료 구독: active · 만료 {fmtDate(billing.paidUntil)}</div>
+                            <div className="muted">최근 결제일: {fmtDate(billing.lastPaidAt)} · 남은 {paidRemaining == null ? "-" : `${paidRemaining}일`}</div>
+                          </>
+                        ) : (
+                          <div className="muted">{trialText}</div>
+                        )}
+                      </div>
+                      <div className="storeActions" onClick={(e) => e.stopPropagation()}>
+                        {on ? <div className="pill pillOn">선택됨</div> : null}
+                        {on ? (
+                          <button className="btn btnPrimary btnSmall" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
+                            구독결제
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="hint" style={{ marginTop: 6 }}>구독 사용 기간이 만료되면 주문/직원/관리 기능 사용이 제한될 수 있습니다. 만료 전에 구독결제를 진행해 주세요.</p>
+            </>
+          )}
+        </section>
+
+        {/* ===== 관리자 메뉴 ===== */}
+        <section className="card menuCard">
         <div className="tabMeta">
           <span className="pill">
             {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
@@ -520,7 +504,8 @@ function AdminPageInner() {
             매장을 선택해야 버튼이 활성화됩니다.
           </div>
         ) : null}
-      </section>
+        </section>
+      </div>
     </main>
   );
 }
@@ -545,6 +530,12 @@ body {
   padding: 14px;
   display: grid;
   gap: 12px;
+}
+.adminLayout{
+  display:grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap:12px;
+  align-items:start;
 }
 .topbar{
   display:flex;
@@ -684,6 +675,9 @@ body {
   display:grid;
   gap:10px;
   margin-top:12px;
+  max-height: min(58vh, 560px);
+  overflow-y: auto;
+  padding-right:4px;
 }
 .storeRow{
   text-align:left;
@@ -796,6 +790,9 @@ body {
   z-index:5;
 }
 @media (max-width: 640px){
+  .adminLayout{
+    grid-template-columns: 1fr;
+  }
   .wrap{ padding:12px; }
   .topbar{ align-items:center; }
   .topActions{
@@ -811,6 +808,9 @@ body {
   .btnGroup{
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap:6px;
+  }
+  .storeList{
+    max-height: min(42vh, 360px);
   }
 }
 `;
