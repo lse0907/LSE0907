@@ -309,6 +309,8 @@ function StaffPageInner() {
   const [listTab, setListTab] = useState<"active" | "completed" | "all">("active");
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const [staffViewMode, setStaffViewMode] = useState<StaffViewMode>("basic");
+  const [modeToast, setModeToast] = useState("");
+  const modeToastTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const sid = storeIdRef.current || storeId;
@@ -322,14 +324,33 @@ function StaffPageInner() {
     }
   }, [storeId]);
 
+  const showModeToast = (text: string) => {
+    setModeToast(text);
+    if (typeof window === "undefined") return;
+    if (modeToastTimerRef.current) window.clearTimeout(modeToastTimerRef.current);
+    modeToastTimerRef.current = window.setTimeout(() => {
+      setModeToast("");
+      modeToastTimerRef.current = null;
+    }, 1500);
+  };
+
   const updateStaffViewMode = (next: StaffViewMode) => {
+    if (next === staffViewMode) return;
     setStaffViewMode(next);
     const sid = storeIdRef.current || storeId;
     if (!sid || typeof window === "undefined") return;
     try {
       localStorage.setItem(staffModeKey(sid), next);
     } catch {}
+    showModeToast(next === "collab" ? "협업 모드로 전환됨" : "기본 모드로 전환됨");
   };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") return;
+      if (modeToastTimerRef.current) window.clearTimeout(modeToastTimerRef.current);
+    };
+  }, []);
 
   // ✅ 로딩 UX 개선:
   // - 첫 로딩만 화면에 표시
@@ -818,6 +839,46 @@ function StaffPageInner() {
           flex-wrap: wrap;
         }
 
+        .modeSwitch {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px;
+          border-radius: 999px;
+          border: 1px solid var(--line);
+          background: #f8fafc;
+        }
+
+        .modeSwitchBtn {
+          border: none;
+          background: transparent;
+          color: #374151;
+          padding: 6px 11px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+          transition: all 0.16s ease;
+        }
+
+        .modeSwitchBtnOn {
+          background: #111827;
+          color: #fff;
+          box-shadow: 0 2px 8px rgba(17, 24, 39, 0.22);
+        }
+
+        .modeSwitchBtn:focus-visible {
+          outline: 2px solid #4f46e5;
+          outline-offset: 1px;
+        }
+
+        .modeToast {
+          margin: 6px 0 0 0;
+          font-size: 12px;
+          font-weight: 800;
+          color: #1d4ed8;
+        }
+
         .modeLabel {
           margin: 0;
           font-size: 12px;
@@ -901,9 +962,21 @@ function StaffPageInner() {
           border: 1px solid var(--line);
           background: #fff;
           cursor: pointer;
+          transition: border-color 0.16s ease, box-shadow 0.16s ease;
         }
+
+        .itemBtn:hover {
+          border-color: #cbd5e1;
+        }
+
+        .itemBtn:focus-visible {
+          outline: 2px solid #4f46e5;
+          outline-offset: 2px;
+        }
+
         .itemBtnOn {
           border: 2px solid var(--brand);
+          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
         }
 
         .rowBetween {
@@ -950,16 +1023,33 @@ function StaffPageInner() {
           border: 1px solid var(--line);
           background: #fff;
           border-radius: 999px;
-          padding: 6px 10px;
+          padding: 7px 12px;
           font-size: 12px;
           font-weight: 900;
           cursor: pointer;
+          transition: background-color 0.14s ease, transform 0.06s ease, box-shadow 0.14s ease;
         }
 
         .quickActionBtnPrimary {
-          border-color: #c7d2fe;
-          background: #eef2ff;
-          color: #3730a3;
+          border-color: #1d4ed8;
+          background: #2563eb;
+          color: #fff;
+          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+        }
+
+        .quickActionBtnPrimary:hover {
+          background: #1d4ed8;
+        }
+
+        .quickActionBtnPrimary:active {
+          transform: translateY(1px);
+          background: #1e40af;
+          box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
+        }
+
+        .quickActionBtnPrimary:focus-visible {
+          outline: 2px solid #60a5fa;
+          outline-offset: 1px;
         }
 
         .bigNo {
@@ -1189,8 +1279,10 @@ function StaffPageInner() {
         }
 
         .optWrap {
-          border-top: 1px solid var(--line);
-          padding-top: 8px;
+          margin-top: 4px;
+          border-radius: 10px;
+          padding: 8px 10px;
+          background: #f8fafc;
           display: grid;
           gap: 6px;
         }
@@ -1206,7 +1298,8 @@ function StaffPageInner() {
         .optMuted {
           color: var(--muted);
           font-weight: 800;
-          font-size: 12px;
+          font-size: 13px;
+          line-height: 1.45;
         }
 
         .actionRow {
@@ -1474,19 +1567,26 @@ function StaffPageInner() {
 
       <div className="modeRow">
         <p className="modeLabel">직원화면 모드</p>
-        <button
-          className={`chip ${staffViewMode === "basic" ? "chipOn" : ""}`}
-          onClick={() => updateStaffViewMode("basic")}
-        >
-          기본 모드
-        </button>
-        <button
-          className={`chip ${staffViewMode === "collab" ? "chipOn" : ""}`}
-          onClick={() => updateStaffViewMode("collab")}
-        >
-          협업 모드
-        </button>
+        <div className="modeSwitch" role="group" aria-label="직원화면 모드">
+          <button
+            type="button"
+            className={`modeSwitchBtn ${staffViewMode === "basic" ? "modeSwitchBtnOn" : ""}`}
+            aria-pressed={staffViewMode === "basic"}
+            onClick={() => updateStaffViewMode("basic")}
+          >
+            기본 모드
+          </button>
+          <button
+            type="button"
+            className={`modeSwitchBtn ${staffViewMode === "collab" ? "modeSwitchBtnOn" : ""}`}
+            aria-pressed={staffViewMode === "collab"}
+            onClick={() => updateStaffViewMode("collab")}
+          >
+            협업 모드
+          </button>
+        </div>
       </div>
+      {modeToast ? <p className="modeToast">{modeToast}</p> : null}
 
       <p className="tabHint">완료/취소·전체는 당일 주문만 표시</p>
 
@@ -1510,9 +1610,18 @@ function StaffPageInner() {
                 const totalQty = o.items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
 
                 return (
-                  <button
+                  <div
                     key={o.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    aria-label={`주문번호 ${o.displayNo} 상세 보기`}
                     onClick={() => onSelect(o.id)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      onSelect(o.id);
+                    }}
                     className={`itemBtn ${isSelected ? "itemBtnOn" : ""}`}
                   >
                     <div className="rowBetween">
@@ -1549,26 +1658,20 @@ function StaffPageInner() {
 
                     {staffViewMode === "collab" && isActive(o.status) ? (
                       <div className="itemQuickActions">
-                        <span
+                        <button
+                          type="button"
                           className="quickActionBtn quickActionBtnPrimary"
-                          role="button"
-                          tabIndex={0}
+                          aria-label={`주문번호 ${o.displayNo} ${statusButtonLabel(o.status)}`}
                           onClick={(e) => {
-                            e.stopPropagation();
-                            updateOrderInDb(o.id, { status: nextStatus(o.status) });
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key !== "Enter" && e.key !== " ") return;
-                            e.preventDefault();
                             e.stopPropagation();
                             updateOrderInDb(o.id, { status: nextStatus(o.status) });
                           }}
                         >
                           {statusButtonLabel(o.status)}
-                        </span>
+                        </button>
                       </div>
                     ) : null}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1664,6 +1767,11 @@ function StaffPageInner() {
                           <div className="orderItemLineTop">
                             <div>
                               <div className="orderItemName">{it.name} x{it.qty}</div>
+                              {optText ? (
+                                <div className="optWrap">
+                                  <div className="optLine">옵션: {optText}</div>
+                                </div>
+                              ) : null}
                               <div className="optMuted" style={{ marginTop: 4 }}>
                                 기본 {fmt(it.price)}원
                                 {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
@@ -1674,12 +1782,6 @@ function StaffPageInner() {
 
                             <div className="orderItemPrice">{fmt(lineTotal)}원</div>
                           </div>
-
-                          {optText ? (
-                            <div className="optWrap">
-                              <div className="optLine">옵션: {optText}</div>
-                            </div>
-                          ) : null}
                         </div>
                       );
                     })}
