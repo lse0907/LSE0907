@@ -131,6 +131,12 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString();
 }
 
+function formatElapsedMin(ts: number) {
+  const diffMs = Date.now() - Number(ts || 0);
+  const minutes = Math.max(0, Math.floor(diffMs / 60000));
+  return `${minutes}분 경과`;
+}
+
 const STATUS_LABEL: Record<OrderStatus, string> = {
   new: "신규",
   making: "제조중",
@@ -650,11 +656,79 @@ function StaffPageInner() {
           gap: 12px;
         }
 
+        .titleTop {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          width: 100%;
+        }
+
         .topActions {
           display: flex;
           gap: 8px;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           justify-content: flex-end;
+          margin-left: auto;
+        }
+
+        .storeInfo {
+          margin: 0;
+          font-weight: 800;
+          font-size: 18px;
+          line-height: 1.25;
+        }
+
+        .storeInfo b {
+          font-weight: 900;
+        }
+
+        .btn.topActionBtn {
+          padding: 7px 10px;
+          font-size: 13px;
+          border-radius: 10px;
+          white-space: nowrap;
+        }
+
+        .sectionTitle {
+          margin: 0;
+          font-size: 24px;
+          line-height: 1.2;
+          font-weight: 900;
+          letter-spacing: -0.01em;
+        }
+
+        .sectionTitleSm {
+          margin: 0;
+          font-size: 18px;
+          line-height: 1.25;
+          font-weight: 850;
+          letter-spacing: -0.01em;
+        }
+
+        .buzzerRow {
+          margin-top: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: nowrap;
+        }
+
+        .buzzerInput {
+          width: 120px;
+          min-width: 0;
+          height: 38px;
+          padding: 8px 10px;
+          border-radius: 10px;
+          border: 1px solid var(--line);
+          font-weight: 700;
+        }
+
+        .buzzerHint {
+          margin: 8px 0 0 0;
+          color: var(--muted);
+          font-size: 13px;
         }
 
         .titleBlock {
@@ -703,7 +777,6 @@ function StaffPageInner() {
         .tabsRow {
           display: flex;
           align-items: center;
-          justify-content: space-between;
           gap: 8px;
           flex-wrap: wrap;
         }
@@ -794,6 +867,33 @@ function StaffPageInner() {
           justify-content: space-between;
           gap: 10px;
           align-items: center;
+        }
+
+        .orderMetaRight {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .elapsedBadge {
+          border: 1px solid #fde68a;
+          background: #fffbeb;
+          color: #92400e;
+          border-radius: 999px;
+          padding: 4px 8px;
+          font-size: 11px;
+          font-weight: 900;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        .orderQuickMeta {
+          margin-top: 8px;
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
         }
 
         .bigNo {
@@ -937,9 +1037,9 @@ function StaffPageInner() {
 
         .itemsScroll {
           margin-top: 10px;
-          max-height: min(42vh, 380px);
-          overflow-y: auto;
-          padding-right: 4px;
+          max-height: none;
+          overflow: visible;
+          padding-right: 0;
         }
 
         .orderItemsTitle {
@@ -1068,7 +1168,7 @@ function StaffPageInner() {
           }
 
           .h1 {
-            font-size: 26px;
+            font-size: 25px;
           }
 
           .desc {
@@ -1088,8 +1188,12 @@ function StaffPageInner() {
             font-size: 18px;
           }
 
-          .itemsScroll {
-            max-height: min(38vh, 320px);
+          .sectionTitle {
+            font-size: 19px;
+          }
+
+          .sectionTitleSm {
+            font-size: 17px;
           }
 
           .menuName {
@@ -1100,13 +1204,44 @@ function StaffPageInner() {
             font-size: 14px;
           }
 
-          .topbar {
+          .titleTop {
+            flex-wrap: nowrap;
             align-items: center;
+            gap: 6px;
           }
 
           .topActions {
-            width: 100%;
-            justify-content: flex-start;
+            justify-content: flex-end;
+            gap: 6px;
+            flex-shrink: 0;
+          }
+
+          .btn.topActionBtn {
+            padding: 6px 8px;
+            font-size: 12px;
+          }
+
+          .storeInfo {
+            font-size: 15px;
+          }
+
+          .orderMetaRight {
+            gap: 4px;
+          }
+
+          .elapsedBadge {
+            padding: 3px 7px;
+            font-size: 10px;
+          }
+
+          .buzzerRow {
+            gap: 8px;
+          }
+
+          .buzzerInput {
+            width: 92px;
+            height: 34px;
+            font-size: 14px;
           }
 
           .btn {
@@ -1150,11 +1285,26 @@ function StaffPageInner() {
 
       <header className="topbar">
         <div className="titleBlock">
-          <h1 className="h1">직원 화면</h1>
+          <div className="titleTop">
+            <h1 className="h1">직원 화면</h1>
+
+            <div className="topActions">
+              <button
+                className="btn btnPrimary topActionBtn"
+                onClick={() =>
+                  (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
+                }
+              >
+                관리자
+              </button>
+              <a className="btn topActionBtn" href="/logout">로그아웃</a>
+            </div>
+          </div>
+
           <p className="desc">주문접수 및 제조 상태 변경</p>
 
           {/* ✅ 현재 매장 표시 */}
-          <p className="muted" style={{ margin: 0, fontWeight: 900 }}>
+          <p className="muted storeInfo">
             현재 매장: <b>{storeId || "미선택"}</b>
           </p>
 
@@ -1162,18 +1312,6 @@ function StaffPageInner() {
           {initialLoading ? <p className="muted" style={{ margin: 0 }}>불러오는 중...</p> : null}
 
           {errMsg ? <p className="err">오류: {errMsg}</p> : null}
-        </div>
-
-        <div className="topActions">
-          <button
-            className="btn btnPrimary"
-            onClick={() =>
-              (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
-            }
-          >
-            관리자화면
-          </button>
-          <a className="btn" href="/logout">로그아웃</a>
         </div>
       </header>
 
@@ -1207,17 +1345,6 @@ function StaffPageInner() {
             전체 ({counts.all})
           </button>
         </div>
-        <button
-          className="btn"
-          onClick={() => {
-            speakKoreanOnce("직원 화면이 준비되었습니다.");
-            fetchOrdersFromDb(false);
-          }}
-          disabled={!storeId}
-          style={{ opacity: !storeId ? 0.5 : 1 }}
-        >
-          새로고침
-        </button>
       </div>
 
       <p className="tabHint">완료/취소·전체는 당일 주문만 표시</p>
@@ -1239,6 +1366,7 @@ function StaffPageInner() {
                 const isSelected = o.id === selectedId;
                 const badgeClass = badgeClassByStatus(o.status);
                 const showNew = isNewBadge(o.id);
+                const totalQty = o.items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
 
                 return (
                   <button
@@ -1252,7 +1380,10 @@ function StaffPageInner() {
                         {o.buzzerNo ? ` · 벨 ${o.buzzerNo}` : ""}
                         {showNew ? <span className="badge badgeHot">NEW</span> : null}
                       </div>
-                      <div className="muted">{formatTime(o.createdAt)}</div>
+                      <div className="orderMetaRight">
+                        <span className="elapsedBadge">{formatElapsedMin(o.createdAt)}</span>
+                        <div className="muted">{formatTime(o.createdAt)}</div>
+                      </div>
                     </div>
 
                     <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1268,6 +1399,11 @@ function StaffPageInner() {
                         .slice(0, 2)
                         .join(", ")}
                       {o.items.length > 2 ? "…" : ""}
+                    </div>
+
+                    <div className="orderQuickMeta">
+                      <span className="badge">메뉴 {o.items.length}개</span>
+                      <span className="badge">총 수량 {totalQty}</span>
                     </div>
                   </button>
                 );
@@ -1299,7 +1435,6 @@ function StaffPageInner() {
                 </div>
                 <p className="metaBottom">
                   <span>{selected.mode === "dine-in" ? `매장 · 테이블 ${selected.table ?? "-"}` : "포장 주문"}</span>
-                  <span>상태: <b>{STATUS_LABEL[selected.status]}</b></span>
                   <span>결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b></span>
                 </p>
                 <p className="metaSummary">
@@ -1315,41 +1450,27 @@ function StaffPageInner() {
               ) : null}
 
               <div className="section">
-                <h3 style={{ margin: "0 0 8px 0" }}>요약 정보</h3>
-                <div className="sum" style={{ marginTop: 0 }}>
-                  <div>
-                    총 수량: <b>{selected.totalCount}</b>
-                  </div>
-                  <div>
-                    총 금액: <b>{fmt(selected.totalPrice)}원</b>
-                  </div>
-                </div>
-              </div>
-
-              <div className="section">
-                <h3 style={{ margin: "0 0 8px 0" }}>진동벨 번호 (선택)</h3>
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <div className="buzzerRow">
+                  <h3 className="sectionTitleSm">진동벨 번호 (선택)</h3>
                   <input
-                    className="input"
+                    className="buzzerInput"
                     value={selected.buzzerNo ?? ""}
                     onChange={(e) => updateOrderInDb(selected.id, { buzzerNo: e.target.value.trim() })}
                     placeholder="예: 12"
                   />
-                  <span className="muted" style={{ fontSize: 13 }}>
-                    * 벨을 지급한 경우에만 입력
-                  </span>
                 </div>
+                <p className="buzzerHint">* 벨을 지급한 경우에만 입력</p>
               </div>
 
               <div className="section">
-                <h3 style={{ margin: "0 0 8px 0" }}>요청사항</h3>
+                <h3 className="sectionTitleSm">요청사항</h3>
                 <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
                   {selected.requestNote || "요청사항 없음"}
                 </div>
               </div>
 
               <div className="section">
-                <h3 className="orderItemsTitle">주문 내역</h3>
+                <h3 className="sectionTitle">주문 내역</h3>
                 <div className="itemsScroll">
                   <div className="menuRow">
                     {selected.items.map((it, idx) => {
