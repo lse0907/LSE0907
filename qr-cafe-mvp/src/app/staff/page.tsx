@@ -644,8 +644,17 @@ function StaffPageInner() {
         }
 
         .topbar {
-          display: grid;
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
           gap: 12px;
+        }
+
+        .topActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
         }
 
         .titleBlock {
@@ -669,14 +678,6 @@ function StaffPageInner() {
           word-break: keep-all;
         }
 
-        .btnRow {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          flex-wrap: wrap;
-          justify-content: flex-start;
-        }
-
         .btn {
           border: 1px solid var(--line);
           background: var(--card);
@@ -697,6 +698,14 @@ function StaffPageInner() {
           gap: 8px;
           flex-wrap: wrap;
           margin-top: 8px;
+        }
+
+        .tabsRow {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
         }
 
         .chip {
@@ -894,6 +903,20 @@ function StaffPageInner() {
           gap: 8px;
         }
 
+        .metaSummary {
+          margin: 0;
+          padding-top: 6px;
+          border-top: 1px solid var(--line);
+          color: #111827;
+          font-size: 14px;
+          font-weight: 850;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
         .section {
           margin-top: 14px;
         }
@@ -978,14 +1001,6 @@ function StaffPageInner() {
           color: var(--muted);
           font-weight: 800;
           font-size: 12px;
-        }
-
-        .sum {
-          border-top: 1px solid var(--line);
-          margin-top: 10px;
-          padding-top: 10px;
-          display: grid;
-          gap: 6px;
         }
 
         .actionRow {
@@ -1085,7 +1100,11 @@ function StaffPageInner() {
             font-size: 14px;
           }
 
-          .btnRow {
+          .topbar {
+            align-items: center;
+          }
+
+          .topActions {
             width: 100%;
             justify-content: flex-start;
           }
@@ -1132,7 +1151,7 @@ function StaffPageInner() {
       <header className="topbar">
         <div className="titleBlock">
           <h1 className="h1">직원 화면</h1>
-          <p className="desc">주문 접수 확인, 상세 확인, 제조 상태 변경까지 한 화면에서 처리하세요.</p>
+          <p className="desc">주문접수 및 제조 상태 변경</p>
 
           {/* ✅ 현재 매장 표시 */}
           <p className="muted" style={{ margin: 0, fontWeight: 900 }}>
@@ -1145,62 +1164,63 @@ function StaffPageInner() {
           {errMsg ? <p className="err">오류: {errMsg}</p> : null}
         </div>
 
-        <div className="btnRow">
+        <div className="topActions">
           <button
             className="btn btnPrimary"
             onClick={() =>
               (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
             }
           >
-            관리자 메뉴
+            관리자화면
           </button>
-
-          <button
-            className="btn"
-            onClick={() => {
-              speakKoreanOnce("직원 화면이 준비되었습니다.");
-              fetchOrdersFromDb(false);
-            }}
-            disabled={!storeId}
-            style={{ opacity: !storeId ? 0.5 : 1 }}
-          >
-            새로고침
-          </button>
+          <a className="btn" href="/logout">로그아웃</a>
         </div>
       </header>
 
-      <div className="tabs">
+      <div className="tabsRow">
+        <div className="tabs">
+          <button
+            className={`chip ${listTab === "active" ? "chipOn" : ""}`}
+            onClick={() => {
+              setListTab("active");
+              setMobileView("list");
+            }}
+          >
+            진행중 ({counts.active})
+          </button>
+          <button
+            className={`chip ${listTab === "completed" ? "chipOn" : ""}`}
+            onClick={() => {
+              setListTab("completed");
+              setMobileView("list");
+            }}
+          >
+            완료/취소 ({counts.completed})
+          </button>
+          <button
+            className={`chip ${listTab === "all" ? "chipOn" : ""}`}
+            onClick={() => {
+              setListTab("all");
+              setMobileView("list");
+            }}
+          >
+            전체 ({counts.all})
+          </button>
+        </div>
         <button
-          className={`chip ${listTab === "active" ? "chipOn" : ""}`}
+          className="btn"
           onClick={() => {
-            setListTab("active");
-            setMobileView("list");
+            speakKoreanOnce("직원 화면이 준비되었습니다.");
+            fetchOrdersFromDb(false);
           }}
+          disabled={!storeId}
+          style={{ opacity: !storeId ? 0.5 : 1 }}
         >
-          진행중 ({counts.active})
-        </button>
-        <button
-          className={`chip ${listTab === "completed" ? "chipOn" : ""}`}
-          onClick={() => {
-            setListTab("completed");
-            setMobileView("list");
-          }}
-        >
-          완료/취소 ({counts.completed})
-        </button>
-        <button
-          className={`chip ${listTab === "all" ? "chipOn" : ""}`}
-          onClick={() => {
-            setListTab("all");
-            setMobileView("list");
-          }}
-        >
-          전체 ({counts.all})
+          새로고침
         </button>
       </div>
 
-      {/* ✅ A문구 확정 */}
-      <p className="tabHint">완료/취소 및 전체 목록은 오늘 접수된 주문만 표시됩니다.</p>
+      <p className="tabHint">완료/취소·전체는 당일 주문만 표시</p>
 
       <div className="panel">
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
@@ -1281,6 +1301,10 @@ function StaffPageInner() {
                   <span>{selected.mode === "dine-in" ? `매장 · 테이블 ${selected.table ?? "-"}` : "포장 주문"}</span>
                   <span>상태: <b>{STATUS_LABEL[selected.status]}</b></span>
                   <span>결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b></span>
+                </p>
+                <p className="metaSummary">
+                  <span>총 수량: <b>{selected.totalCount}</b></span>
+                  <span>총 금액: <b>{fmt(selected.totalPrice)}원</b></span>
                 </p>
               </div>
 
