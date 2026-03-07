@@ -844,15 +844,25 @@ function StaffPageInner() {
         .detailBox {
           border: 1px solid var(--line);
           border-radius: 14px;
-          padding: 12px;
+          padding: 10px 12px;
           background: #fff;
+          display: grid;
+          gap: 6px;
         }
 
         .detailNo {
-          font-size: 30px;
-          font-weight: 950;
+          font-size: 22px;
+          font-weight: 900;
           margin: 0;
-          line-height: 1.1;
+          line-height: 1.2;
+        }
+
+        .metaRow {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          line-height: 1.4;
+          font-weight: 750;
         }
 
         .section {
@@ -873,6 +883,14 @@ function StaffPageInner() {
           margin-top: 10px;
         }
 
+        .orderItemsTitle {
+          margin: 0;
+          font-size: 24px;
+          line-height: 1.2;
+          font-weight: 950;
+          letter-spacing: -0.01em;
+        }
+
         .menuItem {
           border: 1px solid var(--line);
           border-radius: 12px;
@@ -880,6 +898,13 @@ function StaffPageInner() {
           background: #fff;
           display: grid;
           gap: 8px;
+        }
+
+        .menuName {
+          font-size: 24px;
+          line-height: 1.2;
+          font-weight: 950;
+          letter-spacing: -0.01em;
         }
 
         .menuTop {
@@ -906,10 +931,10 @@ function StaffPageInner() {
         }
 
         .optLine {
-          font-size: 12px;
+          font-size: 16px;
           font-weight: 850;
           color: #111827;
-          line-height: 1.35;
+          line-height: 1.4;
           word-break: keep-all;
         }
 
@@ -1001,7 +1026,19 @@ function StaffPageInner() {
           }
 
           .detailNo {
-            font-size: 34px;
+            font-size: 20px;
+          }
+
+          .orderItemsTitle {
+            font-size: 21px;
+          }
+
+          .menuName {
+            font-size: 20px;
+          }
+
+          .optLine {
+            font-size: 14px;
           }
 
           .btnRow {
@@ -1164,16 +1201,14 @@ function StaffPageInner() {
             <>
               <div className="detailBox">
                 <p className="detailNo">주문번호 {selected.displayNo}</p>
-                <p className="muted" style={{ margin: "8px 0 0 0" }}>
+                <p className="metaRow">
                   {selected.mode === "dine-in" ? `매장 · 테이블 ${selected.table ?? "-"}` : "포장 주문"} · 상태:{" "}
                   <b>{STATUS_LABEL[selected.status]}</b>
                 </p>
-                <p className="muted" style={{ margin: "6px 0 0 0" }}>
+                <p className="metaRow">
                   결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b>
                 </p>
-                <p className="muted" style={{ margin: "6px 0 0 0" }}>
-                  주문시각: {formatTime(selected.createdAt)}
-                </p>
+                <p className="metaRow">주문시각: {formatTime(selected.createdAt)}</p>
               </div>
 
               {prepayAddonActive && selected.paymentStatus === "pending" ? (
@@ -1183,22 +1218,7 @@ function StaffPageInner() {
               ) : null}
 
               <div className="section">
-                <h3 style={{ margin: "0 0 8px 0" }}>진동벨 번호 (선택)</h3>
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <input
-                    className="input"
-                    value={selected.buzzerNo ?? ""}
-                    onChange={(e) => updateOrderInDb(selected.id, { buzzerNo: e.target.value.trim() })}
-                    placeholder="예: 12"
-                  />
-                  <span className="muted" style={{ fontSize: 13 }}>
-                    * 벨을 지급한 경우에만 입력
-                  </span>
-                </div>
-              </div>
-
-              <div className="section">
-                <h3 style={{ margin: 0 }}>주문 내역</h3>
+                <h3 className="orderItemsTitle">주문 내역</h3>
                 <div className="menuRow">
                   {selected.items.map((it, idx) => {
                     const optionTotal = Number(it.optionTotal || 0);
@@ -1227,7 +1247,7 @@ function StaffPageInner() {
                       <div key={`${it.id}_${idx}`} className="menuItem">
                         <div className="menuTop">
                           <div>
-                            <div style={{ fontWeight: 900 }}>{it.name} x{it.qty}</div>
+                            <div className="menuName">{it.name} x{it.qty}</div>
                             <div className="optMuted" style={{ marginTop: 4 }}>
                               기본 {fmt(it.price)}원
                               {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
@@ -1256,6 +1276,21 @@ function StaffPageInner() {
                   <div>
                     총 금액: <b>{fmt(selected.totalPrice)}원</b>
                   </div>
+                </div>
+              </div>
+
+              <div className="section">
+                <h3 style={{ margin: "0 0 8px 0" }}>진동벨 번호 (선택)</h3>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <input
+                    className="input"
+                    value={selected.buzzerNo ?? ""}
+                    onChange={(e) => updateOrderInDb(selected.id, { buzzerNo: e.target.value.trim() })}
+                    placeholder="예: 12"
+                  />
+                  <span className="muted" style={{ fontSize: 13 }}>
+                    * 벨을 지급한 경우에만 입력
+                  </span>
                 </div>
               </div>
 
