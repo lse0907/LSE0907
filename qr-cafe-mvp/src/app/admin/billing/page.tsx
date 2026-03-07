@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { BillingSettings, maskToken } from "@/app/lib/billingSettings";
 
 type SaveMode = "db" | "unsynced";
+
+type BillingRuntimeStatus = {
+  basePaidUntil: string | null;
+  addonPaidUntil: string | null;
+  basePrice: number;
+  addonPrice: number;
+  baseMonths: number | null;
+  addonMonths: number | null;
+  addonStatus: string;
+};
 
 const EMPTY_BILLING: BillingSettings = {
   baseApproved: false,
@@ -65,6 +75,45 @@ function BillingForm({ storeId }: { storeId: string }) {
   const [saveBadge, setSaveBadge] = useState<"idle" | "saved" | "error">("idle");
   const [saveMode, setSaveMode] = useState<SaveMode>("unsynced");
   const [loading, setLoading] = useState(true);
+  const [planMonths, setPlanMonths] = useState<1 | 3 | 6 | 12>(1);
+  const [payBase, setPayBase] = useState(true);
+  const [payAddon, setPayAddon] = useState(true);
+  const [paying, setPaying] = useState(false);
+  const [payMsg, setPayMsg] = useState("");
+  const [runtime, setRuntime] = useState<BillingRuntimeStatus>({
+    basePaidUntil: null,
+    addonPaidUntil: null,
+    basePrice: 8900,
+    addonPrice: 5000,
+    baseMonths: null,
+    addonMonths: null,
+    addonStatus: "inactive",
+  });
+
+  const refreshRuntime = useCallback(async () => {
+    const [baseRes, addonRes] = await Promise.all([
+      supabase
+        .from("store_billing")
+        .select("paid_until, current_plan_months, base_price_krw")
+        .eq("store_id", storeId)
+        .maybeSingle(),
+      supabase
+        .from("store_addons")
+        .select("addon_paid_until, current_plan_months, prepay_addon_price_krw, prepay_addon_status")
+        .eq("store_id", storeId)
+        .maybeSingle(),
+    ]);
+
+    setRuntime({
+      basePaidUntil: String(baseRes.data?.paid_until || "").trim() || null,
+      addonPaidUntil: String(addonRes.data?.addon_paid_until || "").trim() || null,
+      basePrice: Math.max(0, Number(baseRes.data?.base_price_krw || 8900)),
+      addonPrice: Math.max(0, Number(addonRes.data?.prepay_addon_price_krw || 5000)),
+      baseMonths: Number.isFinite(Number(baseRes.data?.current_plan_months)) ? Number(baseRes.data?.current_plan_months) : null,
+      addonMonths: Number.isFinite(Number(addonRes.data?.current_plan_months)) ? Number(addonRes.data?.current_plan_months) : null,
+      addonStatus: String(addonRes.data?.prepay_addon_status || "inactive"),
+    });
+  }, [storeId]);
 
   useEffect(() => {
     let mounted = true;
@@ -79,11 +128,12 @@ function BillingForm({ storeId }: { storeId: string }) {
         setSaveMode("unsynced");
       }
       setLoading(false);
+      await refreshRuntime();
     })();
     return () => {
       mounted = false;
     };
-  }, [storeId]);
+  }, [storeId, refreshRuntime]);
 
   const activationReady = useMemo(() => !!form.pgMid && !!form.pgClientKey && !!form.pgSecretKey, [form]);
 
@@ -99,6 +149,53 @@ function BillingForm({ storeId }: { storeId: string }) {
     setSaveMode("unsynced");
     setSaveBadge("error");
     setTimeout(() => setSaveBadge("idle"), 2000);
+  };
+
+  const totalAmount = useMemo(() => {
+    const unit = (payBase ? runtime.basePrice : 0) + (payAddon ? runtime.addonPrice : 0);
+    return unit * planMonths;
+  }, [payAddon, payBase, planMonths, runtime.addonPrice, runtime.basePrice]);
+
+  const onApplyTestPayment = async () => {
+    setPayMsg("");
+    if (!payBase && !payAddon) {
+      setPayMsg("기본 또는 옵션 중 하나 이상 선택해 주세요.");
+      return;
+    }
+
+    setPaying(true);
+    const suffix = `${Date.now()}`;
+    const orderId = `bill_${storeId}_${suffix}`;
+    const paymentKey = `test_pay_${suffix}`;
+    const note = `관리자 테스트 결제 ${planMonths}개월`;
+
+    const { error } = await supabase.rpc("apply_store_billing_payment", {
+      p_store_id: storeId,
+      p_plan_months: planMonths,
+      p_base_paid: payBase,
+      p_addon_paid: payAddon,
+      p_payment_key: paymentKey,
+      p_order_id: orderId,
+      p_amount_krw: totalAmount,
+      p_note: note,
+    });
+
+    if (error) {
+      setPayMsg(`결제 반영 실패: ${error.message}`);
+      setPaying(false);
+      return;
+    }
+
+    await refreshRuntime();
+    setPayMsg(`결제 반영 완료 ✅ (${planMonths}개월 / ${totalAmount.toLocaleString()}원)`);
+    setPaying(false);
+  };
+
+  const fmt = (iso: string | null) => {
+    if (!iso) return "-";
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) return iso;
+    return new Date(t).toLocaleString("ko-KR", { hour12: false });
   };
 
   if (loading) {
