@@ -1315,6 +1315,18 @@ function StaffPageInner() {
               ) : null}
 
               <div className="section">
+                <h3 style={{ margin: "0 0 8px 0" }}>요약 정보</h3>
+                <div className="sum" style={{ marginTop: 0 }}>
+                  <div>
+                    총 수량: <b>{selected.totalCount}</b>
+                  </div>
+                  <div>
+                    총 금액: <b>{fmt(selected.totalPrice)}원</b>
+                  </div>
+                </div>
+              </div>
+
+              <div className="section">
                 <h3 style={{ margin: "0 0 8px 0" }}>진동벨 번호 (선택)</h3>
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                   <input
