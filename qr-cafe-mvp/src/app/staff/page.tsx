@@ -561,6 +561,9 @@ function StaffPageInner() {
     setMobileView("detail");
   };
 
+  const canAdvanceSelected = !!selected && !(selected.status === "done" || selected.status === "canceled" || (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new"));
+  const canCancelSelected = !!selected && !(selected.status === "done" || selected.status === "canceled");
+
   const updateOrderInDb = async (id: string, patch: Partial<OrderRecord>) => {
     const sid = storeIdRef.current || storeId;
 
@@ -865,6 +868,32 @@ function StaffPageInner() {
           font-weight: 750;
         }
 
+        .metaTop {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .metaTime {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .metaBottom {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          line-height: 1.4;
+          font-weight: 750;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
         .section {
           margin-top: 14px;
         }
@@ -885,9 +914,9 @@ function StaffPageInner() {
 
         .orderItemsTitle {
           margin: 0;
-          font-size: 24px;
+          font-size: 20px;
           line-height: 1.2;
-          font-weight: 950;
+          font-weight: 900;
           letter-spacing: -0.01em;
         }
 
@@ -957,6 +986,10 @@ function StaffPageInner() {
           display: flex;
           gap: 10px;
           flex-wrap: wrap;
+        }
+
+        .actionDock {
+          display: none;
         }
 
         .actionBtn {
@@ -1030,7 +1063,7 @@ function StaffPageInner() {
           }
 
           .orderItemsTitle {
-            font-size: 21px;
+            font-size: 18px;
           }
 
           .menuName {
@@ -1052,6 +1085,35 @@ function StaffPageInner() {
 
           .mobileHide {
             display: none !important;
+          }
+
+          .actionRow {
+            display: none;
+          }
+
+          .actionDock {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: max(12px, env(safe-area-inset-bottom));
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            z-index: 30;
+            backdrop-filter: blur(4px);
+          }
+
+          .actionDockTriple {
+            grid-template-columns: 1fr;
+          }
+
+          .dockSpacer {
+            height: 96px;
           }
         }
       `}</style>
@@ -1200,15 +1262,15 @@ function StaffPageInner() {
           ) : (
             <>
               <div className="detailBox">
-                <p className="detailNo">주문번호 {selected.displayNo}</p>
-                <p className="metaRow">
-                  {selected.mode === "dine-in" ? `매장 · 테이블 ${selected.table ?? "-"}` : "포장 주문"} · 상태:{" "}
-                  <b>{STATUS_LABEL[selected.status]}</b>
+                <div className="metaTop">
+                  <p className="detailNo">주문번호 {selected.displayNo}</p>
+                  <p className="metaTime">주문시각: {formatTime(selected.createdAt)}</p>
+                </div>
+                <p className="metaBottom">
+                  <span>{selected.mode === "dine-in" ? `매장 · 테이블 ${selected.table ?? "-"}` : "포장 주문"}</span>
+                  <span>상태: <b>{STATUS_LABEL[selected.status]}</b></span>
+                  <span>결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b></span>
                 </p>
-                <p className="metaRow">
-                  결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b>
-                </p>
-                <p className="metaRow">주문시각: {formatTime(selected.createdAt)}</p>
               </div>
 
               {prepayAddonActive && selected.paymentStatus === "pending" ? (
@@ -1305,18 +1367,9 @@ function StaffPageInner() {
                 <button
                   className="actionBtn actionPrimary"
                   onClick={() => updateOrderInDb(selected.id, { status: nextStatus(selected.status) })}
-                  disabled={
-                    selected.status === "done" ||
-                    selected.status === "canceled" ||
-                    (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new")
-                  }
+                  disabled={!canAdvanceSelected}
                   style={{
-                    opacity:
-                      selected.status === "done" ||
-                      selected.status === "canceled" ||
-                      (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new")
-                        ? 0.5
-                        : 1,
+                    opacity: canAdvanceSelected ? 1 : 0.5,
                   }}
                 >
                   {statusButtonLabel(selected.status)}
@@ -1338,14 +1391,16 @@ function StaffPageInner() {
                     if (!confirm("이 주문을 '취소' 처리할까요? (삭제 아님, 데이터 유지)")) return;
                     updateOrderInDb(selected.id, { status: "canceled" });
                   }}
-                  disabled={selected.status === "done" || selected.status === "canceled"}
+                  disabled={!canCancelSelected}
                   style={{
-                    opacity: selected.status === "done" || selected.status === "canceled" ? 0.5 : 1,
+                    opacity: canCancelSelected ? 1 : 0.5,
                   }}
                 >
                   주문 취소
                 </button>
               </div>
+
+              <div className="dockSpacer" />
 
               <p className="hint">
                 * “주문 취소”는 삭제가 아니라 상태 변경입니다. 데이터는 남아 통계/CSV에 활용할 수 있어요.
@@ -1356,6 +1411,41 @@ function StaffPageInner() {
           )}
         </section>
       </div>
+
+      {selected && mobileView === "detail" ? (
+        <div className={`actionDock ${prepayAddonActive && selected.paymentStatus === "pending" ? "actionDockTriple" : ""}`}>
+          <button
+            className="actionBtn actionPrimary"
+            onClick={() => updateOrderInDb(selected.id, { status: nextStatus(selected.status) })}
+            disabled={!canAdvanceSelected}
+            style={{ opacity: canAdvanceSelected ? 1 : 0.5 }}
+          >
+            {statusButtonLabel(selected.status)}
+          </button>
+
+          {prepayAddonActive && selected.paymentStatus === "pending" ? (
+            <button
+              className="actionBtn"
+              style={{ borderColor: "#2563eb", color: "#2563eb" }}
+              onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
+            >
+              결제완료 처리(테스트)
+            </button>
+          ) : null}
+
+          <button
+            className="actionBtn actionCancel"
+            onClick={() => {
+              if (!confirm("이 주문을 '취소' 처리할까요? (삭제 아님, 데이터 유지)")) return;
+              updateOrderInDb(selected.id, { status: "canceled" });
+            }}
+            disabled={!canCancelSelected}
+            style={{ opacity: canCancelSelected ? 1 : 0.5 }}
+          >
+            주문 취소
+          </button>
+        </div>
+      ) : null}
     </main>
   );
 }
