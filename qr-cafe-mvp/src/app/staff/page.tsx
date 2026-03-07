@@ -650,11 +650,24 @@ function StaffPageInner() {
           gap: 12px;
         }
 
+        .titleTop {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
         .topActions {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
           justify-content: flex-end;
+        }
+
+        .topActionBtn {
+          padding: 8px 12px;
+          font-size: 14px;
+          border-radius: 10px;
         }
 
         .titleBlock {
@@ -703,7 +716,6 @@ function StaffPageInner() {
         .tabsRow {
           display: flex;
           align-items: center;
-          justify-content: space-between;
           gap: 8px;
           flex-wrap: wrap;
         }
@@ -1100,8 +1112,8 @@ function StaffPageInner() {
             font-size: 14px;
           }
 
-          .topbar {
-            align-items: center;
+          .titleTop {
+            flex-wrap: wrap;
           }
 
           .topActions {
@@ -1150,7 +1162,22 @@ function StaffPageInner() {
 
       <header className="topbar">
         <div className="titleBlock">
-          <h1 className="h1">직원 화면</h1>
+          <div className="titleTop">
+            <h1 className="h1">직원 화면</h1>
+
+            <div className="topActions">
+              <button
+                className="btn btnPrimary topActionBtn"
+                onClick={() =>
+                  (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
+                }
+              >
+                관리자화면
+              </button>
+              <a className="btn topActionBtn" href="/logout">로그아웃</a>
+            </div>
+          </div>
+
           <p className="desc">주문접수 및 제조 상태 변경</p>
 
           {/* ✅ 현재 매장 표시 */}
@@ -1162,18 +1189,6 @@ function StaffPageInner() {
           {initialLoading ? <p className="muted" style={{ margin: 0 }}>불러오는 중...</p> : null}
 
           {errMsg ? <p className="err">오류: {errMsg}</p> : null}
-        </div>
-
-        <div className="topActions">
-          <button
-            className="btn btnPrimary"
-            onClick={() =>
-              (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
-            }
-          >
-            관리자화면
-          </button>
-          <a className="btn" href="/logout">로그아웃</a>
         </div>
       </header>
 
@@ -1207,17 +1222,6 @@ function StaffPageInner() {
             전체 ({counts.all})
           </button>
         </div>
-        <button
-          className="btn"
-          onClick={() => {
-            speakKoreanOnce("직원 화면이 준비되었습니다.");
-            fetchOrdersFromDb(false);
-          }}
-          disabled={!storeId}
-          style={{ opacity: !storeId ? 0.5 : 1 }}
-        >
-          새로고침
-        </button>
       </div>
 
       <p className="tabHint">완료/취소·전체는 당일 주문만 표시</p>
@@ -1313,18 +1317,6 @@ function StaffPageInner() {
                   <b style={{ color: "#92400e" }}>선결재 옵션 매장: 결제완료 전에는 제조 시작이 불가합니다.</b>
                 </div>
               ) : null}
-
-              <div className="section">
-                <h3 style={{ margin: "0 0 8px 0" }}>요약 정보</h3>
-                <div className="sum" style={{ marginTop: 0 }}>
-                  <div>
-                    총 수량: <b>{selected.totalCount}</b>
-                  </div>
-                  <div>
-                    총 금액: <b>{fmt(selected.totalPrice)}원</b>
-                  </div>
-                </div>
-              </div>
 
               <div className="section">
                 <h3 style={{ margin: "0 0 8px 0" }}>진동벨 번호 (선택)</h3>
