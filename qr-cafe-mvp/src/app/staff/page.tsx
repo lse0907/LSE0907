@@ -98,6 +98,7 @@ type DbOrderItemOptionRow = {
 };
 
 const LAST_SPOKEN_KEY = "qrCafeStaffLastSpokenOrderId";
+const STAFF_POLL_INTERVAL_MS = 5000;
 
 /**
  * ✅ 선택 매장 결정 우선순위
@@ -492,7 +493,7 @@ function StaffPageInner() {
         }
         return next;
       });
-    }, 1200);
+    }, STAFF_POLL_INTERVAL_MS);
 
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -559,6 +560,9 @@ function StaffPageInner() {
     setSelectedId(id);
     setMobileView("detail");
   };
+
+  const canAdvanceSelected = !!selected && !(selected.status === "done" || selected.status === "canceled" || (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new"));
+  const canCancelSelected = !!selected && !(selected.status === "done" || selected.status === "canceled");
 
   const updateOrderInDb = async (id: string, patch: Partial<OrderRecord>) => {
     const sid = storeIdRef.current || storeId;
@@ -650,7 +654,7 @@ function StaffPageInner() {
         }
 
         .h1 {
-          font-size: 28px;
+          font-size: 30px;
           font-weight: 900;
           margin: 0;
           letter-spacing: -0.02em;
@@ -661,7 +665,7 @@ function StaffPageInner() {
           color: var(--muted);
           line-height: 1.45;
           font-size: 14px;
-          max-width: 520px;
+          max-width: 720px;
           word-break: keep-all;
         }
 
@@ -698,10 +702,11 @@ function StaffPageInner() {
         .chip {
           border: 1px solid var(--line);
           background: #fff;
-          padding: 10px 12px;
+          padding: 10px 14px;
           border-radius: 999px;
           font-weight: 800;
           cursor: pointer;
+          font-size: 14px;
         }
         .chipOn {
           border-color: var(--brand);
@@ -712,32 +717,50 @@ function StaffPageInner() {
         .tabHint {
           margin: 8px 0 0 0;
           color: var(--muted);
-          font-size: 13px;
+          font-size: 12px;
           line-height: 1.4;
-          font-weight: 800;
+          font-weight: 700;
           word-break: keep-all;
         }
 
         .panel {
-          margin-top: 14px;
+          margin-top: 16px;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 14px;
+          gap: 16px;
         }
 
         .card {
           background: var(--card);
           border: 1px solid var(--line);
           border-radius: var(--radius);
-          padding: 14px;
+          padding: 16px;
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
           min-height: 520px;
         }
 
         .cardTitle {
-          margin: 0 0 10px 0;
-          font-size: 18px;
+          margin: 0;
+          font-size: 20px;
           font-weight: 900;
+        }
+
+        .cardTitleRow {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+
+        .backBtn {
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 999px;
+          padding: 8px 12px;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
         }
 
         .list {
@@ -824,14 +847,51 @@ function StaffPageInner() {
         .detailBox {
           border: 1px solid var(--line);
           border-radius: 14px;
-          padding: 12px;
+          padding: 10px 12px;
           background: #fff;
+          display: grid;
+          gap: 6px;
         }
 
         .detailNo {
-          font-size: 24px;
-          font-weight: 950;
+          font-size: 22px;
+          font-weight: 900;
           margin: 0;
+          line-height: 1.2;
+        }
+
+        .metaRow {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          line-height: 1.4;
+          font-weight: 750;
+        }
+
+        .metaTop {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .metaTime {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .metaBottom {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          line-height: 1.4;
+          font-weight: 750;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
         }
 
         .section {
@@ -852,6 +912,21 @@ function StaffPageInner() {
           margin-top: 10px;
         }
 
+        .itemsScroll {
+          margin-top: 10px;
+          max-height: min(42vh, 380px);
+          overflow-y: auto;
+          padding-right: 4px;
+        }
+
+        .orderItemsTitle {
+          margin: 0;
+          font-size: 20px;
+          line-height: 1.2;
+          font-weight: 900;
+          letter-spacing: -0.01em;
+        }
+
         .menuItem {
           border: 1px solid var(--line);
           border-radius: 12px;
@@ -859,6 +934,13 @@ function StaffPageInner() {
           background: #fff;
           display: grid;
           gap: 8px;
+        }
+
+        .menuName {
+          font-size: 24px;
+          line-height: 1.2;
+          font-weight: 950;
+          letter-spacing: -0.01em;
         }
 
         .menuTop {
@@ -885,10 +967,10 @@ function StaffPageInner() {
         }
 
         .optLine {
-          font-size: 12px;
+          font-size: 16px;
           font-weight: 850;
           color: #111827;
-          line-height: 1.35;
+          line-height: 1.4;
           word-break: keep-all;
         }
 
@@ -911,6 +993,10 @@ function StaffPageInner() {
           display: flex;
           gap: 10px;
           flex-wrap: wrap;
+        }
+
+        .actionDock {
+          display: none;
         }
 
         .actionBtn {
@@ -967,12 +1053,36 @@ function StaffPageInner() {
           }
 
           .h1 {
-            font-size: 24px;
+            font-size: 26px;
           }
 
           .desc {
             font-size: 13px;
             max-width: 100%;
+          }
+
+          .cardTitle {
+            font-size: 18px;
+          }
+
+          .detailNo {
+            font-size: 20px;
+          }
+
+          .orderItemsTitle {
+            font-size: 18px;
+          }
+
+          .itemsScroll {
+            max-height: min(38vh, 320px);
+          }
+
+          .menuName {
+            font-size: 20px;
+          }
+
+          .optLine {
+            font-size: 14px;
           }
 
           .btnRow {
@@ -987,13 +1097,42 @@ function StaffPageInner() {
           .mobileHide {
             display: none !important;
           }
+
+          .actionRow {
+            display: none;
+          }
+
+          .actionDock {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: max(12px, env(safe-area-inset-bottom));
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            z-index: 30;
+            backdrop-filter: blur(4px);
+          }
+
+          .actionDockTriple {
+            grid-template-columns: 1fr;
+          }
+
+          .dockSpacer {
+            height: 96px;
+          }
         }
       `}</style>
 
       <header className="topbar">
         <div className="titleBlock">
           <h1 className="h1">직원 화면</h1>
-          <p className="desc">주문 리스트 확인 → 벨번호 입력(선택) → 상태 변경 / 취소</p>
+          <p className="desc">주문 접수 확인, 상세 확인, 제조 상태 변경까지 한 화면에서 처리하세요.</p>
 
           {/* ✅ 현재 매장 표시 */}
           <p className="muted" style={{ margin: 0, fontWeight: 900 }}>
@@ -1063,19 +1202,12 @@ function StaffPageInner() {
       {/* ✅ A문구 확정 */}
       <p className="tabHint">완료/취소 및 전체 목록은 오늘 접수된 주문만 표시됩니다.</p>
 
-      <div className="tabs" style={{ marginTop: 8 }}>
-        <button
-          className="btn"
-          onClick={() => setMobileView("list")}
-          style={{ display: mobileView === "detail" ? "inline-flex" : "none" }}
-        >
-          ← 목록으로
-        </button>
-      </div>
-
       <div className="panel">
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
-          <h2 className="cardTitle">주문 목록 ({filteredOrders.length})</h2>
+          <div className="cardTitleRow">
+            <h2 className="cardTitle">주문 목록</h2>
+            <span className="badge">{filteredOrders.length}건</span>
+          </div>
 
           {!storeId ? (
             <p className="muted">매장이 선택되지 않았습니다. 관리자에서 매장을 선택하고 다시 들어와 주세요.</p>
@@ -1125,23 +1257,30 @@ function StaffPageInner() {
         </section>
 
         <section className={`card ${mobileView === "list" ? "mobileHide" : ""}`}>
-          <h2 className="cardTitle">주문 상세</h2>
+          <div className="cardTitleRow">
+            <h2 className="cardTitle">주문 상세</h2>
+            <button
+              className="backBtn"
+              onClick={() => setMobileView("list")}
+              style={{ display: mobileView === "detail" ? "inline-flex" : "none" }}
+            >
+              주문 목록
+            </button>
+          </div>
 
           {!selected ? (
             <p className="muted">주문을 선택하세요.</p>
           ) : (
             <>
               <div className="detailBox">
-                <p className="detailNo">주문번호 {selected.displayNo}</p>
-                <p className="muted" style={{ margin: "8px 0 0 0" }}>
-                  {selected.mode === "dine-in" ? `매장 · 테이블 ${selected.table ?? "-"}` : "포장 주문"} · 상태:{" "}
-                  <b>{STATUS_LABEL[selected.status]}</b>
-                </p>
-                <p className="muted" style={{ margin: "6px 0 0 0" }}>
-                  결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b>
-                </p>
-                <p className="muted" style={{ margin: "6px 0 0 0" }}>
-                  주문시각: {formatTime(selected.createdAt)}
+                <div className="metaTop">
+                  <p className="detailNo">주문번호 {selected.displayNo}</p>
+                  <p className="metaTime">주문시각: {formatTime(selected.createdAt)}</p>
+                </div>
+                <p className="metaBottom">
+                  <span>{selected.mode === "dine-in" ? `매장 · 테이블 ${selected.table ?? "-"}` : "포장 주문"}</span>
+                  <span>상태: <b>{STATUS_LABEL[selected.status]}</b></span>
+                  <span>결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b></span>
                 </p>
               </div>
 
@@ -1150,6 +1289,18 @@ function StaffPageInner() {
                   <b style={{ color: "#92400e" }}>선결재 옵션 매장: 결제완료 전에는 제조 시작이 불가합니다.</b>
                 </div>
               ) : null}
+
+              <div className="section">
+                <h3 style={{ margin: "0 0 8px 0" }}>요약 정보</h3>
+                <div className="sum" style={{ marginTop: 0 }}>
+                  <div>
+                    총 수량: <b>{selected.totalCount}</b>
+                  </div>
+                  <div>
+                    총 금액: <b>{fmt(selected.totalPrice)}원</b>
+                  </div>
+                </div>
+              </div>
 
               <div className="section">
                 <h3 style={{ margin: "0 0 8px 0" }}>진동벨 번호 (선택)</h3>
@@ -1167,71 +1318,64 @@ function StaffPageInner() {
               </div>
 
               <div className="section">
-                <h3 style={{ margin: 0 }}>주문 내역</h3>
-                <div className="menuRow">
-                  {selected.items.map((it, idx) => {
-                    const optionTotal = Number(it.optionTotal || 0);
-                    const unit = Number(it.price || 0) + optionTotal;
-                    const lineTotal =
-                      Number.isFinite(Number(it.lineTotal)) && it.lineTotal !== undefined
-                        ? Number(it.lineTotal)
-                        : unit * Number(it.qty || 0);
-
-                    const optText =
-                      it.options
-                        ?.map((g) => {
-                          if (!g.items?.length) return null;
-                          const cleanGroupName = String(g.groupName || "")
-                            .replace(/^\s*옵션\s*/g, "")
-                            .trim();
-                          const itemText = g.items
-                            .map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`)
-                            .join(", ");
-                          return cleanGroupName ? `${cleanGroupName}: ${itemText}` : itemText;
-                        })
-                        .filter(Boolean)
-                        .join(" / ") || "";
-
-                    return (
-                      <div key={`${it.id}_${idx}`} className="menuItem">
-                        <div className="menuTop">
-                          <div>
-                            <div style={{ fontWeight: 900 }}>{it.name} x{it.qty}</div>
-                            <div className="optMuted" style={{ marginTop: 4 }}>
-                              기본 {fmt(it.price)}원
-                              {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
-                              {" · "}
-                              1개당 {fmt(unit)}원
-                            </div>
-                          </div>
-
-                          <div className="price">{fmt(lineTotal)}원</div>
-                        </div>
-
-                        {optText ? (
-                          <div className="optWrap">
-                            <div className="optLine">옵션: {optText}</div>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="sum">
-                  <div>
-                    총 수량: <b>{selected.totalCount}</b>
-                  </div>
-                  <div>
-                    총 금액: <b>{fmt(selected.totalPrice)}원</b>
-                  </div>
+                <h3 style={{ margin: "0 0 8px 0" }}>요청사항</h3>
+                <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
+                  {selected.requestNote || "요청사항 없음"}
                 </div>
               </div>
 
               <div className="section">
-                <h3 style={{ margin: "0 0 8px 0" }}>요청사항</h3>
-                <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
-                  {selected.requestNote || "요청사항 없음"}
+                <h3 className="orderItemsTitle">주문 내역</h3>
+                <div className="itemsScroll">
+                  <div className="menuRow">
+                    {selected.items.map((it, idx) => {
+                      const optionTotal = Number(it.optionTotal || 0);
+                      const unit = Number(it.price || 0) + optionTotal;
+                      const lineTotal =
+                        Number.isFinite(Number(it.lineTotal)) && it.lineTotal !== undefined
+                          ? Number(it.lineTotal)
+                          : unit * Number(it.qty || 0);
+
+                      const optText =
+                        it.options
+                          ?.map((g) => {
+                            if (!g.items?.length) return null;
+                            const cleanGroupName = String(g.groupName || "")
+                              .replace(/^\s*옵션\s*/g, "")
+                              .trim();
+                            const itemText = g.items
+                              .map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`)
+                              .join(", ");
+                            return cleanGroupName ? `${cleanGroupName}: ${itemText}` : itemText;
+                          })
+                          .filter(Boolean)
+                          .join(" / ") || "";
+
+                      return (
+                        <div key={`${it.id}_${idx}`} className="menuItem">
+                          <div className="menuTop">
+                            <div>
+                              <div className="menuName">{it.name} x{it.qty}</div>
+                              <div className="optMuted" style={{ marginTop: 4 }}>
+                                기본 {fmt(it.price)}원
+                                {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
+                                {" · "}
+                                1개당 {fmt(unit)}원
+                              </div>
+                            </div>
+
+                            <div className="price">{fmt(lineTotal)}원</div>
+                          </div>
+
+                          {optText ? (
+                            <div className="optWrap">
+                              <div className="optLine">옵션: {optText}</div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -1239,18 +1383,9 @@ function StaffPageInner() {
                 <button
                   className="actionBtn actionPrimary"
                   onClick={() => updateOrderInDb(selected.id, { status: nextStatus(selected.status) })}
-                  disabled={
-                    selected.status === "done" ||
-                    selected.status === "canceled" ||
-                    (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new")
-                  }
+                  disabled={!canAdvanceSelected}
                   style={{
-                    opacity:
-                      selected.status === "done" ||
-                      selected.status === "canceled" ||
-                      (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new")
-                        ? 0.5
-                        : 1,
+                    opacity: canAdvanceSelected ? 1 : 0.5,
                   }}
                 >
                   {statusButtonLabel(selected.status)}
@@ -1272,24 +1407,59 @@ function StaffPageInner() {
                     if (!confirm("이 주문을 '취소' 처리할까요? (삭제 아님, 데이터 유지)")) return;
                     updateOrderInDb(selected.id, { status: "canceled" });
                   }}
-                  disabled={selected.status === "done" || selected.status === "canceled"}
+                  disabled={!canCancelSelected}
                   style={{
-                    opacity: selected.status === "done" || selected.status === "canceled" ? 0.5 : 1,
+                    opacity: canCancelSelected ? 1 : 0.5,
                   }}
                 >
                   주문 취소
                 </button>
               </div>
 
+              <div className="dockSpacer" />
+
               <p className="hint">
-                * “주문 취소”는 삭제가 아니라 상태 변경입니다. 데이터는 남아 통계/CSV에 활용할 수 있어요.
-                <br />
-                * 새 주문 음성 안내는 브라우저 정책상 “새로고침 버튼”을 한 번 누른 뒤부터 더 안정적으로 들릴 수 있어요.
+                * 주문 취소는 삭제가 아닌 상태 변경입니다.
               </p>
             </>
           )}
         </section>
       </div>
+
+      {selected && mobileView === "detail" ? (
+        <div className={`actionDock ${prepayAddonActive && selected.paymentStatus === "pending" ? "actionDockTriple" : ""}`}>
+          <button
+            className="actionBtn actionPrimary"
+            onClick={() => updateOrderInDb(selected.id, { status: nextStatus(selected.status) })}
+            disabled={!canAdvanceSelected}
+            style={{ opacity: canAdvanceSelected ? 1 : 0.5 }}
+          >
+            {statusButtonLabel(selected.status)}
+          </button>
+
+          {prepayAddonActive && selected.paymentStatus === "pending" ? (
+            <button
+              className="actionBtn"
+              style={{ borderColor: "#2563eb", color: "#2563eb" }}
+              onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
+            >
+              결제완료 처리(테스트)
+            </button>
+          ) : null}
+
+          <button
+            className="actionBtn actionCancel"
+            onClick={() => {
+              if (!confirm("이 주문을 '취소' 처리할까요? (삭제 아님, 데이터 유지)")) return;
+              updateOrderInDb(selected.id, { status: "canceled" });
+            }}
+            disabled={!canCancelSelected}
+            style={{ opacity: canCancelSelected ? 1 : 0.5 }}
+          >
+            주문 취소
+          </button>
+        </div>
+      ) : null}
     </main>
   );
 }
