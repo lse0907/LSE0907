@@ -368,6 +368,11 @@ export default function AdminStoreCreatePage() {
           line-height: 1.35;
         }
 
+        .hintWrap {
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+
         .alert {
           border: 1px solid #fecaca;
           background: #fef2f2;
@@ -617,7 +622,7 @@ export default function AdminStoreCreatePage() {
               onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
               disabled={uploadingMain}
             />
-            <div className="hint">
+            <div className="hint hintWrap">
               {uploadingMain ? "업로드 중..." : mainImage ? `등록됨: ${mainImage}` : "아직 등록된 이미지가 없습니다."}
             </div>
           </div>
@@ -631,7 +636,7 @@ export default function AdminStoreCreatePage() {
               onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
               disabled={uploadingLogo}
             />
-            <div className="hint">
+            <div className="hint hintWrap">
               {uploadingLogo ? "업로드 중..." : logoImage ? `등록됨: ${logoImage}` : "아직 등록된 이미지가 없습니다."}
             </div>
           </div>
