@@ -665,6 +665,14 @@ function StaffPageInner() {
           width: 100%;
         }
 
+        .titleTop {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          width: 100%;
+        }
+
         .topActions {
           display: flex;
           gap: 8px;
