@@ -912,6 +912,13 @@ function StaffPageInner() {
           margin-top: 10px;
         }
 
+        .itemsScroll {
+          margin-top: 10px;
+          max-height: min(42vh, 380px);
+          overflow-y: auto;
+          padding-right: 4px;
+        }
+
         .orderItemsTitle {
           margin: 0;
           font-size: 20px;
@@ -1064,6 +1071,10 @@ function StaffPageInner() {
 
           .orderItemsTitle {
             font-size: 18px;
+          }
+
+          .itemsScroll {
+            max-height: min(38vh, 320px);
           }
 
           .menuName {
@@ -1280,58 +1291,8 @@ function StaffPageInner() {
               ) : null}
 
               <div className="section">
-                <h3 className="orderItemsTitle">주문 내역</h3>
-                <div className="menuRow">
-                  {selected.items.map((it, idx) => {
-                    const optionTotal = Number(it.optionTotal || 0);
-                    const unit = Number(it.price || 0) + optionTotal;
-                    const lineTotal =
-                      Number.isFinite(Number(it.lineTotal)) && it.lineTotal !== undefined
-                        ? Number(it.lineTotal)
-                        : unit * Number(it.qty || 0);
-
-                    const optText =
-                      it.options
-                        ?.map((g) => {
-                          if (!g.items?.length) return null;
-                          const cleanGroupName = String(g.groupName || "")
-                            .replace(/^\s*옵션\s*/g, "")
-                            .trim();
-                          const itemText = g.items
-                            .map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`)
-                            .join(", ");
-                          return cleanGroupName ? `${cleanGroupName}: ${itemText}` : itemText;
-                        })
-                        .filter(Boolean)
-                        .join(" / ") || "";
-
-                    return (
-                      <div key={`${it.id}_${idx}`} className="menuItem">
-                        <div className="menuTop">
-                          <div>
-                            <div className="menuName">{it.name} x{it.qty}</div>
-                            <div className="optMuted" style={{ marginTop: 4 }}>
-                              기본 {fmt(it.price)}원
-                              {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
-                              {" · "}
-                              1개당 {fmt(unit)}원
-                            </div>
-                          </div>
-
-                          <div className="price">{fmt(lineTotal)}원</div>
-                        </div>
-
-                        {optText ? (
-                          <div className="optWrap">
-                            <div className="optLine">옵션: {optText}</div>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="sum">
+                <h3 style={{ margin: "0 0 8px 0" }}>요약 정보</h3>
+                <div className="sum" style={{ marginTop: 0 }}>
                   <div>
                     총 수량: <b>{selected.totalCount}</b>
                   </div>
@@ -1360,6 +1321,61 @@ function StaffPageInner() {
                 <h3 style={{ margin: "0 0 8px 0" }}>요청사항</h3>
                 <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
                   {selected.requestNote || "요청사항 없음"}
+                </div>
+              </div>
+
+              <div className="section">
+                <h3 className="orderItemsTitle">주문 내역</h3>
+                <div className="itemsScroll">
+                  <div className="menuRow">
+                    {selected.items.map((it, idx) => {
+                      const optionTotal = Number(it.optionTotal || 0);
+                      const unit = Number(it.price || 0) + optionTotal;
+                      const lineTotal =
+                        Number.isFinite(Number(it.lineTotal)) && it.lineTotal !== undefined
+                          ? Number(it.lineTotal)
+                          : unit * Number(it.qty || 0);
+
+                      const optText =
+                        it.options
+                          ?.map((g) => {
+                            if (!g.items?.length) return null;
+                            const cleanGroupName = String(g.groupName || "")
+                              .replace(/^\s*옵션\s*/g, "")
+                              .trim();
+                            const itemText = g.items
+                              .map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`)
+                              .join(", ");
+                            return cleanGroupName ? `${cleanGroupName}: ${itemText}` : itemText;
+                          })
+                          .filter(Boolean)
+                          .join(" / ") || "";
+
+                      return (
+                        <div key={`${it.id}_${idx}`} className="menuItem">
+                          <div className="menuTop">
+                            <div>
+                              <div className="menuName">{it.name} x{it.qty}</div>
+                              <div className="optMuted" style={{ marginTop: 4 }}>
+                                기본 {fmt(it.price)}원
+                                {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
+                                {" · "}
+                                1개당 {fmt(unit)}원
+                              </div>
+                            </div>
+
+                            <div className="price">{fmt(lineTotal)}원</div>
+                          </div>
+
+                          {optText ? (
+                            <div className="optWrap">
+                              <div className="optLine">옵션: {optText}</div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -1403,9 +1419,7 @@ function StaffPageInner() {
               <div className="dockSpacer" />
 
               <p className="hint">
-                * “주문 취소”는 삭제가 아니라 상태 변경입니다. 데이터는 남아 통계/CSV에 활용할 수 있어요.
-                <br />
-                * 새 주문 음성 안내는 브라우저 정책상 “새로고침 버튼”을 한 번 누른 뒤부터 더 안정적으로 들릴 수 있어요.
+                * 주문 취소는 삭제가 아닌 상태 변경입니다.
               </p>
             </>
           )}
