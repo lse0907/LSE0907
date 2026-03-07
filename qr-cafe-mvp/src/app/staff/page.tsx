@@ -654,6 +654,15 @@ function StaffPageInner() {
           align-items: flex-start;
           justify-content: space-between;
           gap: 12px;
+          width: 100%;
+        }
+
+        .titleTop {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
         }
 
         .titleTop {
@@ -734,6 +743,7 @@ function StaffPageInner() {
         .titleBlock {
           display: grid;
           gap: 8px;
+          width: 100%;
         }
 
         .h1 {
@@ -894,6 +904,28 @@ function StaffPageInner() {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
+        }
+
+        .itemQuickActions {
+          margin-top: 8px;
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .quickActionBtn {
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .quickActionBtnPrimary {
+          border-color: #c7d2fe;
+          background: #eef2ff;
+          color: #3730a3;
         }
 
         .bigNo {
@@ -1205,15 +1237,16 @@ function StaffPageInner() {
           }
 
           .titleTop {
-            flex-wrap: nowrap;
+            grid-template-columns: minmax(0, 1fr) auto;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
           }
 
           .topActions {
             justify-content: flex-end;
             gap: 6px;
             flex-shrink: 0;
+            margin-left: auto;
           }
 
           .btn.topActionBtn {
@@ -1232,6 +1265,15 @@ function StaffPageInner() {
           .elapsedBadge {
             padding: 3px 7px;
             font-size: 10px;
+          }
+
+          .itemQuickActions {
+            margin-top: 6px;
+          }
+
+          .quickActionBtn {
+            padding: 5px 9px;
+            font-size: 11px;
           }
 
           .buzzerRow {
@@ -1405,6 +1447,28 @@ function StaffPageInner() {
                       <span className="badge">메뉴 {o.items.length}개</span>
                       <span className="badge">총 수량 {totalQty}</span>
                     </div>
+
+                    {isActive(o.status) ? (
+                      <div className="itemQuickActions">
+                        <span
+                          className="quickActionBtn quickActionBtnPrimary"
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateOrderInDb(o.id, { status: nextStatus(o.status) });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter" && e.key !== " ") return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            updateOrderInDb(o.id, { status: nextStatus(o.status) });
+                          }}
+                        >
+                          {statusButtonLabel(o.status)}
+                        </span>
+                      </div>
+                    ) : null}
                   </button>
                 );
               })}
