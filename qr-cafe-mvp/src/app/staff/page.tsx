@@ -131,6 +131,12 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString();
 }
 
+function formatElapsedMin(ts: number) {
+  const diffMs = Date.now() - Number(ts || 0);
+  const minutes = Math.max(0, Math.floor(diffMs / 60000));
+  return `${minutes}분 경과`;
+}
+
 const STATUS_LABEL: Record<OrderStatus, string> = {
   new: "신규",
   making: "제조중",
@@ -666,6 +672,17 @@ function StaffPageInner() {
           margin-left: auto;
         }
 
+        .storeInfo {
+          margin: 0;
+          font-weight: 800;
+          font-size: 18px;
+          line-height: 1.25;
+        }
+
+        .storeInfo b {
+          font-weight: 900;
+        }
+
         .btn.topActionBtn {
           padding: 7px 10px;
           font-size: 13px;
@@ -712,12 +729,6 @@ function StaffPageInner() {
           margin: 8px 0 0 0;
           color: var(--muted);
           font-size: 13px;
-        }
-
-        .topActionBtn {
-          padding: 8px 12px;
-          font-size: 14px;
-          border-radius: 10px;
         }
 
         .titleBlock {
@@ -856,6 +867,33 @@ function StaffPageInner() {
           justify-content: space-between;
           gap: 10px;
           align-items: center;
+        }
+
+        .orderMetaRight {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .elapsedBadge {
+          border: 1px solid #fde68a;
+          background: #fffbeb;
+          color: #92400e;
+          border-radius: 999px;
+          padding: 4px 8px;
+          font-size: 11px;
+          font-weight: 900;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        .orderQuickMeta {
+          margin-top: 8px;
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
         }
 
         .bigNo {
@@ -1130,7 +1168,7 @@ function StaffPageInner() {
           }
 
           .h1 {
-            font-size: 26px;
+            font-size: 25px;
           }
 
           .desc {
@@ -1169,16 +1207,31 @@ function StaffPageInner() {
           .titleTop {
             flex-wrap: nowrap;
             align-items: center;
+            gap: 6px;
           }
 
           .topActions {
             justify-content: flex-end;
             gap: 6px;
+            flex-shrink: 0;
           }
 
           .btn.topActionBtn {
             padding: 6px 8px;
             font-size: 12px;
+          }
+
+          .storeInfo {
+            font-size: 15px;
+          }
+
+          .orderMetaRight {
+            gap: 4px;
+          }
+
+          .elapsedBadge {
+            padding: 3px 7px;
+            font-size: 10px;
           }
 
           .buzzerRow {
@@ -1251,7 +1304,7 @@ function StaffPageInner() {
           <p className="desc">주문접수 및 제조 상태 변경</p>
 
           {/* ✅ 현재 매장 표시 */}
-          <p className="muted" style={{ margin: 0, fontWeight: 900 }}>
+          <p className="muted storeInfo">
             현재 매장: <b>{storeId || "미선택"}</b>
           </p>
 
@@ -1313,6 +1366,7 @@ function StaffPageInner() {
                 const isSelected = o.id === selectedId;
                 const badgeClass = badgeClassByStatus(o.status);
                 const showNew = isNewBadge(o.id);
+                const totalQty = o.items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
 
                 return (
                   <button
@@ -1326,7 +1380,10 @@ function StaffPageInner() {
                         {o.buzzerNo ? ` · 벨 ${o.buzzerNo}` : ""}
                         {showNew ? <span className="badge badgeHot">NEW</span> : null}
                       </div>
-                      <div className="muted">{formatTime(o.createdAt)}</div>
+                      <div className="orderMetaRight">
+                        <span className="elapsedBadge">{formatElapsedMin(o.createdAt)}</span>
+                        <div className="muted">{formatTime(o.createdAt)}</div>
+                      </div>
                     </div>
 
                     <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1342,6 +1399,11 @@ function StaffPageInner() {
                         .slice(0, 2)
                         .join(", ")}
                       {o.items.length > 2 ? "…" : ""}
+                    </div>
+
+                    <div className="orderQuickMeta">
+                      <span className="badge">메뉴 {o.items.length}개</span>
+                      <span className="badge">총 수량 {totalQty}</span>
                     </div>
                   </button>
                 );
@@ -1373,7 +1435,6 @@ function StaffPageInner() {
                 </div>
                 <p className="metaBottom">
                   <span>{selected.mode === "dine-in" ? `매장 · 테이블 ${selected.table ?? "-"}` : "포장 주문"}</span>
-                  <span>상태: <b>{STATUS_LABEL[selected.status]}</b></span>
                   <span>결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b></span>
                 </p>
                 <p className="metaSummary">
