@@ -803,15 +803,15 @@ function StaffPageInner() {
   };
 
   const updateOrderItemsInDb = async (itemIds: string[], patch: { status?: ItemStatus; batch?: number }) => {
-    const sid = storeIdRef.current || storeId;
-    if (!sid || !itemIds.length) return;
+    if (!itemIds.length) return;
 
     const payload: any = {};
     if (typeof patch.status !== "undefined") payload.status = patch.status;
     if (typeof patch.batch !== "undefined") payload.batch = patch.batch;
     if (!Object.keys(payload).length) return;
 
-    const { error } = await supabase.from("order_items").update(payload).in("id", itemIds).eq("store_id", sid);
+    // order_items.store_id가 비어있는 레거시 데이터도 있어 store_id 조건으로 막지 않는다.
+    const { error } = await supabase.from("order_items").update(payload).in("id", itemIds);
     if (error) {
       alert(`아이템 상태 저장 실패: ${error.message}`);
       return;

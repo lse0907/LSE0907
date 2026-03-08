@@ -174,7 +174,7 @@ begin
   from public.orders o
   where o.id = p_order_id;
 
-  if v_cancelled then
+  if v_cancelled or v_current_status = 'completed' then
     return;
   end if;
 
@@ -198,7 +198,7 @@ begin
     -- 모든 아이템이 waiting이어도 기존이 new면 new를 유지한다.
     if v_current_status = 'new' then
       update public.orders set status = 'new' where id = p_order_id;
-    else
+    elsif v_current_status in ('checked', 'making') then
       update public.orders set status = 'checked' where id = p_order_id;
     end if;
   end if;
