@@ -1803,7 +1803,7 @@ function StaffPageInner() {
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
       <p className="tabHint" style={{ marginTop: 4 }}>
         {staffViewMode === "station"
-          ? "Station 모드: 주문관리 · 제조 · 준비 · 완료/취소 탭으로 업무를 분리해요."
+          ? "Station 모드: 주문관리에서 주문확인 후 제조 탭으로 이동해요."
           : "Simple 모드: 주문 목록과 상세를 한 흐름으로 처리해요."}
       </p>
 

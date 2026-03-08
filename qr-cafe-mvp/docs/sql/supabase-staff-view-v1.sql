@@ -167,8 +167,10 @@ declare
   v_done int := 0;
   v_waiting int := 0;
   v_cancelled boolean := false;
+  v_current_status text := 'new';
 begin
-  select (o.status = 'cancelled') into v_cancelled
+  select coalesce(o.status, 'new'), (o.status = 'cancelled')
+    into v_current_status, v_cancelled
   from public.orders o
   where o.id = p_order_id;
 
@@ -192,7 +194,13 @@ begin
   elsif v_making > 0 then
     update public.orders set status = 'making' where id = p_order_id;
   elsif v_waiting = v_total then
-    update public.orders set status = 'checked' where id = p_order_id;
+    -- 주문확인(checked)은 수동 절차로 유지:
+    -- 모든 아이템이 waiting이어도 기존이 new면 new를 유지한다.
+    if v_current_status = 'new' then
+      update public.orders set status = 'new' where id = p_order_id;
+    else
+      update public.orders set status = 'checked' where id = p_order_id;
+    end if;
   end if;
 end;
 $$;
