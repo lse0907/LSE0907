@@ -38,6 +38,8 @@ type OrderItem = {
   options?: SelectedGroup[];
   optionTotal?: number; // 1개 기준 옵션 추가금
   lineTotal?: number; // (base+optionTotal)*qty
+  orderId?: string;
+  displayNo?: string;
 };
 
 type OrderRecord = {
@@ -497,6 +499,8 @@ function StaffPageInner() {
 
       const built: OrderItem = {
         id: itemId,
+        orderId,
+        displayNo: "",
         menuId: String(it.menu_id ?? itemId),
         name: String(it.name ?? ""),
         price: base,
@@ -542,6 +546,12 @@ function StaffPageInner() {
         paymentStatus: normalizePaymentStatus(o.payment_status),
       };
     });
+
+    for (const order of assembled) {
+      for (const item of order.items) {
+        item.displayNo = order.displayNo;
+      }
+    }
 
     setOrders(assembled);
     setInitialLoading(false);
@@ -664,6 +674,91 @@ function StaffPageInner() {
     setMobileView("detail");
   };
 
+  const nextBatch = useMemo(() => {
+    const maxBatch = orders
+      .flatMap((o) => o.items)
+      .reduce((max, it) => Math.max(max, Number(it.batch || 0)), 0);
+    return maxBatch + 1;
+  }, [orders]);
+
+  const optionSignature = (it: OrderItem) => {
+    const groups = [...(it.options || [])]
+      .map((g) => ({
+        groupId: String(g.groupId || ""),
+        items: [...(g.items || [])]
+          .map((x) => `${x.id}:${Math.max(1, Number(x.qty || 1))}`)
+          .sort(),
+      }))
+      .sort((a, b) => a.groupId.localeCompare(b.groupId));
+    return JSON.stringify(groups);
+  };
+
+  const makeGroups = useMemo(() => {
+    const source = orders
+      .filter((o) => o.status === "checked" || o.status === "making")
+      .flatMap((o) => o.items.map((it) => ({ ...it, orderId: o.id, displayNo: o.displayNo })));
+
+    type Grouped = {
+      key: string;
+      menuId: string;
+      name: string;
+      status: ItemStatus;
+      batch: number;
+      optionSig: string;
+      qty: number;
+      itemIds: string[];
+      orderNos: string[];
+      optionLabel: string;
+    };
+
+    const grouped = new Map<string, Grouped>();
+
+    for (const it of source) {
+      if (!(it.status === "waiting" || it.status === "making")) continue;
+      const statusKey = it.status;
+      const batchKey = Number(it.batch || 0);
+      const optSig = optionSignature(it);
+      const key = [it.menuId, statusKey, String(batchKey), optSig].join("::");
+
+      if (!grouped.has(key)) {
+        const optionLabel =
+          it.options
+            ?.map((g) => {
+              if (!g.items?.length) return null;
+              const cleaned = String(g.groupName || "").replace(/^\s*옵션\s*/g, "").trim();
+              const names = g.items.map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`).join(", ");
+              return cleaned ? `${cleaned}: ${names}` : names;
+            })
+            .filter(Boolean)
+            .join(" / ") || "";
+
+        grouped.set(key, {
+          key,
+          menuId: it.menuId,
+          name: it.name,
+          status: it.status,
+          batch: batchKey,
+          optionSig: optSig,
+          qty: 0,
+          itemIds: [],
+          orderNos: [],
+          optionLabel,
+        });
+      }
+
+      const g = grouped.get(key)!;
+      g.qty += Number(it.qty || 0);
+      g.itemIds.push(it.id);
+      if (it.displayNo && !g.orderNos.includes(it.displayNo)) g.orderNos.push(it.displayNo);
+    }
+
+    return [...grouped.values()].sort((a, b) => {
+      if (a.status !== b.status) return a.status === "making" ? 1 : -1;
+      if (a.batch !== b.batch) return a.batch - b.batch;
+      return a.name.localeCompare(b.name);
+    });
+  }, [orders]);
+
   const canAdvanceSelected =
     !!selected &&
     !(selected.status === "completed" || selected.status === "cancelled" || (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new"));
@@ -705,6 +800,24 @@ function StaffPageInner() {
     }
 
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  };
+
+  const updateOrderItemsInDb = async (itemIds: string[], patch: { status?: ItemStatus; batch?: number }) => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid || !itemIds.length) return;
+
+    const payload: any = {};
+    if (typeof patch.status !== "undefined") payload.status = patch.status;
+    if (typeof patch.batch !== "undefined") payload.batch = patch.batch;
+    if (!Object.keys(payload).length) return;
+
+    const { error } = await supabase.from("order_items").update(payload).in("id", itemIds).eq("store_id", sid);
+    if (error) {
+      alert(`아이템 상태 저장 실패: ${error.message}`);
+      return;
+    }
+
+    fetchOrdersFromDb(true);
   };
 
   const badgeClassByStatus = (s: OrderStatus) =>
@@ -1705,6 +1818,44 @@ function StaffPageInner() {
 
           {!storeId ? (
             <p className="muted">매장이 선택되지 않았습니다. 관리자에서 매장을 선택하고 다시 들어와 주세요.</p>
+          ) : staffViewMode === "station" && stationTab === "make" ? (
+            makeGroups.length === 0 ? <p className="muted">제조 대기/진행 아이템이 없습니다.</p> : (
+              <div className="list">
+                {makeGroups.map((g) => (
+                  <div key={g.key} className="itemBtn" style={{ cursor: "default" }}>
+                    <div className="rowBetween">
+                      <div className="bigNo">{g.name} × {g.qty}</div>
+                      <span className={`badge ${g.status === "waiting" ? "badgeChecked" : "badgeMaking"}`}>
+                        {g.status === "waiting" ? "제조대기" : "제조중"}
+                      </span>
+                    </div>
+                    <div className="muted" style={{ marginTop: 8 }}>
+                      배치 #{g.batch} · 주문번호 {g.orderNos.join(", ")}
+                    </div>
+                    {g.optionLabel ? <div className="muted" style={{ marginTop: 4 }}>옵션: {g.optionLabel}</div> : null}
+                    <div className="itemQuickActions" style={{ marginTop: 10 }}>
+                      {g.status === "waiting" ? (
+                        <button
+                          type="button"
+                          className="quickActionBtn quickActionBtnPrimary"
+                          onClick={() => updateOrderItemsInDb(g.itemIds, { status: "making", batch: nextBatch })}
+                        >
+                          제조 시작
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="quickActionBtn quickActionBtnPrimary"
+                          onClick={() => updateOrderItemsInDb(g.itemIds, { status: "done" })}
+                        >
+                          제조 완료
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           ) : filteredOrders.length === 0 ? (
             <p className="muted">해당 조건의 주문이 없습니다.</p>
           ) : (
