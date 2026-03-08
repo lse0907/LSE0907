@@ -1,4 +1,4 @@
--- QR Cafe MVP - Staff workflow v1 migration
+-- QR Cafe MVP - Staff workflow v1 migration (safe rerun)
 -- 목적:
 -- 1) 주문 상태를 new/checked/making/ready_for_packing/completed/cancelled 로 완전 교체
 -- 2) order_items 상태(waiting/making/done), batch, packing 체크 영구저장 도입
@@ -6,9 +6,24 @@
 
 begin;
 
+-- 0) 기존 트리거/함수 선정리 (이전 실패 실행 잔여물 방지)
+drop trigger if exists trg_order_items_recompute_order_status on public.order_items;
+drop function if exists public.trg_recompute_order_status_from_items();
+drop function if exists public.recompute_order_status_from_items(uuid);
+
 -- 1) stores: 직원 화면 모드 컬럼
 alter table if exists public.stores
-  add column if not exists staff_view_mode text not null default 'simple';
+  add column if not exists staff_view_mode text;
+
+update public.stores
+set staff_view_mode = coalesce(nullif(trim(staff_view_mode), ''), 'simple')
+where staff_view_mode is distinct from coalesce(nullif(trim(staff_view_mode), ''), 'simple');
+
+alter table if exists public.stores
+  alter column staff_view_mode set default 'simple';
+
+alter table if exists public.stores
+  alter column staff_view_mode set not null;
 
 alter table if exists public.stores
   drop constraint if exists stores_staff_view_mode_check;
@@ -17,19 +32,43 @@ alter table if exists public.stores
   add constraint stores_staff_view_mode_check
   check (staff_view_mode in ('simple', 'station'));
 
--- 2) orders: 상태 완전 교체
--- 기존 값 매핑
+-- 2) orders: 상태 제약 먼저 제거 (이전 환경마다 제약명 다를 수 있음)
+do $$
+declare
+  r record;
+begin
+  for r in
+    select con.conname
+    from pg_constraint con
+    join pg_class rel on rel.oid = con.conrelid
+    join pg_namespace nsp on nsp.oid = rel.relnamespace
+    where nsp.nspname = 'public'
+      and rel.relname = 'orders'
+      and con.contype = 'c'
+      and pg_get_constraintdef(con.oid) ilike '%status%'
+  loop
+    execute format('alter table public.orders drop constraint if exists %I', r.conname);
+  end loop;
+end;
+$$;
+
+-- 기존 값 매핑 (구상태 -> 신상태)
 update public.orders set status = 'ready_for_packing' where status = 'ready';
 update public.orders set status = 'completed' where status = 'done';
 update public.orders set status = 'cancelled' where status = 'canceled';
 
--- 기본값 변경
+-- 널/공백/예외값 방어
+update public.orders
+set status = 'new'
+where status is null
+   or trim(status) = ''
+   or status not in ('new', 'checked', 'making', 'ready_for_packing', 'completed', 'cancelled');
+
 alter table if exists public.orders
   alter column status set default 'new';
 
--- 기존 체크 제약 재정의
 alter table if exists public.orders
-  drop constraint if exists orders_status_check;
+  alter column status set not null;
 
 alter table if exists public.orders
   add constraint orders_status_check
@@ -37,13 +76,51 @@ alter table if exists public.orders
 
 -- 3) order_items: item 상태 + batch
 alter table if exists public.order_items
-  add column if not exists status text not null default 'waiting';
+  add column if not exists status text;
 
 alter table if exists public.order_items
-  add column if not exists batch integer not null default 0;
+  add column if not exists batch integer;
+
+update public.order_items
+set status = coalesce(nullif(trim(status), ''), 'waiting');
+
+update public.order_items
+set status = 'waiting'
+where status not in ('waiting', 'making', 'done');
+
+update public.order_items
+set batch = coalesce(batch, 0)
+where batch is null;
 
 alter table if exists public.order_items
-  drop constraint if exists order_items_status_check;
+  alter column status set default 'waiting';
+alter table if exists public.order_items
+  alter column status set not null;
+
+alter table if exists public.order_items
+  alter column batch set default 0;
+alter table if exists public.order_items
+  alter column batch set not null;
+
+-- order_items status 관련 기존 제약 제거
+do $$
+declare
+  r record;
+begin
+  for r in
+    select con.conname
+    from pg_constraint con
+    join pg_class rel on rel.oid = con.conrelid
+    join pg_namespace nsp on nsp.oid = rel.relnamespace
+    where nsp.nspname = 'public'
+      and rel.relname = 'order_items'
+      and con.contype = 'c'
+      and pg_get_constraintdef(con.oid) ilike '%status%'
+  loop
+    execute format('alter table public.order_items drop constraint if exists %I', r.conname);
+  end loop;
+end;
+$$;
 
 alter table if exists public.order_items
   add constraint order_items_status_check
@@ -130,10 +207,24 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_order_items_recompute_order_status on public.order_items;
 create trigger trg_order_items_recompute_order_status
 after insert or update of status or delete on public.order_items
 for each row execute function public.trg_recompute_order_status_from_items();
+
+-- 기존 데이터 즉시 정합화
+do $$
+declare
+  r record;
+begin
+  for r in
+    select distinct oi.order_id
+    from public.order_items oi
+    where oi.order_id is not null
+  loop
+    perform public.recompute_order_status_from_items(r.order_id);
+  end loop;
+end;
+$$;
 
 -- 6) RLS 정책(기존 정책이 충분하면 생략 가능하지만, 안전하게 upsert 보장)
 alter table public.order_item_packing_checks enable row level security;
