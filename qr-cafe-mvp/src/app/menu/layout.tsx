@@ -11,7 +11,7 @@ import {
   lsOrdersKey,
 } from "@/app/lib/storeScope";
 
-type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 
 type OrderRecord = {
   id: string;
@@ -33,14 +33,15 @@ function loadOrders(storeId: string): OrderRecord[] {
 }
 
 function isActiveStatus(s: OrderStatus) {
-  return s === "new" || s === "making";
+  return s === "new" || s === "checked" || s === "making" || s === "ready_for_packing";
 }
 
 function statusLabel(s: OrderStatus) {
   if (s === "new") return "접수됨";
+  if (s === "checked") return "주문확인";
   if (s === "making") return "제조중";
-  if (s === "ready") return "준비완료";
-  if (s === "done") return "완료";
+  if (s === "ready_for_packing") return "패킹대기";
+  if (s === "completed") return "완료";
   return "취소";
 }
 
