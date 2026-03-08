@@ -6,9 +6,10 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 
 type OrderMode = "dine-in" | "takeout";
-type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 type PaymentStatus = "not_required" | "pending" | "paid";
-type StaffViewMode = "basic" | "collab";
+type StaffViewMode = "simple" | "station";
+type ItemStatus = "waiting" | "making" | "done";
 
 type SelectedOptionItem = {
   id: string;
@@ -28,9 +29,12 @@ type SelectedGroup = {
 
 type OrderItem = {
   id: string;
+  menuId: string;
   name: string;
   price: number; // base
   qty: number;
+  status: ItemStatus;
+  batch: number;
   options?: SelectedGroup[];
   optionTotal?: number; // 1개 기준 옵션 추가금
   lineTotal?: number; // (base+optionTotal)*qty
@@ -75,6 +79,8 @@ type DbOrderItemRow = {
   name: string | null;
   price: number | null;
   qty: number | null;
+  status: string | null;
+  batch: number | null;
   store_id: string | null;
 };
 
@@ -101,8 +107,8 @@ type DbOrderItemOptionRow = {
 const LAST_SPOKEN_KEY = "qrCafeStaffLastSpokenOrderId";
 const STAFF_POLL_INTERVAL_MS = 5000;
 
-function staffModeKey(storeId: string) {
-  return `qrCafeStaffViewMode:${storeId || "default"}`;
+function normalizeStaffViewMode(v: any): StaffViewMode {
+  return String(v || "").trim() === "station" ? "station" : "simple";
 }
 
 /**
@@ -144,10 +150,11 @@ function formatElapsedMin(ts: number) {
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   new: "신규",
+  checked: "주문확인",
   making: "제조중",
-  ready: "준비완료",
-  done: "완료",
-  canceled: "취소",
+  ready_for_packing: "패킹대기",
+  completed: "완료",
+  cancelled: "취소",
 };
 
 const PAYMENT_LABEL: Record<PaymentStatus, string> = {
@@ -157,10 +164,10 @@ const PAYMENT_LABEL: Record<PaymentStatus, string> = {
 };
 
 function isActive(status: OrderStatus) {
-  return status === "new" || status === "making" || status === "ready";
+  return status === "new" || status === "checked" || status === "making" || status === "ready_for_packing";
 }
 function isCompleted(status: OrderStatus) {
-  return status === "done" || status === "canceled";
+  return status === "completed" || status === "cancelled";
 }
 
 function normalizeMode(v: any): OrderMode {
@@ -168,8 +175,17 @@ function normalizeMode(v: any): OrderMode {
 }
 function normalizeStatus(v: any): OrderStatus {
   const s = String(v || "").trim();
-  if (s === "making" || s === "ready" || s === "done" || s === "canceled") return s;
+  if (s === "checked" || s === "making" || s === "ready_for_packing" || s === "completed" || s === "cancelled") return s;
+  if (s === "ready") return "ready_for_packing";
+  if (s === "done") return "completed";
+  if (s === "canceled") return "cancelled";
   return "new";
+}
+
+function normalizeItemStatus(v: any): ItemStatus {
+  const s = String(v || "").trim();
+  if (s === "making" || s === "done") return s;
+  return "waiting";
 }
 
 function normalizePaymentStatus(v: any): PaymentStatus {
@@ -200,17 +216,19 @@ function speakKoreanOnce(text: string) {
 }
 
 function nextStatus(s: OrderStatus): OrderStatus {
-  if (s === "new") return "making";
-  if (s === "making") return "ready";
-  if (s === "ready") return "done";
+  if (s === "new") return "checked";
+  if (s === "checked") return "making";
+  if (s === "making") return "ready_for_packing";
+  if (s === "ready_for_packing") return "completed";
   return s;
 }
 
 function statusButtonLabel(s: OrderStatus) {
-  if (s === "new") return "제조 시작";
-  if (s === "making") return "준비 완료";
-  if (s === "ready") return "완료 처리";
-  if (s === "done") return "완료됨";
+  if (s === "new") return "주문 확인";
+  if (s === "checked") return "제조 시작";
+  if (s === "making") return "패킹 대기";
+  if (s === "ready_for_packing") return "전달 완료";
+  if (s === "completed") return "완료됨";
   return "취소됨";
 }
 
@@ -308,20 +326,21 @@ function StaffPageInner() {
 
   const [listTab, setListTab] = useState<"active" | "completed" | "all">("active");
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
-  const [staffViewMode, setStaffViewMode] = useState<StaffViewMode>("basic");
+  const [staffViewMode, setStaffViewMode] = useState<StaffViewMode>("simple");
   const [modeToast, setModeToast] = useState("");
   const modeToastTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const sid = storeIdRef.current || storeId;
-    if (!sid || typeof window === "undefined") return;
-    try {
-      const saved = String(localStorage.getItem(staffModeKey(sid)) || "").trim();
-      if (saved === "collab" || saved === "basic") setStaffViewMode(saved);
-      else setStaffViewMode("basic");
-    } catch {
-      setStaffViewMode("basic");
-    }
+    if (!sid) return;
+    (async () => {
+      const { data } = await supabase
+        .from("stores")
+        .select("staff_view_mode")
+        .eq("store_id", sid)
+        .maybeSingle();
+      setStaffViewMode(normalizeStaffViewMode(data?.staff_view_mode));
+    })();
   }, [storeId]);
 
   const showModeToast = (text: string) => {
@@ -334,15 +353,8 @@ function StaffPageInner() {
     }, 1500);
   };
 
-  const updateStaffViewMode = (next: StaffViewMode) => {
-    if (next === staffViewMode) return;
-    setStaffViewMode(next);
-    const sid = storeIdRef.current || storeId;
-    if (!sid || typeof window === "undefined") return;
-    try {
-      localStorage.setItem(staffModeKey(sid), next);
-    } catch {}
-    showModeToast(next === "collab" ? "협업 모드로 전환됨" : "기본 모드로 전환됨");
+  const updateStaffViewMode = (_next: StaffViewMode) => {
+    showModeToast("직원 화면 모드는 관리자 > 매장설정에서 변경할 수 있어요.");
   };
 
   useEffect(() => {
@@ -430,7 +442,7 @@ function StaffPageInner() {
 
     const { data: oiData, error: oiErr } = await supabase
       .from("order_items")
-      .select("id, order_id, menu_id, name, price, qty, store_id")
+      .select("id, order_id, menu_id, name, price, qty, status, batch, store_id")
       .in("order_id", orderIds);
 
     if (oiErr) {
@@ -473,10 +485,13 @@ function StaffPageInner() {
       const lineTotal = unit * qty;
 
       const built: OrderItem = {
-        id: String(it.menu_id ?? itemId),
+        id: itemId,
+        menuId: String(it.menu_id ?? itemId),
         name: String(it.name ?? ""),
         price: base,
         qty,
+        status: normalizeItemStatus(it.status),
+        batch: Number(it.batch ?? 0),
         options: groups.length ? groups : [],
         optionTotal,
         lineTotal,
@@ -615,8 +630,10 @@ function StaffPageInner() {
     setMobileView("detail");
   };
 
-  const canAdvanceSelected = !!selected && !(selected.status === "done" || selected.status === "canceled" || (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new"));
-  const canCancelSelected = !!selected && !(selected.status === "done" || selected.status === "canceled");
+  const canAdvanceSelected =
+    !!selected &&
+    !(selected.status === "completed" || selected.status === "cancelled" || (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new"));
+  const canCancelSelected = !!selected && !(selected.status === "completed" || selected.status === "cancelled");
 
   const updateOrderInDb = async (id: string, patch: Partial<OrderRecord>) => {
     const sid = storeIdRef.current || storeId;
@@ -659,11 +676,13 @@ function StaffPageInner() {
   const badgeClassByStatus = (s: OrderStatus) =>
     s === "new"
       ? "badgeNew"
+      : s === "checked"
+      ? "badgeChecked"
       : s === "making"
       ? "badgeMaking"
-      : s === "ready"
+      : s === "ready_for_packing"
       ? "badgeReady"
-      : s === "canceled"
+      : s === "cancelled"
       ? "badgeCanceled"
       : "badgeDone";
 
@@ -1080,6 +1099,11 @@ function StaffPageInner() {
           border-color: #dbeafe;
           background: #eff6ff;
           color: #1d4ed8;
+        }
+        .badgeChecked {
+          border-color: #e0e7ff;
+          background: #eef2ff;
+          color: #4338ca;
         }
         .badgeMaking {
           border-color: #fef3c7;
@@ -1570,23 +1594,28 @@ function StaffPageInner() {
         <div className="modeSwitch" role="group" aria-label="직원화면 모드">
           <button
             type="button"
-            className={`modeSwitchBtn ${staffViewMode === "basic" ? "modeSwitchBtnOn" : ""}`}
-            aria-pressed={staffViewMode === "basic"}
-            onClick={() => updateStaffViewMode("basic")}
+            className={`modeSwitchBtn ${staffViewMode === "simple" ? "modeSwitchBtnOn" : ""}`}
+            aria-pressed={staffViewMode === "simple"}
+            onClick={() => updateStaffViewMode("simple")}
           >
-            기본 모드
+            Simple
           </button>
           <button
             type="button"
-            className={`modeSwitchBtn ${staffViewMode === "collab" ? "modeSwitchBtnOn" : ""}`}
-            aria-pressed={staffViewMode === "collab"}
-            onClick={() => updateStaffViewMode("collab")}
+            className={`modeSwitchBtn ${staffViewMode === "station" ? "modeSwitchBtnOn" : ""}`}
+            aria-pressed={staffViewMode === "station"}
+            onClick={() => updateStaffViewMode("station")}
           >
-            협업 모드
+            Station
           </button>
         </div>
       </div>
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
+      <p className="tabHint" style={{ marginTop: 4 }}>
+        {staffViewMode === "station"
+          ? "Station 모드: 목록에서 빠르게 상태를 갱신할 수 있어요."
+          : "Simple 모드: 주문 목록과 상세를 한 흐름으로 처리해요."}
+      </p>
 
       <p className="tabHint">완료/취소·전체는 당일 주문만 표시</p>
 
@@ -1656,7 +1685,7 @@ function StaffPageInner() {
                       <span className="badge">총 수량 {totalQty}</span>
                     </div>
 
-                    {staffViewMode === "collab" && isActive(o.status) ? (
+                    {staffViewMode === "station" && isActive(o.status) ? (
                       <div className="itemQuickActions">
                         <button
                           type="button"
@@ -1815,7 +1844,7 @@ function StaffPageInner() {
                   className="actionBtn actionCancel"
                   onClick={() => {
                     if (!confirm("이 주문을 '취소' 처리할까요? (삭제 아님, 데이터 유지)")) return;
-                    updateOrderInDb(selected.id, { status: "canceled" });
+                    updateOrderInDb(selected.id, { status: "cancelled" });
                   }}
                   disabled={!canCancelSelected}
                   style={{
@@ -1861,7 +1890,7 @@ function StaffPageInner() {
             className="actionBtn actionCancel"
             onClick={() => {
               if (!confirm("이 주문을 '취소' 처리할까요? (삭제 아님, 데이터 유지)")) return;
-              updateOrderInDb(selected.id, { status: "canceled" });
+              updateOrderInDb(selected.id, { status: "cancelled" });
             }}
             disabled={!canCancelSelected}
             style={{ opacity: canCancelSelected ? 1 : 0.5 }}
