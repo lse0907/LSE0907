@@ -152,7 +152,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   new: "신규",
   checked: "주문확인",
   making: "제조중",
-  ready_for_packing: "패킹대기",
+  ready_for_packing: "준비완료",
   completed: "완료",
   cancelled: "취소",
 };
@@ -226,7 +226,7 @@ function nextStatus(s: OrderStatus): OrderStatus {
 function statusButtonLabel(s: OrderStatus) {
   if (s === "new") return "주문 확인";
   if (s === "checked") return "제조 시작";
-  if (s === "making") return "패킹 대기";
+  if (s === "making") return "준비 완료";
   if (s === "ready_for_packing") return "전달 완료";
   if (s === "completed") return "완료됨";
   return "취소됨";
@@ -325,6 +325,7 @@ function StaffPageInner() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [listTab, setListTab] = useState<"active" | "completed" | "all">("active");
+  const [stationTab, setStationTab] = useState<"order" | "make" | "ready" | "history">("order");
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const [staffViewMode, setStaffViewMode] = useState<StaffViewMode>("simple");
   const [modeToast, setModeToast] = useState("");
@@ -356,6 +357,16 @@ function StaffPageInner() {
   const updateStaffViewMode = (_next: StaffViewMode) => {
     showModeToast("직원 화면 모드는 관리자 > 매장설정에서 변경할 수 있어요.");
   };
+
+  useEffect(() => {
+    if (staffViewMode === "station") {
+      setStationTab("order");
+      setMobileView("list");
+      return;
+    }
+    setListTab("active");
+    setMobileView("list");
+  }, [staffViewMode]);
 
   useEffect(() => {
     return () => {
@@ -607,6 +618,13 @@ function StaffPageInner() {
   const filteredOrders = useMemo(() => {
     const sorted = [...orders].sort((a, b) => b.createdAt - a.createdAt);
 
+    if (staffViewMode === "station") {
+      if (stationTab === "order") return sorted.filter((o) => o.status === "new");
+      if (stationTab === "make") return sorted.filter((o) => o.status === "checked" || o.status === "making");
+      if (stationTab === "ready") return sorted.filter((o) => o.status === "ready_for_packing");
+      return sorted.filter((o) => isCompleted(o.status) && isTodayLocal(o.createdAt));
+    }
+
     if (listTab === "active") return sorted.filter((o) => isActive(o.status));
 
     if (listTab === "completed") {
@@ -615,7 +633,7 @@ function StaffPageInner() {
 
     // all
     return sorted.filter((o) => isTodayLocal(o.createdAt));
-  }, [orders, listTab]);
+  }, [orders, listTab, staffViewMode, stationTab]);
 
   // ✅ 카운트도 규칙에 맞춰 표시
   const counts = useMemo(() => {
@@ -624,6 +642,22 @@ function StaffPageInner() {
     const all = orders.filter((o) => isTodayLocal(o.createdAt)).length;
     return { active, completed, all };
   }, [orders]);
+
+  const stationCounts = useMemo(() => {
+    const order = orders.filter((o) => o.status === "new").length;
+    const make = orders.filter((o) => o.status === "checked" || o.status === "making").length;
+    const ready = orders.filter((o) => o.status === "ready_for_packing").length;
+    const history = orders.filter((o) => isCompleted(o.status) && isTodayLocal(o.createdAt)).length;
+    return { order, make, ready, history };
+  }, [orders]);
+
+  const listTitle = useMemo(() => {
+    if (staffViewMode !== "station") return "주문 목록";
+    if (stationTab === "order") return "주문관리";
+    if (stationTab === "make") return "제조";
+    if (stationTab === "ready") return "준비";
+    return "완료/취소";
+  }, [staffViewMode, stationTab]);
 
   const onSelect = (id: string) => {
     setSelectedId(id);
@@ -1557,37 +1591,80 @@ function StaffPageInner() {
         </div>
       </header>
 
-      <div className="tabsRow">
-        <div className="tabs">
-          <button
-            className={`chip ${listTab === "active" ? "chipOn" : ""}`}
-            onClick={() => {
-              setListTab("active");
-              setMobileView("list");
-            }}
-          >
-            진행중 ({counts.active})
-          </button>
-          <button
-            className={`chip ${listTab === "completed" ? "chipOn" : ""}`}
-            onClick={() => {
-              setListTab("completed");
-              setMobileView("list");
-            }}
-          >
-            완료/취소 ({counts.completed})
-          </button>
-          <button
-            className={`chip ${listTab === "all" ? "chipOn" : ""}`}
-            onClick={() => {
-              setListTab("all");
-              setMobileView("list");
-            }}
-          >
-            전체 ({counts.all})
-          </button>
+      {staffViewMode === "simple" ? (
+        <div className="tabsRow">
+          <div className="tabs">
+            <button
+              className={`chip ${listTab === "active" ? "chipOn" : ""}`}
+              onClick={() => {
+                setListTab("active");
+                setMobileView("list");
+              }}
+            >
+              진행중 ({counts.active})
+            </button>
+            <button
+              className={`chip ${listTab === "completed" ? "chipOn" : ""}`}
+              onClick={() => {
+                setListTab("completed");
+                setMobileView("list");
+              }}
+            >
+              완료/취소 ({counts.completed})
+            </button>
+            <button
+              className={`chip ${listTab === "all" ? "chipOn" : ""}`}
+              onClick={() => {
+                setListTab("all");
+                setMobileView("list");
+              }}
+            >
+              전체 ({counts.all})
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="tabsRow">
+          <div className="tabs">
+            <button
+              className={`chip ${stationTab === "order" ? "chipOn" : ""}`}
+              onClick={() => {
+                setStationTab("order");
+                setMobileView("list");
+              }}
+            >
+              주문관리 ({stationCounts.order})
+            </button>
+            <button
+              className={`chip ${stationTab === "make" ? "chipOn" : ""}`}
+              onClick={() => {
+                setStationTab("make");
+                setMobileView("list");
+              }}
+            >
+              제조 ({stationCounts.make})
+            </button>
+            <button
+              className={`chip ${stationTab === "ready" ? "chipOn" : ""}`}
+              onClick={() => {
+                setStationTab("ready");
+                setMobileView("list");
+              }}
+            >
+              준비 ({stationCounts.ready})
+            </button>
+            <button
+              className={`chip ${stationTab === "history" ? "chipOn" : ""}`}
+              onClick={() => {
+                setStationTab("history");
+                setMobileView("list");
+              }}
+            >
+              완료/취소 ({stationCounts.history})
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="modeRow">
         <p className="modeLabel">직원화면 모드</p>
@@ -1613,16 +1690,16 @@ function StaffPageInner() {
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
       <p className="tabHint" style={{ marginTop: 4 }}>
         {staffViewMode === "station"
-          ? "Station 모드: 목록에서 빠르게 상태를 갱신할 수 있어요."
+          ? "Station 모드: 주문관리 · 제조 · 준비 · 완료/취소 탭으로 업무를 분리해요."
           : "Simple 모드: 주문 목록과 상세를 한 흐름으로 처리해요."}
       </p>
 
-      <p className="tabHint">완료/취소·전체는 당일 주문만 표시</p>
+      <p className="tabHint">Simple 모드의 완료/취소·전체는 당일 주문만 표시</p>
 
       <div className="panel">
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
-            <h2 className="cardTitle">주문 목록</h2>
+            <h2 className="cardTitle">{listTitle}</h2>
             <span className="badge">{filteredOrders.length}건</span>
           </div>
 

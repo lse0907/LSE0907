@@ -849,7 +849,7 @@ function AdminstorePageInner() {
               <option value="station">Station Mode (분리형)</option>
             </select>
             <div className="hint">
-              Simple: 직원 1~2명 매장에 적합 / Station: 주문·제조·패킹 역할 분리에 적합
+              Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비 역할 분리에 적합
             </div>
           </div>
 

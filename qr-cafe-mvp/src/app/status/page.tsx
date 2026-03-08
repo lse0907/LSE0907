@@ -35,7 +35,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   new: "접수됨",
   checked: "주문확인",
   making: "제조중",
-  ready_for_packing: "패킹대기",
+  ready_for_packing: "준비완료",
   completed: "완료",
   cancelled: "취소",
 };

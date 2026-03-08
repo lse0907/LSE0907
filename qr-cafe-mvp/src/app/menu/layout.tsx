@@ -40,7 +40,7 @@ function statusLabel(s: OrderStatus) {
   if (s === "new") return "접수됨";
   if (s === "checked") return "주문확인";
   if (s === "making") return "제조중";
-  if (s === "ready_for_packing") return "패킹대기";
+  if (s === "ready_for_packing") return "준비완료";
   if (s === "completed") return "완료";
   return "취소";
 }
