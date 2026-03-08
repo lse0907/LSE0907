@@ -193,6 +193,7 @@ export default function AdminStoreCreatePage() {
       }
 
       saveStoreProfile(id, {
+        staffViewMode: "simple",
         storeName: name,
         storeDesc: storeDesc.trim() || DEFAULT_STORE_PROFILE.storeDesc,
         mainImage: mainImage.trim(),
