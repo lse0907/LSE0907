@@ -8,7 +8,7 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { lsLastOrderIdKey, lsLastOrderTokenKey, resolveStoreId } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
-type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 
 type DbOrderRow = {
   id: string;
@@ -33,10 +33,11 @@ const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   new: "접수됨",
+  checked: "주문확인",
   making: "제조중",
-  ready: "준비완료",
-  done: "완료",
-  canceled: "취소",
+  ready_for_packing: "준비완료",
+  completed: "완료",
+  cancelled: "취소",
 };
 
 function normalizeMode(v: any): OrderMode {
@@ -45,7 +46,10 @@ function normalizeMode(v: any): OrderMode {
 
 function normalizeStatus(v: any): OrderStatus {
   const s = String(v || "").trim();
-  if (s === "making" || s === "ready" || s === "done" || s === "canceled") return s;
+  if (s === "checked" || s === "making" || s === "ready_for_packing" || s === "completed" || s === "cancelled") return s;
+  if (s === "ready") return "ready_for_packing";
+  if (s === "done") return "completed";
+  if (s === "canceled") return "cancelled";
   return "new";
 }
 
@@ -163,7 +167,7 @@ function StatusPageInner() {
 
     const view = toOrderView(data as DbOrderRow);
 
-    if (view.status === "done" || view.status === "canceled") {
+    if (view.status === "completed" || view.status === "cancelled") {
       clearLastOrder();
       return;
     }
@@ -204,7 +208,7 @@ function StatusPageInner() {
 
   useEffect(() => {
     if (!order) return;
-    if (order.status === "done" || order.status === "canceled") {
+    if (order.status === "completed" || order.status === "cancelled") {
       clearLastOrder();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,10 +223,10 @@ function StatusPageInner() {
     lastStatusRef.current[order.id] = cur;
 
     if (readyShownRef.current[order.id]) return;
-    if (cur === "canceled" || cur === "done") return;
+    if (cur === "cancelled" || cur === "completed") return;
     if (!prev) return;
 
-    if (prev !== "ready" && cur === "ready") {
+    if (prev !== "ready_for_packing" && cur === "ready_for_packing") {
       readyShownRef.current[order.id] = true;
       setShowReadyPopup(true);
       speakReadyOnce();
@@ -239,7 +243,7 @@ function StatusPageInner() {
   };
 
   const visibleOrder =
-    order && order.status !== "done" && order.status !== "canceled" ? order : null;
+    order && order.status !== "completed" && order.status !== "cancelled" ? order : null;
 
   return (
     <main className="wrap">
