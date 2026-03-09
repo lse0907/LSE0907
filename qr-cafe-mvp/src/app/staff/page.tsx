@@ -40,6 +40,7 @@ type OrderItem = {
   lineTotal?: number; // (base+optionTotal)*qty
   orderId?: string;
   displayNo?: string;
+  packingChecked?: boolean;
 };
 
 type OrderRecord = {
@@ -104,6 +105,11 @@ type DbOrderItemOptionRow = {
   option_group_name?: string | null;
 
   store_id?: string | null;
+};
+
+type DbPackingCheckRow = {
+  order_item_id: string | null;
+  checked: boolean | null;
 };
 
 const LAST_SPOKEN_KEY = "qrCafeStaffLastSpokenOrderId";
@@ -470,6 +476,7 @@ function StaffPageInner() {
     const orderItemIds = itemRows.map((x) => x.id);
 
     let optRows: DbOrderItemOptionRow[] = [];
+    let packingMap = new Map<string, boolean>();
     if (orderItemIds.length) {
       const { data: optData, error: optErr } = await supabase
         .from("order_item_options")
@@ -482,6 +489,18 @@ function StaffPageInner() {
         optRows = [];
       } else {
         optRows = (Array.isArray(optData) ? optData : []) as DbOrderItemOptionRow[];
+      }
+
+      const { data: checkData, error: checkErr } = await supabase
+        .from("order_item_packing_checks")
+        .select("order_item_id, checked")
+        .in("order_item_id", orderItemIds);
+
+      if (checkErr) {
+        console.error("[staff] fetch order_item_packing_checks error:", checkErr.message);
+      } else {
+        const rows = (Array.isArray(checkData) ? checkData : []) as DbPackingCheckRow[];
+        packingMap = new Map(rows.map((r) => [String(r.order_item_id || ""), !!r.checked]));
       }
     }
 
@@ -510,6 +529,7 @@ function StaffPageInner() {
         options: groups.length ? groups : [],
         optionTotal,
         lineTotal,
+        packingChecked: packingMap.get(itemId) || false,
       };
 
       if (!itemsByOrder.has(orderId)) itemsByOrder.set(orderId, []);
@@ -631,7 +651,7 @@ function StaffPageInner() {
     if (staffViewMode === "station") {
       if (stationTab === "order") return sorted.filter((o) => o.status === "new");
       if (stationTab === "make") return sorted.filter((o) => o.status === "checked" || o.status === "making");
-      if (stationTab === "ready") return sorted.filter((o) => o.status === "ready_for_packing");
+      if (stationTab === "ready") return sorted.filter((o) => !isCompleted(o.status) && hasReadyItems(o));
       return sorted.filter((o) => isCompleted(o.status) && isTodayLocal(o.createdAt));
     }
 
@@ -656,7 +676,7 @@ function StaffPageInner() {
   const stationCounts = useMemo(() => {
     const order = orders.filter((o) => o.status === "new").length;
     const make = orders.filter((o) => o.status === "checked" || o.status === "making").length;
-    const ready = orders.filter((o) => o.status === "ready_for_packing").length;
+    const ready = orders.filter((o) => !isCompleted(o.status) && hasReadyItems(o)).length;
     const history = orders.filter((o) => isCompleted(o.status) && isTodayLocal(o.createdAt)).length;
     return { order, make, ready, history };
   }, [orders]);
@@ -758,6 +778,59 @@ function StaffPageInner() {
       return a.name.localeCompare(b.name);
     });
   }, [orders]);
+
+  const buildOptionText = (it: OrderItem) =>
+    it.options
+      ?.map((g) => {
+        if (!g.items?.length) return null;
+        const cleanGroupName = String(g.groupName || "")
+          .replace(/^\s*옵션\s*/g, "")
+          .trim();
+        const itemText = g.items
+          .map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`)
+          .join(", ");
+        return cleanGroupName ? `${cleanGroupName}: ${itemText}` : itemText;
+      })
+      .filter(Boolean)
+      .join(" / ") || "";
+
+  function hasReadyItems(o: OrderRecord) {
+    return o.items.some((it) => it.status === "done");
+  }
+
+  const readyOrders = useMemo(
+    () =>
+      [...orders]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .filter((o) => !isCompleted(o.status) && hasReadyItems(o)),
+    [orders]
+  );
+
+  const togglePackingChecks = async (order: OrderRecord, nextChecked: boolean, targetItemId?: string) => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid) return;
+
+    const doneItems = order.items.filter((it) => it.status === "done");
+    const targets = targetItemId ? doneItems.filter((it) => it.id === targetItemId) : doneItems;
+    if (!targets.length) return;
+
+    const nowIso = new Date().toISOString();
+    const rows = targets.map((it) => ({
+      store_id: sid,
+      order_id: order.id,
+      order_item_id: it.id,
+      checked: nextChecked,
+      checked_at: nextChecked ? nowIso : null,
+    }));
+
+    const { error } = await supabase.from("order_item_packing_checks").upsert(rows, { onConflict: "order_item_id" });
+    if (error) {
+      alert(`준비 체크 저장 실패: ${error.message}`);
+      return;
+    }
+
+    fetchOrdersFromDb(true);
+  };
 
   const canAdvanceSelected =
     !!selected &&
@@ -1867,6 +1940,76 @@ function StaffPageInner() {
                 ))}
               </div>
             )
+          ) : staffViewMode === "station" && stationTab === "ready" ? (
+            readyOrders.length === 0 ? <p className="muted">검수 대기인 준비 주문이 없습니다.</p> : (
+              <div className="list">
+                {readyOrders.map((o) => {
+                  const doneItems = o.items.filter((it) => it.status === "done");
+                  const checkedCount = doneItems.filter((it) => !!it.packingChecked).length;
+                  const allChecked = doneItems.length > 0 && checkedCount === doneItems.length;
+
+                  return (
+                    <div key={`ready_${o.id}`} className="itemBtn" style={{ cursor: "default" }}>
+                      <div className="rowBetween">
+                        <div className="bigNo">주문번호 {o.displayNo}</div>
+                        <span className="badge">검수 {checkedCount}/{doneItems.length}</span>
+                      </div>
+
+                      <div className="muted" style={{ marginTop: 8 }}>
+                        {o.mode === "dine-in" ? `매장 · 테이블 ${o.table ?? "-"}` : "포장"}
+                      </div>
+                      {o.requestNote ? <div className="muted" style={{ marginTop: 4 }}>요청사항: {o.requestNote}</div> : null}
+
+                      <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                        {doneItems.map((it) => {
+                          const optText = buildOptionText(it);
+                          const checked = !!it.packingChecked;
+                          return (
+                            <div key={`ready_item_${it.id}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                              <div className="rowBetween">
+                                <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
+                                <span className={`badge ${checked ? "badgeDone" : "badgeChecked"}`}>
+                                  {checked ? "검수완료" : "검수대기"}
+                                </span>
+                              </div>
+                              {optText ? <div className="muted" style={{ marginTop: 4 }}>옵션: {optText}</div> : null}
+                              <div className="itemQuickActions" style={{ marginTop: 8 }}>
+                                <button
+                                  type="button"
+                                  className="quickActionBtn"
+                                  onClick={() => togglePackingChecks(o, !checked, it.id)}
+                                >
+                                  {checked ? "검수 해제" : "검수 체크"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="itemQuickActions" style={{ marginTop: 12, gap: 8 }}>
+                        <button
+                          type="button"
+                          className="quickActionBtn"
+                          onClick={() => togglePackingChecks(o, true)}
+                        >
+                          전체 검수완료
+                        </button>
+                        <button
+                          type="button"
+                          className="quickActionBtn quickActionBtnPrimary"
+                          onClick={() => updateOrderInDb(o.id, { status: "completed" })}
+                          disabled={!allChecked}
+                          style={{ opacity: allChecked ? 1 : 0.45 }}
+                        >
+                          전달 완료
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
           ) : filteredOrders.length === 0 ? (
             <p className="muted">해당 조건의 주문이 없습니다.</p>
           ) : (
@@ -2015,20 +2158,7 @@ function StaffPageInner() {
                           ? Number(it.lineTotal)
                           : unit * Number(it.qty || 0);
 
-                      const optText =
-                        it.options
-                          ?.map((g) => {
-                            if (!g.items?.length) return null;
-                            const cleanGroupName = String(g.groupName || "")
-                              .replace(/^\s*옵션\s*/g, "")
-                              .trim();
-                            const itemText = g.items
-                              .map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`)
-                              .join(", ");
-                            return cleanGroupName ? `${cleanGroupName}: ${itemText}` : itemText;
-                          })
-                          .filter(Boolean)
-                          .join(" / ") || "";
+                      const optText = buildOptionText(it);
 
                       return (
                         <div key={`${it.id}_${idx}`} className="orderItemLine">
