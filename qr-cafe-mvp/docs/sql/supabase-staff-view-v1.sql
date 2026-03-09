@@ -219,6 +219,49 @@ create trigger trg_order_items_recompute_order_status
 after insert or update of status or delete on public.order_items
 for each row execute function public.trg_recompute_order_status_from_items();
 
+-- staff 화면용 아이템 상태 일괄 업데이트 (RLS 우회 안전 경로)
+create or replace function public.staff_update_order_items_status(
+  p_store_id text,
+  p_item_ids uuid[],
+  p_status text,
+  p_batch integer default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_updated integer := 0;
+begin
+  if p_status not in ('waiting', 'making', 'done') then
+    raise exception 'invalid item status: %', p_status;
+  end if;
+
+  if p_item_ids is null or cardinality(p_item_ids) = 0 then
+    return 0;
+  end if;
+
+  update public.order_items oi
+  set
+    status = p_status,
+    batch = coalesce(p_batch, oi.batch)
+  where oi.id = any(p_item_ids)
+    and exists (
+      select 1
+      from public.orders o
+      where o.id = oi.order_id
+        and o.store_id = p_store_id
+    );
+
+  get diagnostics v_updated = row_count;
+  return v_updated;
+end;
+$$;
+
+revoke all on function public.staff_update_order_items_status(text, uuid[], text, integer) from public;
+grant execute on function public.staff_update_order_items_status(text, uuid[], text, integer) to anon, authenticated;
+
 -- 기존 데이터 즉시 정합화
 do $$
 declare

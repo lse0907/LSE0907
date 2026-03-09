@@ -803,18 +803,29 @@ function StaffPageInner() {
   };
 
   const updateOrderItemsInDb = async (itemIds: string[], patch: { status?: ItemStatus; batch?: number }) => {
-    if (!itemIds.length) return;
+    const sid = storeIdRef.current || storeId;
+    if (!sid || !itemIds.length) return;
+    if (typeof patch.status === "undefined") return;
 
-    const payload: any = {};
-    if (typeof patch.status !== "undefined") payload.status = patch.status;
-    if (typeof patch.batch !== "undefined") payload.batch = patch.batch;
-    if (!Object.keys(payload).length) return;
+    const rpcPayload = {
+      p_store_id: sid,
+      p_item_ids: itemIds,
+      p_status: patch.status,
+      p_batch: typeof patch.batch === "undefined" ? null : patch.batch,
+    };
 
-    // order_items.store_id가 비어있는 레거시 데이터도 있어 store_id 조건으로 막지 않는다.
-    const { error } = await supabase.from("order_items").update(payload).in("id", itemIds);
-    if (error) {
-      alert(`아이템 상태 저장 실패: ${error.message}`);
-      return;
+    const rpcRes = await supabase.rpc("staff_update_order_items_status", rpcPayload);
+
+    // 마이그레이션 미반영 환경 대비 fallback
+    if (rpcRes.error) {
+      const payload: any = { status: patch.status };
+      if (typeof patch.batch !== "undefined") payload.batch = patch.batch;
+
+      const fallback = await supabase.from("order_items").update(payload).in("id", itemIds);
+      if (fallback.error) {
+        alert(`아이템 상태 저장 실패: ${fallback.error.message}`);
+        return;
+      }
     }
 
     fetchOrdersFromDb(true);
