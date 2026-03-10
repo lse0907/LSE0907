@@ -8,6 +8,7 @@ import { supabase } from "@/app/lib/supabaseClient";
  * ✅ 핵심 필드만 사용
  */
 export type StoreProfile = {
+  staffViewMode: "simple" | "station";
   storeName: string;
   storeDesc: string;
   mainImage: string;
@@ -28,6 +29,7 @@ export type StoreProfile = {
 export const STORE_PROFILE_UPDATED_EVENT = "qrCafeStoreProfileUpdated";
 
 export const DEFAULT_STORE_PROFILE: StoreProfile = {
+  staffViewMode: "simple",
   storeName: "카페 브라운",
   storeDesc: "QR로 간편하게 주문하고 기다리세요.\n주문 후 직원 안내에 따라 픽업/수령해 주세요.",
   mainImage: "/hero.jpg",
@@ -72,6 +74,7 @@ export function loadStoreProfile(storeId?: string): StoreProfile {
 
     return {
       ...DEFAULT_STORE_PROFILE,
+      staffViewMode: parsed.staffViewMode === "station" ? "station" : "simple",
       storeName: pickString(parsed.storeName, DEFAULT_STORE_PROFILE.storeName),
       storeDesc: pickString(parsed.storeDesc, DEFAULT_STORE_PROFILE.storeDesc),
       mainImage: pickString((parsed as any).mainImage, DEFAULT_STORE_PROFILE.mainImage),
@@ -95,6 +98,7 @@ export function loadStoreProfile(storeId?: string): StoreProfile {
 export function saveStoreProfile(storeId: string | undefined, next: StoreProfile) {
   const sanitized: StoreProfile = {
     ...DEFAULT_STORE_PROFILE,
+    staffViewMode: next.staffViewMode === "station" ? "station" : "simple",
     storeName: pickString(next.storeName, DEFAULT_STORE_PROFILE.storeName),
     storeDesc: pickString(next.storeDesc, DEFAULT_STORE_PROFILE.storeDesc),
     mainImage: pickString(next.mainImage, DEFAULT_STORE_PROFILE.mainImage),
@@ -134,7 +138,7 @@ export function useStoreProfile(storeId?: string) {
       if (!sid) return;
       const { data, error } = await supabase
         .from("stores")
-        .select("store_name, main_image_url, logo_image_url")
+        .select("store_name, main_image_url, logo_image_url, staff_view_mode")
         .eq("store_id", sid)
         .maybeSingle();
 
@@ -148,6 +152,7 @@ export function useStoreProfile(storeId?: string) {
       const current = loadStoreProfile(sid);
       const next: StoreProfile = {
         ...current,
+        staffViewMode: data.staff_view_mode === "station" ? "station" : "simple",
         storeName: String(data.store_name || current.storeName || "").trim() || current.storeName,
         mainImage: data.main_image_url || current.mainImage,
         logoImage: data.logo_image_url || current.logoImage,
@@ -156,7 +161,8 @@ export function useStoreProfile(storeId?: string) {
       if (
         current.storeName !== next.storeName ||
         current.mainImage !== next.mainImage ||
-        current.logoImage !== next.logoImage
+        current.logoImage !== next.logoImage ||
+        current.staffViewMode !== next.staffViewMode
       ) {
         saveStoreProfile(sid, next);
         setProfile(next);
