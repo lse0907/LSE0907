@@ -1914,7 +1914,7 @@ function StaffPageInner() {
                       </span>
                     </div>
                     <div className="muted" style={{ marginTop: 8 }}>
-                      배치 #{g.batch} · 주문번호 {g.orderNos.join(", ")}
+                      {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
                     </div>
                     {g.optionLabel ? <div className="muted" style={{ marginTop: 4 }}>옵션: {g.optionLabel}</div> : null}
                     <div className="itemQuickActions" style={{ marginTop: 10 }}>
