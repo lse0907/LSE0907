@@ -189,7 +189,7 @@ function AdminPageInner() {
         .eq("store_id", storeId)
         .gte("order_date", rangeStart)
         .lte("order_date", rangeEnd)
-        .neq("status", "canceled");
+        .neq("status", "cancelled");
 
       if (error) throw error;
 
