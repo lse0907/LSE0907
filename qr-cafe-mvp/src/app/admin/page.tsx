@@ -351,10 +351,9 @@ function AdminPageInner() {
                   const billing = billingByStore[s.store_id];
                   const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
                   const remainingText = (days: number | null) => (days == null ? "-" : `${days}일`);
-                  const subscriptionLine =
-                    billing?.basePlanStatus === "active"
-                      ? `구독 상태: 유료 · 남은 기간 ${remainingText(paidRemaining)}`
-                      : `구독 상태: 무료 · 남은 기간 ${remainingText(remaining)}`;
+                  const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
+                  const remainingPeriod =
+                    billing?.basePlanStatus === "active" ? remainingText(paidRemaining) : remainingText(remaining);
                   return (
                     <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -367,7 +366,8 @@ function AdminPageInner() {
                           {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
                         </div>
                         <div className="muted">권한: {role}</div>
-                        <div className="muted">{subscriptionLine}</div>
+                        <div className="muted">구독 상태: {subscriptionStatus}</div>
+                        <div className="muted">남은 기간: {remainingPeriod}</div>
                       </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                         {on ? <div className="pill pillOn">선택됨</div> : null}
@@ -381,7 +381,10 @@ function AdminPageInner() {
                   );
                 })}
               </div>
-              <p className="hint" style={{ marginTop: 6 }}>사용기간이 만료되면 기능 사용이 제한됩니다. 만료 전에 결제를 진행해 주세요.</p>
+              <p className="hint" style={{ marginTop: 6 }}>
+                남은사용기간이 만료 되면 기능 사용이 제한 됩니다.<br />
+                만료 전에 결재를 진행해 주세요.
+              </p>
             </>
           )}
         </section>
