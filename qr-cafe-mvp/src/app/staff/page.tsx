@@ -667,6 +667,7 @@ function StaffPageInner() {
   }, [orders]);
 
   const selected = useMemo(() => orders.find((o) => o.id === selectedId) || null, [orders, selectedId]);
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; displayNo: string } | null>(null);
 
   // ✅ 탭 필터 규칙
   // - 진행중: 날짜 상관없이 모두
@@ -719,6 +720,21 @@ function StaffPageInner() {
   const onSelect = (id: string) => {
     setSelectedId(id);
     setMobileView("detail");
+  };
+
+  const openCancelModal = (order: OrderRecord) => {
+    setCancelTarget({ id: order.id, displayNo: order.displayNo });
+  };
+
+  const closeCancelModal = () => {
+    setCancelTarget(null);
+  };
+
+  const confirmCancelOrder = async () => {
+    if (!cancelTarget) return;
+    const id = cancelTarget.id;
+    closeCancelModal();
+    await updateOrderInDb(id, { status: "cancelled" });
   };
 
   const nextBatch = useMemo(() => {
@@ -1655,6 +1671,47 @@ function StaffPageInner() {
           word-break: break-all;
         }
 
+        .modalBackdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.45);
+          display: grid;
+          place-items: center;
+          z-index: 60;
+          padding: 16px;
+        }
+
+        .modalCard {
+          width: min(420px, 100%);
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 16px;
+          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
+          display: grid;
+          gap: 12px;
+        }
+
+        .modalTitle {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 900;
+        }
+
+        .modalDesc {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        .modalActions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+
+
         @media (max-width: 900px) {
           .panel {
             grid-template-columns: 1fr;
@@ -2288,16 +2345,13 @@ function StaffPageInner() {
                     style={{ borderColor: "#2563eb", color: "#2563eb" }}
                     onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
                   >
-                    결제완료 처리(테스트)
+                    결제완료 처리
                   </button>
                 ) : null}
 
                 <button
                   className="actionBtn actionCancel"
-                  onClick={() => {
-                    if (!confirm("이 주문을 '취소' 처리할까요? (삭제 아님, 데이터 유지)")) return;
-                    updateOrderInDb(selected.id, { status: "cancelled" });
-                  }}
+                  onClick={() => openCancelModal(selected)}
                   disabled={!canCancelSelected}
                   style={{
                     opacity: canCancelSelected ? 1 : 0.5,
@@ -2334,21 +2388,35 @@ function StaffPageInner() {
               style={{ borderColor: "#2563eb", color: "#2563eb" }}
               onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
             >
-              결제완료 처리(테스트)
+              결제완료 처리
             </button>
           ) : null}
 
           <button
             className="actionBtn actionCancel"
-            onClick={() => {
-              if (!confirm("이 주문을 '취소' 처리할까요? (삭제 아님, 데이터 유지)")) return;
-              updateOrderInDb(selected.id, { status: "cancelled" });
-            }}
+            onClick={() => openCancelModal(selected)}
             disabled={!canCancelSelected}
             style={{ opacity: canCancelSelected ? 1 : 0.5 }}
           >
             주문 취소
           </button>
+        </div>
+      ) : null}
+
+      {cancelTarget ? (
+        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="cancel-modal-title">
+          <div className="modalCard">
+            <h3 id="cancel-modal-title" className="modalTitle">주문 취소 확인</h3>
+            <p className="modalDesc">
+              주문번호 {cancelTarget.displayNo}를 취소 처리할까요?
+              <br />
+              취소는 삭제가 아닌 상태 변경입니다.
+            </p>
+            <div className="modalActions">
+              <button type="button" className="btn" onClick={closeCancelModal}>닫기</button>
+              <button type="button" className="btn actionCancel" onClick={confirmCancelOrder}>주문 취소</button>
+            </div>
+          </div>
         </div>
       ) : null}
     </main>
