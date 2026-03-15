@@ -114,6 +114,7 @@ type DbPackingCheckRow = {
 
 const LAST_SPOKEN_KEY = "qrCafeStaffLastSpokenOrderId";
 const STAFF_POLL_INTERVAL_MS = 5000;
+const STAFF_VIEW_MODE_OVERRIDE_KEY = "qrCafeStaffViewModeOverride";
 
 function normalizeStaffViewMode(v: any): StaffViewMode {
   return String(v || "").trim() === "station" ? "station" : "simple";
@@ -126,6 +127,18 @@ function normalizeStaffViewMode(v: any): StaffViewMode {
  * 3) env NEXT_PUBLIC_STORE_ID
  * 4) fallback "ximen"
  */
+function getStaffViewModeOverride(storeId: string): StaffViewMode | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const key = `${STAFF_VIEW_MODE_OVERRIDE_KEY}:${storeId}`;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    return normalizeStaffViewMode(raw);
+  } catch {
+    return null;
+  }
+}
+
 function resolveStoreIdFromClient(storeFromQuery?: string | null) {
   const q = String(storeFromQuery || "").trim();
   if (q) return q;
@@ -233,9 +246,9 @@ function nextStatus(s: OrderStatus): OrderStatus {
 
 function statusButtonLabel(s: OrderStatus) {
   if (s === "new") return "주문 확인";
-  if (s === "checked") return "제조 시작";
+  if (s === "checked") return "▶ 제조 시작";
   if (s === "making") return "준비 완료";
-  if (s === "ready_for_packing") return "전달 완료";
+  if (s === "ready_for_packing") return "✓ 전달 완료";
   if (s === "completed") return "완료됨";
   return "취소됨";
 }
@@ -348,7 +361,9 @@ function StaffPageInner() {
         .select("staff_view_mode")
         .eq("store_id", sid)
         .maybeSingle();
-      setStaffViewMode(normalizeStaffViewMode(data?.staff_view_mode));
+      const baseMode = normalizeStaffViewMode(data?.staff_view_mode);
+      const overrideMode = getStaffViewModeOverride(sid);
+      setStaffViewMode(overrideMode || baseMode);
     })();
   }, [storeId]);
 
@@ -362,8 +377,20 @@ function StaffPageInner() {
     }, 1500);
   };
 
-  const updateStaffViewMode = (_next: StaffViewMode) => {
-    showModeToast("직원 화면 모드는 관리자 > 매장설정에서 변경할 수 있어요.");
+  const updateStaffViewMode = (next: StaffViewMode) => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid) return;
+    try {
+      if (typeof window !== "undefined") {
+        const key = `${STAFF_VIEW_MODE_OVERRIDE_KEY}:${sid}`;
+        window.localStorage.setItem(key, next);
+      }
+    } catch {
+      // ignore local override write failure
+    }
+    setStaffViewMode(next);
+    setMobileView("list");
+    showModeToast("현재 기기에서만 화면 모드를 임시 전환했어요.");
   };
 
   useEffect(() => {
@@ -1721,6 +1748,23 @@ function StaffPageInner() {
             padding: 10px 12px;
           }
 
+          .tabs {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+          }
+
+          .tabs::-webkit-scrollbar {
+            display: none;
+          }
+
+          .chip {
+            flex: 0 0 auto;
+            white-space: nowrap;
+            padding: 9px 12px;
+          }
+
           .mobileHide {
             display: none !important;
           }
@@ -1909,7 +1953,7 @@ function StaffPageInner() {
                   <div key={g.key} className="itemBtn" style={{ cursor: "default" }}>
                     <div className="rowBetween">
                       <div className="bigNo">{g.name} × {g.qty}</div>
-                      <span className={`badge ${g.status === "waiting" ? "badgeChecked" : "badgeMaking"}`}>
+                      <span className={`badge statusPill ${g.status === "waiting" ? "badgeChecked" : "badgeMaking"}`}>
                         {g.status === "waiting" ? "제조대기" : "제조중"}
                       </span>
                     </div>
@@ -1924,7 +1968,7 @@ function StaffPageInner() {
                           className="quickActionBtn quickActionBtnPrimary"
                           onClick={() => updateOrderItemsInDb(g.itemIds, { status: "making", batch: nextBatch })}
                         >
-                          제조 시작
+                          ▶ 제조 시작
                         </button>
                       ) : (
                         <button
@@ -1932,7 +1976,7 @@ function StaffPageInner() {
                           className="quickActionBtn quickActionBtnPrimary"
                           onClick={() => updateOrderItemsInDb(g.itemIds, { status: "done" })}
                         >
-                          제조 완료
+                          ✓ 제조 완료
                         </button>
                       )}
                     </div>
@@ -1980,7 +2024,7 @@ function StaffPageInner() {
                             <div key={`ready_item_${it.id}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
                               <div className="rowBetween">
                                 <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
-                                <span className={`badge ${statusClass}`}>{statusText}</span>
+                                <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
                               </div>
                               {optText ? <div className="muted" style={{ marginTop: 4 }}>옵션: {optText}</div> : null}
                               {isDone ? (
@@ -1990,7 +2034,7 @@ function StaffPageInner() {
                                     className={`quickActionBtn ${checked ? "" : "quickActionBtnPrimary"}`}
                                     onClick={() => togglePackingChecks(o, !checked, it.id)}
                                   >
-                                    {checked ? "확인 취소" : "확인"}
+                                    {checked ? "↺ 확인 취소" : "☑ 확인"}
                                   </button>
                                 </div>
                               ) : null}
@@ -2007,7 +2051,7 @@ function StaffPageInner() {
                           disabled={!doneItems.length}
                           style={{ opacity: doneItems.length ? 1 : 0.45 }}
                         >
-                          전체 준비확인
+                          ☑ 전체 준비확인
                         </button>
                         <button
                           type="button"
@@ -2016,7 +2060,7 @@ function StaffPageInner() {
                           disabled={!canCompleteOrder}
                           style={{ opacity: canCompleteOrder ? 1 : 0.45 }}
                         >
-                          전달 완료
+                          ✓ 전달 완료
                         </button>
                       </div>
                     </div>
