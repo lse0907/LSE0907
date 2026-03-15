@@ -189,7 +189,7 @@ function AdminPageInner() {
         .eq("store_id", storeId)
         .gte("order_date", rangeStart)
         .lte("order_date", rangeEnd)
-        .neq("status", "canceled");
+        .neq("status", "cancelled");
 
       if (error) throw error;
 
@@ -512,6 +512,7 @@ function AdminPageInner() {
 
 const baseCss = `
 :root {
+  color-scheme: light;
   --bg: #f6f7f9;
   --card: #ffffff;
   --text: #111827;
@@ -548,6 +549,11 @@ body {
   gap:8px;
   flex-wrap:wrap;
   justify-content:flex-end;
+}
+.topActions .btn{
+  padding:12px 16px;
+  border-radius:12px;
+  font-size:14px;
 }
 .h1{
   margin:0;
@@ -640,6 +646,8 @@ body {
 .btn{
   border:1px solid var(--line);
   background:#fff;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
   padding:10px 14px;
   border-radius:12px;
   cursor:pointer;
@@ -718,6 +726,8 @@ body {
   text-align:center;
   border:1px solid var(--line);
   background:#fff;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
   border-radius:14px;
   padding:10px 8px;
   cursor:pointer;
@@ -747,6 +757,8 @@ body {
 .subBtn{
   border:1px solid var(--line);
   background:#fff;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
   padding:12px 14px;
   border-radius:12px;
   cursor:pointer;
@@ -800,8 +812,8 @@ body {
     gap:6px;
   }
   .topActions .btn{
-    padding:8px 10px;
-    font-size:12px;
+    padding:10px 12px;
+    font-size:13px;
     white-space:nowrap;
   }
   .cardBtnTitle{ font-size:14px; }

@@ -534,6 +534,7 @@ function MenuPageInner() {
     <main className="wrap">
       <style jsx global>{`
         :root {
+          color-scheme: light;
           --bg: #f6f7f9;
           --card: #ffffff;
           --text: #111827;
@@ -690,6 +691,8 @@ function MenuPageInner() {
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           font-weight: 950;
           cursor: pointer;
         }
@@ -709,6 +712,8 @@ function MenuPageInner() {
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           font-weight: 950;
           cursor: pointer;
           white-space: nowrap;
@@ -808,6 +813,8 @@ function MenuPageInner() {
         .xbtn {
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           border-radius: 12px;
           padding: 8px 10px;
           font-weight: 950;
@@ -900,6 +907,8 @@ function MenuPageInner() {
           border-radius: 999px;
           border: 1px solid #cbd5e1;
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           font-weight: 900;
           cursor: pointer;
         }
