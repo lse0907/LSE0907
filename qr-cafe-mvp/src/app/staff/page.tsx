@@ -2049,7 +2049,7 @@ function StaffPageInner() {
                               </div>
                               {optText || isDone ? (
                                 <div className="readyItemSubRow">
-                                  {optText ? <div className="muted readyItemOption">옵션: {optText}</div> : null}
+                                  {optText ? <div className="muted readyItemOption">{optText}</div> : null}
                                   {isDone ? (
                                     <div className="itemQuickActions readyItemActions">
                                       <button
@@ -2057,7 +2057,7 @@ function StaffPageInner() {
                                         className={`quickActionBtn ${checked ? "" : "quickActionBtnPrimary"}`}
                                         onClick={() => togglePackingChecks(o, !checked, it.id)}
                                       >
-                                        {checked ? "↺ 확인 취소" : "✓ 확인"}
+                                        {checked ? "↺ 확인취소" : "✓ 준비확인"}
                                       </button>
                                     </div>
                                   ) : null}
