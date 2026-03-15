@@ -1329,6 +1329,27 @@ function StaffPageInner() {
           outline-offset: 1px;
         }
 
+        .readyItemSubRow {
+          margin-top: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .readyItemOption {
+          margin: 0;
+          flex: 1 1 220px;
+          min-width: 0;
+        }
+
+        .readyItemActions {
+          margin-top: 0;
+          margin-left: auto;
+          flex: 0 0 auto;
+        }
+
         .bigNo {
           font-size: 18px;
           font-weight: 900;
@@ -1851,7 +1872,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              완료/취소 ({counts.completed})
+              완료 ({counts.completed})
             </button>
             <button
               className={`chip ${listTab === "all" ? "chipOn" : ""}`}
@@ -1901,7 +1922,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              완료/취소 ({stationCounts.history})
+              완료 ({stationCounts.history})
             </button>
           </div>
         </div>
@@ -2026,16 +2047,20 @@ function StaffPageInner() {
                                 <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
                                 <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
                               </div>
-                              {optText ? <div className="muted" style={{ marginTop: 4 }}>옵션: {optText}</div> : null}
-                              {isDone ? (
-                                <div className="itemQuickActions" style={{ marginTop: 8 }}>
-                                  <button
-                                    type="button"
-                                    className={`quickActionBtn ${checked ? "" : "quickActionBtnPrimary"}`}
-                                    onClick={() => togglePackingChecks(o, !checked, it.id)}
-                                  >
-                                    {checked ? "↺ 확인 취소" : "☑ 확인"}
-                                  </button>
+                              {optText || isDone ? (
+                                <div className="readyItemSubRow">
+                                  {optText ? <div className="muted readyItemOption">옵션: {optText}</div> : null}
+                                  {isDone ? (
+                                    <div className="itemQuickActions readyItemActions">
+                                      <button
+                                        type="button"
+                                        className={`quickActionBtn ${checked ? "" : "quickActionBtnPrimary"}`}
+                                        onClick={() => togglePackingChecks(o, !checked, it.id)}
+                                      >
+                                        {checked ? "↺ 확인 취소" : "✓ 확인"}
+                                      </button>
+                                    </div>
+                                  ) : null}
                                 </div>
                               ) : null}
                             </div>
@@ -2051,7 +2076,7 @@ function StaffPageInner() {
                           disabled={!doneItems.length}
                           style={{ opacity: doneItems.length ? 1 : 0.45 }}
                         >
-                          ☑ 전체 준비확인
+                          ✓ 전체 준비확인
                         </button>
                         <button
                           type="button"
