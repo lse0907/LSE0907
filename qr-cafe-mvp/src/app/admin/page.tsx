@@ -189,7 +189,7 @@ function AdminPageInner() {
         .eq("store_id", storeId)
         .gte("order_date", rangeStart)
         .lte("order_date", rangeEnd)
-        .neq("status", "canceled");
+        .neq("status", "cancelled");
 
       if (error) throw error;
 
@@ -640,6 +640,8 @@ body {
 .btn{
   border:1px solid var(--line);
   background:#fff;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
   padding:10px 14px;
   border-radius:12px;
   cursor:pointer;
