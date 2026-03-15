@@ -825,7 +825,7 @@ function StaffPageInner() {
 
     const { error } = await supabase.from("order_item_packing_checks").upsert(rows, { onConflict: "order_item_id" });
     if (error) {
-      alert(`준비 체크 저장 실패: ${error.message}`);
+      alert(`준비 확인 저장 실패: ${error.message}`);
       return;
     }
 
@@ -1941,18 +1941,20 @@ function StaffPageInner() {
               </div>
             )
           ) : staffViewMode === "station" && stationTab === "ready" ? (
-            readyOrders.length === 0 ? <p className="muted">검수 대기인 준비 주문이 없습니다.</p> : (
+            readyOrders.length === 0 ? <p className="muted">준비 확인 대기 주문이 없습니다.</p> : (
               <div className="list">
                 {readyOrders.map((o) => {
                   const doneItems = o.items.filter((it) => it.status === "done");
                   const checkedCount = doneItems.filter((it) => !!it.packingChecked).length;
-                  const allChecked = doneItems.length > 0 && checkedCount === doneItems.length;
+                  const allItemsDone = o.items.length > 0 && o.items.every((it) => it.status === "done");
+                  const allDoneChecked = doneItems.length > 0 && checkedCount === doneItems.length;
+                  const canCompleteOrder = allItemsDone && allDoneChecked;
 
                   return (
                     <div key={`ready_${o.id}`} className="itemBtn" style={{ cursor: "default" }}>
                       <div className="rowBetween">
                         <div className="bigNo">주문번호 {o.displayNo}</div>
-                        <span className="badge">검수 {checkedCount}/{doneItems.length}</span>
+                        <span className="badge">준비 확인 {checkedCount}/{doneItems.length}</span>
                       </div>
 
                       <div className="muted" style={{ marginTop: 8 }}>
@@ -1961,27 +1963,37 @@ function StaffPageInner() {
                       {o.requestNote ? <div className="muted" style={{ marginTop: 4 }}>요청사항: {o.requestNote}</div> : null}
 
                       <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-                        {doneItems.map((it) => {
+                        {o.items.map((it) => {
                           const optText = buildOptionText(it);
                           const checked = !!it.packingChecked;
+                          const isDone = it.status === "done";
+                          const statusText = !isDone
+                            ? it.status === "making"
+                              ? "제조중"
+                              : "제조대기"
+                            : checked
+                            ? "준비확인"
+                            : "준비대기";
+                          const statusClass = !isDone ? "badgeMaking" : checked ? "badgeDone" : "badgeChecked";
+
                           return (
                             <div key={`ready_item_${it.id}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
                               <div className="rowBetween">
                                 <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
-                                <span className={`badge ${checked ? "badgeDone" : "badgeChecked"}`}>
-                                  {checked ? "검수완료" : "검수대기"}
-                                </span>
+                                <span className={`badge ${statusClass}`}>{statusText}</span>
                               </div>
                               {optText ? <div className="muted" style={{ marginTop: 4 }}>옵션: {optText}</div> : null}
-                              <div className="itemQuickActions" style={{ marginTop: 8 }}>
-                                <button
-                                  type="button"
-                                  className="quickActionBtn"
-                                  onClick={() => togglePackingChecks(o, !checked, it.id)}
-                                >
-                                  {checked ? "검수 해제" : "검수 체크"}
-                                </button>
-                              </div>
+                              {isDone ? (
+                                <div className="itemQuickActions" style={{ marginTop: 8 }}>
+                                  <button
+                                    type="button"
+                                    className={`quickActionBtn ${checked ? "" : "quickActionBtnPrimary"}`}
+                                    onClick={() => togglePackingChecks(o, !checked, it.id)}
+                                  >
+                                    {checked ? "확인 취소" : "확인"}
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })}
@@ -1992,15 +2004,17 @@ function StaffPageInner() {
                           type="button"
                           className="quickActionBtn"
                           onClick={() => togglePackingChecks(o, true)}
+                          disabled={!doneItems.length}
+                          style={{ opacity: doneItems.length ? 1 : 0.45 }}
                         >
-                          전체 검수완료
+                          전체 준비확인
                         </button>
                         <button
                           type="button"
                           className="quickActionBtn quickActionBtnPrimary"
                           onClick={() => updateOrderInDb(o.id, { status: "completed" })}
-                          disabled={!allChecked}
-                          style={{ opacity: allChecked ? 1 : 0.45 }}
+                          disabled={!canCompleteOrder}
+                          style={{ opacity: canCompleteOrder ? 1 : 0.45 }}
                         >
                           전달 완료
                         </button>
