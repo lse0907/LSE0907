@@ -512,6 +512,7 @@ function AdminPageInner() {
 
 const baseCss = `
 :root {
+  color-scheme: light;
   --bg: #f6f7f9;
   --card: #ffffff;
   --text: #111827;
@@ -720,6 +721,8 @@ body {
   text-align:center;
   border:1px solid var(--line);
   background:#fff;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
   border-radius:14px;
   padding:10px 8px;
   cursor:pointer;
@@ -749,6 +752,8 @@ body {
 .subBtn{
   border:1px solid var(--line);
   background:#fff;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
   padding:12px 14px;
   border-radius:12px;
   cursor:pointer;
