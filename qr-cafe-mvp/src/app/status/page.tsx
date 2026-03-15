@@ -289,7 +289,8 @@ function StatusPageInner() {
           font-weight: 900;
           cursor: pointer;
           text-decoration: none;
-          color: inherit;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -380,7 +381,8 @@ function StatusPageInner() {
           font-weight: 950;
           cursor: pointer;
           text-decoration: none;
-          color: inherit;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           display: inline-flex;
           align-items: center;
           justify-content: center;

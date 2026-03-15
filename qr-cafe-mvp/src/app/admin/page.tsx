@@ -640,6 +640,8 @@ body {
 .btn{
   border:1px solid var(--line);
   background:#fff;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
   padding:10px 14px;
   border-radius:12px;
   cursor:pointer;

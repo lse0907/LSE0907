@@ -1187,7 +1187,7 @@ function StaffPageInner() {
           color: var(--text);
           -webkit-text-fill-color: currentColor;
           padding: 10px 14px;
-          border-radius: 999px;
+          border-radius: 12px;
           font-weight: 800;
           cursor: pointer;
           font-size: 14px;
@@ -1846,8 +1846,9 @@ function StaffPageInner() {
           .chip {
             flex: 0 0 auto;
             white-space: nowrap;
-            font-size: 12px;
-            padding: 8px 10px;
+            font-size: 13px;
+            padding: 8px 11px;
+            border-radius: 11px;
           }
 
           .mobileHide {
@@ -1894,8 +1895,9 @@ function StaffPageInner() {
           }
 
           .chip {
-            font-size: 11px;
-            padding: 7px 9px;
+            font-size: 12px;
+            padding: 8px 10px;
+            border-radius: 10px;
           }
 
           .btn.topActionBtn {
@@ -2035,13 +2037,7 @@ function StaffPageInner() {
         </div>
       </div>
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
-      <p className="tabHint" style={{ marginTop: 4 }}>
-        {staffViewMode === "station"
-          ? "Station 모드: 주문관리에서 주문확인 후 제조 탭으로 이동해요."
-          : "Simple 모드: 주문 목록과 상세를 한 흐름으로 처리해요."}
-      </p>
-
-      <p className="tabHint">Simple 모드의 완료/취소·전체는 당일 주문만 표시</p>
+      <p className="tabHint" style={{ marginTop: 4 }}>주문 확인 → 제조 → 준비 확인 순서로 진행해 주세요.</p>
 
       <div className="panel">
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
