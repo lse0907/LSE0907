@@ -550,6 +550,11 @@ body {
   flex-wrap:wrap;
   justify-content:flex-end;
 }
+.topActions .btn{
+  padding:12px 16px;
+  border-radius:12px;
+  font-size:14px;
+}
 .h1{
   margin:0;
   font-size:28px;
@@ -807,8 +812,8 @@ body {
     gap:6px;
   }
   .topActions .btn{
-    padding:8px 10px;
-    font-size:12px;
+    padding:10px 12px;
+    font-size:13px;
     white-space:nowrap;
   }
   .cardBtnTitle{ font-size:14px; }

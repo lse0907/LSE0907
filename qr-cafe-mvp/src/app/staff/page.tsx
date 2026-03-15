@@ -1027,9 +1027,9 @@ function StaffPageInner() {
         }
 
         .btn.topActionBtn {
-          padding: 7px 10px;
-          font-size: 13px;
-          border-radius: 10px;
+          padding: 10px 14px;
+          font-size: 14px;
+          border-radius: 12px;
           white-space: nowrap;
         }
 
@@ -1115,7 +1115,7 @@ function StaffPageInner() {
           display: flex;
           gap: 6px;
           flex-wrap: wrap;
-          margin-top: 8px;
+          margin-top: 6px;
         }
 
         .tabsRow {
@@ -1186,11 +1186,11 @@ function StaffPageInner() {
           background: #fff;
           color: var(--text);
           -webkit-text-fill-color: currentColor;
-          padding: 10px 14px;
+          padding: 12px 16px;
           border-radius: 12px;
-          font-weight: 800;
+          font-weight: 900;
           cursor: pointer;
-          font-size: 14px;
+          font-size: 15px;
         }
         .chipOn {
           border-color: var(--brand);
@@ -1894,15 +1894,14 @@ function StaffPageInner() {
             gap: 4px;
           }
 
-          .chip {
-            font-size: 12px;
+          .btn.topActionBtn {
             padding: 8px 10px;
-            border-radius: 10px;
+            font-size: 12px;
           }
 
-          .btn.topActionBtn {
-            padding: 6px 7px;
-            font-size: 11px;
+          .chip {
+            padding: 10px 12px;
+            font-size: 14px;
           }
         }
 
@@ -1939,6 +1938,28 @@ function StaffPageInner() {
           {errMsg ? <p className="err">오류: {errMsg}</p> : null}
         </div>
       </header>
+
+      <div className="modeRow">
+        <p className="modeLabel">모드전환</p>
+        <div className="modeSwitch" role="group" aria-label="모드전환">
+          <button
+            type="button"
+            className={`modeSwitchBtn ${staffViewMode === "simple" ? "modeSwitchBtnOn" : ""}`}
+            aria-pressed={staffViewMode === "simple"}
+            onClick={() => updateStaffViewMode("simple")}
+          >
+            Simple
+          </button>
+          <button
+            type="button"
+            className={`modeSwitchBtn ${staffViewMode === "station" ? "modeSwitchBtnOn" : ""}`}
+            aria-pressed={staffViewMode === "station"}
+            onClick={() => updateStaffViewMode("station")}
+          >
+            Station
+          </button>
+        </div>
+      </div>
 
       {staffViewMode === "simple" ? (
         <div className="tabsRow">
@@ -2014,28 +2035,6 @@ function StaffPageInner() {
           </div>
         </div>
       )}
-
-      <div className="modeRow">
-        <p className="modeLabel">직원화면 모드</p>
-        <div className="modeSwitch" role="group" aria-label="직원화면 모드">
-          <button
-            type="button"
-            className={`modeSwitchBtn ${staffViewMode === "simple" ? "modeSwitchBtnOn" : ""}`}
-            aria-pressed={staffViewMode === "simple"}
-            onClick={() => updateStaffViewMode("simple")}
-          >
-            Simple
-          </button>
-          <button
-            type="button"
-            className={`modeSwitchBtn ${staffViewMode === "station" ? "modeSwitchBtnOn" : ""}`}
-            aria-pressed={staffViewMode === "station"}
-            onClick={() => updateStaffViewMode("station")}
-          >
-            Station
-          </button>
-        </div>
-      </div>
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
       <p className="tabHint" style={{ marginTop: 4 }}>주문 확인 → 제조 → 준비 확인 순서로 진행해 주세요.</p>
 
