@@ -1113,7 +1113,7 @@ function StaffPageInner() {
 
         .tabs {
           display: flex;
-          gap: 8px;
+          gap: 6px;
           flex-wrap: wrap;
           margin-top: 6px;
         }
