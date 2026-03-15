@@ -8,7 +8,7 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { lsLastOrderIdKey, lsLastOrderTokenKey, resolveStoreId } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
-type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 
 type DbOrderRow = {
   id: string;
@@ -51,7 +51,10 @@ function normalizeMode(v: any): OrderMode {
 
 function normalizeStatus(v: any): OrderStatus {
   const s = String(v || "").trim();
-  if (s === "making" || s === "ready" || s === "done" || s === "canceled") return s;
+  if (s === "checked" || s === "making" || s === "ready_for_packing" || s === "completed" || s === "cancelled") return s;
+  if (s === "ready") return "ready_for_packing";
+  if (s === "done") return "completed";
+  if (s === "canceled") return "cancelled";
   return "new";
 }
 
@@ -213,7 +216,7 @@ function DonePageInner() {
           <p style={{ margin: 0, fontWeight: 850 }}>포장 주문</p>
         )}
 
-        {order.status === "canceled" ? (
+        {order.status === "cancelled" ? (
           <p style={{ marginTop: 8, color: "#b45309", fontWeight: 950 }}>
             * 이 주문은 취소되었습니다.
           </p>
