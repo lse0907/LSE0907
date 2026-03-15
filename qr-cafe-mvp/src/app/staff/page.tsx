@@ -969,6 +969,7 @@ function StaffPageInner() {
     <main className="wrap">
       <style jsx global>{`
         :root {
+          color-scheme: light;
           --bg: #f6f7f9;
           --card: #ffffff;
           --text: #111827;
@@ -1112,7 +1113,7 @@ function StaffPageInner() {
 
         .tabs {
           display: flex;
-          gap: 8px;
+          gap: 6px;
           flex-wrap: wrap;
           margin-top: 8px;
         }
@@ -1145,7 +1146,8 @@ function StaffPageInner() {
         .modeSwitchBtn {
           border: none;
           background: transparent;
-          color: #374151;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           padding: 6px 11px;
           border-radius: 999px;
           font-size: 12px;
@@ -1182,6 +1184,8 @@ function StaffPageInner() {
         .chip {
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           padding: 10px 14px;
           border-radius: 999px;
           font-weight: 800;
@@ -1190,6 +1194,7 @@ function StaffPageInner() {
         }
         .chipOn {
           border-color: var(--brand);
+          color: var(--text);
           box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.08);
         }
 
@@ -1827,6 +1832,7 @@ function StaffPageInner() {
           }
 
           .tabs {
+            gap: 5px;
             flex-wrap: nowrap;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -1840,7 +1846,8 @@ function StaffPageInner() {
           .chip {
             flex: 0 0 auto;
             white-space: nowrap;
-            padding: 9px 12px;
+            font-size: 12px;
+            padding: 8px 10px;
           }
 
           .mobileHide {
@@ -1875,7 +1882,28 @@ function StaffPageInner() {
           .dockSpacer {
             height: 96px;
           }
+          .modeSwitchBtn {
+            font-size: 11px;
+            padding: 6px 10px;
+          }
         }
+
+        @media (max-width: 390px) {
+          .tabs {
+            gap: 4px;
+          }
+
+          .chip {
+            font-size: 11px;
+            padding: 7px 9px;
+          }
+
+          .btn.topActionBtn {
+            padding: 6px 7px;
+            font-size: 11px;
+          }
+        }
+
       `}</style>
 
       <header className="topbar">
