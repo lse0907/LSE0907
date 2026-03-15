@@ -23,6 +23,7 @@ function getFileExt(name: string) {
 // ✅ "실제로 저장/반영되는 핵심 필드"만 비교/저장에 사용
 function pickCore(p: any) {
   return {
+    staffViewMode: p?.staffViewMode === "station" ? "station" : "simple",
     storeName: String(p?.storeName ?? ""),
     storeDesc: String(p?.storeDesc ?? ""),
     mainImage: String(p?.mainImage ?? ""),
@@ -156,6 +157,7 @@ function AdminstorePageInner() {
           store_name: (draft as any).storeName || null,
           main_image_url: (draft as any).mainImage || null,
           logo_image_url: (draft as any).logoImage || null,
+          staff_view_mode: (draft as any).staffViewMode === "station" ? "station" : "simple",
         })
         .eq("store_id", storeId);
 
@@ -829,6 +831,26 @@ function AdminstorePageInner() {
               onChange={(e) => setDraft((p: any) => ({ ...p, storeDesc: e.target.value }))}
               placeholder="예) QR로 간편하게 주문하고 기다리세요..."
             />
+          </div>
+
+          <div className="field">
+            <div className="label">직원 화면 모드</div>
+            <select
+              className="input"
+              value={(draft as any).staffViewMode === "station" ? "station" : "simple"}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  staffViewMode: e.target.value === "station" ? "station" : "simple",
+                }))
+              }
+            >
+              <option value="simple">Simple Mode (통합형)</option>
+              <option value="station">Station Mode (분리형)</option>
+            </select>
+            <div className="hint">
+              Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비 역할 분리에 적합
+            </div>
           </div>
 
           <div className="field">
