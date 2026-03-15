@@ -154,14 +154,6 @@ function AdminPageInner() {
     setStoresLoaded(true);
   };
 
-  const fmtDate = (iso: string | null | undefined) => {
-    const raw = String(iso || "").trim();
-    if (!raw) return "-";
-    const t = new Date(raw).getTime();
-    if (!Number.isFinite(t)) return raw;
-    return new Date(t).toLocaleDateString("ko-KR");
-  };
-
   const calcPaidRemainingDays = (paidUntil: string | null | undefined) => {
     const raw = String(paidUntil || "").trim();
     if (!raw) return null;
@@ -358,10 +350,11 @@ function AdminPageInner() {
                   const remaining = calcRemainingDays(s.created_at);
                   const billing = billingByStore[s.store_id];
                   const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
-                  const trialText =
-                    remaining === null
-                      ? `무료 사용기간 ${FREE_TRIAL_DAYS}일`
-                      : `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remaining}일`;
+                  const remainingText = (days: number | null) => (days == null ? "-" : `${days}일`);
+                  const subscriptionLine =
+                    billing?.basePlanStatus === "active"
+                      ? `구독 상태: 유료 · 남은 기간 ${remainingText(paidRemaining)}`
+                      : `구독 상태: 무료 · 남은 기간 ${remainingText(remaining)}`;
                   return (
                     <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -374,14 +367,7 @@ function AdminPageInner() {
                           {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
                         </div>
                         <div className="muted">권한: {role}</div>
-                        {billing?.basePlanStatus === "active" ? (
-                          <>
-                            <div className="muted">유료 구독: active · 만료 {fmtDate(billing.paidUntil)}</div>
-                            <div className="muted">최근 결제일: {fmtDate(billing.lastPaidAt)} · 남은 {paidRemaining == null ? "-" : `${paidRemaining}일`}</div>
-                          </>
-                        ) : (
-                          <div className="muted">{trialText}</div>
-                        )}
+                        <div className="muted">{subscriptionLine}</div>
                       </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                         {on ? <div className="pill pillOn">선택됨</div> : null}
@@ -395,7 +381,7 @@ function AdminPageInner() {
                   );
                 })}
               </div>
-              <p className="hint" style={{ marginTop: 6 }}>구독 사용 기간이 만료되면 주문/직원/관리 기능 사용이 제한될 수 있습니다. 만료 전에 구독결제를 진행해 주세요.</p>
+              <p className="hint" style={{ marginTop: 6 }}>사용기간이 만료되면 기능 사용이 제한됩니다. 만료 전에 결제를 진행해 주세요.</p>
             </>
           )}
         </section>
@@ -546,14 +532,14 @@ body {
 }
 .topActions{
   display:flex;
-  gap:8px;
+  gap:5px;
   flex-wrap:wrap;
   justify-content:flex-end;
 }
 .topActions .btn{
-  padding:12px 16px;
-  border-radius:12px;
-  font-size:14px;
+  padding:9px 10px;
+  border-radius:10px;
+  font-size:13px;
 }
 .h1{
   margin:0;
@@ -662,7 +648,7 @@ body {
 .btnGroup{
   display:grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap:8px;
+  gap:6px;
   margin-top:12px;
 }
 .btnPrimary{
@@ -728,8 +714,8 @@ body {
   background:#fff;
   color:var(--text);
   -webkit-text-fill-color: currentColor;
-  border-radius:14px;
-  padding:10px 8px;
+  border-radius:12px;
+  padding:9px 6px;
   cursor:pointer;
 }
 .cardBtn:disabled{
@@ -746,8 +732,10 @@ body {
 }
 .cardBtnTitle{
   margin:0;
-  font-size:16px;
+  font-size:14px;
   font-weight:950;
+  line-height:1.1;
+  white-space:nowrap;
 }
 .subPanel{
   margin-top:12px;
@@ -809,17 +797,17 @@ body {
   .topbar{ align-items:center; }
   .topActions{
     flex-wrap:nowrap;
-    gap:6px;
+    gap:4px;
   }
   .topActions .btn{
-    padding:10px 12px;
-    font-size:13px;
+    padding:8px 8px;
+    font-size:12px;
     white-space:nowrap;
   }
-  .cardBtnTitle{ font-size:14px; }
+  .cardBtnTitle{ font-size:12px; }
   .btnGroup{
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap:6px;
+    gap:4px;
   }
   .storeList{
     max-height: min(42vh, 360px);
