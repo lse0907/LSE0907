@@ -1018,7 +1018,7 @@ function StaffPageInner() {
         .storeInfo {
           margin: 0;
           font-weight: 800;
-          font-size: 18px;
+          font-size: 16px;
           line-height: 1.25;
         }
 
@@ -1085,15 +1085,6 @@ function StaffPageInner() {
           font-weight: 900;
           margin: 0;
           letter-spacing: -0.02em;
-        }
-
-        .desc {
-          margin: 0;
-          color: var(--muted);
-          line-height: 1.45;
-          font-size: 14px;
-          max-width: 720px;
-          word-break: keep-all;
         }
 
         .btn {
@@ -1186,7 +1177,7 @@ function StaffPageInner() {
           background: #fff;
           color: var(--text);
           -webkit-text-fill-color: currentColor;
-          padding: 12px 16px;
+          padding: 12px 12px;
           border-radius: 12px;
           font-weight: 900;
           cursor: pointer;
@@ -1891,7 +1882,7 @@ function StaffPageInner() {
 
         @media (max-width: 390px) {
           .tabs {
-            gap: 4px;
+            gap: 3px;
           }
 
           .btn.topActionBtn {
@@ -1900,7 +1891,7 @@ function StaffPageInner() {
           }
 
           .chip {
-            padding: 10px 12px;
+            padding: 10px 10px;
             font-size: 14px;
           }
         }
@@ -1924,8 +1915,6 @@ function StaffPageInner() {
               <a className="btn topActionBtn" href="/logout">로그아웃</a>
             </div>
           </div>
-
-          <p className="desc">주문접수 및 제조 상태 변경</p>
 
           {/* ✅ 현재 매장 표시 */}
           <p className="muted storeInfo">
