@@ -104,6 +104,19 @@ function DonePageInner() {
     }
   }, [accessTokenFromQuery, storeIdForLinks]);
 
+
+  const globalPageStyle = (
+    <style jsx global>{`
+      :root {
+        color-scheme: light;
+      }
+      body {
+        background: #f6f7f9;
+        color: #111827;
+      }
+    `}</style>
+  );
+
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -160,18 +173,23 @@ function DonePageInner() {
 
   if (loading) {
     return (
-      <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
+      <>
+        {globalPageStyle}
+        <main style={{ padding: 24, maxWidth: 520, margin: "0 auto", color: "#111827" }}>
         <h1 style={{ fontSize: 22, fontWeight: 900 }}>주문 접수 완료</h1>
         <p style={{ marginTop: 10, color: "#6b7280", fontWeight: 800 }}>
           주문 정보를 불러오는 중...
         </p>
-      </main>
+        </main>
+      </>
     );
   }
 
   if (!order) {
     return (
-      <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
+      <>
+        {globalPageStyle}
+        <main style={{ padding: 24, maxWidth: 520, margin: "0 auto", color: "#111827" }}>
         <h1 style={{ fontSize: 22, fontWeight: 900 }}>주문 접수 완료</h1>
 
         <p style={{ marginTop: 10, fontWeight: 850 }}>
@@ -189,17 +207,22 @@ function DonePageInner() {
               border: "1px solid #ccc",
               textDecoration: "none",
               fontWeight: 900,
+              color: "#111827",
+              WebkitTextFillColor: "currentColor",
             }}
           >
             홈으로
           </Link>
         </div>
-      </main>
+        </main>
+      </>
     );
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
+    <>
+      {globalPageStyle}
+      <main style={{ padding: 24, maxWidth: 520, margin: "0 auto", color: "#111827" }}>
       <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>주문 접수 완료</h1>
 
       <div style={{ marginTop: 10, color: "#444" }}>
@@ -285,12 +308,15 @@ function DonePageInner() {
             border: "1px solid #ccc",
             textDecoration: "none",
             fontWeight: 900,
+            color: "#111827",
+            WebkitTextFillColor: "currentColor",
           }}
         >
           홈으로
         </Link>
       </div>
-    </main>
+      </main>
+    </>
   );
 }
 export default function DonePagePage() {
