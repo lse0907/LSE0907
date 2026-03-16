@@ -13,7 +13,7 @@ import {
 } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
-type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 type PaymentStatus = "not_required" | "pending" | "paid";
 
 type PgConfig = {
@@ -498,6 +498,8 @@ function ConfirmPageInner() {
     borderRadius: 12,
     border: active ? "2px solid #111" : "1px solid #ddd",
     background: "white",
+    color: "#111827",
+    WebkitTextFillColor: "currentColor" as const,
     cursor: disabled ? "not-allowed" : "pointer",
     fontWeight: 900,
     opacity: disabled ? 0.55 : 1,
@@ -507,7 +509,17 @@ function ConfirmPageInner() {
   const takeoutDisabled = isTableQr;
 
   return (
-    <main style={{ padding: 16, maxWidth: 720, margin: "0 auto" }}>
+    <>
+      <style jsx global>{`
+        :root {
+          color-scheme: light;
+        }
+        body {
+          background: #f6f7f9;
+          color: #111827;
+        }
+      `}</style>
+      <main style={{ padding: 16, maxWidth: 720, margin: "0 auto", color: "#111827" }}>
       <h1 style={{ margin: 0, fontWeight: 950 }}>주문 확인</h1>
 
       <div style={{ marginTop: 8, color: "#444", fontWeight: 800 }}>
@@ -669,7 +681,7 @@ function ConfirmPageInner() {
       </div>
 
       <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
-        <button onClick={goMenu} style={{ padding: 12, flex: 1, fontWeight: 900 }}>
+        <button onClick={goMenu} style={{ padding: 12, flex: 1, fontWeight: 900, color: "#111827", WebkitTextFillColor: "currentColor" }}>
           메뉴로 돌아가기
         </button>
         <button
@@ -680,6 +692,8 @@ function ConfirmPageInner() {
             flex: 1,
             opacity: canSubmit ? 1 : 0.5,
             fontWeight: 900,
+            color: "#111827",
+            WebkitTextFillColor: "currentColor",
           }}
         >
           {submitting ? "저장 중..." : isPrepayStore ? "결제하기" : "주문 접수"}
@@ -693,7 +707,8 @@ function ConfirmPageInner() {
           ? "결제 완료 후 주문이 접수됩니다."
           : "결제는 매장에서 진행됩니다."}
       </p>
-    </main>
+      </main>
+    </>
   );
 }
 export default function ConfirmPage() {

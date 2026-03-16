@@ -8,7 +8,7 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { lsLastOrderIdKey, lsLastOrderTokenKey, resolveStoreId } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
-type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 
 type DbOrderRow = {
   id: string;
@@ -51,7 +51,10 @@ function normalizeMode(v: any): OrderMode {
 
 function normalizeStatus(v: any): OrderStatus {
   const s = String(v || "").trim();
-  if (s === "making" || s === "ready" || s === "done" || s === "canceled") return s;
+  if (s === "checked" || s === "making" || s === "ready_for_packing" || s === "completed" || s === "cancelled") return s;
+  if (s === "ready") return "ready_for_packing";
+  if (s === "done") return "completed";
+  if (s === "canceled") return "cancelled";
   return "new";
 }
 
@@ -100,6 +103,19 @@ function DonePageInner() {
       return "";
     }
   }, [accessTokenFromQuery, storeIdForLinks]);
+
+
+  const globalPageStyle = (
+    <style jsx global>{`
+      :root {
+        color-scheme: light;
+      }
+      body {
+        background: #f6f7f9;
+        color: #111827;
+      }
+    `}</style>
+  );
 
   useEffect(() => {
     const run = async () => {
@@ -157,18 +173,23 @@ function DonePageInner() {
 
   if (loading) {
     return (
-      <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
+      <>
+        {globalPageStyle}
+        <main style={{ padding: 24, maxWidth: 520, margin: "0 auto", color: "#111827" }}>
         <h1 style={{ fontSize: 22, fontWeight: 900 }}>주문 접수 완료</h1>
         <p style={{ marginTop: 10, color: "#6b7280", fontWeight: 800 }}>
           주문 정보를 불러오는 중...
         </p>
-      </main>
+        </main>
+      </>
     );
   }
 
   if (!order) {
     return (
-      <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
+      <>
+        {globalPageStyle}
+        <main style={{ padding: 24, maxWidth: 520, margin: "0 auto", color: "#111827" }}>
         <h1 style={{ fontSize: 22, fontWeight: 900 }}>주문 접수 완료</h1>
 
         <p style={{ marginTop: 10, fontWeight: 850 }}>
@@ -186,17 +207,22 @@ function DonePageInner() {
               border: "1px solid #ccc",
               textDecoration: "none",
               fontWeight: 900,
+              color: "#111827",
+              WebkitTextFillColor: "currentColor",
             }}
           >
             홈으로
           </Link>
         </div>
-      </main>
+        </main>
+      </>
     );
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 520, margin: "0 auto" }}>
+    <>
+      {globalPageStyle}
+      <main style={{ padding: 24, maxWidth: 520, margin: "0 auto", color: "#111827" }}>
       <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>주문 접수 완료</h1>
 
       <div style={{ marginTop: 10, color: "#444" }}>
@@ -213,7 +239,7 @@ function DonePageInner() {
           <p style={{ margin: 0, fontWeight: 850 }}>포장 주문</p>
         )}
 
-        {order.status === "canceled" ? (
+        {order.status === "cancelled" ? (
           <p style={{ marginTop: 8, color: "#b45309", fontWeight: 950 }}>
             * 이 주문은 취소되었습니다.
           </p>
@@ -282,12 +308,15 @@ function DonePageInner() {
             border: "1px solid #ccc",
             textDecoration: "none",
             fontWeight: 900,
+            color: "#111827",
+            WebkitTextFillColor: "currentColor",
           }}
         >
           홈으로
         </Link>
       </div>
-    </main>
+      </main>
+    </>
   );
 }
 export default function DonePagePage() {
