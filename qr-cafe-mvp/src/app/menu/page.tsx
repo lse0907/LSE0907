@@ -720,7 +720,20 @@ function MenuPageInner() {
           height: 100%;
           max-width: 760px;
           margin: 0 auto;
-          padding: 14px;
+          padding: 0 14px;
+        }
+        .stickyHead {
+          position: sticky;
+          top: 0;
+          z-index: 25;
+          background: rgba(246, 247, 249, 0.95);
+          backdrop-filter: blur(8px);
+          border-bottom: 1px solid var(--line);
+        }
+        .stickyInner {
+          max-width: 760px;
+          margin: 0 auto;
+          padding: 10px 12px 8px;
           display: grid;
           align-content: end;
         }
@@ -747,9 +760,9 @@ function MenuPageInner() {
         }
         .h1 {
           margin: 0;
-          color: #fff;
+          color: #111827;
           font-weight: 950;
-          font-size: 22px;
+          font-size: 19px;
           letter-spacing: -0.02em;
           text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
         }
@@ -1172,13 +1185,15 @@ function MenuPageInner() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="heroImg" src={headerImage} alt="hero" />
         <div className="overlay" style={{ background: overlayBg }} />
-        <div className="heroInner">
+        <div className="heroInner" />
+      </section>
+
+      <section className="stickyHead">
+        <div className="stickyInner">
           <div className="titleRow">
             <h1 className="h1">{profile.storeName || "메뉴"}</h1>
             <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
           </div>
-        </div>
-      </section>
 
       <section className="stickyHead">
         <div className="stickyInner">
