@@ -41,6 +41,9 @@ type OrderItem = {
   orderId?: string;
   displayNo?: string;
   packingChecked?: boolean;
+  categoryId?: string;
+  categoryName?: string;
+  categoryOrder?: number;
 };
 
 type OrderRecord = {
@@ -502,6 +505,48 @@ function StaffPageInner() {
     const itemRows = (Array.isArray(oiData) ? oiData : []) as DbOrderItemRow[];
     const orderItemIds = itemRows.map((x) => x.id);
 
+    const menuIds = Array.from(new Set(itemRows.map((x) => String(x.menu_id || "")).filter(Boolean)));
+    const menuCategoryMap = new Map<string, { categoryId: string; categoryName: string; categoryOrder: number }>();
+    if (menuIds.length) {
+      const { data: menuData, error: menuErr } = await supabase
+        .from("menu_items")
+        .select("id,category_id")
+        .eq("store_id", sid)
+        .in("id", menuIds);
+      if (menuErr) {
+        console.error("[staff] fetch menu_items(category) error:", menuErr.message);
+      } else {
+        const categoryIds = Array.from(new Set((Array.isArray(menuData) ? menuData : []).map((m: any) => String(m.category_id || "")).filter(Boolean)));
+        const categoryMap = new Map<string, { name: string; order: number }>();
+        if (categoryIds.length) {
+          const { data: catData, error: catErr } = await supabase
+            .from("menu_categories")
+            .select("id,name,sort_order")
+            .eq("store_id", sid)
+            .in("id", categoryIds);
+          if (catErr) {
+            console.error("[staff] fetch menu_categories error:", catErr.message);
+          } else {
+            for (const c of Array.isArray(catData) ? catData : []) {
+              categoryMap.set(String((c as any).id || ""), {
+                name: String((c as any).name || "").trim() || "미분류",
+                order: Number.isFinite(Number((c as any).sort_order)) ? Number((c as any).sort_order) : 9999,
+              });
+            }
+          }
+        }
+        for (const m of Array.isArray(menuData) ? menuData : []) {
+          const catId = String((m as any).category_id || "").trim();
+          const meta = categoryMap.get(catId) || { name: "미분류", order: 9999 };
+          menuCategoryMap.set(String((m as any).id || "").trim(), {
+            categoryId: catId,
+            categoryName: meta.name,
+            categoryOrder: meta.order,
+          });
+        }
+      }
+    }
+
     let optRows: DbOrderItemOptionRow[] = [];
     let packingMap = new Map<string, boolean>();
     if (orderItemIds.length) {
@@ -543,11 +588,13 @@ function StaffPageInner() {
       const unit = base + optionTotal;
       const lineTotal = unit * qty;
 
+      const menuId = String(it.menu_id ?? itemId);
+      const categoryMeta = menuCategoryMap.get(menuId) || { categoryId: "", categoryName: "미분류", categoryOrder: 9999 };
       const built: OrderItem = {
         id: itemId,
         orderId,
         displayNo: "",
-        menuId: String(it.menu_id ?? itemId),
+        menuId,
         name: String(it.name ?? ""),
         price: base,
         qty,
@@ -557,6 +604,9 @@ function StaffPageInner() {
         optionTotal,
         lineTotal,
         packingChecked: packingMap.get(itemId) || false,
+        categoryId: categoryMeta.categoryId,
+        categoryName: categoryMeta.categoryName,
+        categoryOrder: categoryMeta.categoryOrder,
       };
 
       if (!itemsByOrder.has(orderId)) itemsByOrder.set(orderId, []);
@@ -772,6 +822,8 @@ function StaffPageInner() {
       itemIds: string[];
       orderNos: string[];
       optionLabel: string;
+      categoryName: string;
+      categoryOrder: number;
     };
 
     const grouped = new Map<string, Grouped>();
@@ -806,6 +858,8 @@ function StaffPageInner() {
           itemIds: [],
           orderNos: [],
           optionLabel,
+          categoryName: it.categoryName || "미분류",
+          categoryOrder: Number.isFinite(Number(it.categoryOrder)) ? Number(it.categoryOrder) : 9999,
         });
       }
 
@@ -817,6 +871,8 @@ function StaffPageInner() {
 
     return [...grouped.values()].sort((a, b) => {
       if (a.status !== b.status) return a.status === "making" ? 1 : -1;
+      if (a.categoryOrder !== b.categoryOrder) return a.categoryOrder - b.categoryOrder;
+      if (a.categoryName !== b.categoryName) return a.categoryName.localeCompare(b.categoryName);
       if (a.batch !== b.batch) return a.batch - b.batch;
       return a.name.localeCompare(b.name);
     });
@@ -2302,39 +2358,58 @@ function StaffPageInner() {
                 <h3 className="sectionTitle">주문 내역</h3>
                 <div className="itemsScroll">
                   <div className="orderItemsBox">
-                    {selected.items.map((it, idx) => {
-                      const optionTotal = Number(it.optionTotal || 0);
-                      const unit = Number(it.price || 0) + optionTotal;
-                      const lineTotal =
-                        Number.isFinite(Number(it.lineTotal)) && it.lineTotal !== undefined
-                          ? Number(it.lineTotal)
-                          : unit * Number(it.qty || 0);
+                    {Object.entries(
+                      selected.items.reduce<Record<string, OrderItem[]>>((acc, it) => {
+                        const key = it.categoryName || "미분류";
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push(it);
+                        return acc;
+                      }, {})
+                    )
+                      .sort((a, b) => {
+                        const ao = Math.min(...a[1].map((it) => Number(it.categoryOrder ?? 9999)));
+                        const bo = Math.min(...b[1].map((it) => Number(it.categoryOrder ?? 9999)));
+                        if (ao !== bo) return ao - bo;
+                        return a[0].localeCompare(b[0]);
+                      })
+                      .map(([categoryName, rows]) => (
+                        <div key={categoryName} style={{ display: "grid", gap: 8 }}>
+                          <div className="muted" style={{ fontWeight: 900 }}>{categoryName}</div>
+                          {rows.map((it, idx) => {
+                            const optionTotal = Number(it.optionTotal || 0);
+                            const unit = Number(it.price || 0) + optionTotal;
+                            const lineTotal =
+                              Number.isFinite(Number(it.lineTotal)) && it.lineTotal !== undefined
+                                ? Number(it.lineTotal)
+                                : unit * Number(it.qty || 0);
 
-                      const optText = buildOptionText(it);
+                            const optText = buildOptionText(it);
 
-                      return (
-                        <div key={`${it.id}_${idx}`} className="orderItemLine">
-                          <div className="orderItemLineTop">
-                            <div>
-                              <div className="orderItemName">{it.name} x{it.qty}</div>
-                              {optText ? (
-                                <div className="optWrap">
-                                  <div className="optLine">옵션: {optText}</div>
+                            return (
+                              <div key={`${it.id}_${idx}`} className="orderItemLine">
+                                <div className="orderItemLineTop">
+                                  <div>
+                                    <div className="orderItemName">{it.name} x{it.qty}</div>
+                                    {optText ? (
+                                      <div className="optWrap">
+                                        <div className="optLine">옵션: {optText}</div>
+                                      </div>
+                                    ) : null}
+                                    <div className="optMuted" style={{ marginTop: 4 }}>
+                                      기본 {fmt(it.price)}원
+                                      {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
+                                      {" · "}
+                                      1개당 {fmt(unit)}원
+                                    </div>
+                                  </div>
+
+                                  <div className="orderItemPrice">{fmt(lineTotal)}원</div>
                                 </div>
-                              ) : null}
-                              <div className="optMuted" style={{ marginTop: 4 }}>
-                                기본 {fmt(it.price)}원
-                                {optionTotal ? ` + 옵션 ${fmt(optionTotal)}원` : ""}
-                                {" · "}
-                                1개당 {fmt(unit)}원
                               </div>
-                            </div>
-
-                            <div className="orderItemPrice">{fmt(lineTotal)}원</div>
-                          </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      ))}
                   </div>
                 </div>
               </div>
