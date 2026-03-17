@@ -154,14 +154,6 @@ function AdminPageInner() {
     setStoresLoaded(true);
   };
 
-  const fmtDate = (iso: string | null | undefined) => {
-    const raw = String(iso || "").trim();
-    if (!raw) return "-";
-    const t = new Date(raw).getTime();
-    if (!Number.isFinite(t)) return raw;
-    return new Date(t).toLocaleDateString("ko-KR");
-  };
-
   const calcPaidRemainingDays = (paidUntil: string | null | undefined) => {
     const raw = String(paidUntil || "").trim();
     if (!raw) return null;
@@ -189,7 +181,7 @@ function AdminPageInner() {
         .eq("store_id", storeId)
         .gte("order_date", rangeStart)
         .lte("order_date", rangeEnd)
-        .neq("status", "canceled");
+        .neq("status", "cancelled");
 
       if (error) throw error;
 
@@ -358,10 +350,10 @@ function AdminPageInner() {
                   const remaining = calcRemainingDays(s.created_at);
                   const billing = billingByStore[s.store_id];
                   const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
-                  const trialText =
-                    remaining === null
-                      ? `무료 사용기간 ${FREE_TRIAL_DAYS}일`
-                      : `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remaining}일`;
+                  const remainingText = (days: number | null) => (days == null ? "-" : `${days}일`);
+                  const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
+                  const remainingPeriod =
+                    billing?.basePlanStatus === "active" ? remainingText(paidRemaining) : remainingText(remaining);
                   return (
                     <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -374,14 +366,8 @@ function AdminPageInner() {
                           {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
                         </div>
                         <div className="muted">권한: {role}</div>
-                        {billing?.basePlanStatus === "active" ? (
-                          <>
-                            <div className="muted">유료 구독: active · 만료 {fmtDate(billing.paidUntil)}</div>
-                            <div className="muted">최근 결제일: {fmtDate(billing.lastPaidAt)} · 남은 {paidRemaining == null ? "-" : `${paidRemaining}일`}</div>
-                          </>
-                        ) : (
-                          <div className="muted">{trialText}</div>
-                        )}
+                        <div className="muted">구독 상태: {subscriptionStatus}</div>
+                        <div className="muted">남은 기간: {remainingPeriod}</div>
                       </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                         {on ? <div className="pill pillOn">선택됨</div> : null}
@@ -395,7 +381,10 @@ function AdminPageInner() {
                   );
                 })}
               </div>
-              <p className="hint" style={{ marginTop: 6 }}>구독 사용 기간이 만료되면 주문/직원/관리 기능 사용이 제한될 수 있습니다. 만료 전에 구독결제를 진행해 주세요.</p>
+              <p className="hint" style={{ marginTop: 6 }}>
+                남은사용기간이 만료 되면 기능 사용이 제한 됩니다.<br />
+                만료 전에 결재를 진행해 주세요.
+              </p>
             </>
           )}
         </section>
@@ -456,6 +445,9 @@ function AdminPageInner() {
 
         {activeSection === "ops" ? (
           <div className="subPanel">
+            <button className="subBtn" onClick={() => go("/admin/categories")}>
+              카테고리 관리
+            </button>
             <button className="subBtn" onClick={() => go("/admin/menu")}>
               메뉴관리
             </button>
@@ -512,6 +504,7 @@ function AdminPageInner() {
 
 const baseCss = `
 :root {
+  color-scheme: light;
   --bg: #f6f7f9;
   --card: #ffffff;
   --text: #111827;
@@ -545,9 +538,14 @@ body {
 }
 .topActions{
   display:flex;
-  gap:8px;
+  gap:5px;
   flex-wrap:wrap;
   justify-content:flex-end;
+}
+.topActions .btn{
+  padding:9px 10px;
+  border-radius:10px;
+  font-size:13px;
 }
 .h1{
   margin:0;
@@ -640,6 +638,8 @@ body {
 .btn{
   border:1px solid var(--line);
   background:#fff;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
   padding:10px 14px;
   border-radius:12px;
   cursor:pointer;
@@ -654,7 +654,7 @@ body {
 .btnGroup{
   display:grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap:8px;
+  gap:6px;
   margin-top:12px;
 }
 .btnPrimary{
@@ -718,8 +718,10 @@ body {
   text-align:center;
   border:1px solid var(--line);
   background:#fff;
-  border-radius:14px;
-  padding:10px 8px;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
+  border-radius:12px;
+  padding:9px 6px;
   cursor:pointer;
 }
 .cardBtn:disabled{
@@ -736,8 +738,10 @@ body {
 }
 .cardBtnTitle{
   margin:0;
-  font-size:16px;
+  font-size:14px;
   font-weight:950;
+  line-height:1.1;
+  white-space:nowrap;
 }
 .subPanel{
   margin-top:12px;
@@ -747,6 +751,8 @@ body {
 .subBtn{
   border:1px solid var(--line);
   background:#fff;
+  color:var(--text);
+  -webkit-text-fill-color: currentColor;
   padding:12px 14px;
   border-radius:12px;
   cursor:pointer;
@@ -797,17 +803,17 @@ body {
   .topbar{ align-items:center; }
   .topActions{
     flex-wrap:nowrap;
-    gap:6px;
+    gap:4px;
   }
   .topActions .btn{
-    padding:8px 10px;
+    padding:8px 8px;
     font-size:12px;
     white-space:nowrap;
   }
-  .cardBtnTitle{ font-size:14px; }
+  .cardBtnTitle{ font-size:12px; }
   .btnGroup{
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap:6px;
+    gap:4px;
   }
   .storeList{
     max-height: min(42vh, 360px);

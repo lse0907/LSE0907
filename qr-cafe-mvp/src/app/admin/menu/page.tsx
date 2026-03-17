@@ -16,6 +16,15 @@ type MenuItem = {
   is_sold_out?: boolean | null;
   option_group_ids?: string[] | null;
   sort_order?: number | null;
+  category_id?: string | null;
+};
+
+type MenuCategory = {
+  id: string;
+  store_id: string;
+  name: string;
+  sort_order?: number | null;
+  is_active?: boolean | null;
 };
 
 type OptionGroup = {
@@ -52,6 +61,7 @@ type MenuDraft = {
   isSoldOut: boolean;
   optionGroupIds: string[];
   sortOrder: string;
+  categoryId: string;
   optionPriceByItem: Record<string, string>;
 };
 
@@ -87,6 +97,7 @@ const emptyDraft: MenuDraft = {
   isSoldOut: false,
   optionGroupIds: [],
   sortOrder: "",
+  categoryId: "",
   optionPriceByItem: {},
 };
 
@@ -98,6 +109,7 @@ function AdminMenuPageInner() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [optionItems, setOptionItems] = useState<OptionItem[]>([]);
   const [optionPrices, setOptionPrices] = useState<MenuOptionPrice[]>([]);
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -149,12 +161,21 @@ function AdminMenuPageInner() {
 
       const menuRes = await supabase
         .from("menu_items")
-        .select("id,store_id,name,price,image,is_sold_out,option_group_ids,sort_order")
+        .select("id,store_id,name,price,image,is_sold_out,option_group_ids,sort_order,category_id")
         .eq("store_id", storeId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
 
       if (menuRes.error) throw menuRes.error;
+
+      const categoryRes = await supabase
+        .from("menu_categories")
+        .select("id,store_id,name,sort_order,is_active")
+        .eq("store_id", storeId)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (categoryRes.error) throw categoryRes.error;
 
       let groupData: OptionGroup[] = [];
       const groupRes = await supabase
@@ -202,6 +223,7 @@ function AdminMenuPageInner() {
       setGroups(groupData);
       setOptionItems((itemRes.data || []) as OptionItem[]);
       setOptionPrices((priceRes.data || []) as MenuOptionPrice[]);
+      setCategories((categoryRes.data || []) as MenuCategory[]);
 
       setSelectedId((prev) => {
         if (prev && (menuRes.data || []).some((x) => x.id === prev)) return prev;
@@ -237,6 +259,7 @@ function AdminMenuPageInner() {
       isSoldOut: Boolean(found.is_sold_out),
       optionGroupIds: Array.isArray(found.option_group_ids) ? found.option_group_ids : [],
       sortOrder: found.sort_order != null ? String(found.sort_order) : "",
+      categoryId: String(found.category_id || ""),
       optionPriceByItem: optionPrices
         .filter((row) => row.menu_id === found.id)
         .reduce<Record<string, string>>((acc, row) => {
@@ -323,6 +346,7 @@ function AdminMenuPageInner() {
         is_sold_out: draft.isSoldOut,
         option_group_ids: filteredGroups,
         sort_order: draft.sortOrder ? toInt(draft.sortOrder, 0) : null,
+        category_id: draft.categoryId || null,
       };
 
       const exists = items.some((x) => x.id === id);
@@ -1423,6 +1447,21 @@ function AdminMenuPageInner() {
                   placeholder="예: 10"
                   disabled={saving || loading}
                 />
+              </div>
+
+              <div className="field">
+                <div className="label">카테고리</div>
+                <select
+                  className="input"
+                  value={draft.categoryId}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, categoryId: e.target.value }))}
+                  disabled={saving || loading}
+                >
+                  <option value="">미분류</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="field menuIdInput">

@@ -7,7 +7,7 @@ import { getCurrentStoreId } from "@/app/lib/currentStore";
 import { supabase } from "@/app/lib/supabaseClient";
 
 type OrderMode = "dine-in" | "takeout";
-type OrderStatus = "new" | "making" | "ready" | "done" | "canceled";
+type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 
 type OrderRecord = {
   id: string;
@@ -93,7 +93,7 @@ function summarize(orders: OrderRecord[]): Summary {
 }
 
 function isCanceled(o: OrderRecord) {
-  return o.status === "canceled";
+  return o.status === "cancelled";
 }
 
 function inRange(orderDate: string, startYmd: string, endYmd: string) {
@@ -121,7 +121,10 @@ function csvEscape(v: string) {
 
 function normalizeStatus(v: any): OrderStatus {
   const s = String(v || "").trim();
-  if (s === "making" || s === "ready" || s === "done" || s === "canceled") return s;
+  if (s === "checked" || s === "making" || s === "ready_for_packing" || s === "completed" || s === "cancelled") return s;
+  if (s === "ready") return "ready_for_packing";
+  if (s === "done") return "completed";
+  if (s === "canceled") return "cancelled";
   return "new";
 }
 
@@ -244,7 +247,7 @@ function AdminstatsPageInner() {
     setErrMsg("");
 
     try {
-      // ✅ orders: store_id + 기간 + canceled 제외
+      // ✅ orders: store_id + 기간 + cancelled 제외
       const { data: oData, error: oErr } = await supabase
         .from("orders")
         .select(
@@ -253,7 +256,7 @@ function AdminstatsPageInner() {
         .eq("store_id", storeId)
         .gte("order_date", start)
         .lte("order_date", end)
-        .neq("status", "canceled")
+        .neq("status", "cancelled")
         .order("created_at", { ascending: true });
 
       if (oErr) throw new Error(`[orders] ${oErr.message}`);
@@ -800,7 +803,7 @@ function AdminstatsPageInner() {
             store: {storeId || "—"} · {modeLabel}
           </span>
         </div>
-        <p className="desc">* 취소 주문(canceled)은 통계/CSV/리스트에서 제외됩니다.</p>
+        <p className="desc">* 취소 주문(cancelled)은 통계/CSV/리스트에서 제외됩니다.</p>
 
         <div className="btnRow">
           <a className="btn" href="/admin">
