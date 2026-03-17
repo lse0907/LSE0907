@@ -41,6 +41,10 @@ function CategoriesPageInner() {
   const [sortOrder, setSortOrder] = useState("");
   const [msg, setMsg] = useState("");
 
+  const [editId, setEditId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editSortOrder, setEditSortOrder] = useState("");
+
   useEffect(() => {
     const queryStore = (sp.get("store") || "").trim();
     const saved = (getCurrentStoreId() || "").trim();
@@ -115,6 +119,46 @@ function CategoriesPageInner() {
     setSaving(false);
   };
 
+  const startEdit = (cat: MenuCategory) => {
+    setEditId(cat.id);
+    setEditName(cat.name);
+    setEditSortOrder(cat.sort_order == null ? "" : String(cat.sort_order));
+    setMsg("");
+  };
+
+  const cancelEdit = () => {
+    setEditId("");
+    setEditName("");
+    setEditSortOrder("");
+  };
+
+  const onSaveEdit = async (cat: MenuCategory) => {
+    if (!storeId || !editName.trim()) {
+      setMsg("카테고리명을 입력해 주세요.");
+      return;
+    }
+    setSaving(true);
+    setMsg("");
+    const { error } = await supabase
+      .from("menu_categories")
+      .update({
+        name: editName.trim(),
+        sort_order: editSortOrder.trim() ? toInt(editSortOrder, 0) : null,
+      })
+      .eq("id", cat.id)
+      .eq("store_id", storeId);
+
+    if (error) {
+      setMsg(error.message);
+      setSaving(false);
+      return;
+    }
+
+    cancelEdit();
+    await refresh();
+    setSaving(false);
+  };
+
   const onDisable = async (cat: MenuCategory) => {
     const { error } = await supabase
       .from("menu_categories")
@@ -181,24 +225,62 @@ function CategoriesPageInner() {
           <button className="btn btnPrimary" onClick={onCreate} disabled={saving || loading || !name.trim()}>생성</button>
         </div>
         <p className="muted">삭제 정책: 재할당 강제(삭제 시 첫 번째 활성 카테고리로 메뉴 이동)</p>
+        <p className="muted">생성 후에도 카테고리명/순서는 수정 가능합니다.</p>
         {msg ? <div style={{ color: "#b91c1c", fontWeight: 900 }}>{msg}</div> : null}
       </section>
 
       <section className="card">
         {loading ? <p className="muted">불러오는 중...</p> : cats.length === 0 ? <p className="muted">등록된 카테고리가 없습니다.</p> : (
           <div style={{ display: "grid", gap: 8 }}>
-            {cats.map((cat) => (
-              <div key={cat.id} className="row" style={{ justifyContent: "space-between", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
-                <div>
-                  <div className="name">{cat.name} {cat.is_active === false ? "(비활성)" : ""}</div>
-                  <div className="muted">순서 {cat.sort_order ?? "-"} · 메뉴 {countByCategory.get(cat.id) || 0}개</div>
+            {cats.map((cat) => {
+              const isEditing = editId === cat.id;
+              return (
+                <div key={cat.id} className="row" style={{ justifyContent: "space-between", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {isEditing ? (
+                      <>
+                        <input
+                          className="input"
+                          placeholder="카테고리명"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          disabled={saving || loading}
+                        />
+                        <input
+                          className="input"
+                          inputMode="numeric"
+                          style={{ width: 120 }}
+                          placeholder="순서"
+                          value={editSortOrder}
+                          onChange={(e) => setEditSortOrder(e.target.value)}
+                          disabled={saving || loading}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div className="name">{cat.name} {cat.is_active === false ? "(비활성)" : ""}</div>
+                        <div className="muted">순서 {cat.sort_order ?? "-"} · 메뉴 {countByCategory.get(cat.id) || 0}개</div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="row">
+                    {isEditing ? (
+                      <>
+                        <button className="btn btnPrimary" onClick={() => onSaveEdit(cat)} disabled={saving || loading || !editName.trim()}>저장</button>
+                        <button className="btn" onClick={cancelEdit} disabled={saving || loading}>취소</button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="btn" onClick={() => startEdit(cat)} disabled={saving || loading}>수정</button>
+                        <button className="btn" onClick={() => onDisable(cat)} disabled={saving || loading || cat.is_active === false}>비활성화</button>
+                        <button className="btn" onClick={() => onDeleteWithReassign(cat)} disabled={saving || loading}>삭제(재할당)</button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="row">
-                  <button className="btn" onClick={() => onDisable(cat)} disabled={saving || loading || cat.is_active === false}>비활성화</button>
-                  <button className="btn" onClick={() => onDeleteWithReassign(cat)} disabled={saving || loading}>삭제(재할당)</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
