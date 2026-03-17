@@ -323,7 +323,7 @@ function AdminBillingPageInner() {
       <header className="topbar">
         <h1 className="h1">PG 설정</h1>
         <button className="btn" type="button" onClick={() => router.back()}>
-          뒤로가기
+          관리자 홈
         </button>
       </header>
 
