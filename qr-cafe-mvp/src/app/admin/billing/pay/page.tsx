@@ -266,7 +266,7 @@ function AdminBillingPayPageInner() {
         <h1 className="h1">매장 결제/구독</h1>
         <div className="row">
           <button className="btn" type="button" onClick={() => router.push(`/admin/billing?store=${encodeURIComponent(storeId)}`)}>
-            PG 설
+            PG 설정
           </button>
           <button className="btn" type="button" onClick={() => router.back()}>
             관리자 홈
