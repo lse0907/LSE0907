@@ -258,7 +258,7 @@ function MenuPageInner() {
     const sorted = [...(menuItems || [])].sort((a: any, b: any) => {
       const ao = Number((a as any).sortOrder ?? 999999);
       const bo = Number((b as any).sortOrder ?? 999999);
-      if (ao !== bo) return ao - bo;
+            if (ao !== bo) return ao - bo;
       return String((a as any).name || "").localeCompare(String((b as any).name || ""));
     });
     return sorted;
@@ -518,7 +518,7 @@ function MenuPageInner() {
       }
 
       const othersTotal = Object.entries(groupMap)
-        .filter(([id]) => id !== itemId)
+              .filter(([id]) => id !== itemId)
         .reduce((sum, [, q]) => sum + Math.max(0, Number(q || 0)), 0);
 
       const allowed = Math.max(0, Math.min(nextQty, Math.max(0, max - othersTotal)));
@@ -727,20 +727,7 @@ function MenuPageInner() {
           height: 100%;
           max-width: 760px;
           margin: 0 auto;
-          padding: 0 14px;
-        }
-        .stickyHead {
-          position: sticky;
-          top: 0;
-          z-index: 25;
-          background: rgba(246, 247, 249, 0.95);
-          backdrop-filter: blur(8px);
-          border-bottom: 1px solid var(--line);
-        }
-        .stickyInner {
-          max-width: 760px;
-          margin: 0 auto;
-          padding: 10px 12px 8px;
+          padding: 14px;
           display: grid;
           align-content: end;
         }
@@ -764,9 +751,9 @@ function MenuPageInner() {
         }
         .h1 {
           margin: 0;
-          color: #111827;
+          color: #fff;
           font-weight: 950;
-          font-size: 19px;
+          font-size: 22px;
           letter-spacing: -0.02em;
           text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
         }
@@ -791,7 +778,7 @@ function MenuPageInner() {
           gap:8px;
           overflow-x:auto;
           padding-bottom:2px;
-        }
+                  }
         .catTabs::-webkit-scrollbar {
           display: none;
         }
@@ -1051,7 +1038,7 @@ function MenuPageInner() {
           font-weight: 850;
           font-size: 12px;
         }
-        .iList {
+                  .iList {
           margin-top: 10px;
           display: grid;
           gap: 8px;
@@ -1311,8 +1298,7 @@ function MenuPageInner() {
           )}
         </div>
       </section>
-
-      {totals.totalCount > 0 ? (
+            {totals.totalCount > 0 ? (
         <section className="bottomBar">
           <div className="bottomInner">
             <div className="sumText">
