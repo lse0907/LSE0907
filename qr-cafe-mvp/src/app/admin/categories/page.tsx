@@ -214,7 +214,7 @@ function CategoriesPageInner() {
       <header className="row" style={{ justifyContent: "space-between" }}>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 950 }}>카테고리 관리</h1>
         <div className="row">
-          <button className="btn" onClick={() => router.push(storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")}>관리자</button>
+          <button className="btn" onClick={() => router.push(storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")}>관리자 </button>
         </div>
       </header>
 
