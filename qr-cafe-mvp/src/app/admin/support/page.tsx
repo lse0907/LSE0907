@@ -114,18 +114,28 @@ function AdminSupportInner() {
 
   return (
     <main className="wrap">
+      <style jsx global>{`
+        :root {
+          color-scheme: light;
+        }
+
+        body {
+          background: #f6f7f9;
+          color: #111827;
+        }
+      `}</style>
       <style jsx>{`
-        .wrap { max-width: 920px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+        .wrap { max-width: 920px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; color:#111827; }
         .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .h1 { margin: 0; font-size: 22px; font-weight: 900; }
         .card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:14px; display:grid; gap:10px; }
         .row { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
-        .btn { border:1px solid #d1d5db; background:#fff; border-radius:10px; padding:9px 12px; font-weight:800; cursor:pointer; }
+        .btn { border:1px solid #d1d5db; background:#fff; color:#111827; -webkit-text-fill-color: currentColor; border-radius:10px; padding:9px 12px; font-weight:800; cursor:pointer; }
         .btn.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
         .input, .textarea, .select { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:10px; font-size:14px; }
         .textarea { min-height:90px; resize: vertical; }
-        .muted { color:#6b7280; margin:0; font-size:13px; }
-        .ticket { border:1px solid #eef2f7; border-radius:12px; padding:10px; display:grid; gap:6px; }
+        .muted { color:#4b5563; margin:0; font-size:13px; }
+        .ticket { border:1px solid #e5e7eb; border-radius:12px; padding:10px; display:grid; gap:6px; background:#fff; }
         .pill { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
       `}</style>
 
