@@ -61,6 +61,12 @@ type OptionData = {
   items: OptionItem[];
 };
 
+type MenuCategory = {
+  id: string;
+  name: string;
+  sortOrder: number;
+};
+
 function uid(prefix = "line") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random()
     .toString(16)
@@ -117,6 +123,8 @@ function MenuPageInner() {
   });
   const [menuOptionPrices, setMenuOptionPrices] = useState<MenuOptionPrice[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(true);
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [activeCategoryId, setActiveCategoryId] = useState("all");
 
   const [cartLines, setCartLines] = useState<CartLine[]>([]);
 
@@ -186,10 +194,38 @@ function MenuPageInner() {
     setOptionsLoading(false);
   };
 
+
+  const fetchCategoriesFromDb = async () => {
+    const { data, error } = await supabase
+      .from("menu_categories")
+      .select("id,name,sort_order,is_active,store_id")
+      .eq("store_id", storeId)
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("[menu] fetch menu_categories error:", error.message);
+      setCategories([]);
+      setActiveCategoryId("all");
+      return;
+    }
+
+    const rows = (Array.isArray(data) ? data : []).map((row: any) => ({
+      id: toStr(row.id).trim(),
+      name: toStr(row.name).trim(),
+      sortOrder: Number.isFinite(Number(row.sort_order)) ? toInt(row.sort_order, 0) : 0,
+    })).filter((row) => row.id && row.name);
+
+    setCategories(rows);
+  };
+
   // ✅ storeId가 바뀌면 옵션/메뉴를 다시 불러오고, 장바구니도 꼬임 방지로 초기화
   useEffect(() => {
     fetchOptionsFromDb();
+    fetchCategoriesFromDb();
     refreshMenu();
+    setActiveCategoryId("all");
     setCartLines([]); // ✅ 매장 바뀌면 카트 초기화 (교차 주문 방지)
     setOptOpen(false);
     setOptTarget(null);
@@ -198,6 +234,7 @@ function MenuPageInner() {
 
     const onFocus = () => {
       fetchOptionsFromDb();
+      fetchCategoriesFromDb();
       refreshMenu();
     };
     window.addEventListener("focus", onFocus);
@@ -207,9 +244,15 @@ function MenuPageInner() {
   }, [storeId]);
 
   const list = useMemo(() => {
-    const sorted = [...(menuItems || [])];
-    return sorted;
-  }, [menuItems]);
+    const sorted = [...(menuItems || [])].sort((a: any, b: any) => {
+      const ao = Number((a as any).sortOrder ?? 999999);
+      const bo = Number((b as any).sortOrder ?? 999999);
+      if (ao !== bo) return ao - bo;
+      return String((a as any).name || "").localeCompare(String((b as any).name || ""));
+    });
+    if (activeCategoryId === "all") return sorted;
+    return sorted.filter((m: any) => String((m as any).categoryId || "") === activeCategoryId);
+  }, [menuItems, activeCategoryId]);
 
   const headerImage = profile.mainImage || "/hero.jpg";
   const headerOverlayStrength = Math.max(
@@ -534,6 +577,7 @@ function MenuPageInner() {
     <main className="wrap">
       <style jsx global>{`
         :root {
+          color-scheme: light;
           --bg: #f6f7f9;
           --card: #ffffff;
           --text: #111827;
@@ -611,6 +655,28 @@ function MenuPageInner() {
           margin: 0 auto;
           display: grid;
           gap: 12px;
+        }
+        .catTabs {
+          display:flex;
+          gap:8px;
+          overflow-x:auto;
+          padding-bottom:2px;
+        }
+        .catTab {
+          white-space:nowrap;
+          border:1px solid var(--line);
+          background:#fff;
+          color:var(--text);
+          -webkit-text-fill-color: currentColor;
+          border-radius:999px;
+          padding:8px 12px;
+          font-weight:900;
+          cursor:pointer;
+        }
+        .catTabOn {
+          background:var(--brand);
+          border-color:var(--brand);
+          color:#fff;
         }
 
         .menuCard {
@@ -690,6 +756,8 @@ function MenuPageInner() {
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           font-weight: 950;
           cursor: pointer;
         }
@@ -709,6 +777,8 @@ function MenuPageInner() {
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           font-weight: 950;
           cursor: pointer;
           white-space: nowrap;
@@ -808,6 +878,8 @@ function MenuPageInner() {
         .xbtn {
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           border-radius: 12px;
           padding: 8px 10px;
           font-weight: 950;
@@ -900,6 +972,8 @@ function MenuPageInner() {
           border-radius: 999px;
           border: 1px solid #cbd5e1;
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           font-weight: 900;
           cursor: pointer;
         }
@@ -979,6 +1053,16 @@ function MenuPageInner() {
 
       <section className="content">
         <div className="contentInner">
+          {!menuLoading && !optionsLoading ? (
+            <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
+              <button className={`catTab ${activeCategoryId === "all" ? "catTabOn" : ""}`} onClick={() => setActiveCategoryId("all")}>전체</button>
+              {categories.map((cat) => (
+                <button key={cat.id} className={`catTab ${activeCategoryId === cat.id ? "catTabOn" : ""}`} onClick={() => setActiveCategoryId(cat.id)}>
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {menuLoading || optionsLoading ? (
             <div style={{ color: "#6b7280", fontWeight: 850, padding: 12 }}>
               데이터를 불러오는 중...

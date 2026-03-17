@@ -12,6 +12,7 @@ export type MenuItem = {
   isSoldOut?: boolean;
   optionGroupIds?: string[];
   sortOrder?: number;
+  categoryId?: string | null;
 };
 
 export const MENU_UPDATED_EVENT = "qrCafeMenuItemsUpdated";
@@ -70,6 +71,7 @@ function sanitizeItem(x: any): MenuItem | null {
     isSoldOut,
     optionGroupIds,
     sortOrder,
+    categoryId: typeof (x as any).category_id === "string" ? (x as any).category_id.trim() : null,
   };
 }
 
@@ -85,7 +87,7 @@ export async function fetchMenuItemsFromDb(storeId?: string): Promise<MenuItem[]
 
   const { data, error } = await supabase
     .from("menu_items")
-    .select("id,name,price,image,is_sold_out,option_group_ids,sort_order,store_id,created_at")
+    .select("id,name,price,image,is_sold_out,option_group_ids,sort_order,category_id,store_id,created_at")
     .eq("store_id", sid)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
