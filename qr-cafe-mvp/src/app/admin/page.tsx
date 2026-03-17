@@ -448,6 +448,9 @@ function AdminPageInner() {
 
         {activeSection === "ops" ? (
           <div className="subPanel">
+            <button className="subBtn" onClick={() => go("/admin/categories")}>
+              카테고리 관리
+            </button>
             <button className="subBtn" onClick={() => go("/admin/menu")}>
               메뉴관리
             </button>
