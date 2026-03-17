@@ -339,7 +339,7 @@ function MenuPageInner() {
     if (selectedCategoryId === "all") return;
     const el = menuContentRef.current;
     if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY - 108;
+    const top = el.getBoundingClientRect().top + window.scrollY - 220;
     window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
   }, [selectedCategoryId]);
 
@@ -698,6 +698,13 @@ function MenuPageInner() {
           padding-bottom: 92px; /* 하단 고정바 공간 */
         }
 
+        .topSticky {
+          position: sticky;
+          top: 0;
+          z-index: 50;
+          background: var(--bg);
+        }
+
         .hero {
           position: relative;
           height: 144px;
@@ -738,9 +745,6 @@ function MenuPageInner() {
           align-content: end;
         }
         .stickyHead {
-          position: sticky;
-          top: 0;
-          z-index: 40;
           background: rgba(246, 247, 249, 0.95);
           backdrop-filter: blur(8px);
           border-bottom: 1px solid var(--line);
@@ -773,13 +777,6 @@ function MenuPageInner() {
           font-size: 12px;
           text-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
         }
-        .stickyTitle {
-          margin: 0;
-          font-size: 13px;
-          color: #4b5563;
-          font-weight: 900;
-        }
-
         .content {
           padding: 10px 12px 28px;
         }
@@ -1181,52 +1178,50 @@ function MenuPageInner() {
         }
       `}</style>
 
-      <section className="hero">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="heroImg" src={headerImage} alt="hero" />
-        <div className="overlay" style={{ background: overlayBg }} />
-        <div className="heroInner" />
-      </section>
-
-      <section className="stickyHead">
-        <div className="stickyInner">
-          <div className="titleRow">
-            <h1 className="h1">{profile.storeName || "메뉴"}</h1>
-            <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
+      <div className="topSticky">
+        <section className="hero">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="heroImg" src={headerImage} alt="hero" />
+          <div className="overlay" style={{ background: overlayBg }} />
+          <div className="heroInner">
+            <div className="titleRow">
+              <h1 className="h1">{profile.storeName || "메뉴"}</h1>
+              <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
+            </div>
           </div>
+        </section>
 
-      <section className="stickyHead">
-        <div className="stickyInner">
-          <p className="stickyTitle">{profile.storeName || "메뉴"}</p>
-
-          {!menuLoading && !optionsLoading ? (
-            <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
-              <button
-                className={`catTab ${highlightedCategoryId === "all" ? "catTabOn" : ""}`}
-                onClick={() => {
-                  setSelectedCategoryId("all");
-                  setScrollCategoryId("all");
-                  scrollToCategory("all");
-                }}
-              >
-                전체
-              </button>
-              {categories.map((cat) => (
+        <section className="stickyHead">
+          <div className="stickyInner">
+            {!menuLoading && !optionsLoading ? (
+              <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
                 <button
-                  key={cat.id}
-                  className={`catTab ${highlightedCategoryId === cat.id ? "catTabOn" : ""}`}
+                  className={`catTab ${highlightedCategoryId === "all" ? "catTabOn" : ""}`}
                   onClick={() => {
-                    setSelectedCategoryId(cat.id);
-                    setScrollCategoryId(cat.id);
+                    setSelectedCategoryId("all");
+                    setScrollCategoryId("all");
+                    scrollToCategory("all");
                   }}
                 >
-                  {cat.name}
+                  전체
                 </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      </section>
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    className={`catTab ${highlightedCategoryId === cat.id ? "catTabOn" : ""}`}
+                    onClick={() => {
+                      setSelectedCategoryId(cat.id);
+                      setScrollCategoryId(cat.id);
+                    }}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </div>
 
       <section className="content">
         <div className="contentInner" ref={menuContentRef}>
