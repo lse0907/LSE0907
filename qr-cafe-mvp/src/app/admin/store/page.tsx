@@ -737,7 +737,7 @@ function AdminstorePageInner() {
             type="button"
             onClick={() => router.push(`/admin?store=${encodeURIComponent(storeId)}`)}
           >
-            관리자 화면
+            관리자 홈
           </button>
         </div>
       </header>

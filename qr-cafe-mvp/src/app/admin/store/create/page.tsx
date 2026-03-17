@@ -543,7 +543,7 @@ export default function AdminStoreCreatePage() {
           <p className="sub">필수 정보만 입력하세요.</p>
         </div>
         <button className="btn" type="button" onClick={() => router.back()}>
-          뒤로가기
+          관리자 홈
         </button>
       </header>
 

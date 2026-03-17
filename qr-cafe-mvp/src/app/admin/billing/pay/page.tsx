@@ -269,7 +269,7 @@ function AdminBillingPayPageInner() {
             설정으로 이동
           </button>
           <button className="btn" type="button" onClick={() => router.back()}>
-            뒤로가기
+            관리자 홈
           </button>
         </div>
       </header>

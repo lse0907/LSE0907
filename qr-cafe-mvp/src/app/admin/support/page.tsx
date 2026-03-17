@@ -142,7 +142,7 @@ function AdminSupportInner() {
       <header className="top">
         <h1 className="h1">지원센터</h1>
         <div className="row">
-          <button className="btn" onClick={() => router.back()}>뒤로가기</button>
+          <button className="btn" onClick={() => router.back()}>관리자 </button>
         </div>
       </header>
 
