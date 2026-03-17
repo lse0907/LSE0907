@@ -133,6 +133,7 @@ function MenuPageInner() {
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [scrollCategoryId, setScrollCategoryId] = useState("all");
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const menuContentRef = useRef<HTMLDivElement | null>(null);
 
   const [cartLines, setCartLines] = useState<CartLine[]>([]);
 
@@ -333,6 +334,14 @@ function MenuPageInner() {
 
     return () => observer.disconnect();
   }, [categories, menuSections, selectedCategoryId]);
+
+  useEffect(() => {
+    if (selectedCategoryId === "all") return;
+    const el = menuContentRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 108;
+    window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+  }, [selectedCategoryId]);
 
   const scrollToCategory = (categoryId: string) => {
     if (categoryId === "all") {
@@ -686,8 +695,6 @@ function MenuPageInner() {
       <style jsx>{`
         .wrap {
           min-height: 100vh;
-          display: grid;
-          grid-template-rows: auto 1fr;
           padding-bottom: 92px; /* 하단 고정바 공간 */
         }
 
@@ -728,6 +735,21 @@ function MenuPageInner() {
           margin: 0 auto;
           padding: 10px 12px 8px;
           display: grid;
+          align-content: end;
+        }
+        .stickyHead {
+          position: sticky;
+          top: 0;
+          z-index: 40;
+          background: rgba(246, 247, 249, 0.95);
+          backdrop-filter: blur(8px);
+          border-bottom: 1px solid var(--line);
+        }
+        .stickyInner {
+          max-width: 760px;
+          margin: 0 auto;
+          padding: 10px 12px 8px;
+          display: grid;
           gap: 8px;
         }
         .titleRow {
@@ -742,12 +764,20 @@ function MenuPageInner() {
           font-weight: 950;
           font-size: 19px;
           letter-spacing: -0.02em;
+          text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
         }
         .sub {
           margin: 0;
-          color: #6b7280;
+          color: rgba(255, 255, 255, 0.9);
           font-weight: 850;
           font-size: 12px;
+          text-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
+        }
+        .stickyTitle {
+          margin: 0;
+          font-size: 13px;
+          color: #4b5563;
+          font-weight: 900;
         }
 
         .content {
@@ -1165,6 +1195,10 @@ function MenuPageInner() {
             <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
           </div>
 
+      <section className="stickyHead">
+        <div className="stickyInner">
+          <p className="stickyTitle">{profile.storeName || "메뉴"}</p>
+
           {!menuLoading && !optionsLoading ? (
             <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
               <button
@@ -1184,9 +1218,6 @@ function MenuPageInner() {
                   onClick={() => {
                     setSelectedCategoryId(cat.id);
                     setScrollCategoryId(cat.id);
-                    if (selectedCategoryId === "all") {
-                      setTimeout(() => scrollToCategory(cat.id), 0);
-                    }
                   }}
                 >
                   {cat.name}
@@ -1198,7 +1229,7 @@ function MenuPageInner() {
       </section>
 
       <section className="content">
-        <div className="contentInner">
+        <div className="contentInner" ref={menuContentRef}>
           {menuLoading || optionsLoading ? (
             <div style={{ color: "#6b7280", fontWeight: 850, padding: 12 }}>
               데이터를 불러오는 중...
