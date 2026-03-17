@@ -134,6 +134,8 @@ function MenuPageInner() {
   const [scrollCategoryId, setScrollCategoryId] = useState("all");
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const menuContentRef = useRef<HTMLDivElement | null>(null);
+  const topStickyRef = useRef<HTMLDivElement | null>(null);
+  const [topStickyHeight, setTopStickyHeight] = useState(0);
 
   const [cartLines, setCartLines] = useState<CartLine[]>([]);
 
@@ -336,12 +338,32 @@ function MenuPageInner() {
   }, [categories, menuSections, selectedCategoryId]);
 
   useEffect(() => {
+    const el = topStickyRef.current;
+    if (!el) return;
+
+    const updateHeight = () => {
+      setTopStickyHeight(Math.ceil(el.getBoundingClientRect().height));
+    };
+
+    updateHeight();
+
+    const ro = new ResizeObserver(() => updateHeight());
+    ro.observe(el);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [menuLoading, optionsLoading, categories.length]);
+
+  useEffect(() => {
     if (selectedCategoryId === "all") return;
     const el = menuContentRef.current;
     if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY - 220;
+    const top = el.getBoundingClientRect().top + window.scrollY - Math.max(0, topStickyHeight) - 12;
     window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
-  }, [selectedCategoryId]);
+  }, [selectedCategoryId, topStickyHeight]);
 
   const scrollToCategory = (categoryId: string) => {
     if (categoryId === "all") {
@@ -350,7 +372,7 @@ function MenuPageInner() {
     }
     const el = sectionRefs.current[categoryId];
     if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY - 120;
+    const top = el.getBoundingClientRect().top + window.scrollY - Math.max(0, topStickyHeight) - 8;
     window.scrollTo({ top, behavior: "smooth" });
   };
 
@@ -699,8 +721,10 @@ function MenuPageInner() {
         }
 
         .topSticky {
-          position: sticky;
+          position: fixed;
           top: 0;
+          left: 0;
+          right: 0;
           z-index: 50;
           background: var(--bg);
         }
@@ -779,6 +803,9 @@ function MenuPageInner() {
           overflow-x:auto;
           padding-bottom:2px;
                   }
+        .catTabs::-webkit-scrollbar {
+          display: none;
+        }
         .catTabs::-webkit-scrollbar {
           display: none;
         }
@@ -1165,7 +1192,7 @@ function MenuPageInner() {
         }
       `}</style>
 
-      <div className="topSticky">
+      <div className="topSticky" ref={topStickyRef}>
         <section className="hero">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="heroImg" src={headerImage} alt="hero" />
@@ -1209,6 +1236,8 @@ function MenuPageInner() {
           </div>
         </section>
       </div>
+
+      <div style={{ height: topStickyHeight }} aria-hidden />
 
       <section className="content">
         <div className="contentInner" ref={menuContentRef}>
