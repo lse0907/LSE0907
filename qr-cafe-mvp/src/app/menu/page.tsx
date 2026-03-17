@@ -1,7 +1,7 @@
 // src/app/menu/page.tsx
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useMenuItems, MenuItem } from "@/app/lib/menuStore";
 import { useStoreProfile } from "@/app/lib/storeProfile";
@@ -67,6 +67,12 @@ type MenuCategory = {
   sortOrder: number;
 };
 
+type MenuSection = {
+  id: string;
+  name: string;
+  items: MenuItem[];
+};
+
 function uid(prefix = "line") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random()
     .toString(16)
@@ -124,7 +130,10 @@ function MenuPageInner() {
   const [menuOptionPrices, setMenuOptionPrices] = useState<MenuOptionPrice[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
-  const [activeCategoryId, setActiveCategoryId] = useState("all");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("all");
+  const [scrollCategoryId, setScrollCategoryId] = useState("all");
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const menuContentRef = useRef<HTMLDivElement | null>(null);
 
   const [cartLines, setCartLines] = useState<CartLine[]>([]);
 
@@ -207,7 +216,8 @@ function MenuPageInner() {
     if (error) {
       console.error("[menu] fetch menu_categories error:", error.message);
       setCategories([]);
-      setActiveCategoryId("all");
+      setSelectedCategoryId("all");
+      setScrollCategoryId("all");
       return;
     }
 
@@ -225,7 +235,8 @@ function MenuPageInner() {
     fetchOptionsFromDb();
     fetchCategoriesFromDb();
     refreshMenu();
-    setActiveCategoryId("all");
+    setSelectedCategoryId("all");
+    setScrollCategoryId("all");
     setCartLines([]); // ✅ 매장 바뀌면 카트 초기화 (교차 주문 방지)
     setOptOpen(false);
     setOptTarget(null);
@@ -243,16 +254,105 @@ function MenuPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
-  const list = useMemo(() => {
+  const sortedMenuItems = useMemo(() => {
     const sorted = [...(menuItems || [])].sort((a: any, b: any) => {
       const ao = Number((a as any).sortOrder ?? 999999);
       const bo = Number((b as any).sortOrder ?? 999999);
       if (ao !== bo) return ao - bo;
       return String((a as any).name || "").localeCompare(String((b as any).name || ""));
     });
-    if (activeCategoryId === "all") return sorted;
-    return sorted.filter((m: any) => String((m as any).categoryId || "") === activeCategoryId);
-  }, [menuItems, activeCategoryId]);
+    return sorted;
+  }, [menuItems]);
+
+  const menuSections = useMemo<MenuSection[]>(() => {
+    if (selectedCategoryId !== "all") {
+      const selectedCategory = categories.find((cat) => cat.id === selectedCategoryId);
+      return [
+        {
+          id: selectedCategoryId,
+          name: selectedCategory?.name || "카테고리",
+          items: sortedMenuItems.filter(
+            (m: any) => String((m as any).categoryId || "") === selectedCategoryId
+          ),
+        },
+      ];
+    }
+
+    const byCategory = new Map<string, MenuItem[]>();
+    sortedMenuItems.forEach((item: any) => {
+      const cid = String(item.categoryId || "").trim();
+      if (!cid) return;
+      if (!byCategory.has(cid)) byCategory.set(cid, []);
+      byCategory.get(cid)?.push(item);
+    });
+
+    const sections: MenuSection[] = categories
+      .map((cat) => ({ id: cat.id, name: cat.name, items: byCategory.get(cat.id) || [] }))
+      .filter((section) => section.items.length > 0);
+
+    const uncategorized = sortedMenuItems.filter((item: any) => !String(item.categoryId || "").trim());
+    if (uncategorized.length > 0) {
+      sections.push({ id: "uncategorized", name: "기타", items: uncategorized });
+    }
+
+    return sections;
+  }, [categories, selectedCategoryId, sortedMenuItems]);
+
+  const list = useMemo(() => menuSections.flatMap((section) => section.items), [menuSections]);
+
+  const highlightedCategoryId = selectedCategoryId === "all" ? scrollCategoryId : selectedCategoryId;
+
+  useEffect(() => {
+    if (selectedCategoryId !== "all") return;
+    if (!menuSections.length) {
+      setScrollCategoryId("all");
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (!visible) return;
+        const sectionId = visible.target.getAttribute("data-section-id") || "all";
+        const isKnown = sectionId === "all" || categories.some((cat) => cat.id === sectionId);
+        setScrollCategoryId(isKnown ? sectionId : "all");
+      },
+      {
+        root: null,
+        rootMargin: "-90px 0px -60% 0px",
+        threshold: [0.1, 0.35, 0.65],
+      }
+    );
+
+    menuSections.forEach((section) => {
+      const el = sectionRefs.current[section.id];
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [categories, menuSections, selectedCategoryId]);
+
+  useEffect(() => {
+    if (selectedCategoryId === "all") return;
+    const el = menuContentRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 220;
+    window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+  }, [selectedCategoryId]);
+
+  const scrollToCategory = (categoryId: string) => {
+    if (categoryId === "all") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const el = sectionRefs.current[categoryId];
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 120;
+    window.scrollTo({ top, behavior: "smooth" });
+  };
 
   const headerImage = profile.mainImage || "/hero.jpg";
   const headerOverlayStrength = Math.max(
@@ -595,14 +695,19 @@ function MenuPageInner() {
       <style jsx>{`
         .wrap {
           min-height: 100vh;
-          display: grid;
-          grid-template-rows: auto 1fr;
           padding-bottom: 92px; /* 하단 고정바 공간 */
+        }
+
+        .topSticky {
+          position: sticky;
+          top: 0;
+          z-index: 50;
+          background: var(--bg);
         }
 
         .hero {
           position: relative;
-          height: 180px;
+          height: 144px;
           overflow: hidden;
           background: linear-gradient(135deg, #111827 0%, #374151 100%);
         }
@@ -625,7 +730,18 @@ function MenuPageInner() {
           padding: 14px;
           display: grid;
           align-content: end;
-          gap: 6px;
+        }
+        .stickyHead {
+          background: rgba(246, 247, 249, 0.95);
+          backdrop-filter: blur(8px);
+          border-bottom: 1px solid var(--line);
+        }
+        .stickyInner {
+          max-width: 760px;
+          margin: 0 auto;
+          padding: 10px 12px 8px;
+          display: grid;
+          gap: 8px;
         }
         .titleRow {
           display: flex;
@@ -639,16 +755,17 @@ function MenuPageInner() {
           font-weight: 950;
           font-size: 22px;
           letter-spacing: -0.02em;
+          text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
         }
         .sub {
           margin: 0;
-          color: rgba(255, 255, 255, 0.85);
+          color: rgba(255, 255, 255, 0.9);
           font-weight: 850;
           font-size: 12px;
+          text-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
         }
-
         .content {
-          padding: 14px 12px 28px;
+          padding: 10px 12px 28px;
         }
         .contentInner {
           max-width: 760px;
@@ -661,6 +778,9 @@ function MenuPageInner() {
           gap:8px;
           overflow-x:auto;
           padding-bottom:2px;
+        }
+        .catTabs::-webkit-scrollbar {
+          display: none;
         }
         .catTab {
           white-space:nowrap;
@@ -687,6 +807,12 @@ function MenuPageInner() {
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
           display: grid;
           gap: 10px;
+        }
+        .sectionTitle {
+          margin: 2px 2px 0;
+          font-size: 14px;
+          font-weight: 950;
+          color: #374151;
         }
         .menuRow {
           display: grid;
@@ -1018,7 +1144,7 @@ function MenuPageInner() {
 
         @media (max-width: 520px) {
           .hero {
-            height: 168px;
+            height: 128px;
           }
           .menuRow {
             grid-template-columns: 86px 1fr auto;
@@ -1039,30 +1165,53 @@ function MenuPageInner() {
         }
       `}</style>
 
-      <section className="hero">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="heroImg" src={headerImage} alt="hero" />
-        <div className="overlay" style={{ background: overlayBg }} />
-        <div className="heroInner">
-          <div className="titleRow">
-            <h1 className="h1">{profile.storeName || "메뉴"}</h1>
-            <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
+      <div className="topSticky">
+        <section className="hero">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="heroImg" src={headerImage} alt="hero" />
+          <div className="overlay" style={{ background: overlayBg }} />
+          <div className="heroInner">
+            <div className="titleRow">
+              <h1 className="h1">{profile.storeName || "메뉴"}</h1>
+              <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+
+        <section className="stickyHead">
+          <div className="stickyInner">
+            {!menuLoading && !optionsLoading ? (
+              <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
+                <button
+                  className={`catTab ${highlightedCategoryId === "all" ? "catTabOn" : ""}`}
+                  onClick={() => {
+                    setSelectedCategoryId("all");
+                    setScrollCategoryId("all");
+                    scrollToCategory("all");
+                  }}
+                >
+                  전체
+                </button>
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    className={`catTab ${highlightedCategoryId === cat.id ? "catTabOn" : ""}`}
+                    onClick={() => {
+                      setSelectedCategoryId(cat.id);
+                      setScrollCategoryId(cat.id);
+                    }}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </div>
 
       <section className="content">
-        <div className="contentInner">
-          {!menuLoading && !optionsLoading ? (
-            <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
-              <button className={`catTab ${activeCategoryId === "all" ? "catTabOn" : ""}`} onClick={() => setActiveCategoryId("all")}>전체</button>
-              {categories.map((cat) => (
-                <button key={cat.id} className={`catTab ${activeCategoryId === cat.id ? "catTabOn" : ""}`} onClick={() => setActiveCategoryId(cat.id)}>
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-          ) : null}
+        <div className="contentInner" ref={menuContentRef}>
           {menuLoading || optionsLoading ? (
             <div style={{ color: "#6b7280", fontWeight: 850, padding: 12 }}>
               데이터를 불러오는 중...
@@ -1072,76 +1221,80 @@ function MenuPageInner() {
               등록된 메뉴가 없습니다. (DB에 menu_items를 넣었는지 확인해 주세요)
             </div>
           ) : (
-            list.map((m: any) => {
-              const hasOptions =
-                Array.isArray(m.optionGroupIds) && m.optionGroupIds.length > 0;
+            menuSections.map((section) => (
+              <div
+                key={section.id}
+                data-section-id={section.id}
+                ref={(el) => {
+                  sectionRefs.current[section.id] = el;
+                }}
+                style={{ display: "grid", gap: 10 }}
+              >
+                {selectedCategoryId === "all" ? <div className="sectionTitle">{section.name}</div> : null}
 
-              const simpleQty = simpleQtyByMenuId[m.id] || 0;
+                {section.items.map((m: any) => {
+                  const hasOptions =
+                    Array.isArray(m.optionGroupIds) && m.optionGroupIds.length > 0;
 
-              return (
-                <div key={m.id} className="menuCard">
-                  <div className="menuRow">
-                    <div className="imgBox">
-                      {(m.image || "").trim() ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={m.image} alt={m.name} />
-                      ) : (
-                        <div className="noImg">NO IMG</div>
-                      )}
-                    </div>
+                  const simpleQty = simpleQtyByMenuId[m.id] || 0;
 
-                    <div style={{ minWidth: 0 }}>
-                      <p className="name">{m.name}</p>
-                      <div className="price">{fmt(Number(m.price || 0))}원</div>
+                  return (
+                    <div key={m.id} className="menuCard">
+                      <div className="menuRow">
+                        <div className="imgBox">
+                          {(m.image || "").trim() ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={m.image} alt={m.name} />
+                          ) : (
+                            <div className="noImg">NO IMG</div>
+                          )}
+                        </div>
 
-                      {m.isSoldOut ? <div className="soldout">품절</div> : null}
+                        <div style={{ minWidth: 0 }}>
+                          <p className="name">{m.name}</p>
+                          <div className="price">{fmt(Number(m.price || 0))}원</div>
 
-                      {hasOptions ? <div className="metaLine">옵션 선택</div> : null}
-                    </div>
+                          {m.isSoldOut ? <div className="soldout">품절</div> : null}
 
-                    {hasOptions ? (
-                      <button
-                        className="addBtn"
-                        onClick={() => onPlus(m)}
-                        disabled={m.isSoldOut}
-                        aria-label="add-with-options"
-                      >
-                        담기
-                      </button>
-                    ) : simpleQty === 0 ? (
-                      <button
-                        className="qbtn"
-                        onClick={() => onPlus(m)}
-                        disabled={m.isSoldOut}
-                        aria-label="plus"
-                      >
-                        +
-                      </button>
-                    ) : (
-                      <div className="qtyBox">
-                        <button
-                          className="qbtn"
-                          onClick={() => onMinus(m)}
-                          disabled={m.isSoldOut || simpleQty === 0}
-                          aria-label="minus"
-                        >
-                          -
-                        </button>
-                        <b className="qnum">{simpleQty}</b>
-                        <button
-                          className="qbtn"
-                          onClick={() => onPlus(m)}
-                          disabled={m.isSoldOut}
-                          aria-label="plus"
-                        >
-                          +
-                        </button>
+                          {hasOptions ? <div className="metaLine">옵션 선택</div> : null}
+                        </div>
+
+                        {simpleQty === 0 ? (
+                          <button
+                            className="addBtn"
+                            onClick={() => onPlus(m)}
+                            disabled={m.isSoldOut}
+                            aria-label={hasOptions ? "add-with-options" : "add"}
+                          >
+                            담기
+                          </button>
+                        ) : (
+                          <div className="qtyBox">
+                            <button
+                              className="qbtn"
+                              onClick={() => onMinus(m)}
+                              disabled={m.isSoldOut || simpleQty === 0}
+                              aria-label="minus"
+                            >
+                              -
+                            </button>
+                            <b className="qnum">{simpleQty}</b>
+                            <button
+                              className="qbtn"
+                              onClick={() => onPlus(m)}
+                              disabled={m.isSoldOut}
+                              aria-label="plus"
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })
+                    </div>
+                  );
+                })}
+              </div>
+            ))
           )}
         </div>
       </section>
