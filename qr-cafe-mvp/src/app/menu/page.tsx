@@ -727,7 +727,20 @@ function MenuPageInner() {
           height: 100%;
           max-width: 760px;
           margin: 0 auto;
-          padding: 14px;
+          padding: 0 14px;
+        }
+        .stickyHead {
+          position: sticky;
+          top: 0;
+          z-index: 25;
+          background: rgba(246, 247, 249, 0.95);
+          backdrop-filter: blur(8px);
+          border-bottom: 1px solid var(--line);
+        }
+        .stickyInner {
+          max-width: 760px;
+          margin: 0 auto;
+          padding: 10px 12px 8px;
           display: grid;
           align-content: end;
         }
@@ -751,9 +764,9 @@ function MenuPageInner() {
         }
         .h1 {
           margin: 0;
-          color: #fff;
+          color: #111827;
           font-weight: 950;
-          font-size: 22px;
+          font-size: 19px;
           letter-spacing: -0.02em;
           text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
         }
