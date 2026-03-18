@@ -422,6 +422,7 @@ function StaffPageInner() {
 
   // ✅ 새 주문 NEW 뱃지 표시용
   const [newOrderIds, setNewOrderIds] = useState<Record<string, number>>({}); // id -> expireAt(ms)
+  const [newOrderPopup, setNewOrderPopup] = useState<{ id: string; displayNo: string } | null>(null);
 
   // ✅ “새 주문 들어옴” 감지용
   const lastTopOrderIdRef = useRef<string>("");
@@ -662,6 +663,7 @@ function StaffPageInner() {
     setSelectedId(null);
     setMobileView("list");
     setNewOrderIds({});
+    setNewOrderPopup(null);
     lastTopOrderIdRef.current = "";
     setInitialLoading(true);
 
@@ -706,6 +708,7 @@ function StaffPageInner() {
       // NEW 뱃지 10초
       const expireAt = Date.now() + 10_000;
       setNewOrderIds((prev) => ({ ...prev, [top.id]: expireAt }));
+      setNewOrderPopup({ id: top.id, displayNo: top.displayNo });
 
       // 음성 안내(중복 방지)
       const lastSpoken = localStorage.getItem(LAST_SPOKEN_KEY) || "";
@@ -718,6 +721,13 @@ function StaffPageInner() {
 
   const selected = useMemo(() => orders.find((o) => o.id === selectedId) || null, [orders, selectedId]);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; displayNo: string } | null>(null);
+
+  const moveToOrderCheckTab = () => {
+    if (staffViewMode === "station") setStationTab("order");
+    else setListTab("active");
+    setMobileView("list");
+    setNewOrderPopup(null);
+  };
 
   // ✅ 탭 필터 규칙
   // - 진행중: 날짜 상관없이 모두
@@ -761,11 +771,36 @@ function StaffPageInner() {
 
   const listTitle = useMemo(() => {
     if (staffViewMode !== "station") return "주문 목록";
-    if (stationTab === "order") return "주문관리";
+    if (stationTab === "order") return "주문확인";
     if (stationTab === "make") return "제조";
     if (stationTab === "ready") return "준비";
     return "완료/취소";
   }, [staffViewMode, stationTab]);
+
+  const statusButtonLabelForView = (s: OrderStatus) => {
+    if (staffViewMode === "simple") {
+      if (s === "checked" || s === "making") return "✓ 제조 완료";
+      if (s === "ready_for_packing") return "✓ 주문 완료";
+    }
+    return statusButtonLabel(s);
+  };
+
+  const nextStatusForView = (s: OrderStatus): OrderStatus => {
+    if (staffViewMode !== "simple") return nextStatus(s);
+    if (s === "new") return "checked";
+    if (s === "checked" || s === "making") return "ready_for_packing";
+    if (s === "ready_for_packing") return "completed";
+    return s;
+  };
+
+  const advanceOrder = async (order: OrderRecord) => {
+    await updateOrderInDb(order.id, { status: nextStatusForView(order.status) });
+    if (staffViewMode === "simple" && order.status === "ready_for_packing") {
+      setListTab("active");
+      setSelectedId(null);
+      setMobileView("list");
+    }
+  };
 
   const onSelect = (id: string) => {
     setSelectedId(id);
@@ -877,6 +912,11 @@ function StaffPageInner() {
       return a.name.localeCompare(b.name);
     });
   }, [orders]);
+
+  const waitingItemIdsForBatch = useMemo(
+    () => makeGroups.filter((g) => g.status === "waiting").flatMap((g) => g.itemIds),
+    [makeGroups]
+  );
 
   const buildOptionText = (it: OrderItem) =>
     it.options
@@ -1219,6 +1259,25 @@ function StaffPageInner() {
           font-size: 12px;
           font-weight: 800;
           color: #1d4ed8;
+        }
+
+        .newOrderPopup {
+          margin-top: 8px;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          border-radius: 12px;
+          padding: 10px 12px;
+        }
+        .newOrderPopupTitle {
+          font-size: 12px;
+          font-weight: 900;
+          color: #1d4ed8;
+        }
+        .newOrderPopupText {
+          margin-top: 2px;
+          font-size: 13px;
+          font-weight: 850;
+          color: #111827;
         }
 
         .modeLabel {
@@ -2016,7 +2075,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              진행중 ({counts.active})
+              주문확인 ({counts.active})
             </button>
             <button
               className={`chip ${listTab === "completed" ? "chipOn" : ""}`}
@@ -2048,7 +2107,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              주문관리 ({stationCounts.order})
+              주문확인 ({stationCounts.order})
             </button>
             <button
               className={`chip ${stationTab === "make" ? "chipOn" : ""}`}
@@ -2081,6 +2140,20 @@ function StaffPageInner() {
         </div>
       )}
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
+      {newOrderPopup ? (
+        <div className="newOrderPopup" role="alert" aria-live="assertive">
+          <div className="newOrderPopupTitle">신규 주문 접수</div>
+          <div className="newOrderPopupText">주문번호 {newOrderPopup.displayNo}</div>
+          <div className="itemQuickActions" style={{ marginTop: 8 }}>
+            <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
+              주문확인으로 이동
+            </button>
+            <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>
+              닫기
+            </button>
+          </div>
+        </div>
+      ) : null}
       <p className="tabHint" style={{ marginTop: 4 }}>주문 확인 → 제조 → 준비 확인 순서로 진행해 주세요.</p>
 
       <div className="panel">
@@ -2095,6 +2168,17 @@ function StaffPageInner() {
           ) : staffViewMode === "station" && stationTab === "make" ? (
             makeGroups.length === 0 ? <p className="muted">제조 대기/진행 아이템이 없습니다.</p> : (
               <div className="list">
+                <div className="itemQuickActions" style={{ marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    className="quickActionBtn quickActionBtnPrimary"
+                    onClick={() => updateOrderItemsInDb(waitingItemIdsForBatch, { status: "making", batch: nextBatch })}
+                    disabled={waitingItemIdsForBatch.length === 0}
+                    style={{ opacity: waitingItemIdsForBatch.length ? 1 : 0.45 }}
+                  >
+                    배치 생성 (전체 1회)
+                  </button>
+                </div>
                 {makeGroups.map((g) => (
                   <div key={g.key} className="itemBtn" style={{ cursor: "default" }}>
                     <div className="rowBetween">
@@ -2280,13 +2364,13 @@ function StaffPageInner() {
                         <button
                           type="button"
                           className="quickActionBtn quickActionBtnPrimary"
-                          aria-label={`주문번호 ${o.displayNo} ${statusButtonLabel(o.status)}`}
+                          aria-label={`주문번호 ${o.displayNo} ${statusButtonLabelForView(o.status)}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            updateOrderInDb(o.id, { status: nextStatus(o.status) });
+                            advanceOrder(o);
                           }}
                         >
-                          {statusButtonLabel(o.status)}
+                          {statusButtonLabelForView(o.status)}
                         </button>
                       </div>
                     ) : null}
@@ -2310,7 +2394,24 @@ function StaffPageInner() {
           </div>
 
           {!selected ? (
-            <p className="muted">주문을 선택하세요.</p>
+            <div className="detailBox" style={{ display: "grid", gap: 10 }}>
+              <p className="muted">주문을 선택하세요.</p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span className="badge">주문확인 {counts.active}건</span>
+                <span className="badge">완료 {counts.completed}건</span>
+                <span className="badge">전체 {counts.all}건</span>
+              </div>
+              <div className="itemQuickActions">
+                <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
+                  주문확인 탭 보기
+                </button>
+                {staffViewMode === "station" ? (
+                  <button type="button" className="quickActionBtn" onClick={() => setStationTab("make")}>
+                    제조 탭 보기
+                  </button>
+                ) : null}
+              </div>
+            </div>
           ) : (
             <>
               <div className="detailBox">
@@ -2374,7 +2475,7 @@ function StaffPageInner() {
                       })
                       .map(([categoryName, rows]) => (
                         <div key={categoryName} style={{ display: "grid", gap: 8 }}>
-                          <div className="muted" style={{ fontWeight: 900 }}>{categoryName}</div>
+                          <div className="muted" style={{ fontWeight: 900, paddingLeft: 8 }}>{categoryName}</div>
                           {rows.map((it, idx) => {
                             const optionTotal = Number(it.optionTotal || 0);
                             const unit = Number(it.price || 0) + optionTotal;
@@ -2417,13 +2518,13 @@ function StaffPageInner() {
               <div className="actionRow">
                 <button
                   className="actionBtn actionPrimary"
-                  onClick={() => updateOrderInDb(selected.id, { status: nextStatus(selected.status) })}
+                  onClick={() => advanceOrder(selected)}
                   disabled={!canAdvanceSelected}
                   style={{
                     opacity: canAdvanceSelected ? 1 : 0.5,
                   }}
                 >
-                  {statusButtonLabel(selected.status)}
+                  {statusButtonLabelForView(selected.status)}
                 </button>
 
                 {prepayAddonActive && selected.paymentStatus === "pending" ? (
@@ -2462,11 +2563,11 @@ function StaffPageInner() {
         <div className={`actionDock ${prepayAddonActive && selected.paymentStatus === "pending" ? "actionDockTriple" : ""}`}>
           <button
             className="actionBtn actionPrimary"
-            onClick={() => updateOrderInDb(selected.id, { status: nextStatus(selected.status) })}
+            onClick={() => advanceOrder(selected)}
             disabled={!canAdvanceSelected}
             style={{ opacity: canAdvanceSelected ? 1 : 0.5 }}
           >
-            {statusButtonLabel(selected.status)}
+            {statusButtonLabelForView(selected.status)}
           </button>
 
           {prepayAddonActive && selected.paymentStatus === "pending" ? (
