@@ -777,11 +777,6 @@ function StaffPageInner() {
     return "완료/취소";
   }, [staffViewMode, stationTab]);
 
-  const waitingItemIdsForBatch = useMemo(
-    () => makeGroups.filter((g) => g.status === "waiting").flatMap((g) => g.itemIds),
-    [makeGroups]
-  );
-
   const statusButtonLabelForView = (s: OrderStatus) => {
     if (staffViewMode === "simple") {
       if (s === "checked" || s === "making") return "✓ 제조 완료";
@@ -917,6 +912,11 @@ function StaffPageInner() {
       return a.name.localeCompare(b.name);
     });
   }, [orders]);
+
+  const waitingItemIdsForBatch = useMemo(
+    () => makeGroups.filter((g) => g.status === "waiting").flatMap((g) => g.itemIds),
+    [makeGroups]
+  );
 
   const buildOptionText = (it: OrderItem) =>
     it.options
