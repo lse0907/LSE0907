@@ -780,7 +780,7 @@ function StaffPageInner() {
   const statusButtonLabelForView = (s: OrderStatus) => {
     if (staffViewMode === "simple") {
       if (s === "checked" || s === "making") return "✓ 제조 완료";
-      if (s === "ready_for_packing") return "✓ 주문 완료";
+      if (s === "ready_for_packing") return "✓ 전달 완료";
     }
     return statusButtonLabel(s);
   };
@@ -2146,7 +2146,7 @@ function StaffPageInner() {
           <div className="newOrderPopupText">주문번호 {newOrderPopup.displayNo}</div>
           <div className="itemQuickActions" style={{ marginTop: 8 }}>
             <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
-              주문확인으로 이동
+              확인
             </button>
             <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>
               닫기
@@ -2193,13 +2193,7 @@ function StaffPageInner() {
                     {g.optionLabel ? <div className="muted" style={{ marginTop: 4 }}>옵션: {g.optionLabel}</div> : null}
                     <div className="itemQuickActions" style={{ marginTop: 10 }}>
                       {g.status === "waiting" ? (
-                        <button
-                          type="button"
-                          className="quickActionBtn quickActionBtnPrimary"
-                          onClick={() => updateOrderItemsInDb(g.itemIds, { status: "making", batch: nextBatch })}
-                        >
-                          ▶ 제조 시작
-                        </button>
+                        <span className="muted">상단에서 배치 생성 후 제조를 시작해 주세요.</span>
                       ) : (
                         <button
                           type="button"
