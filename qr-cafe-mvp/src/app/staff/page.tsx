@@ -2169,6 +2169,7 @@ function StaffPageInner() {
             makeGroups.length === 0 ? <p className="muted">제조 대기/진행 아이템이 없습니다.</p> : (
               <div className="list">
                 <div className="itemQuickActions" style={{ marginBottom: 8 }}>
+                  <span className="muted">주문확인 후 배치는 1회만 생성해 주세요.</span>
                   <button
                     type="button"
                     className="quickActionBtn quickActionBtnPrimary"
@@ -2176,24 +2177,24 @@ function StaffPageInner() {
                     disabled={waitingItemIdsForBatch.length === 0}
                     style={{ opacity: waitingItemIdsForBatch.length ? 1 : 0.45 }}
                   >
-                    배치 생성 (전체 1회)
+                    배치 생성
                   </button>
                 </div>
                 {makeGroups.map((g) => (
                   <div key={g.key} className="itemBtn" style={{ cursor: "default" }}>
-                    <div className="rowBetween">
+                    <div className="muted" style={{ marginTop: 8 }}>
+                      {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
+                    </div>
+                    <div className="rowBetween" style={{ marginTop: 8 }}>
                       <div className="bigNo">{g.name} × {g.qty}</div>
                       <span className={`badge statusPill ${g.status === "waiting" ? "badgeChecked" : "badgeMaking"}`}>
                         {g.status === "waiting" ? "제조대기" : "제조중"}
                       </span>
                     </div>
-                    <div className="muted" style={{ marginTop: 8 }}>
-                      {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
-                    </div>
                     {g.optionLabel ? <div className="muted" style={{ marginTop: 4 }}>옵션: {g.optionLabel}</div> : null}
                     <div className="itemQuickActions" style={{ marginTop: 10 }}>
                       {g.status === "waiting" ? (
-                        <span className="muted">상단에서 배치 생성 후 제조를 시작해 주세요.</span>
+                        null
                       ) : (
                         <button
                           type="button"
@@ -2508,6 +2509,54 @@ function StaffPageInner() {
                   </div>
                 </div>
               </div>
+
+              {staffViewMode === "station" && !isCompleted(selected.status) ? (
+                <div className="section">
+                  <h3 className="sectionTitle">진행 현황</h3>
+                  <div className="detailBox" style={{ display: "grid", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <span className="badge">제조대기 {selected.items.filter((it) => it.status === "waiting").length}개</span>
+                      <span className="badge">제조중 {selected.items.filter((it) => it.status === "making").length}개</span>
+                      <span className="badge">제조완료 {selected.items.filter((it) => it.status === "done").length}개</span>
+                      <span className="badge">
+                        준비확인 {selected.items.filter((it) => it.status === "done" && !!it.packingChecked).length}개
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {selected.items.map((it, idx) => {
+                        const optText = buildOptionText(it);
+                        const statusText =
+                          it.status === "waiting"
+                            ? "제조대기"
+                            : it.status === "making"
+                            ? "제조중"
+                            : it.packingChecked
+                            ? "준비확인"
+                            : "제조완료";
+                        const statusClass =
+                          it.status === "waiting"
+                            ? "badgeChecked"
+                            : it.status === "making"
+                            ? "badgeMaking"
+                            : it.packingChecked
+                            ? "badgeDone"
+                            : "badgeDone";
+
+                        return (
+                          <div key={`station_progress_${it.id}_${idx}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                            <div className="rowBetween">
+                              <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
+                              <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
+                            </div>
+                            {optText ? <div className="muted" style={{ marginTop: 6 }}>{optText}</div> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="actionRow">
                 <button
