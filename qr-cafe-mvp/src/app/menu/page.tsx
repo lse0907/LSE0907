@@ -122,6 +122,10 @@ function MenuPageInner() {
 
   const table = (sp.get("table") || "").trim();
   const isTableQr = !!table;
+  const cartStorageKey = useMemo(
+    () => `qrCafeCart:${storeId}:${isTableQr ? table : "counter"}`,
+    [storeId, isTableQr, table]
+  );
 
   const [optionsData, setOptionsData] = useState<OptionData>({
     groups: [],
@@ -232,14 +236,35 @@ function MenuPageInner() {
     setCategories(rows);
   };
 
-  // ✅ storeId가 바뀌면 옵션/메뉴를 다시 불러오고, 장바구니도 꼬임 방지로 초기화
+  // ✅ storeId가 바뀌면 옵션/메뉴를 다시 불러오고, 장바구니는 현재 매장/테이블 키로 복원
   useEffect(() => {
     fetchOptionsFromDb();
     fetchCategoriesFromDb();
     refreshMenu();
     setSelectedCategoryId("all");
     setScrollCategoryId("all");
-    setCartLines([]); // ✅ 매장 바뀌면 카트 초기화 (교차 주문 방지)
+    try {
+      const raw = sessionStorage.getItem(cartStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const restored = Array.isArray(parsed)
+        ? parsed
+            .filter((x) => x && typeof x === "object")
+            .map((x: any) => ({
+              lineId: String(x.lineId || uid("line")),
+              menuId: String(x.menuId || ""),
+              name: String(x.name || ""),
+              basePrice: Number(x.basePrice ?? 0),
+              qty: Math.max(0, Number(x.qty ?? 0)),
+              image: typeof x.image === "string" ? x.image : "",
+              options: Array.isArray(x.options) ? x.options : [],
+              optionTotal: Number(x.optionTotal ?? 0),
+            }))
+            .filter((x) => x.menuId && x.qty > 0)
+        : [];
+      setCartLines(restored);
+    } catch {
+      setCartLines([]);
+    }
     setOptOpen(false);
     setOptTarget(null);
     setOptSel({});
@@ -254,7 +279,16 @@ function MenuPageInner() {
 
     return () => window.removeEventListener("focus", onFocus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
+  }, [storeId, cartStorageKey]);
+
+  useEffect(() => {
+    try {
+      if (!cartLines.length) sessionStorage.removeItem(cartStorageKey);
+      else sessionStorage.setItem(cartStorageKey, JSON.stringify(cartLines));
+    } catch {
+      // ignore storage write errors
+    }
+  }, [cartLines, cartStorageKey]);
 
   const sortedMenuItems = useMemo(() => {
     const sorted = [...(menuItems || [])].sort((a: any, b: any) => {
@@ -803,6 +837,9 @@ function MenuPageInner() {
           overflow-x:auto;
           padding-bottom:2px;
                   }
+        .catTabs::-webkit-scrollbar {
+          display: none;
+        }
         .catTabs::-webkit-scrollbar {
           display: none;
         }
