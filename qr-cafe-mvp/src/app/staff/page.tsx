@@ -919,6 +919,16 @@ function StaffPageInner() {
     [makeGroups]
   );
 
+  const makeGroupsByCategory = useMemo(() => {
+    const grouped = new Map<string, typeof makeGroups>();
+    for (const g of makeGroups) {
+      const key = g.categoryName || "미분류";
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(g);
+    }
+    return [...grouped.entries()];
+  }, [makeGroups]);
+
   const buildOptionText = (it: OrderItem) =>
     it.options
       ?.map((g) => {
@@ -2171,30 +2181,51 @@ function StaffPageInner() {
             makeGroups.length === 0 ? <p className="muted">제조 대기/진행 아이템이 없습니다.</p> : (
               <div className="list">
                 <p className="muted" style={{ marginBottom: 8 }}>주문확인 후, 제조시작 버튼을 눌러주세요.</p>
-                {makeGroups.map((g) => (
-                  <div key={g.key} className="itemBtn" style={{ cursor: "default", padding: "10px 12px" }}>
-                    <div className="muted" style={{ marginTop: 4 }}>
-                      {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
+                {makeGroupsByCategory.map(([categoryName, rows]) => (
+                  <div key={`make_cat_${categoryName}`} style={{ display: "grid", gap: 8 }}>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        padding: "6px 10px",
+                        borderLeft: "4px solid #3b82f6",
+                        background: "#eff6ff",
+                        color: "#1e3a8a",
+                        borderRadius: 8,
+                      }}
+                    >
+                      {categoryName}
                     </div>
-                    <div className="rowBetween" style={{ marginTop: 6 }}>
-                      <div className="bigNo">{g.name} × {g.qty}</div>
-                      <span className={`badge statusPill ${g.status === "waiting" ? "badgeChecked" : "badgeMaking"}`}>
-                        {g.status === "waiting" ? "제조대기" : "제조중"}
-                      </span>
-                    </div>
-                    {g.optionLabel ? <div className="muted" style={{ marginTop: 4 }}>옵션: {g.optionLabel}</div> : null}
-                    <div className="itemQuickActions" style={{ marginTop: 10 }}>
-                      {g.status === "waiting" ? (
-                        null
-                      ) : (
-                        <button
-                          type="button"
-                          className="quickActionBtn quickActionBtnPrimary"
-                          onClick={() => updateOrderItemsInDb(g.itemIds, { status: "done" })}
+                    <div className="detailBox" style={{ display: "grid", gap: 0, padding: 0 }}>
+                      {rows.map((g, idx) => (
+                        <div
+                          key={g.key}
+                          style={{
+                            padding: "10px 12px",
+                            borderTop: idx === 0 ? "none" : "1px solid #e5e7eb",
+                            display: "grid",
+                            gap: 6,
+                          }}
                         >
-                          ✓ 제조 완료
-                        </button>
-                      )}
+                          <div className="rowBetween">
+                            <div className="bigNo">{g.name} × {g.qty}</div>
+                            {g.status === "making" ? (
+                              <button
+                                type="button"
+                                className="quickActionBtn quickActionBtnPrimary"
+                                onClick={() => updateOrderItemsInDb(g.itemIds, { status: "done" })}
+                              >
+                                ✓ 제조완료
+                              </button>
+                            ) : (
+                              <span className="muted" style={{ fontWeight: 800 }}>대기</span>
+                            )}
+                          </div>
+                          <div className="muted">
+                            {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
+                          </div>
+                          {g.optionLabel ? <div className="muted">옵션: {g.optionLabel}</div> : null}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -2222,7 +2253,7 @@ function StaffPageInner() {
                       </div>
                       {o.requestNote ? <div className="muted" style={{ marginTop: 4 }}>요청사항: {o.requestNote}</div> : null}
 
-                      <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                      <div className="detailBox" style={{ marginTop: 10, display: "grid", gap: 0, padding: 0 }}>
                         {o.items.map((it) => {
                           const optText = buildOptionText(it);
                           const checked = !!it.packingChecked;
@@ -2238,7 +2269,13 @@ function StaffPageInner() {
                           const showReadyAction = isDone && !checked;
 
                           return (
-                            <div key={`ready_item_${it.id}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                            <div
+                              key={`ready_item_${it.id}`}
+                              style={{
+                                padding: "10px 12px",
+                                borderTop: o.items.findIndex((x) => x.id === it.id) === 0 ? "none" : "1px solid #e5e7eb",
+                              }}
+                            >
                               <div className="rowBetween">
                                 <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
                                 {showReadyAction ? (
@@ -2261,9 +2298,10 @@ function StaffPageInner() {
                                       <button
                                         type="button"
                                         className="quickActionBtn"
+                                        style={{ borderColor: "#ef4444", color: "#b91c1c" }}
                                         onClick={() => togglePackingChecks(o, false, it.id)}
                                       >
-                                        ↺ 확인취소
+                                        취소
                                       </button>
                                     </div>
                                   ) : null}
@@ -2282,7 +2320,7 @@ function StaffPageInner() {
                           disabled={!doneItems.length}
                           style={{ opacity: doneItems.length ? 1 : 0.45 }}
                         >
-                          ✓ 전체 준비확인
+                          ✓ 전체확인
                         </button>
                         <button
                           type="button"
