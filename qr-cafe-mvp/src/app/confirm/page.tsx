@@ -570,16 +570,22 @@ function ConfirmPageInner() {
         }
       `}</style>
       <main style={{ padding: 16, maxWidth: 720, margin: "0 auto", color: "#111827" }}>
-      <h1 style={{ margin: 0, fontWeight: 950 }}>주문 확인</h1>
-
-      <div style={{ marginTop: 8, color: "#444", fontWeight: 800 }}>
-        {isTableQr ? (
-          <p style={{ margin: 0 }}>
-            테이블 QR로 접속 · 테이블 <b>{tableFromMenu}</b> · <b>매장 이용</b>
-          </p>
-        ) : (
-          <p style={{ margin: 0 }}>카운터 QR로 접속</p>
-        )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <h1 style={{ margin: 0, fontWeight: 950 }}>주문 확인</h1>
+        <span
+          style={{
+            border: "1px solid #d1d5db",
+            borderRadius: 999,
+            padding: "4px 10px",
+            color: "#374151",
+            fontWeight: 900,
+            fontSize: 12,
+            background: "white",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {isTableQr ? "테이블 주문" : "카운터 주문"}
+        </span>
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -640,23 +646,26 @@ function ConfirmPageInner() {
                   ) : null}
 
                   <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                    <button
-                      onClick={() => decLine(ln.lineId)}
-                      style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", fontWeight: 900 }}
-                    >
-                      -1
-                    </button>
+                    {ln.qty <= 1 ? (
+                      <button
+                        onClick={() => removeLine(ln.lineId)}
+                        style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #ef4444", color: "#b91c1c", background: "white", fontWeight: 900 }}
+                      >
+                        삭제
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => decLine(ln.lineId)}
+                        style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", fontWeight: 900 }}
+                      >
+                        -1
+                      </button>
+                    )}
                     <button
                       onClick={() => incLine(ln.lineId)}
                       style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", fontWeight: 900 }}
                     >
                       +1
-                    </button>
-                    <button
-                      onClick={() => removeLine(ln.lineId)}
-                      style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #ef4444", color: "#b91c1c", background: "white", fontWeight: 900 }}
-                    >
-                      삭제
                     </button>
                   </div>
                 </div>
@@ -666,11 +675,11 @@ function ConfirmPageInner() {
         )}
       </div>
 
-      <div style={{ marginTop: 18, borderTop: "1px solid #eee", paddingTop: 14 }}>
+      <div style={{ marginTop: 18, borderTop: "1px solid #eee", paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div style={{ fontWeight: 900 }}>
           총 수량: <b>{totalCount}</b>
         </div>
-        <div style={{ marginTop: 6, fontWeight: 900 }}>
+        <div style={{ fontWeight: 900 }}>
           총 금액: <b>{fmt(totalPrice)}원</b>
         </div>
       </div>
@@ -680,7 +689,7 @@ function ConfirmPageInner() {
         <textarea
           value={requestNote}
           onChange={(e) => setRequestNote(e.target.value)}
-          placeholder="예) 얼음 적게 / 덜 달게 (가능한 경우에만 반영됩니다)"
+          placeholder=""
           style={{
             width: "100%",
             minHeight: 90,
@@ -691,7 +700,7 @@ function ConfirmPageInner() {
           }}
         />
         <p style={{ marginTop: 8, color: "#666", fontWeight: 800 }}>
-          * 요청사항은 참고용이며, 매장 상황에 따라 반영되지 않을 수 있습니다.
+          * 요청사항은 참고용입니다.
         </p>
       </div>
 

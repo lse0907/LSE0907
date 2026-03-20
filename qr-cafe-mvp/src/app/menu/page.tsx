@@ -855,6 +855,9 @@ function MenuPageInner() {
         .catTabs::-webkit-scrollbar {
           display: none;
         }
+        .catTabs::-webkit-scrollbar {
+          display: none;
+        }
         .catTab {
           white-space:nowrap;
           border:1px solid var(--line);
