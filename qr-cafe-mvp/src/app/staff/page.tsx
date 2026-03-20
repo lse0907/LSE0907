@@ -348,7 +348,7 @@ function StaffPageInner() {
   const [prepayAddonActive, setPrepayAddonActive] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const [listTab, setListTab] = useState<"active" | "completed" | "all">("active");
+  const [listTab, setListTab] = useState<"active" | "completed">("active");
   const [stationTab, setStationTab] = useState<"order" | "make" | "ready" | "history">("order");
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const [staffViewMode, setStaffViewMode] = useState<StaffViewMode>("simple");
@@ -779,6 +779,7 @@ function StaffPageInner() {
 
   const statusButtonLabelForView = (s: OrderStatus) => {
     if (staffViewMode === "simple") {
+      if (s === "new") return "✓ 주문 확인";
       if (s === "checked" || s === "making") return "✓ 제조 완료";
       if (s === "ready_for_packing") return "✓ 전달 완료";
     }
@@ -2086,15 +2087,6 @@ function StaffPageInner() {
             >
               완료 ({counts.completed})
             </button>
-            <button
-              className={`chip ${listTab === "all" ? "chipOn" : ""}`}
-              onClick={() => {
-                setListTab("all");
-                setMobileView("list");
-              }}
-            >
-              전체 ({counts.all})
-            </button>
           </div>
         </div>
       ) : (
@@ -2157,7 +2149,20 @@ function StaffPageInner() {
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
             <h2 className="cardTitle">{listTitle}</h2>
-            <span className="badge">{filteredOrders.length}건</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span className="badge">{filteredOrders.length}건</span>
+              {staffViewMode === "station" && stationTab === "make" ? (
+                <button
+                  type="button"
+                  className="quickActionBtn quickActionBtnPrimary"
+                  onClick={() => updateOrderItemsInDb(waitingItemIdsForBatch, { status: "making", batch: nextBatch })}
+                  disabled={waitingItemIdsForBatch.length === 0}
+                  style={{ opacity: waitingItemIdsForBatch.length ? 1 : 0.45 }}
+                >
+                  제조 시작
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {!storeId ? (
@@ -2165,24 +2170,13 @@ function StaffPageInner() {
           ) : staffViewMode === "station" && stationTab === "make" ? (
             makeGroups.length === 0 ? <p className="muted">제조 대기/진행 아이템이 없습니다.</p> : (
               <div className="list">
-                <div className="itemQuickActions" style={{ marginBottom: 8 }}>
-                  <span className="muted">주문확인 후 배치는 1회만 생성해 주세요.</span>
-                  <button
-                    type="button"
-                    className="quickActionBtn quickActionBtnPrimary"
-                    onClick={() => updateOrderItemsInDb(waitingItemIdsForBatch, { status: "making", batch: nextBatch })}
-                    disabled={waitingItemIdsForBatch.length === 0}
-                    style={{ opacity: waitingItemIdsForBatch.length ? 1 : 0.45 }}
-                  >
-                    배치 생성
-                  </button>
-                </div>
+                <p className="muted" style={{ marginBottom: 8 }}>주문확인 후, 제조시작 버튼을 눌러주세요.</p>
                 {makeGroups.map((g) => (
-                  <div key={g.key} className="itemBtn" style={{ cursor: "default" }}>
-                    <div className="muted" style={{ marginTop: 8 }}>
+                  <div key={g.key} className="itemBtn" style={{ cursor: "default", padding: "10px 12px" }}>
+                    <div className="muted" style={{ marginTop: 4 }}>
                       {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
                     </div>
-                    <div className="rowBetween" style={{ marginTop: 8 }}>
+                    <div className="rowBetween" style={{ marginTop: 6 }}>
                       <div className="bigNo">{g.name} × {g.qty}</div>
                       <span className={`badge statusPill ${g.status === "waiting" ? "badgeChecked" : "badgeMaking"}`}>
                         {g.status === "waiting" ? "제조대기" : "제조중"}
@@ -2348,7 +2342,7 @@ function StaffPageInner() {
                           .join(", ")}
                         {o.items.length > 2 ? "…" : ""}
                       </div>
-                      {isActive(o.status) ? (
+                      {(staffViewMode === "simple" ? o.status === "new" : isActive(o.status)) ? (
                         <div className="itemQuickActions" style={{ marginTop: 0 }}>
                           <button
                             type="button"
@@ -2425,30 +2419,32 @@ function StaffPageInner() {
                 </div>
               ) : null}
 
-              <div className="section">
-                <div className="buzzerRow">
-                  <h3 className="sectionTitleSm">진동벨 번호 (선택)</h3>
-                  <input
-                    className="buzzerInput"
-                    value={selected.buzzerNo ?? ""}
-                    onChange={(e) => updateOrderInDb(selected.id, { buzzerNo: e.target.value.trim() })}
-                    placeholder="예: 12"
-                  />
-                </div>
-                <p className="buzzerHint">* 벨을 지급한 경우에만 입력</p>
-              </div>
+              {(staffViewMode !== "station" || stationTab === "order" || stationTab === "history") ? (
+                <>
+                  <div className="section">
+                    <div className="buzzerRow">
+                      <h3 className="sectionTitleSm">진동벨 번호 (선택)</h3>
+                      <input
+                        className="buzzerInput"
+                        value={selected.buzzerNo ?? ""}
+                        onChange={(e) => updateOrderInDb(selected.id, { buzzerNo: e.target.value.trim() })}
+                        placeholder="예: 12"
+                      />
+                    </div>
+                    <p className="buzzerHint">* 벨을 지급한 경우에만 입력</p>
+                  </div>
 
-              <div className="section">
-                <h3 className="sectionTitleSm">요청사항</h3>
-                <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
-                  {selected.requestNote || "요청사항 없음"}
-                </div>
-              </div>
+                  <div className="section">
+                    <h3 className="sectionTitleSm">요청사항</h3>
+                    <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
+                      {selected.requestNote || "요청사항 없음"}
+                    </div>
+                  </div>
 
-              <div className="section">
-                <h3 className="sectionTitle">주문 내역</h3>
-                <div className="itemsScroll">
-                  <div className="orderItemsBox">
+                  <div className="section">
+                    <h3 className="sectionTitle">주문 내역</h3>
+                    <div className="itemsScroll">
+                      <div className="orderItemsBox">
                     {Object.entries(
                       selected.items.reduce<Record<string, OrderItem[]>>((acc, it) => {
                         const key = it.categoryName || "미분류";
@@ -2465,7 +2461,18 @@ function StaffPageInner() {
                       })
                       .map(([categoryName, rows]) => (
                         <div key={categoryName} style={{ display: "grid", gap: 8 }}>
-                          <div className="muted" style={{ fontWeight: 900, paddingLeft: 8 }}>{categoryName}</div>
+                          <div
+                            style={{
+                              fontWeight: 900,
+                              padding: "6px 10px",
+                              borderLeft: "4px solid #3b82f6",
+                              background: "#eff6ff",
+                              color: "#1e3a8a",
+                              borderRadius: 8,
+                            }}
+                          >
+                            {categoryName}
+                          </div>
                           {rows.map((it, idx) => {
                             const optionTotal = Number(it.optionTotal || 0);
                             const unit = Number(it.price || 0) + optionTotal;
@@ -2501,9 +2508,59 @@ function StaffPageInner() {
                           })}
                         </div>
                       ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              {staffViewMode === "station" && (stationTab === "make" || stationTab === "ready") && !isCompleted(selected.status) ? (
+                <div className="section">
+                  <h3 className="sectionTitle">진행 현황</h3>
+                  <div className="detailBox" style={{ display: "grid", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <span className="badge">제조대기 {selected.items.filter((it) => it.status === "waiting").length}개</span>
+                      <span className="badge">제조중 {selected.items.filter((it) => it.status === "making").length}개</span>
+                      <span className="badge">제조완료 {selected.items.filter((it) => it.status === "done").length}개</span>
+                      <span className="badge">
+                        준비확인 {selected.items.filter((it) => it.status === "done" && !!it.packingChecked).length}개
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {selected.items.map((it, idx) => {
+                        const optText = buildOptionText(it);
+                        const statusText =
+                          it.status === "waiting"
+                            ? "제조대기"
+                            : it.status === "making"
+                            ? "제조중"
+                            : it.packingChecked
+                            ? "준비확인"
+                            : "제조완료";
+                        const statusClass =
+                          it.status === "waiting"
+                            ? "badgeChecked"
+                            : it.status === "making"
+                            ? "badgeMaking"
+                            : it.packingChecked
+                            ? "badgeDone"
+                            : "badgeDone";
+
+                        return (
+                          <div key={`station_progress_${it.id}_${idx}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                            <div className="rowBetween">
+                              <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
+                              <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
+                            </div>
+                            {optText ? <div className="muted" style={{ marginTop: 6 }}>{optText}</div> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
 
               {staffViewMode === "station" && !isCompleted(selected.status) ? (
                 <div className="section">
