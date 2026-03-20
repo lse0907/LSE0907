@@ -603,7 +603,7 @@ function ConfirmPageInner() {
                 ln.options
                   .map((g) => {
                     if (!g.items?.length) return null;
-                    return `${g.groupName}: ${g.items.map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`).join(", ")}`;
+                    return g.items.map((x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`).join(", ");
                   })
                   .filter(Boolean)
                   .join(" / ") || "";
@@ -673,6 +673,24 @@ function ConfirmPageInner() {
             })}
           </div>
         )}
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <button
+          onClick={goMenu}
+          style={{
+            width: "100%",
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid #d1d5db",
+            background: "white",
+            fontWeight: 900,
+            color: "#111827",
+            WebkitTextFillColor: "currentColor",
+          }}
+        >
+          + 메뉴 더 담기
+        </button>
       </div>
 
       <div style={{ marginTop: 18, borderTop: "1px solid #eee", paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -760,7 +778,19 @@ function ConfirmPageInner() {
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          marginTop: 18,
+          position: "sticky",
+          bottom: 0,
+          background: "#f6f7f9",
+          paddingTop: 10,
+          paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
+          zIndex: 20,
+        }}
+      >
         <button onClick={goMenu} style={{ padding: 12, flex: 1, fontWeight: 900, color: "#111827", WebkitTextFillColor: "currentColor" }}>
           메뉴로 돌아가기
         </button>
@@ -779,6 +809,7 @@ function ConfirmPageInner() {
           {submitting ? "저장 중..." : isPrepayStore ? "결제하기" : "주문 접수"}
         </button>
       </div>
+      <div style={{ height: 10 }} />
 
       <p style={{ marginTop: 8, color: "#6b7280", fontWeight: 800, fontSize: 13 }}>
         {prepayLoading
