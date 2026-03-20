@@ -88,41 +88,43 @@ function uuid() {
   );
 }
 
+function normalizeCartLines(raw: any): CartLine[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((x) => x && typeof x === "object")
+    .map((x: any) => ({
+      lineId: String(x.lineId || uuid()),
+      menuId: String(x.menuId || x.id || ""),
+      name: String(x.name || ""),
+      basePrice: Number(x.basePrice ?? x.price ?? 0),
+      qty: Math.max(0, Number(x.qty ?? 0)),
+      image: typeof x.image === "string" ? x.image : "",
+      options: Array.isArray(x.options)
+        ? x.options.map((g: any) => ({
+            ...g,
+            items: Array.isArray(g?.items)
+              ? g.items
+                  .map((it: any) => ({
+                    id: String(it?.id || ""),
+                    name: String(it?.name || ""),
+                    priceDelta: Number(it?.priceDelta ?? 0),
+                    qty: Math.max(1, Number(it?.qty ?? 1)),
+                  }))
+                  .filter((it: SelectedOptionItem) => it.id)
+              : [],
+          }))
+        : [],
+      optionTotal: Number(x.optionTotal ?? 0),
+    }))
+    .filter((x) => x.menuId && x.qty > 0);
+}
+
 function parseCart(cartParam: string | null): CartLine[] {
   if (!cartParam) return [];
   try {
     const decoded = decodeURIComponent(cartParam);
     const parsed = JSON.parse(decoded);
-
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((x) => x && typeof x === "object")
-      .map((x: any) => ({
-        lineId: String(x.lineId || uuid()),
-        menuId: String(x.menuId || x.id || ""),
-        name: String(x.name || ""),
-        basePrice: Number(x.basePrice ?? x.price ?? 0),
-        qty: Math.max(0, Number(x.qty ?? 0)),
-        image: typeof x.image === "string" ? x.image : "",
-        options: Array.isArray(x.options)
-          ? x.options.map((g: any) => ({
-              ...g,
-              items: Array.isArray(g?.items)
-                ? g.items
-                    .map((it: any) => ({
-                      id: String(it?.id || ""),
-                      name: String(it?.name || ""),
-                      priceDelta: Number(it?.priceDelta ?? 0),
-                      qty: Math.max(1, Number(it?.qty ?? 1)),
-                    }))
-                    .filter((it: SelectedOptionItem) => it.id)
-                : [],
-            }))
-          : [],
-        optionTotal: Number(x.optionTotal ?? 0),
-      }))
-      .filter((x) => x.menuId && x.qty > 0);
+    return normalizeCartLines(parsed);
   } catch {
     return [];
   }
@@ -171,8 +173,37 @@ function ConfirmPageInner() {
 
   const tableFromMenu = (sp.get("table") || "").trim();
   const isTableQr = !!tableFromMenu;
+  const initialCartLines = useMemo(() => parseCart(sp.get("cart")), [sp]);
+  const cartStorageKey = useMemo(
+    () => `qrCafeCart:${storeId}:${isTableQr ? tableFromMenu : "counter"}`,
+    [storeId, isTableQr, tableFromMenu]
+  );
+  const [cartLines, setCartLines] = useState<CartLine[]>(initialCartLines);
 
-  const cartLines = useMemo(() => parseCart(sp.get("cart")), [sp]);
+  useEffect(() => {
+    setCartLines(initialCartLines);
+  }, [initialCartLines]);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(cartStorageKey);
+      if (!raw) return;
+      const parsed = normalizeCartLines(JSON.parse(raw));
+      if (!parsed.length) return;
+      setCartLines(parsed);
+    } catch {
+      // ignore storage parse errors
+    }
+  }, [cartStorageKey]);
+
+  useEffect(() => {
+    try {
+      if (!cartLines.length) sessionStorage.removeItem(cartStorageKey);
+      else sessionStorage.setItem(cartStorageKey, JSON.stringify(cartLines));
+    } catch {
+      // ignore storage write errors
+    }
+  }, [cartLines, cartStorageKey]);
 
   const totalCount = useMemo(
     () => cartLines.reduce((s, x) => s + (x.qty || 0), 0),
@@ -473,6 +504,7 @@ function ConfirmPageInner() {
       localStorage.setItem(lsLastOrderIdKey(storeId), orderId);
       localStorage.setItem(lsLastOrderTokenKey(storeId), accessToken);
       localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
+      sessionStorage.removeItem(cartStorageKey);
 
       router.push(
         `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(
@@ -490,6 +522,24 @@ function ConfirmPageInner() {
     const base = `/menu?store=${encodeURIComponent(storeId)}`;
     if (isTableQr) router.push(`${base}&table=${encodeURIComponent(tableFromMenu)}`);
     else router.push(base);
+  };
+
+  const decLine = (lineId: string) => {
+    setCartLines((prev) =>
+      prev
+        .map((ln) => (ln.lineId !== lineId ? ln : { ...ln, qty: Math.max(0, Number(ln.qty || 0) - 1) }))
+        .filter((ln) => ln.qty > 0)
+    );
+  };
+
+  const incLine = (lineId: string) => {
+    setCartLines((prev) =>
+      prev.map((ln) => (ln.lineId !== lineId ? ln : { ...ln, qty: Math.max(1, Number(ln.qty || 0) + 1) }))
+    );
+  };
+
+  const removeLine = (lineId: string) => {
+    setCartLines((prev) => prev.filter((ln) => ln.lineId !== lineId));
   };
 
   const modeBtnStyle = (active: boolean, disabled: boolean) => ({
@@ -588,6 +638,27 @@ function ConfirmPageInner() {
                       옵션: {optText}
                     </div>
                   ) : null}
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                    <button
+                      onClick={() => decLine(ln.lineId)}
+                      style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", fontWeight: 900 }}
+                    >
+                      -1
+                    </button>
+                    <button
+                      onClick={() => incLine(ln.lineId)}
+                      style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #d1d5db", background: "white", fontWeight: 900 }}
+                    >
+                      +1
+                    </button>
+                    <button
+                      onClick={() => removeLine(ln.lineId)}
+                      style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #ef4444", color: "#b91c1c", background: "white", fontWeight: 900 }}
+                    >
+                      삭제
+                    </button>
+                  </div>
                 </div>
               );
             })}
