@@ -598,7 +598,8 @@ function MenuPageInner() {
       if (!g) continue;
       const picked = optSel[gid] || {};
       const selectedQty = Object.values(picked).reduce((sum, n) => sum + Math.max(0, Number(n || 0)), 0);
-      const min = Math.max(0, Number(g.min ?? (g.required ? 1 : 0)));
+      const requiredMin = g.required ? 1 : 0;
+      const min = Math.max(requiredMin, Math.max(0, Number(g.min ?? 0)));
       const max = Math.max(min, Number(g.max ?? min));
 
       if (selectedQty < min) {
@@ -645,7 +646,7 @@ function MenuPageInner() {
         groupId: g.id,
         groupName: g.name,
         required: !!g.required,
-        min: Number(g.min || 0),
+        min: Math.max(g.required ? 1 : 0, Number(g.min || 0)),
         max: Number(g.max || 0),
         items: selectedItems,
       });
@@ -837,6 +838,9 @@ function MenuPageInner() {
           overflow-x:auto;
           padding-bottom:2px;
                   }
+        .catTabs::-webkit-scrollbar {
+          display: none;
+        }
         .catTabs::-webkit-scrollbar {
           display: none;
         }
@@ -1440,7 +1444,7 @@ function MenuPageInner() {
                           {g.name} {g.required ? "(필수)" : "(선택)"}
                         </div>
                         <div className="gHint">
-                          {g.min}~{g.max}개 선택
+                          {Math.max(g.required ? 1 : 0, Number(g.min || 0))}~{Math.max(Math.max(g.required ? 1 : 0, Number(g.min || 0)), Number(g.max || 0))}개 선택
                         </div>
                       </div>
                       <div
@@ -1461,7 +1465,8 @@ function MenuPageInner() {
                 }
 
                 const picked = optSel[gid] || {};
-                const min = Math.max(0, Number(g.min ?? (g.required ? 1 : 0)));
+                const requiredMin = g.required ? 1 : 0;
+                const min = Math.max(requiredMin, Math.max(0, Number(g.min ?? 0)));
                 const max = Math.max(min, Number(g.max ?? min));
                 const isSingle = max === 1;
                 const selectedQty = getSelectedQty(gid);
