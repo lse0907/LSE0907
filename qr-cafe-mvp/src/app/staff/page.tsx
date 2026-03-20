@@ -2044,7 +2044,7 @@ function StaffPageInner() {
       </header>
 
       <div className="modeRow">
-        <p className="modeLabel">모드전환</p>
+        <p className="modeLabel">운영 방식</p>
         <div className="modeSwitch" role="group" aria-label="모드전환">
           <button
             type="button"
@@ -2052,7 +2052,7 @@ function StaffPageInner() {
             aria-pressed={staffViewMode === "simple"}
             onClick={() => updateStaffViewMode("simple")}
           >
-            Simple
+            기본 모드
           </button>
           <button
             type="button"
@@ -2060,7 +2060,7 @@ function StaffPageInner() {
             aria-pressed={staffViewMode === "station"}
             onClick={() => updateStaffViewMode("station")}
           >
-            Station
+            분업 모드
           </button>
         </div>
       </div>
@@ -2142,15 +2142,12 @@ function StaffPageInner() {
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
       {newOrderPopup ? (
         <div className="newOrderPopup" role="alert" aria-live="assertive">
-          <div className="newOrderPopupTitle">신규 주문 접수</div>
-          <div className="newOrderPopupText">주문번호 {newOrderPopup.displayNo}</div>
-          <div className="itemQuickActions" style={{ marginTop: 8 }}>
-            <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
-              확인
-            </button>
-            <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>
-              닫기
-            </button>
+          <div className="rowBetween" style={{ gap: 8, alignItems: "center" }}>
+            <div className="newOrderPopupTitle">신규 주문 접수 · 주문번호 {newOrderPopup.displayNo}</div>
+            <div className="itemQuickActions" style={{ marginTop: 0 }}>
+              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>확인</button>
+              <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>닫기</button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -2334,41 +2331,39 @@ function StaffPageInner() {
                       </div>
                     </div>
 
-                    <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                       <span className={`badge ${badgeClass}`}>{STATUS_LABEL[o.status]}</span>
                       <span className="badge">
                         {o.mode === "dine-in" ? `매장 · 테이블 ${o.table ?? "-"}` : "포장"}
                       </span>
-                    </div>
-
-                    <div className="muted" style={{ marginTop: 8 }}>
-                      {o.items
-                        .map((it) => `${it.name}×${it.qty}`)
-                        .slice(0, 2)
-                        .join(", ")}
-                      {o.items.length > 2 ? "…" : ""}
-                    </div>
-
-                    <div className="orderQuickMeta">
                       <span className="badge">메뉴 {o.items.length}개</span>
                       <span className="badge">총 수량 {totalQty}</span>
                     </div>
 
-                    {staffViewMode === "station" && isActive(o.status) ? (
-                      <div className="itemQuickActions">
-                        <button
-                          type="button"
-                          className="quickActionBtn quickActionBtnPrimary"
-                          aria-label={`주문번호 ${o.displayNo} ${statusButtonLabelForView(o.status)}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            advanceOrder(o);
-                          }}
-                        >
-                          {statusButtonLabelForView(o.status)}
-                        </button>
+                    <div className="rowBetween" style={{ marginTop: 8, gap: 10 }}>
+                      <div className="muted" style={{ flex: 1, minWidth: 0 }}>
+                        {o.items
+                          .map((it) => `${it.name}×${it.qty}`)
+                          .slice(0, 2)
+                          .join(", ")}
+                        {o.items.length > 2 ? "…" : ""}
                       </div>
-                    ) : null}
+                      {isActive(o.status) ? (
+                        <div className="itemQuickActions" style={{ marginTop: 0 }}>
+                          <button
+                            type="button"
+                            className="quickActionBtn quickActionBtnPrimary"
+                            aria-label={`주문번호 ${o.displayNo} ${statusButtonLabelForView(o.status)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              advanceOrder(o);
+                            }}
+                          >
+                            {statusButtonLabelForView(o.status)}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
@@ -2559,16 +2554,22 @@ function StaffPageInner() {
               ) : null}
 
               <div className="actionRow">
-                <button
-                  className="actionBtn actionPrimary"
-                  onClick={() => advanceOrder(selected)}
-                  disabled={!canAdvanceSelected}
-                  style={{
-                    opacity: canAdvanceSelected ? 1 : 0.5,
-                  }}
-                >
-                  {statusButtonLabelForView(selected.status)}
-                </button>
+                {!(staffViewMode === "station" && selected.status === "checked") ? (
+                  <button
+                    className="actionBtn actionPrimary"
+                    onClick={() => advanceOrder(selected)}
+                    disabled={!canAdvanceSelected}
+                    style={{
+                      opacity: canAdvanceSelected ? 1 : 0.5,
+                    }}
+                  >
+                    {statusButtonLabelForView(selected.status)}
+                  </button>
+                ) : (
+                  <button className="actionBtn" disabled style={{ opacity: 0.7 }}>
+                    제조 탭에서 시작
+                  </button>
+                )}
 
                 {prepayAddonActive && selected.paymentStatus === "pending" ? (
                   <button
