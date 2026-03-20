@@ -2235,24 +2235,35 @@ function StaffPageInner() {
                             ? "준비확인"
                             : "준비대기";
                           const statusClass = !isDone ? "badgeMaking" : checked ? "badgeDone" : "badgeChecked";
+                          const showReadyAction = isDone && !checked;
 
                           return (
                             <div key={`ready_item_${it.id}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
                               <div className="rowBetween">
                                 <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
-                                <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
+                                {showReadyAction ? (
+                                  <button
+                                    type="button"
+                                    className="quickActionBtn quickActionBtnPrimary"
+                                    onClick={() => togglePackingChecks(o, true, it.id)}
+                                  >
+                                    ✓ 준비확인
+                                  </button>
+                                ) : (
+                                  <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
+                                )}
                               </div>
                               {optText || isDone ? (
                                 <div className="readyItemSubRow">
                                   {optText ? <div className="muted readyItemOption">{optText}</div> : null}
-                                  {isDone ? (
+                                  {isDone && checked ? (
                                     <div className="itemQuickActions readyItemActions">
                                       <button
                                         type="button"
-                                        className={`quickActionBtn ${checked ? "" : "quickActionBtnPrimary"}`}
-                                        onClick={() => togglePackingChecks(o, !checked, it.id)}
+                                        className="quickActionBtn"
+                                        onClick={() => togglePackingChecks(o, false, it.id)}
                                       >
-                                        {checked ? "↺ 확인취소" : "✓ 준비확인"}
+                                        ↺ 확인취소
                                       </button>
                                     </div>
                                   ) : null}
@@ -2377,7 +2388,63 @@ function StaffPageInner() {
             </button>
           </div>
 
-          {!selected ? (
+          {staffViewMode === "station" && (stationTab === "make" || stationTab === "ready") ? (
+            <div style={{ display: "grid", gap: 10 }}>
+              <div className="detailBox">
+                <div className="rowBetween">
+                  <b>{stationTab === "make" ? "제조 진행 현황" : "준비 진행 현황"}</b>
+                  <span className="badge">{stationTab === "make" ? makeGroups.length : readyOrders.length}건</span>
+                </div>
+              </div>
+
+              {stationTab === "make" ? (
+                <div className="detailBox" style={{ display: "grid", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <span className="badge">제조대기 {makeGroups.filter((g) => g.status === "waiting").length}건</span>
+                    <span className="badge">제조중 {makeGroups.filter((g) => g.status === "making").length}건</span>
+                  </div>
+                  {makeGroups.map((g) => (
+                    <div key={`panel_make_${g.key}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                      <div className="rowBetween">
+                        <div style={{ fontWeight: 800 }}>{g.name} × {g.qty}</div>
+                        <span className={`badge statusPill ${g.status === "waiting" ? "badgeChecked" : "badgeMaking"}`}>
+                          {g.status === "waiting" ? "제조대기" : "제조중"}
+                        </span>
+                      </div>
+                      <div className="muted" style={{ marginTop: 6 }}>
+                        {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="detailBox" style={{ display: "grid", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <span className="badge">준비 대상 {readyOrders.length}건</span>
+                    <span className="badge">
+                      준비확인 완료 {readyOrders.filter((o) => o.items.filter((it) => it.status === "done").every((it) => !!it.packingChecked)).length}건
+                    </span>
+                  </div>
+                  {readyOrders.map((o) => {
+                    const doneItems = o.items.filter((it) => it.status === "done");
+                    const checkedCount = doneItems.filter((it) => !!it.packingChecked).length;
+                    return (
+                      <div key={`panel_ready_${o.id}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                        <div className="rowBetween">
+                          <div style={{ fontWeight: 800 }}>주문번호 {o.displayNo}</div>
+                          <span className="badge">준비 확인 {checkedCount}/{doneItems.length}</span>
+                        </div>
+                        <div className="muted" style={{ marginTop: 6 }}>
+                          {o.items.map((it) => `${it.name}×${it.qty}`).slice(0, 2).join(", ")}
+                          {o.items.length > 2 ? "…" : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : !selected ? (
             <div className="detailBox" style={{ display: "grid", gap: 10 }}>
               <p className="muted">주문을 선택하세요.</p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -2562,80 +2629,30 @@ function StaffPageInner() {
                 </div>
               ) : null}
 
-              {staffViewMode === "station" && !isCompleted(selected.status) ? (
-                <div className="section">
-                  <h3 className="sectionTitle">진행 현황</h3>
-                  <div className="detailBox" style={{ display: "grid", gap: 8 }}>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <span className="badge">제조대기 {selected.items.filter((it) => it.status === "waiting").length}개</span>
-                      <span className="badge">제조중 {selected.items.filter((it) => it.status === "making").length}개</span>
-                      <span className="badge">제조완료 {selected.items.filter((it) => it.status === "done").length}개</span>
-                      <span className="badge">
-                        준비확인 {selected.items.filter((it) => it.status === "done" && !!it.packingChecked).length}개
-                      </span>
-                    </div>
-
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {selected.items.map((it, idx) => {
-                        const optText = buildOptionText(it);
-                        const statusText =
-                          it.status === "waiting"
-                            ? "제조대기"
-                            : it.status === "making"
-                            ? "제조중"
-                            : it.packingChecked
-                            ? "준비확인"
-                            : "제조완료";
-                        const statusClass =
-                          it.status === "waiting"
-                            ? "badgeChecked"
-                            : it.status === "making"
-                            ? "badgeMaking"
-                            : it.packingChecked
-                            ? "badgeDone"
-                            : "badgeDone";
-
-                        return (
-                          <div key={`station_progress_${it.id}_${idx}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
-                            <div className="rowBetween">
-                              <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
-                              <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
-                            </div>
-                            {optText ? <div className="muted" style={{ marginTop: 6 }}>{optText}</div> : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
               <div className="actionRow">
-                {!(staffViewMode === "station" && selected.status === "checked") ? (
-                  <button
-                    className="actionBtn actionPrimary"
-                    onClick={() => advanceOrder(selected)}
-                    disabled={!canAdvanceSelected}
-                    style={{
-                      opacity: canAdvanceSelected ? 1 : 0.5,
-                    }}
-                  >
-                    {statusButtonLabelForView(selected.status)}
-                  </button>
-                ) : (
-                  <button className="actionBtn" disabled style={{ opacity: 0.7 }}>
-                    제조 탭에서 시작
-                  </button>
-                )}
+                {staffViewMode !== "station" ? (
+                  <>
+                    <button
+                      className="actionBtn actionPrimary"
+                      onClick={() => advanceOrder(selected)}
+                      disabled={!canAdvanceSelected}
+                      style={{
+                        opacity: canAdvanceSelected ? 1 : 0.5,
+                      }}
+                    >
+                      {statusButtonLabelForView(selected.status)}
+                    </button>
 
-                {prepayAddonActive && selected.paymentStatus === "pending" ? (
-                  <button
-                    className="actionBtn"
-                    style={{ borderColor: "#2563eb", color: "#2563eb" }}
-                    onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
-                  >
-                    결제완료 처리
-                  </button>
+                    {prepayAddonActive && selected.paymentStatus === "pending" ? (
+                      <button
+                        className="actionBtn"
+                        style={{ borderColor: "#2563eb", color: "#2563eb" }}
+                        onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
+                      >
+                        결제완료 처리
+                      </button>
+                    ) : null}
+                  </>
                 ) : null}
 
                 <button
@@ -2662,23 +2679,27 @@ function StaffPageInner() {
 
       {selected && mobileView === "detail" ? (
         <div className={`actionDock ${prepayAddonActive && selected.paymentStatus === "pending" ? "actionDockTriple" : ""}`}>
-          <button
-            className="actionBtn actionPrimary"
-            onClick={() => advanceOrder(selected)}
-            disabled={!canAdvanceSelected}
-            style={{ opacity: canAdvanceSelected ? 1 : 0.5 }}
-          >
-            {statusButtonLabelForView(selected.status)}
-          </button>
+          {staffViewMode !== "station" ? (
+            <>
+              <button
+                className="actionBtn actionPrimary"
+                onClick={() => advanceOrder(selected)}
+                disabled={!canAdvanceSelected}
+                style={{ opacity: canAdvanceSelected ? 1 : 0.5 }}
+              >
+                {statusButtonLabelForView(selected.status)}
+              </button>
 
-          {prepayAddonActive && selected.paymentStatus === "pending" ? (
-            <button
-              className="actionBtn"
-              style={{ borderColor: "#2563eb", color: "#2563eb" }}
-              onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
-            >
-              결제완료 처리
-            </button>
+              {prepayAddonActive && selected.paymentStatus === "pending" ? (
+                <button
+                  className="actionBtn"
+                  style={{ borderColor: "#2563eb", color: "#2563eb" }}
+                  onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
+                >
+                  결제완료 처리
+                </button>
+              ) : null}
+            </>
           ) : null}
 
           <button
