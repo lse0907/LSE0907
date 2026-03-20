@@ -2562,6 +2562,54 @@ function StaffPageInner() {
                 </div>
               ) : null}
 
+              {staffViewMode === "station" && !isCompleted(selected.status) ? (
+                <div className="section">
+                  <h3 className="sectionTitle">진행 현황</h3>
+                  <div className="detailBox" style={{ display: "grid", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <span className="badge">제조대기 {selected.items.filter((it) => it.status === "waiting").length}개</span>
+                      <span className="badge">제조중 {selected.items.filter((it) => it.status === "making").length}개</span>
+                      <span className="badge">제조완료 {selected.items.filter((it) => it.status === "done").length}개</span>
+                      <span className="badge">
+                        준비확인 {selected.items.filter((it) => it.status === "done" && !!it.packingChecked).length}개
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {selected.items.map((it, idx) => {
+                        const optText = buildOptionText(it);
+                        const statusText =
+                          it.status === "waiting"
+                            ? "제조대기"
+                            : it.status === "making"
+                            ? "제조중"
+                            : it.packingChecked
+                            ? "준비확인"
+                            : "제조완료";
+                        const statusClass =
+                          it.status === "waiting"
+                            ? "badgeChecked"
+                            : it.status === "making"
+                            ? "badgeMaking"
+                            : it.packingChecked
+                            ? "badgeDone"
+                            : "badgeDone";
+
+                        return (
+                          <div key={`station_progress_${it.id}_${idx}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                            <div className="rowBetween">
+                              <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
+                              <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
+                            </div>
+                            {optText ? <div className="muted" style={{ marginTop: 6 }}>{optText}</div> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="actionRow">
                 {!(staffViewMode === "station" && selected.status === "checked") ? (
                   <button
