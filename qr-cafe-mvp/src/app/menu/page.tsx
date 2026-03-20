@@ -865,6 +865,9 @@ function MenuPageInner() {
         .catTabs::-webkit-scrollbar {
           display: none;
         }
+        .catTabs::-webkit-scrollbar {
+          display: none;
+        }
         .catTab {
           white-space:nowrap;
           border:1px solid var(--line);
@@ -1435,6 +1438,10 @@ function MenuPageInner() {
                 if (!g) return null;
 
                 const items = groupItems(gid);
+                const requiredMin = g.required ? 1 : 0;
+                const min = Math.max(requiredMin, Math.max(0, Number(g.min ?? 0)));
+                const max = Math.max(min, Number(g.max ?? min));
+                const hintText = g.required ? `필수 · 최소 ${min}개` : `선택 · 최대 ${max}개`;
 
                 if (items.length === 0) {
                   return (
@@ -1444,7 +1451,7 @@ function MenuPageInner() {
                           {g.name} {g.required ? "(필수)" : "(선택)"}
                         </div>
                         <div className="gHint">
-                          {Math.max(g.required ? 1 : 0, Number(g.min || 0))}~{Math.max(Math.max(g.required ? 1 : 0, Number(g.min || 0)), Number(g.max || 0))}개 선택
+                          {hintText}
                         </div>
                       </div>
                       <div
@@ -1465,12 +1472,7 @@ function MenuPageInner() {
                 }
 
                 const picked = optSel[gid] || {};
-                const requiredMin = g.required ? 1 : 0;
-                const min = Math.max(requiredMin, Math.max(0, Number(g.min ?? 0)));
-                const max = Math.max(min, Number(g.max ?? min));
                 const isSingle = max === 1;
-                const selectedQty = getSelectedQty(gid);
-                const remaining = Math.max(0, max - selectedQty);
 
                 return (
                   <div key={gid} className="gCard">
@@ -1479,7 +1481,7 @@ function MenuPageInner() {
                         {g.name} {g.required ? "(필수)" : "(선택)"}
                       </div>
                       <div className="gHint">
-                        {min}~{max}개 선택 · 현재 {selectedQty}개 · 남은 선택 {remaining}개
+                        {hintText}
                       </div>
                     </div>
 
