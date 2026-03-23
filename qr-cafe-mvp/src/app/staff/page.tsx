@@ -777,7 +777,6 @@ function StaffPageInner() {
     return "완료/취소";
   }, [staffViewMode, stationTab]);
 
-  const modeGuideText = "현재 모드에 맞는 순서로 처리해 주세요.";
   const tabGuideText = useMemo(() => {
     if (staffViewMode === "simple") return "주문확인 후 제조완료, 전달완료 순서로 처리해 주세요.";
     if (stationTab === "order") return "신규 주문을 먼저 확인해 주세요.";
@@ -925,6 +924,10 @@ function StaffPageInner() {
 
   const waitingItemIdsForBatch = useMemo(
     () => makeGroups.filter((g) => g.status === "waiting").flatMap((g) => g.itemIds),
+    [makeGroups]
+  );
+  const makingItemIdsForBatch = useMemo(
+    () => makeGroups.filter((g) => g.status === "making").flatMap((g) => g.itemIds),
     [makeGroups]
   );
 
@@ -1326,11 +1329,20 @@ function StaffPageInner() {
 
         /* ✅ 탭 아래 안내 문구 */
         .tabHint {
-          margin: 8px 0 0 0;
+          margin: 6px 0 0 0;
           color: var(--muted);
-          font-size: 12px;
+          font-size: 11px;
           line-height: 1.4;
-          font-weight: 700;
+          font-weight: 400;
+          word-break: keep-all;
+        }
+
+        .tabSubHint {
+          margin: 2px 0 0 0;
+          color: var(--muted);
+          font-size: 11px;
+          line-height: 1.4;
+          font-weight: 400;
           word-break: keep-all;
         }
 
@@ -1497,6 +1509,26 @@ function StaffPageInner() {
           flex: 0 0 auto;
         }
 
+        .readyItemNameWrap {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-width: 0;
+          flex-wrap: wrap;
+        }
+
+        .readyItemOptionDesktop {
+          display: none;
+          min-width: 0;
+          color: var(--muted);
+        }
+
+        .readyItemOptionMobile {
+          margin: 0;
+          flex: 1 1 220px;
+          min-width: 0;
+        }
+
         @media (min-width: 900px) {
           .readyItemSubRow {
             align-items: flex-start;
@@ -1509,6 +1541,15 @@ function StaffPageInner() {
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+          }
+          .readyItemOptionDesktop {
+            display: inline;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            line-height: 1.35;
+          }
+          .readyItemOptionMobile {
+            display: none;
           }
         }
 
@@ -2177,8 +2218,10 @@ function StaffPageInner() {
           </div>
         </div>
       ) : null}
-      <p className="tabHint" style={{ marginTop: 4 }}>{modeGuideText}</p>
-      <p className="muted" style={{ marginTop: 2, fontWeight: 800 }}>{tabGuideText}</p>
+      <p className="tabHint">{tabGuideText}</p>
+      <p className="tabSubHint">
+        {staffViewMode === "simple" ? "기본모드" : `분업모드 · ${listTitle}`}
+      </p>
 
       <div className="panel">
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
@@ -2254,6 +2297,17 @@ function StaffPageInner() {
                     </div>
                   </div>
                 ))}
+                <div className="itemQuickActions" style={{ marginTop: 12, gap: 8 }}>
+                  <button
+                    type="button"
+                    className="quickActionBtn quickActionBtnPrimary"
+                    onClick={() => updateOrderItemsInDb(makingItemIdsForBatch, { status: "done" })}
+                    disabled={makingItemIdsForBatch.length === 0}
+                    style={{ opacity: makingItemIdsForBatch.length ? 1 : 0.45 }}
+                  >
+                    ✓ 전체 제조완료
+                  </button>
+                </div>
               </div>
             )
           ) : staffViewMode === "station" && stationTab === "ready" ? (
@@ -2302,29 +2356,33 @@ function StaffPageInner() {
                               }}
                             >
                               <div className="rowBetween">
-                                <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
+                                <div className="readyItemNameWrap">
+                                  <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
+                                  {optText ? <div className="readyItemOptionDesktop">옵션: {optText}</div> : null}
+                                  {isDone && checked ? <span className={`badge statusPill ${statusClass}`}>{statusText}</span> : null}
+                                </div>
                                 {showReadyAction ? (
                                   <button
                                     type="button"
                                     className="quickActionBtn quickActionBtnPrimary"
-                                    style={{ minWidth: 72 }}
+                                    style={{ minWidth: 60 }}
                                     onClick={() => togglePackingChecks(o, true, it.id)}
                                   >
                                     확인
                                   </button>
                                 ) : (
-                                  <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
+                                  !checked ? <span className={`badge statusPill ${statusClass}`}>{statusText}</span> : null
                                 )}
                               </div>
                               {optText || isDone ? (
                                 <div className="readyItemSubRow">
-                                  {optText ? <div className="muted readyItemOption">{optText}</div> : null}
+                                  {optText ? <div className="muted readyItemOption readyItemOptionMobile">옵션: {optText}</div> : null}
                                   {isDone && checked ? (
                                     <div className="itemQuickActions readyItemActions">
                                       <button
                                         type="button"
                                         className="quickActionBtn"
-                                        style={{ minWidth: 72, borderColor: "#ef4444", color: "#b91c1c" }}
+                                        style={{ minWidth: 60, borderColor: "#ef4444", color: "#b91c1c" }}
                                         onClick={() => togglePackingChecks(o, false, it.id)}
                                       >
                                         취소
