@@ -777,6 +777,15 @@ function StaffPageInner() {
     return "완료/취소";
   }, [staffViewMode, stationTab]);
 
+  const modeGuideText = "현재 모드에 맞는 순서로 처리해 주세요.";
+  const tabGuideText = useMemo(() => {
+    if (staffViewMode === "simple") return "주문확인 후 제조완료, 전달완료 순서로 처리해 주세요.";
+    if (stationTab === "order") return "신규 주문을 먼저 확인해 주세요.";
+    if (stationTab === "make") return "주문확인 후 제조시작 버튼으로 일괄 시작하세요.";
+    if (stationTab === "ready") return "확인 처리 후 전달완료를 진행하세요.";
+    return "완료된 주문 기록을 확인할 수 있습니다.";
+  }, [staffViewMode, stationTab]);
+
   const statusButtonLabelForView = (s: OrderStatus) => {
     if (staffViewMode === "simple") {
       if (s === "new") return "✓ 주문 확인";
@@ -1488,6 +1497,21 @@ function StaffPageInner() {
           flex: 0 0 auto;
         }
 
+        @media (min-width: 900px) {
+          .readyItemSubRow {
+            align-items: flex-start;
+          }
+          .readyItemOption {
+            flex: 0 1 52%;
+            margin-left: auto;
+            text-align: right;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+        }
+
         .bigNo {
           font-size: 18px;
           font-weight: 900;
@@ -2153,7 +2177,8 @@ function StaffPageInner() {
           </div>
         </div>
       ) : null}
-      <p className="tabHint" style={{ marginTop: 4 }}>주문 확인 → 제조 → 준비 확인 순서로 진행해 주세요.</p>
+      <p className="tabHint" style={{ marginTop: 4 }}>{modeGuideText}</p>
+      <p className="muted" style={{ marginTop: 2, fontWeight: 800 }}>{tabGuideText}</p>
 
       <div className="panel">
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
@@ -2169,7 +2194,7 @@ function StaffPageInner() {
                   disabled={waitingItemIdsForBatch.length === 0}
                   style={{ opacity: waitingItemIdsForBatch.length ? 1 : 0.45 }}
                 >
-                  제조 시작
+                  ▶ 제조시작
                 </button>
               ) : null}
             </div>
@@ -2263,7 +2288,7 @@ function StaffPageInner() {
                               ? "제조중"
                               : "제조대기"
                             : checked
-                            ? "준비확인"
+                            ? "확인"
                             : "준비대기";
                           const statusClass = !isDone ? "badgeMaking" : checked ? "badgeDone" : "badgeChecked";
                           const showReadyAction = isDone && !checked;
@@ -2282,9 +2307,10 @@ function StaffPageInner() {
                                   <button
                                     type="button"
                                     className="quickActionBtn quickActionBtnPrimary"
+                                    style={{ minWidth: 72 }}
                                     onClick={() => togglePackingChecks(o, true, it.id)}
                                   >
-                                    ✓ 준비확인
+                                    확인
                                   </button>
                                 ) : (
                                   <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
@@ -2298,7 +2324,7 @@ function StaffPageInner() {
                                       <button
                                         type="button"
                                         className="quickActionBtn"
-                                        style={{ borderColor: "#ef4444", color: "#b91c1c" }}
+                                        style={{ minWidth: 72, borderColor: "#ef4444", color: "#b91c1c" }}
                                         onClick={() => togglePackingChecks(o, false, it.id)}
                                       >
                                         취소
@@ -2641,8 +2667,8 @@ function StaffPageInner() {
                             : it.status === "making"
                             ? "제조중"
                             : it.packingChecked
-                            ? "준비확인"
-                            : "제조완료";
+                                    ? "확인"
+                                    : "제조완료";
                         const statusClass =
                           it.status === "waiting"
                             ? "badgeChecked"
