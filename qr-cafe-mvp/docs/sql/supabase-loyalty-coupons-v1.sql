@@ -634,24 +634,28 @@ alter table public.store_coupon_templates enable row level security;
 alter table public.customer_coupons enable row level security;
 
 -- customer_profiles: customer self
-create policy if not exists customer_profiles_select_self
+drop policy if exists customer_profiles_select_self on public.customer_profiles;
+create policy customer_profiles_select_self
 on public.customer_profiles
 for select
 using (auth.uid() = user_id);
 
-create policy if not exists customer_profiles_upsert_self
+drop policy if exists customer_profiles_upsert_self on public.customer_profiles;
+create policy customer_profiles_upsert_self
 on public.customer_profiles
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
 -- wallet: customer self + store members can view
-create policy if not exists customer_store_wallets_select_self
+drop policy if exists customer_store_wallets_select_self on public.customer_store_wallets;
+create policy customer_store_wallets_select_self
 on public.customer_store_wallets
 for select
 using (auth.uid() = customer_user_id);
 
-create policy if not exists customer_store_wallets_select_store_member
+drop policy if exists customer_store_wallets_select_store_member on public.customer_store_wallets;
+create policy customer_store_wallets_select_store_member
 on public.customer_store_wallets
 for select
 using (
@@ -664,7 +668,8 @@ using (
 );
 
 -- wallet writes only by store members (for admin adjustments) or RPC owner
-create policy if not exists customer_store_wallets_write_store_member
+drop policy if exists customer_store_wallets_write_store_member on public.customer_store_wallets;
+create policy customer_store_wallets_write_store_member
 on public.customer_store_wallets
 for all
 using (
@@ -683,12 +688,14 @@ with check (
 );
 
 -- point transactions: customer self + store members read
-create policy if not exists point_transactions_select_self
+drop policy if exists point_transactions_select_self on public.point_transactions;
+create policy point_transactions_select_self
 on public.point_transactions
 for select
 using (auth.uid() = customer_user_id);
 
-create policy if not exists point_transactions_select_store_member
+drop policy if exists point_transactions_select_store_member on public.point_transactions;
+create policy point_transactions_select_store_member
 on public.point_transactions
 for select
 using (
@@ -700,7 +707,8 @@ using (
 );
 
 -- point transaction writes: store members only (or via definer function)
-create policy if not exists point_transactions_write_store_member
+drop policy if exists point_transactions_write_store_member on public.point_transactions;
+create policy point_transactions_write_store_member
 on public.point_transactions
 for all
 using (
@@ -719,7 +727,8 @@ with check (
 );
 
 -- settings tables: store members manage own store
-create policy if not exists store_loyalty_settings_member_rw
+drop policy if exists store_loyalty_settings_member_rw on public.store_loyalty_settings;
+create policy store_loyalty_settings_member_rw
 on public.store_loyalty_settings
 for all
 using (
@@ -737,7 +746,8 @@ with check (
   )
 );
 
-create policy if not exists store_tier_rules_member_rw
+drop policy if exists store_tier_rules_member_rw on public.store_tier_rules;
+create policy store_tier_rules_member_rw
 on public.store_tier_rules
 for all
 using (
@@ -755,7 +765,8 @@ with check (
   )
 );
 
-create policy if not exists store_coupon_templates_member_rw
+drop policy if exists store_coupon_templates_member_rw on public.store_coupon_templates;
+create policy store_coupon_templates_member_rw
 on public.store_coupon_templates
 for all
 using (
@@ -774,12 +785,14 @@ with check (
 );
 
 -- customer coupons: self read, store member read/write
-create policy if not exists customer_coupons_select_self
+drop policy if exists customer_coupons_select_self on public.customer_coupons;
+create policy customer_coupons_select_self
 on public.customer_coupons
 for select
 using (auth.uid() = customer_user_id);
 
-create policy if not exists customer_coupons_member_rw
+drop policy if exists customer_coupons_member_rw on public.customer_coupons;
+create policy customer_coupons_member_rw
 on public.customer_coupons
 for all
 using (
