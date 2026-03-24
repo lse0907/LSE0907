@@ -1337,15 +1337,6 @@ function StaffPageInner() {
           word-break: keep-all;
         }
 
-        .tabSubHint {
-          margin: 2px 0 0 0;
-          color: var(--muted);
-          font-size: 11px;
-          line-height: 1.4;
-          font-weight: 400;
-          word-break: keep-all;
-        }
-
         .panel {
           margin-top: 16px;
           display: grid;
@@ -1507,6 +1498,13 @@ function StaffPageInner() {
           margin-top: 0;
           margin-left: auto;
           flex: 0 0 auto;
+        }
+
+        .statusPillMini {
+          font-size: 10px;
+          padding: 2px 6px;
+          border-radius: 999px;
+          line-height: 1.2;
         }
 
         .readyItemNameWrap {
@@ -2219,9 +2217,6 @@ function StaffPageInner() {
         </div>
       ) : null}
       <p className="tabHint">{tabGuideText}</p>
-      <p className="tabSubHint">
-        {staffViewMode === "simple" ? "기본모드" : `분업모드 · ${listTitle}`}
-      </p>
 
       <div className="panel">
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
@@ -2357,38 +2352,28 @@ function StaffPageInner() {
                             >
                               <div className="rowBetween">
                                 <div className="readyItemNameWrap">
+                                  {isDone && checked ? (
+                                    <span className={`badge statusPill ${statusClass} statusPillMini`}>{statusText}</span>
+                                  ) : null}
                                   <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
                                   {optText ? <div className="readyItemOptionDesktop">옵션: {optText}</div> : null}
-                                  {isDone && checked ? <span className={`badge statusPill ${statusClass}`}>{statusText}</span> : null}
                                 </div>
-                                {showReadyAction ? (
+                                {isDone ? (
                                   <button
                                     type="button"
-                                    className="quickActionBtn quickActionBtnPrimary"
-                                    style={{ minWidth: 60 }}
-                                    onClick={() => togglePackingChecks(o, true, it.id)}
+                                    className={checked ? "quickActionBtn" : "quickActionBtn quickActionBtnPrimary"}
+                                    style={checked ? { minWidth: 60, borderColor: "#ef4444", color: "#b91c1c" } : { minWidth: 60 }}
+                                    onClick={() => togglePackingChecks(o, !checked, it.id)}
                                   >
-                                    확인
+                                    {checked ? "취소" : "확인"}
                                   </button>
                                 ) : (
-                                  !checked ? <span className={`badge statusPill ${statusClass}`}>{statusText}</span> : null
+                                  <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
                                 )}
                               </div>
-                              {optText || isDone ? (
+                              {optText ? (
                                 <div className="readyItemSubRow">
                                   {optText ? <div className="muted readyItemOption readyItemOptionMobile">옵션: {optText}</div> : null}
-                                  {isDone && checked ? (
-                                    <div className="itemQuickActions readyItemActions">
-                                      <button
-                                        type="button"
-                                        className="quickActionBtn"
-                                        style={{ minWidth: 60, borderColor: "#ef4444", color: "#b91c1c" }}
-                                        onClick={() => togglePackingChecks(o, false, it.id)}
-                                      >
-                                        취소
-                                      </button>
-                                    </div>
-                                  ) : null}
                                 </div>
                               ) : null}
                             </div>
