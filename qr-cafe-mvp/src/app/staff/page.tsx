@@ -348,7 +348,7 @@ function StaffPageInner() {
   const [prepayAddonActive, setPrepayAddonActive] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const [listTab, setListTab] = useState<"active" | "completed" | "all">("active");
+  const [listTab, setListTab] = useState<"active" | "completed">("active");
   const [stationTab, setStationTab] = useState<"order" | "make" | "ready" | "history">("order");
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const [staffViewMode, setStaffViewMode] = useState<StaffViewMode>("simple");
@@ -422,6 +422,7 @@ function StaffPageInner() {
 
   // ✅ 새 주문 NEW 뱃지 표시용
   const [newOrderIds, setNewOrderIds] = useState<Record<string, number>>({}); // id -> expireAt(ms)
+  const [newOrderPopup, setNewOrderPopup] = useState<{ id: string; displayNo: string } | null>(null);
 
   // ✅ “새 주문 들어옴” 감지용
   const lastTopOrderIdRef = useRef<string>("");
@@ -662,6 +663,7 @@ function StaffPageInner() {
     setSelectedId(null);
     setMobileView("list");
     setNewOrderIds({});
+    setNewOrderPopup(null);
     lastTopOrderIdRef.current = "";
     setInitialLoading(true);
 
@@ -706,6 +708,7 @@ function StaffPageInner() {
       // NEW 뱃지 10초
       const expireAt = Date.now() + 10_000;
       setNewOrderIds((prev) => ({ ...prev, [top.id]: expireAt }));
+      setNewOrderPopup({ id: top.id, displayNo: top.displayNo });
 
       // 음성 안내(중복 방지)
       const lastSpoken = localStorage.getItem(LAST_SPOKEN_KEY) || "";
@@ -718,6 +721,13 @@ function StaffPageInner() {
 
   const selected = useMemo(() => orders.find((o) => o.id === selectedId) || null, [orders, selectedId]);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; displayNo: string } | null>(null);
+
+  const moveToOrderCheckTab = () => {
+    if (staffViewMode === "station") setStationTab("order");
+    else setListTab("active");
+    setMobileView("list");
+    setNewOrderPopup(null);
+  };
 
   // ✅ 탭 필터 규칙
   // - 진행중: 날짜 상관없이 모두
@@ -761,11 +771,45 @@ function StaffPageInner() {
 
   const listTitle = useMemo(() => {
     if (staffViewMode !== "station") return "주문 목록";
-    if (stationTab === "order") return "주문관리";
+    if (stationTab === "order") return "주문확인";
     if (stationTab === "make") return "제조";
     if (stationTab === "ready") return "준비";
     return "완료/취소";
   }, [staffViewMode, stationTab]);
+
+  const tabGuideText = useMemo(() => {
+    if (staffViewMode === "simple") return "주문확인 후 제조완료, 전달완료 순서로 처리해 주세요.";
+    if (stationTab === "order") return "신규 주문을 먼저 확인해 주세요.";
+    if (stationTab === "make") return "주문확인 후 제조시작 버튼으로 일괄 시작하세요.";
+    if (stationTab === "ready") return "확인 처리 후 전달완료를 진행하세요.";
+    return "완료된 주문 기록을 확인할 수 있습니다.";
+  }, [staffViewMode, stationTab]);
+
+  const statusButtonLabelForView = (s: OrderStatus) => {
+    if (staffViewMode === "simple") {
+      if (s === "new") return "✓ 주문 확인";
+      if (s === "checked" || s === "making") return "✓ 제조 완료";
+      if (s === "ready_for_packing") return "✓ 전달 완료";
+    }
+    return statusButtonLabel(s);
+  };
+
+  const nextStatusForView = (s: OrderStatus): OrderStatus => {
+    if (staffViewMode !== "simple") return nextStatus(s);
+    if (s === "new") return "checked";
+    if (s === "checked" || s === "making") return "ready_for_packing";
+    if (s === "ready_for_packing") return "completed";
+    return s;
+  };
+
+  const advanceOrder = async (order: OrderRecord) => {
+    await updateOrderInDb(order.id, { status: nextStatusForView(order.status) });
+    if (staffViewMode === "simple" && order.status === "ready_for_packing") {
+      setListTab("active");
+      setSelectedId(null);
+      setMobileView("list");
+    }
+  };
 
   const onSelect = (id: string) => {
     setSelectedId(id);
@@ -877,6 +921,25 @@ function StaffPageInner() {
       return a.name.localeCompare(b.name);
     });
   }, [orders]);
+
+  const waitingItemIdsForBatch = useMemo(
+    () => makeGroups.filter((g) => g.status === "waiting").flatMap((g) => g.itemIds),
+    [makeGroups]
+  );
+  const makingItemIdsForBatch = useMemo(
+    () => makeGroups.filter((g) => g.status === "making").flatMap((g) => g.itemIds),
+    [makeGroups]
+  );
+
+  const makeGroupsByCategory = useMemo(() => {
+    const grouped = new Map<string, typeof makeGroups>();
+    for (const g of makeGroups) {
+      const key = g.categoryName || "미분류";
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(g);
+    }
+    return [...grouped.entries()];
+  }, [makeGroups]);
 
   const buildOptionText = (it: OrderItem) =>
     it.options
@@ -1221,6 +1284,25 @@ function StaffPageInner() {
           color: #1d4ed8;
         }
 
+        .newOrderPopup {
+          margin-top: 8px;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          border-radius: 12px;
+          padding: 10px 12px;
+        }
+        .newOrderPopupTitle {
+          font-size: 12px;
+          font-weight: 900;
+          color: #1d4ed8;
+        }
+        .newOrderPopupText {
+          margin-top: 2px;
+          font-size: 13px;
+          font-weight: 850;
+          color: #111827;
+        }
+
         .modeLabel {
           margin: 0;
           font-size: 12px;
@@ -1247,11 +1329,11 @@ function StaffPageInner() {
 
         /* ✅ 탭 아래 안내 문구 */
         .tabHint {
-          margin: 8px 0 0 0;
+          margin: 6px 0 0 0;
           color: var(--muted);
           font-size: 12px;
           line-height: 1.4;
-          font-weight: 700;
+          font-weight: 400;
           word-break: keep-all;
         }
 
@@ -1416,6 +1498,57 @@ function StaffPageInner() {
           margin-top: 0;
           margin-left: auto;
           flex: 0 0 auto;
+        }
+
+        .statusPillMini {
+          font-size: 10px;
+          padding: 2px 6px;
+          border-radius: 999px;
+          line-height: 1.2;
+        }
+
+        .readyItemNameWrap {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-width: 0;
+          flex-wrap: wrap;
+        }
+
+        .readyItemOptionDesktop {
+          display: none;
+          min-width: 0;
+          color: var(--muted);
+        }
+
+        .readyItemOptionMobile {
+          margin: 0;
+          flex: 1 1 220px;
+          min-width: 0;
+        }
+
+        @media (min-width: 900px) {
+          .readyItemSubRow {
+            align-items: flex-start;
+          }
+          .readyItemOption {
+            flex: 0 1 52%;
+            margin-left: auto;
+            text-align: right;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+          .readyItemOptionDesktop {
+            display: inline;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            line-height: 1.35;
+          }
+          .readyItemOptionMobile {
+            display: none;
+          }
         }
 
         .bigNo {
@@ -1985,7 +2118,7 @@ function StaffPageInner() {
       </header>
 
       <div className="modeRow">
-        <p className="modeLabel">모드전환</p>
+        <p className="modeLabel">운영 방식</p>
         <div className="modeSwitch" role="group" aria-label="모드전환">
           <button
             type="button"
@@ -1993,7 +2126,7 @@ function StaffPageInner() {
             aria-pressed={staffViewMode === "simple"}
             onClick={() => updateStaffViewMode("simple")}
           >
-            Simple
+            기본 모드
           </button>
           <button
             type="button"
@@ -2001,7 +2134,7 @@ function StaffPageInner() {
             aria-pressed={staffViewMode === "station"}
             onClick={() => updateStaffViewMode("station")}
           >
-            Station
+            분업 모드
           </button>
         </div>
       </div>
@@ -2016,7 +2149,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              진행중 ({counts.active})
+              주문확인 ({counts.active})
             </button>
             <button
               className={`chip ${listTab === "completed" ? "chipOn" : ""}`}
@@ -2026,15 +2159,6 @@ function StaffPageInner() {
               }}
             >
               완료 ({counts.completed})
-            </button>
-            <button
-              className={`chip ${listTab === "all" ? "chipOn" : ""}`}
-              onClick={() => {
-                setListTab("all");
-                setMobileView("list");
-              }}
-            >
-              전체 ({counts.all})
             </button>
           </div>
         </div>
@@ -2048,7 +2172,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              주문관리 ({stationCounts.order})
+              주문확인 ({stationCounts.order})
             </button>
             <button
               className={`chip ${stationTab === "make" ? "chipOn" : ""}`}
@@ -2081,13 +2205,37 @@ function StaffPageInner() {
         </div>
       )}
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
-      <p className="tabHint" style={{ marginTop: 4 }}>주문 확인 → 제조 → 준비 확인 순서로 진행해 주세요.</p>
+      {newOrderPopup ? (
+        <div className="newOrderPopup" role="alert" aria-live="assertive">
+          <div className="rowBetween" style={{ gap: 8, alignItems: "center" }}>
+            <div className="newOrderPopupTitle">신규 주문 접수 · 주문번호 {newOrderPopup.displayNo}</div>
+            <div className="itemQuickActions" style={{ marginTop: 0 }}>
+              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>확인</button>
+              <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <p className="tabHint">{tabGuideText}</p>
 
       <div className="panel">
         <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
             <h2 className="cardTitle">{listTitle}</h2>
-            <span className="badge">{filteredOrders.length}건</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span className="badge">{filteredOrders.length}건</span>
+              {staffViewMode === "station" && stationTab === "make" ? (
+                <button
+                  type="button"
+                  className="quickActionBtn quickActionBtnPrimary"
+                  onClick={() => updateOrderItemsInDb(waitingItemIdsForBatch, { status: "making", batch: nextBatch })}
+                  disabled={waitingItemIdsForBatch.length === 0}
+                  style={{ opacity: waitingItemIdsForBatch.length ? 1 : 0.45 }}
+                >
+                  ▶ 제조시작
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {!storeId ? (
@@ -2095,39 +2243,66 @@ function StaffPageInner() {
           ) : staffViewMode === "station" && stationTab === "make" ? (
             makeGroups.length === 0 ? <p className="muted">제조 대기/진행 아이템이 없습니다.</p> : (
               <div className="list">
-                {makeGroups.map((g) => (
-                  <div key={g.key} className="itemBtn" style={{ cursor: "default" }}>
-                    <div className="rowBetween">
-                      <div className="bigNo">{g.name} × {g.qty}</div>
-                      <span className={`badge statusPill ${g.status === "waiting" ? "badgeChecked" : "badgeMaking"}`}>
-                        {g.status === "waiting" ? "제조대기" : "제조중"}
-                      </span>
+                <p className="muted" style={{ marginBottom: 8 }}>주문확인 후, 제조시작 버튼을 눌러주세요.</p>
+                {makeGroupsByCategory.map(([categoryName, rows]) => (
+                  <div key={`make_cat_${categoryName}`} style={{ display: "grid", gap: 8 }}>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        padding: "6px 10px",
+                        borderLeft: "4px solid #3b82f6",
+                        background: "#eff6ff",
+                        color: "#1e3a8a",
+                        borderRadius: 8,
+                      }}
+                    >
+                      {categoryName}
                     </div>
-                    <div className="muted" style={{ marginTop: 8 }}>
-                      {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
-                    </div>
-                    {g.optionLabel ? <div className="muted" style={{ marginTop: 4 }}>옵션: {g.optionLabel}</div> : null}
-                    <div className="itemQuickActions" style={{ marginTop: 10 }}>
-                      {g.status === "waiting" ? (
-                        <button
-                          type="button"
-                          className="quickActionBtn quickActionBtnPrimary"
-                          onClick={() => updateOrderItemsInDb(g.itemIds, { status: "making", batch: nextBatch })}
+                    <div className="detailBox" style={{ display: "grid", gap: 0, padding: 0 }}>
+                      {rows.map((g, idx) => (
+                        <div
+                          key={g.key}
+                          style={{
+                            padding: "10px 12px",
+                            borderTop: idx === 0 ? "none" : "1px solid #e5e7eb",
+                            display: "grid",
+                            gap: 6,
+                          }}
                         >
-                          ▶ 제조 시작
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="quickActionBtn quickActionBtnPrimary"
-                          onClick={() => updateOrderItemsInDb(g.itemIds, { status: "done" })}
-                        >
-                          ✓ 제조 완료
-                        </button>
-                      )}
+                          <div className="rowBetween">
+                            <div className="bigNo">{g.name} × {g.qty}</div>
+                            {g.status === "making" ? (
+                              <button
+                                type="button"
+                                className="quickActionBtn quickActionBtnPrimary"
+                                onClick={() => updateOrderItemsInDb(g.itemIds, { status: "done" })}
+                              >
+                                ✓ 제조완료
+                              </button>
+                            ) : (
+                              <span className="muted" style={{ fontWeight: 800 }}>대기</span>
+                            )}
+                          </div>
+                          <div className="muted">
+                            {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
+                          </div>
+                          {g.optionLabel ? <div className="muted">옵션: {g.optionLabel}</div> : null}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
+                <div className="itemQuickActions" style={{ marginTop: 12, gap: 8 }}>
+                  <button
+                    type="button"
+                    className="quickActionBtn quickActionBtnPrimary"
+                    onClick={() => updateOrderItemsInDb(makingItemIdsForBatch, { status: "done" })}
+                    disabled={makingItemIdsForBatch.length === 0}
+                    style={{ opacity: makingItemIdsForBatch.length ? 1 : 0.45 }}
+                  >
+                    ✓ 전체 제조완료
+                  </button>
+                </div>
               </div>
             )
           ) : staffViewMode === "station" && stationTab === "ready" ? (
@@ -2152,7 +2327,7 @@ function StaffPageInner() {
                       </div>
                       {o.requestNote ? <div className="muted" style={{ marginTop: 4 }}>요청사항: {o.requestNote}</div> : null}
 
-                      <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                      <div className="detailBox" style={{ marginTop: 10, display: "grid", gap: 0, padding: 0 }}>
                         {o.items.map((it) => {
                           const optText = buildOptionText(it);
                           const checked = !!it.packingChecked;
@@ -2162,30 +2337,42 @@ function StaffPageInner() {
                               ? "제조중"
                               : "제조대기"
                             : checked
-                            ? "준비확인"
+                            ? "확인"
                             : "준비대기";
                           const statusClass = !isDone ? "badgeMaking" : checked ? "badgeDone" : "badgeChecked";
 
                           return (
-                            <div key={`ready_item_${it.id}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                            <div
+                              key={`ready_item_${it.id}`}
+                              style={{
+                                padding: "10px 12px",
+                                borderTop: o.items.findIndex((x) => x.id === it.id) === 0 ? "none" : "1px solid #e5e7eb",
+                              }}
+                            >
                               <div className="rowBetween">
-                                <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
-                                <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
-                              </div>
-                              {optText || isDone ? (
-                                <div className="readyItemSubRow">
-                                  {optText ? <div className="muted readyItemOption">{optText}</div> : null}
-                                  {isDone ? (
-                                    <div className="itemQuickActions readyItemActions">
-                                      <button
-                                        type="button"
-                                        className={`quickActionBtn ${checked ? "" : "quickActionBtnPrimary"}`}
-                                        onClick={() => togglePackingChecks(o, !checked, it.id)}
-                                      >
-                                        {checked ? "↺ 확인취소" : "✓ 준비확인"}
-                                      </button>
-                                    </div>
+                                <div className="readyItemNameWrap">
+                                  {isDone && checked ? (
+                                    <span className={`badge statusPill ${statusClass} statusPillMini`}>{statusText}</span>
                                   ) : null}
+                                  <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
+                                  {optText ? <div className="readyItemOptionDesktop">{optText}</div> : null}
+                                </div>
+                                {isDone ? (
+                                  <button
+                                    type="button"
+                                    className={checked ? "quickActionBtn" : "quickActionBtn quickActionBtnPrimary"}
+                                    style={checked ? { minWidth: 60, borderColor: "#ef4444", color: "#b91c1c" } : { minWidth: 60 }}
+                                    onClick={() => togglePackingChecks(o, !checked, it.id)}
+                                  >
+                                    {checked ? "취소" : "확인"}
+                                  </button>
+                                ) : (
+                                  <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
+                                )}
+                              </div>
+                              {optText ? (
+                                <div className="readyItemSubRow">
+                                  {optText ? <div className="muted readyItemOption readyItemOptionMobile">{optText}</div> : null}
                                 </div>
                               ) : null}
                             </div>
@@ -2201,7 +2388,7 @@ function StaffPageInner() {
                           disabled={!doneItems.length}
                           style={{ opacity: doneItems.length ? 1 : 0.45 }}
                         >
-                          ✓ 전체 준비확인
+                          ✓ 전체확인
                         </button>
                         <button
                           type="button"
@@ -2255,41 +2442,39 @@ function StaffPageInner() {
                       </div>
                     </div>
 
-                    <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                       <span className={`badge ${badgeClass}`}>{STATUS_LABEL[o.status]}</span>
                       <span className="badge">
                         {o.mode === "dine-in" ? `매장 · 테이블 ${o.table ?? "-"}` : "포장"}
                       </span>
-                    </div>
-
-                    <div className="muted" style={{ marginTop: 8 }}>
-                      {o.items
-                        .map((it) => `${it.name}×${it.qty}`)
-                        .slice(0, 2)
-                        .join(", ")}
-                      {o.items.length > 2 ? "…" : ""}
-                    </div>
-
-                    <div className="orderQuickMeta">
                       <span className="badge">메뉴 {o.items.length}개</span>
                       <span className="badge">총 수량 {totalQty}</span>
                     </div>
 
-                    {staffViewMode === "station" && isActive(o.status) ? (
-                      <div className="itemQuickActions">
-                        <button
-                          type="button"
-                          className="quickActionBtn quickActionBtnPrimary"
-                          aria-label={`주문번호 ${o.displayNo} ${statusButtonLabel(o.status)}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateOrderInDb(o.id, { status: nextStatus(o.status) });
-                          }}
-                        >
-                          {statusButtonLabel(o.status)}
-                        </button>
+                    <div className="rowBetween" style={{ marginTop: 8, gap: 10 }}>
+                      <div className="muted" style={{ flex: 1, minWidth: 0 }}>
+                        {o.items
+                          .map((it) => `${it.name}×${it.qty}`)
+                          .slice(0, 2)
+                          .join(", ")}
+                        {o.items.length > 2 ? "…" : ""}
                       </div>
-                    ) : null}
+                      {(staffViewMode === "simple" ? o.status === "new" : isActive(o.status)) ? (
+                        <div className="itemQuickActions" style={{ marginTop: 0 }}>
+                          <button
+                            type="button"
+                            className="quickActionBtn quickActionBtnPrimary"
+                            aria-label={`주문번호 ${o.displayNo} ${statusButtonLabelForView(o.status)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              advanceOrder(o);
+                            }}
+                          >
+                            {statusButtonLabelForView(o.status)}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
@@ -2309,8 +2494,81 @@ function StaffPageInner() {
             </button>
           </div>
 
-          {!selected ? (
-            <p className="muted">주문을 선택하세요.</p>
+          {staffViewMode === "station" && (stationTab === "make" || stationTab === "ready") ? (
+            <div style={{ display: "grid", gap: 10 }}>
+              <div className="detailBox">
+                <div className="rowBetween">
+                  <b>{stationTab === "make" ? "제조 진행 현황" : "준비 진행 현황"}</b>
+                  <span className="badge">{stationTab === "make" ? makeGroups.length : readyOrders.length}건</span>
+                </div>
+              </div>
+
+              {stationTab === "make" ? (
+                <div className="detailBox" style={{ display: "grid", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <span className="badge">제조대기 {makeGroups.filter((g) => g.status === "waiting").length}건</span>
+                    <span className="badge">제조중 {makeGroups.filter((g) => g.status === "making").length}건</span>
+                  </div>
+                  {makeGroups.map((g) => (
+                    <div key={`panel_make_${g.key}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                      <div className="rowBetween">
+                        <div style={{ fontWeight: 800 }}>{g.name} × {g.qty}</div>
+                        <span className={`badge statusPill ${g.status === "waiting" ? "badgeChecked" : "badgeMaking"}`}>
+                          {g.status === "waiting" ? "제조대기" : "제조중"}
+                        </span>
+                      </div>
+                      <div className="muted" style={{ marginTop: 6 }}>
+                        {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="detailBox" style={{ display: "grid", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <span className="badge">준비 대상 {readyOrders.length}건</span>
+                    <span className="badge">
+                      준비확인 완료 {readyOrders.filter((o) => o.items.filter((it) => it.status === "done").every((it) => !!it.packingChecked)).length}건
+                    </span>
+                  </div>
+                  {readyOrders.map((o) => {
+                    const doneItems = o.items.filter((it) => it.status === "done");
+                    const checkedCount = doneItems.filter((it) => !!it.packingChecked).length;
+                    return (
+                      <div key={`panel_ready_${o.id}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                        <div className="rowBetween">
+                          <div style={{ fontWeight: 800 }}>주문번호 {o.displayNo}</div>
+                          <span className="badge">준비 확인 {checkedCount}/{doneItems.length}</span>
+                        </div>
+                        <div className="muted" style={{ marginTop: 6 }}>
+                          {o.items.map((it) => `${it.name}×${it.qty}`).slice(0, 2).join(", ")}
+                          {o.items.length > 2 ? "…" : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : !selected ? (
+            <div className="detailBox" style={{ display: "grid", gap: 10 }}>
+              <p className="muted">주문을 선택하세요.</p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span className="badge">주문확인 {counts.active}건</span>
+                <span className="badge">완료 {counts.completed}건</span>
+                <span className="badge">전체 {counts.all}건</span>
+              </div>
+              <div className="itemQuickActions">
+                <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
+                  주문확인 탭 보기
+                </button>
+                {staffViewMode === "station" ? (
+                  <button type="button" className="quickActionBtn" onClick={() => setStationTab("make")}>
+                    제조 탭 보기
+                  </button>
+                ) : null}
+              </div>
+            </div>
           ) : (
             <>
               <div className="detailBox">
@@ -2334,30 +2592,32 @@ function StaffPageInner() {
                 </div>
               ) : null}
 
-              <div className="section">
-                <div className="buzzerRow">
-                  <h3 className="sectionTitleSm">진동벨 번호 (선택)</h3>
-                  <input
-                    className="buzzerInput"
-                    value={selected.buzzerNo ?? ""}
-                    onChange={(e) => updateOrderInDb(selected.id, { buzzerNo: e.target.value.trim() })}
-                    placeholder="예: 12"
-                  />
-                </div>
-                <p className="buzzerHint">* 벨을 지급한 경우에만 입력</p>
-              </div>
+              {(staffViewMode !== "station" || stationTab === "order" || stationTab === "history") ? (
+                <>
+                  <div className="section">
+                    <div className="buzzerRow">
+                      <h3 className="sectionTitleSm">진동벨 번호 (선택)</h3>
+                      <input
+                        className="buzzerInput"
+                        value={selected.buzzerNo ?? ""}
+                        onChange={(e) => updateOrderInDb(selected.id, { buzzerNo: e.target.value.trim() })}
+                        placeholder="예: 12"
+                      />
+                    </div>
+                    <p className="buzzerHint">* 벨을 지급한 경우에만 입력</p>
+                  </div>
 
-              <div className="section">
-                <h3 className="sectionTitleSm">요청사항</h3>
-                <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
-                  {selected.requestNote || "요청사항 없음"}
-                </div>
-              </div>
+                  <div className="section">
+                    <h3 className="sectionTitleSm">요청사항</h3>
+                    <div className="detailBox" style={{ color: selected.requestNote ? "#111" : "#6b7280" }}>
+                      {selected.requestNote || "요청사항 없음"}
+                    </div>
+                  </div>
 
-              <div className="section">
-                <h3 className="sectionTitle">주문 내역</h3>
-                <div className="itemsScroll">
-                  <div className="orderItemsBox">
+                  <div className="section">
+                    <h3 className="sectionTitle">주문 내역</h3>
+                    <div className="itemsScroll">
+                      <div className="orderItemsBox">
                     {Object.entries(
                       selected.items.reduce<Record<string, OrderItem[]>>((acc, it) => {
                         const key = it.categoryName || "미분류";
@@ -2374,7 +2634,18 @@ function StaffPageInner() {
                       })
                       .map(([categoryName, rows]) => (
                         <div key={categoryName} style={{ display: "grid", gap: 8 }}>
-                          <div className="muted" style={{ fontWeight: 900 }}>{categoryName}</div>
+                          <div
+                            style={{
+                              fontWeight: 900,
+                              padding: "6px 10px",
+                              borderLeft: "4px solid #3b82f6",
+                              background: "#eff6ff",
+                              color: "#1e3a8a",
+                              borderRadius: 8,
+                            }}
+                          >
+                            {categoryName}
+                          </div>
                           {rows.map((it, idx) => {
                             const optionTotal = Number(it.optionTotal || 0);
                             const unit = Number(it.price || 0) + optionTotal;
@@ -2410,30 +2681,84 @@ function StaffPageInner() {
                           })}
                         </div>
                       ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              {staffViewMode === "station" && (stationTab === "make" || stationTab === "ready") && !isCompleted(selected.status) ? (
+                <div className="section">
+                  <h3 className="sectionTitle">진행 현황</h3>
+                  <div className="detailBox" style={{ display: "grid", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <span className="badge">제조대기 {selected.items.filter((it) => it.status === "waiting").length}개</span>
+                      <span className="badge">제조중 {selected.items.filter((it) => it.status === "making").length}개</span>
+                      <span className="badge">제조완료 {selected.items.filter((it) => it.status === "done").length}개</span>
+                      <span className="badge">
+                        준비확인 {selected.items.filter((it) => it.status === "done" && !!it.packingChecked).length}개
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {selected.items.map((it, idx) => {
+                        const optText = buildOptionText(it);
+                        const statusText =
+                          it.status === "waiting"
+                            ? "제조대기"
+                            : it.status === "making"
+                            ? "제조중"
+                            : it.packingChecked
+                                    ? "확인"
+                                    : "제조완료";
+                        const statusClass =
+                          it.status === "waiting"
+                            ? "badgeChecked"
+                            : it.status === "making"
+                            ? "badgeMaking"
+                            : it.packingChecked
+                            ? "badgeDone"
+                            : "badgeDone";
+
+                        return (
+                          <div key={`station_progress_${it.id}_${idx}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                            <div className="rowBetween">
+                              <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
+                              <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
+                            </div>
+                            {optText ? <div className="muted" style={{ marginTop: 6 }}>{optText}</div> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
 
               <div className="actionRow">
-                <button
-                  className="actionBtn actionPrimary"
-                  onClick={() => updateOrderInDb(selected.id, { status: nextStatus(selected.status) })}
-                  disabled={!canAdvanceSelected}
-                  style={{
-                    opacity: canAdvanceSelected ? 1 : 0.5,
-                  }}
-                >
-                  {statusButtonLabel(selected.status)}
-                </button>
+                {staffViewMode !== "station" ? (
+                  <>
+                    <button
+                      className="actionBtn actionPrimary"
+                      onClick={() => advanceOrder(selected)}
+                      disabled={!canAdvanceSelected}
+                      style={{
+                        opacity: canAdvanceSelected ? 1 : 0.5,
+                      }}
+                    >
+                      {statusButtonLabelForView(selected.status)}
+                    </button>
 
-                {prepayAddonActive && selected.paymentStatus === "pending" ? (
-                  <button
-                    className="actionBtn"
-                    style={{ borderColor: "#2563eb", color: "#2563eb" }}
-                    onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
-                  >
-                    결제완료 처리
-                  </button>
+                    {prepayAddonActive && selected.paymentStatus === "pending" ? (
+                      <button
+                        className="actionBtn"
+                        style={{ borderColor: "#2563eb", color: "#2563eb" }}
+                        onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
+                      >
+                        결제완료 처리
+                      </button>
+                    ) : null}
+                  </>
                 ) : null}
 
                 <button
@@ -2460,23 +2785,27 @@ function StaffPageInner() {
 
       {selected && mobileView === "detail" ? (
         <div className={`actionDock ${prepayAddonActive && selected.paymentStatus === "pending" ? "actionDockTriple" : ""}`}>
-          <button
-            className="actionBtn actionPrimary"
-            onClick={() => updateOrderInDb(selected.id, { status: nextStatus(selected.status) })}
-            disabled={!canAdvanceSelected}
-            style={{ opacity: canAdvanceSelected ? 1 : 0.5 }}
-          >
-            {statusButtonLabel(selected.status)}
-          </button>
+          {staffViewMode !== "station" ? (
+            <>
+              <button
+                className="actionBtn actionPrimary"
+                onClick={() => advanceOrder(selected)}
+                disabled={!canAdvanceSelected}
+                style={{ opacity: canAdvanceSelected ? 1 : 0.5 }}
+              >
+                {statusButtonLabelForView(selected.status)}
+              </button>
 
-          {prepayAddonActive && selected.paymentStatus === "pending" ? (
-            <button
-              className="actionBtn"
-              style={{ borderColor: "#2563eb", color: "#2563eb" }}
-              onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
-            >
-              결제완료 처리
-            </button>
+              {prepayAddonActive && selected.paymentStatus === "pending" ? (
+                <button
+                  className="actionBtn"
+                  style={{ borderColor: "#2563eb", color: "#2563eb" }}
+                  onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
+                >
+                  결제완료 처리
+                </button>
+              ) : null}
+            </>
           ) : null}
 
           <button
