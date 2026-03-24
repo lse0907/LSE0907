@@ -2356,7 +2356,7 @@ function StaffPageInner() {
                                     <span className={`badge statusPill ${statusClass} statusPillMini`}>{statusText}</span>
                                   ) : null}
                                   <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
-                                  {optText ? <div className="readyItemOptionDesktop">옵션: {optText}</div> : null}
+                                  {optText ? <div className="readyItemOptionDesktop">{optText}</div> : null}
                                 </div>
                                 {isDone ? (
                                   <button
@@ -2373,7 +2373,7 @@ function StaffPageInner() {
                               </div>
                               {optText ? (
                                 <div className="readyItemSubRow">
-                                  {optText ? <div className="muted readyItemOption readyItemOptionMobile">옵션: {optText}</div> : null}
+                                  {optText ? <div className="muted readyItemOption readyItemOptionMobile">{optText}</div> : null}
                                 </div>
                               ) : null}
                             </div>
