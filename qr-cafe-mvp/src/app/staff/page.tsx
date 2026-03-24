@@ -1331,7 +1331,7 @@ function StaffPageInner() {
         .tabHint {
           margin: 6px 0 0 0;
           color: var(--muted);
-          font-size: 12px;
+          font-size: 11px;
           line-height: 1.4;
           font-weight: 400;
           word-break: keep-all;
@@ -2340,6 +2340,7 @@ function StaffPageInner() {
                             ? "확인"
                             : "준비대기";
                           const statusClass = !isDone ? "badgeMaking" : checked ? "badgeDone" : "badgeChecked";
+                          const showReadyAction = isDone && !checked;
 
                           return (
                             <div
