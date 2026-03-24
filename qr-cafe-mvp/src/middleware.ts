@@ -32,9 +32,14 @@ export async function middleware(req: NextRequest) {
   const isProtected =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/staff") ||
-    pathname.startsWith("/onboarding");
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/me");
 
-  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const isAuthPage =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/signup-owner") ||
+    pathname.startsWith("/signup-customer");
 
   const { supabase, res } = createSupabaseMiddlewareClient(req);
 
@@ -51,13 +56,30 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 로그인 상태에서 login/signup 접근하면 admin으로 보내기(선택)
+  // 로그인 상태에서 login/signup 접근하면 역할에 맞는 기본 페이지로 이동
   if (isAuthPage && isLoggedIn) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/admin";
-    // 혹시 next가 있으면 그쪽으로
     const next = searchParams.get("next");
-    if (next) url.pathname = next;
+    const url = req.nextUrl.clone();
+
+    if (next) {
+      url.pathname = next;
+      return NextResponse.redirect(url);
+    }
+
+    const uid = data?.user?.id || null;
+    let isStoreMember = false;
+
+    if (uid) {
+      const { data: memberRow } = await supabase
+        .from("store_members")
+        .select("id")
+        .eq("user_id", uid)
+        .limit(1)
+        .maybeSingle();
+      isStoreMember = !!memberRow;
+    }
+
+    url.pathname = isStoreMember ? "/admin" : "/me";
     return NextResponse.redirect(url);
   }
 
@@ -65,5 +87,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/staff/:path*", "/onboarding/:path*", "/login", "/signup"],
+  matcher: ["/admin/:path*", "/staff/:path*", "/onboarding/:path*", "/me/:path*", "/login", "/signup", "/signup-owner", "/signup-customer"],
 };
