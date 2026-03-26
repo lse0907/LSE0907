@@ -342,6 +342,8 @@ function ConfirmPageInner() {
       const accessToken = uuid();
       const createdAtIso = new Date().toISOString();
       const orderDate = todayKey();
+      const { data: authData } = await supabase.auth.getUser();
+      const customerUserId = authData?.user?.id || null;
 
       const paymentStatus = await resolvePaymentStatus();
 
@@ -354,12 +356,15 @@ function ConfirmPageInner() {
         const pending = {
           createdAt: Date.now(),
           storeId,
+          customerUserId,
           cartLines,
           mode: effectiveMode,
           table: effectiveMode === "dine-in" ? effectiveTable : "",
           requestNote,
           totalCount,
           totalPrice,
+          usedPoints: 0,
+          usedCouponId: null as string | null,
         };
 
         localStorage.setItem(`${PREPAY_PENDING_KEY}:${payOrderId}`, JSON.stringify(pending));
@@ -466,6 +471,21 @@ function ConfirmPageInner() {
       if (optionRows.length) {
         const { error: oioErr } = await supabase.from("order_item_options").insert(optionRows);
         if (oioErr) throw new Error(`[order_item_options insert] ${oioErr.message}`);
+      }
+
+      if (customerUserId) {
+        const { error: loyaltyErr } = await supabase.rpc("apply_loyalty_on_paid_order", {
+          p_order_id: orderId,
+          p_store_id: storeId,
+          p_customer_user_id: customerUserId,
+          p_order_amount: Math.round(totalPrice),
+          p_used_points: 0,
+          p_used_coupon_id: null,
+          p_idempotency_key: `${orderId}:loyalty`,
+        });
+        if (loyaltyErr) {
+          console.warn("[loyalty] apply failed:", loyaltyErr.message);
+        }
       }
 
       // 로컬 저장(임시 유지)
