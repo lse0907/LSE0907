@@ -43,6 +43,7 @@ create table if not exists public.customer_profiles (
   updated_at timestamptz not null default now()
 );
 
+drop trigger if exists trg_customer_profiles_updated_at on public.customer_profiles;
 create trigger trg_customer_profiles_updated_at
 before update on public.customer_profiles
 for each row execute function public.set_updated_at();
@@ -66,6 +67,7 @@ create table if not exists public.customer_store_wallets (
 create index if not exists idx_customer_store_wallets_store
   on public.customer_store_wallets(store_id);
 
+drop trigger if exists trg_customer_store_wallets_updated_at on public.customer_store_wallets;
 create trigger trg_customer_store_wallets_updated_at
 before update on public.customer_store_wallets
 for each row execute function public.set_updated_at();
@@ -112,6 +114,7 @@ create table if not exists public.store_loyalty_settings (
   check (tier_general_rate_pct <= tier_regular_rate_pct and tier_regular_rate_pct <= tier_vip_rate_pct)
 );
 
+drop trigger if exists trg_store_loyalty_settings_updated_at on public.store_loyalty_settings;
 create trigger trg_store_loyalty_settings_updated_at
 before update on public.store_loyalty_settings
 for each row execute function public.set_updated_at();
@@ -139,6 +142,7 @@ create table if not exists public.store_tier_rules (
   check (vip_min_orders >= regular_min_orders)
 );
 
+drop trigger if exists trg_store_tier_rules_updated_at on public.store_tier_rules;
 create trigger trg_store_tier_rules_updated_at
 before update on public.store_tier_rules
 for each row execute function public.set_updated_at();
@@ -174,6 +178,7 @@ create table if not exists public.store_coupon_templates (
 create index if not exists idx_store_coupon_templates_store_active
   on public.store_coupon_templates(store_id, is_active);
 
+drop trigger if exists trg_store_coupon_templates_updated_at on public.store_coupon_templates;
 create trigger trg_store_coupon_templates_updated_at
 before update on public.store_coupon_templates
 for each row execute function public.set_updated_at();
@@ -198,6 +203,7 @@ create index if not exists idx_customer_coupons_customer_store_status
 create index if not exists idx_customer_coupons_store_status_expires
   on public.customer_coupons(store_id, status, expires_at);
 
+drop trigger if exists trg_customer_coupons_updated_at on public.customer_coupons;
 create trigger trg_customer_coupons_updated_at
 before update on public.customer_coupons
 for each row execute function public.set_updated_at();
