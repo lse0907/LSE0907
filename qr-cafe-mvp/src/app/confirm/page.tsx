@@ -232,7 +232,6 @@ function ConfirmPageInner() {
   const [isPrepayStore, setIsPrepayStore] = useState(false);
   const [prepayLoading, setPrepayLoading] = useState(true);
   const [pgConfig, setPgConfig] = useState<PgConfig>({ clientKey: "", mid: "" });
-  const [authEmail, setAuthEmail] = useState("");
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
   const [issuedCouponCount, setIssuedCouponCount] = useState(0);
@@ -287,7 +286,6 @@ function ConfirmPageInner() {
       const uid = authData?.user?.id || null;
       if (!mounted) return;
       setCustomerUserId(uid);
-      setAuthEmail(String(authData?.user?.email || ""));
 
       if (!uid) {
         setWallet(null);
@@ -640,20 +638,58 @@ function ConfirmPageInner() {
       <main style={{ padding: 16, maxWidth: 720, margin: "0 auto", color: "#111827" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <h1 style={{ margin: 0, fontWeight: 950 }}>주문 확인</h1>
-        <span
-          style={{
-            border: "1px solid #d1d5db",
-            borderRadius: 999,
-            padding: "4px 10px",
-            color: "#374151",
-            fontWeight: 900,
-            fontSize: 12,
-            background: "white",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {isTableQr ? "테이블 주문" : "카운터 주문"}
-        </span>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <span
+            style={{
+              border: "1px solid #d1d5db",
+              borderRadius: 999,
+              padding: "4px 10px",
+              color: "#374151",
+              fontWeight: 900,
+              fontSize: 12,
+              background: "white",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {isTableQr ? "테이블 주문" : "카운터 주문"}
+          </span>
+          {customerUserId ? (
+            <>
+              <button
+                onClick={() => router.push(`/me?store=${encodeURIComponent(storeId)}`)}
+                style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
+              >
+                내정보
+              </button>
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  setCustomerUserId(null);
+                  setWallet(null);
+                  setIssuedCouponCount(0);
+                }}
+                style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
+              >
+                로그아웃
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => router.push("/login")}
+                style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
+              >
+                로그인
+              </button>
+              <button
+                onClick={() => router.push("/signup")}
+                style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
+              >
+                회원가입
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -773,10 +809,7 @@ function ConfirmPageInner() {
       <div style={{ marginTop: 10, border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fff" }}>
         {customerUserId ? (
           <>
-            <p style={{ margin: 0, fontWeight: 900 }}>
-              로그인 회원: <b>{authEmail || "회원"}</b>
-            </p>
-            <p style={{ margin: "6px 0 0", fontWeight: 800 }}>
+            <p style={{ margin: 0, fontWeight: 800 }}>
               현재 등급: <b>{wallet?.tier || "general"}</b> · 잔여 포인트: <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 보유 쿠폰: <b>{issuedCouponCount}장</b>
             </p>
             <p style={{ margin: "6px 0 0", color: "#6b7280", fontWeight: 700, fontSize: 13 }}>

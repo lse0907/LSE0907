@@ -73,9 +73,25 @@ function MePageInner() {
 
   return (
     <main style={{ maxWidth: 760, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>내 혜택</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>회원 정보</h1>
+        <button
+          type="button"
+          onClick={() => {
+            const sid = storeFromQuery || wallets[0]?.store_id || "";
+            if (!sid) {
+              router.push("/");
+              return;
+            }
+            router.push(`/menu?store=${encodeURIComponent(sid)}`);
+          }}
+          style={actionBtnStyle}
+        >
+          주문화면
+        </button>
+      </div>
       <p style={{ color: "#6b7280", marginTop: 8, fontWeight: 700 }}>
-        고객 회원 정보와 매장별 포인트를 확인할 수 있어요.
+        RION Order 회원 정보와 매장별 포인트를 확인할 수 있어요.
       </p>
 
       {loading ? <p style={{ marginTop: 14 }}>불러오는 중...</p> : null}
@@ -87,28 +103,6 @@ function MePageInner() {
           <p><b>이메일:</b> {email || "-"}</p>
           <p><b>이름:</b> {profile?.name || "-"}</p>
           <p><b>전화번호:</b> {profile?.phone || "-"}</p>
-        </section>
-      ) : null}
-
-      {!loading ? (
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>바로가기</h2>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => {
-                const sid = storeFromQuery || wallets[0]?.store_id || "";
-                if (!sid) {
-                  router.push("/");
-                  return;
-                }
-                router.push(`/menu?store=${encodeURIComponent(sid)}`);
-              }}
-              style={actionBtnStyle}
-            >
-              주문 화면으로 가기
-            </button>
-          </div>
         </section>
       ) : null}
 

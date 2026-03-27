@@ -154,7 +154,6 @@ function MenuPageInner() {
   const [optSel, setOptSel] = useState<Record<string, Record<string, number>>>({});
   const [optQty, setOptQty] = useState(1);
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
-  const [authEmail, setAuthEmail] = useState("");
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
 
   const fetchOptionsFromDb = async () => {
@@ -251,7 +250,6 @@ function MenuPageInner() {
       const uid = authData?.user?.id || null;
       if (!mounted) return;
       setCustomerUserId(uid);
-      setAuthEmail(String(authData?.user?.email || ""));
 
       if (!uid) {
         setWallet(null);
@@ -828,6 +826,24 @@ function MenuPageInner() {
           display: grid;
           align-content: end;
         }
+        .topActions {
+          position: absolute;
+          top: 10px;
+          right: 12px;
+          display: flex;
+          gap: 8px;
+          z-index: 3;
+        }
+        .topBtn {
+          border: 1px solid rgba(255, 255, 255, 0.35);
+          background: rgba(17, 24, 39, 0.5);
+          color: #fff;
+          font-weight: 900;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          cursor: pointer;
+        }
         .stickyHead {
           background: rgba(246, 247, 249, 0.95);
           backdrop-filter: blur(8px);
@@ -1319,6 +1335,30 @@ function MenuPageInner() {
           <img className="heroImg" src={headerImage} alt="hero" />
           <div className="overlay" style={{ background: overlayBg }} />
           <div className="heroInner">
+            <div className="topActions">
+              {customerUserId ? (
+                <>
+                  <button className="topBtn" onClick={() => router.push(`/me?store=${encodeURIComponent(storeId)}`)}>
+                    내정보
+                  </button>
+                  <button
+                    className="topBtn"
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      setCustomerUserId(null);
+                      setWallet(null);
+                    }}
+                  >
+                    로그아웃
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="topBtn" onClick={() => router.push("/login")}>로그인</button>
+                  <button className="topBtn" onClick={() => router.push("/signup")}>회원가입</button>
+                </>
+              )}
+            </div>
             <div className="titleRow">
               <h1 className="h1">{profile.storeName || "메뉴"}</h1>
               <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
@@ -1330,17 +1370,17 @@ function MenuPageInner() {
           <div className="stickyInner">
             <div
               style={{
-                border: "1px solid #e5e7eb",
+                border: "1px solid #c7d2fe",
                 borderRadius: 10,
                 padding: "8px 10px",
-                background: "#fff",
+                background: "#eef2ff",
                 fontWeight: 800,
                 fontSize: 13,
               }}
             >
               {customerUserId ? (
                 <span>
-                  로그인됨 · {authEmail || "회원"} · 등급 <b>{wallet?.tier || "general"}</b> · 포인트{" "}
+                  등급 <b>{wallet?.tier || "general"}</b> · 포인트{" "}
                   <b>{fmt(Number(wallet?.point_balance || 0))}P</b>
                 </span>
               ) : (
