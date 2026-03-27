@@ -811,10 +811,40 @@ with check (
 );
 
 -- ---------------------------------------------------------
--- 13) Grants for RPC
+-- 13) Public checkout-mode RPC for customer/guest pages
+-- ---------------------------------------------------------
+create or replace function public.get_store_checkout_mode(
+  p_store_id text
+)
+returns table (
+  is_prepay boolean,
+  source text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_status text;
+begin
+  select sa.prepay_addon_status
+    into v_status
+  from public.store_addons sa
+  where sa.store_id = p_store_id
+  limit 1;
+
+  is_prepay := (coalesce(v_status, 'inactive') = 'active');
+  source := 'store_addons';
+  return next;
+end;
+$$;
+
+-- ---------------------------------------------------------
+-- 14) Grants for RPC
 -- ---------------------------------------------------------
 grant execute on function public.issue_customer_coupon(text, uuid, uuid) to authenticated;
 grant execute on function public.apply_loyalty_on_paid_order(uuid, text, uuid, integer, integer, uuid, text) to authenticated;
 grant execute on function public.recalculate_customer_tier(text, uuid) to authenticated;
+grant execute on function public.get_store_checkout_mode(text) to anon, authenticated;
 
 commit;

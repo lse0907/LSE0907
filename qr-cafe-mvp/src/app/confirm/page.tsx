@@ -251,14 +251,12 @@ function ConfirmPageInner() {
 
   const fetchPrepayAddonActive = async (): Promise<boolean> => {
     try {
-      const { data, error } = await supabase
-        .from("store_addons")
-        .select("prepay_addon_status")
-        .eq("store_id", storeId)
-        .maybeSingle();
-
+      const { data, error } = await supabase.rpc("get_store_checkout_mode", {
+        p_store_id: storeId,
+      });
       if (error) return false;
-      return String(data?.prepay_addon_status || "inactive") === "active";
+      const row = Array.isArray(data) ? data[0] : null;
+      return !!row?.is_prepay;
     } catch {
       return false;
     }
