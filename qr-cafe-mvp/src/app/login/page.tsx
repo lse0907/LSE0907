@@ -35,7 +35,22 @@ function LoginPageInner() {
       return;
     }
 
-    router.push("/admin");
+    const { data: userData } = await supabase.auth.getUser();
+    const uid = userData?.user?.id;
+
+    if (!uid) {
+      router.push("/login");
+      return;
+    }
+
+    const { data: memberRow } = await supabase
+      .from("store_members")
+      .select("id")
+      .eq("user_id", uid)
+      .limit(1)
+      .maybeSingle();
+
+    router.push(memberRow ? "/admin" : "/me");
   };
 
   return (
