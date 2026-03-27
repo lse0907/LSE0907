@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 
 type WalletRow = {
@@ -17,13 +17,15 @@ type ProfileRow = {
   phone: string | null;
 };
 
-export default function MePage() {
+function MePageInner() {
   const router = useRouter();
+  const sp = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [email, setEmail] = useState("");
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [wallets, setWallets] = useState<WalletRow[]>([]);
+  const storeFromQuery = useMemo(() => String(sp.get("store") || "").trim(), [sp]);
 
   useEffect(() => {
     (async () => {
@@ -90,6 +92,28 @@ export default function MePage() {
 
       {!loading ? (
         <section style={cardStyle}>
+          <h2 style={sectionTitleStyle}>바로가기</h2>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const sid = storeFromQuery || wallets[0]?.store_id || "";
+                if (!sid) {
+                  router.push("/");
+                  return;
+                }
+                router.push(`/menu?store=${encodeURIComponent(sid)}`);
+              }}
+              style={actionBtnStyle}
+            >
+              주문 화면으로 가기
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {!loading ? (
+        <section style={cardStyle}>
           <h2 style={sectionTitleStyle}>요약</h2>
           <p><b>전체 포인트:</b> {summary.totalPoints.toLocaleString()}P</p>
           <p><b>혜택 매장 수:</b> {summary.stores}개</p>
@@ -138,3 +162,21 @@ const sectionTitleStyle: React.CSSProperties = {
   fontWeight: 900,
   margin: "0 0 10px",
 };
+
+const actionBtnStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid #111827",
+  background: "#111827",
+  color: "#fff",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+export default function MePage() {
+  return (
+    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+      <MePageInner />
+    </Suspense>
+  );
+}

@@ -73,6 +73,11 @@ type MenuSection = {
   items: MenuItem[];
 };
 
+type WalletSummary = {
+  point_balance: number;
+  tier: string;
+};
+
 function uid(prefix = "line") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random()
     .toString(16)
@@ -148,6 +153,9 @@ function MenuPageInner() {
 
   const [optSel, setOptSel] = useState<Record<string, Record<string, number>>>({});
   const [optQty, setOptQty] = useState(1);
+  const [customerUserId, setCustomerUserId] = useState<string | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [wallet, setWallet] = useState<WalletSummary | null>(null);
 
   const fetchOptionsFromDb = async () => {
     setOptionsLoading(true);
@@ -235,6 +243,36 @@ function MenuPageInner() {
 
     setCategories(rows);
   };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      const uid = authData?.user?.id || null;
+      if (!mounted) return;
+      setCustomerUserId(uid);
+      setAuthEmail(String(authData?.user?.email || ""));
+
+      if (!uid) {
+        setWallet(null);
+        return;
+      }
+
+      const { data: walletRow } = await supabase
+        .from("customer_store_wallets")
+        .select("point_balance,tier")
+        .eq("customer_user_id", uid)
+        .eq("store_id", storeId)
+        .maybeSingle();
+
+      if (!mounted) return;
+      setWallet((walletRow as WalletSummary | null) || null);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
 
   // ✅ storeId가 바뀌면 옵션/메뉴를 다시 불러오고, 장바구니는 현재 매장/테이블 키로 복원
   useEffect(() => {
@@ -1290,6 +1328,28 @@ function MenuPageInner() {
 
         <section className="stickyHead">
           <div className="stickyInner">
+            <div
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: 10,
+                padding: "8px 10px",
+                background: "#fff",
+                fontWeight: 800,
+                fontSize: 13,
+              }}
+            >
+              {customerUserId ? (
+                <span>
+                  로그인됨 · {authEmail || "회원"} · 등급 <b>{wallet?.tier || "general"}</b> · 포인트{" "}
+                  <b>{fmt(Number(wallet?.point_balance || 0))}P</b>
+                </span>
+              ) : (
+                <span>
+                  비회원 주문 중 · 회원가입하면 주문 시 매장별 포인트를 적립받을 수 있어요.
+                </span>
+              )}
+            </div>
+
             {!menuLoading && !optionsLoading ? (
               <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
                 <button
