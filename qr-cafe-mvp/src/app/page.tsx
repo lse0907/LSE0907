@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStoreProfile } from "./lib/storeProfile";
 import { getStoreIdFromSearchParams, lsLastOrderIdKey, lsLastOrderTokenKey } from "./lib/storeScope";
+import { supabase } from "./lib/supabaseClient";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 
@@ -19,6 +20,7 @@ function HomeStartInner() {
   const [lastOrderId, setLastOrderId] = useState<string>("");
   const [lastOrderToken, setLastOrderToken] = useState<string>("");
   const [orderHidden, setOrderHidden] = useState<boolean>(false);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -36,6 +38,13 @@ function HomeStartInner() {
       setOrderHidden(false);
     }
   }, [storeId]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      setAuthUserId(data?.user?.id || null);
+    })();
+  }, []);
 
   // 테이블 QR이면 /?table=3
   const table = useMemo(() => (sp.get("table") || "").trim(), [sp]);
@@ -155,6 +164,24 @@ function HomeStartInner() {
           padding: 18px;
           max-width: 560px;
           margin: 0 auto;
+        }
+        .topActions {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          display: flex;
+          gap: 8px;
+          z-index: 3;
+        }
+        .topBtn {
+          border: 1px solid rgba(255, 255, 255, 0.35);
+          background: rgba(17, 24, 39, 0.5);
+          color: #fff;
+          font-weight: 900;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          cursor: pointer;
         }
 
         .logoRow {
@@ -302,6 +329,29 @@ function HomeStartInner() {
         <div className="overlay" style={{ background: overlayBg }} />
 
         <div className="heroInner">
+          <div className="topActions">
+            {authUserId ? (
+              <>
+                <button className="topBtn" onClick={() => router.push(`/me?store=${encodeURIComponent(storeId)}`)}>
+                  내정보
+                </button>
+                <button
+                  className="topBtn"
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    setAuthUserId(null);
+                  }}
+                >
+                  로그아웃
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="topBtn" onClick={() => router.push("/login")}>로그인</button>
+                <button className="topBtn" onClick={() => router.push("/signup")}>회원가입</button>
+              </>
+            )}
+          </div>
           <div className="logoRow">
             {LOGO_IMAGE ? (
               <div className="logo">
