@@ -845,6 +845,28 @@ begin
 end;
 $$;
 
+create or replace function public.get_store_checkout_client_config(
+  p_store_id text
+)
+returns table (
+  client_key text,
+  mid text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    coalesce(spc.client_key, '')::text as client_key,
+    coalesce(spc.mid, '')::text as mid
+  from public.store_pg_config spc
+  where spc.store_id = p_store_id
+  limit 1;
+end;
+$$;
+
 -- ---------------------------------------------------------
 -- 14) Grants for RPC
 -- ---------------------------------------------------------
@@ -852,5 +874,6 @@ grant execute on function public.issue_customer_coupon(text, uuid, uuid) to auth
 grant execute on function public.apply_loyalty_on_paid_order(uuid, text, uuid, integer, integer, uuid, text) to authenticated;
 grant execute on function public.recalculate_customer_tier(text, uuid) to authenticated;
 grant execute on function public.get_store_checkout_mode(text) to anon, authenticated;
+grant execute on function public.get_store_checkout_client_config(text) to anon, authenticated;
 
 commit;

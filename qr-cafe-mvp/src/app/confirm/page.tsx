@@ -320,16 +320,17 @@ function ConfirmPageInner() {
     let mounted = true;
     (async () => {
       try {
-        const { data } = await supabase
-          .from("store_pg_config")
-          .select("client_key, mid")
-          .eq("store_id", storeId)
-          .maybeSingle();
+        const { data, error } = await supabase.rpc("get_store_checkout_client_config", {
+          p_store_id: storeId,
+        });
+
+        if (error) throw error;
+        const row = Array.isArray(data) ? data[0] : null;
 
         if (!mounted) return;
         setPgConfig({
-          clientKey: String(data?.client_key || "").trim(),
-          mid: String(data?.mid || "").trim(),
+          clientKey: String(row?.client_key || "").trim(),
+          mid: String(row?.mid || "").trim(),
         });
       } catch {
         if (!mounted) return;
