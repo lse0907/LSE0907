@@ -74,6 +74,11 @@ type OrderRecord = {
   paymentStatus?: PaymentStatus;
 };
 
+type WalletSummary = {
+  point_balance: number;
+  tier: string;
+};
+
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 const PREPAY_PENDING_KEY = "qrCafePrepayPending";
 
@@ -227,6 +232,10 @@ function ConfirmPageInner() {
   const [isPrepayStore, setIsPrepayStore] = useState(false);
   const [prepayLoading, setPrepayLoading] = useState(true);
   const [pgConfig, setPgConfig] = useState<PgConfig>({ clientKey: "", mid: "" });
+  const [authEmail, setAuthEmail] = useState("");
+  const [customerUserId, setCustomerUserId] = useState<string | null>(null);
+  const [wallet, setWallet] = useState<WalletSummary | null>(null);
+  const [issuedCouponCount, setIssuedCouponCount] = useState(0);
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -269,6 +278,46 @@ function ConfirmPageInner() {
       mounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      const uid = authData?.user?.id || null;
+      if (!mounted) return;
+      setCustomerUserId(uid);
+      setAuthEmail(String(authData?.user?.email || ""));
+
+      if (!uid) {
+        setWallet(null);
+        setIssuedCouponCount(0);
+        return;
+      }
+
+      const [walletRes, couponRes] = await Promise.all([
+        supabase
+          .from("customer_store_wallets")
+          .select("point_balance,tier")
+          .eq("customer_user_id", uid)
+          .eq("store_id", storeId)
+          .maybeSingle(),
+        supabase
+          .from("customer_coupons")
+          .select("id", { count: "exact", head: true })
+          .eq("customer_user_id", uid)
+          .eq("store_id", storeId)
+          .eq("status", "issued"),
+      ]);
+
+      if (!mounted) return;
+      setWallet((walletRes.data as WalletSummary | null) || null);
+      setIssuedCouponCount(couponRes.count || 0);
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, [storeId]);
 
   useEffect(() => {
@@ -342,6 +391,7 @@ function ConfirmPageInner() {
       const accessToken = uuid();
       const createdAtIso = new Date().toISOString();
       const orderDate = todayKey();
+      const currentCustomerUserId = customerUserId;
 
       const paymentStatus = await resolvePaymentStatus();
 
@@ -354,12 +404,15 @@ function ConfirmPageInner() {
         const pending = {
           createdAt: Date.now(),
           storeId,
+          customerUserId: currentCustomerUserId,
           cartLines,
           mode: effectiveMode,
           table: effectiveMode === "dine-in" ? effectiveTable : "",
           requestNote,
           totalCount,
           totalPrice,
+          usedPoints: 0,
+          usedCouponId: null as string | null,
         };
 
         localStorage.setItem(`${PREPAY_PENDING_KEY}:${payOrderId}`, JSON.stringify(pending));
@@ -466,6 +519,21 @@ function ConfirmPageInner() {
       if (optionRows.length) {
         const { error: oioErr } = await supabase.from("order_item_options").insert(optionRows);
         if (oioErr) throw new Error(`[order_item_options insert] ${oioErr.message}`);
+      }
+
+      if (currentCustomerUserId) {
+        const { error: loyaltyErr } = await supabase.rpc("apply_loyalty_on_paid_order", {
+          p_order_id: orderId,
+          p_store_id: storeId,
+          p_customer_user_id: currentCustomerUserId,
+          p_order_amount: Math.round(totalPrice),
+          p_used_points: 0,
+          p_used_coupon_id: null,
+          p_idempotency_key: `${orderId}:loyalty`,
+        });
+        if (loyaltyErr) {
+          console.warn("[loyalty] apply failed:", loyaltyErr.message);
+        }
       }
 
       // 로컬 저장(임시 유지)
@@ -700,6 +768,29 @@ function ConfirmPageInner() {
         <div style={{ fontWeight: 900 }}>
           총 금액: <b>{fmt(totalPrice)}원</b>
         </div>
+      </div>
+
+      <div style={{ marginTop: 10, border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fff" }}>
+        {customerUserId ? (
+          <>
+            <p style={{ margin: 0, fontWeight: 900 }}>
+              로그인 회원: <b>{authEmail || "회원"}</b>
+            </p>
+            <p style={{ margin: "6px 0 0", fontWeight: 800 }}>
+              현재 등급: <b>{wallet?.tier || "general"}</b> · 잔여 포인트: <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 보유 쿠폰: <b>{issuedCouponCount}장</b>
+            </p>
+            <p style={{ margin: "6px 0 0", color: "#6b7280", fontWeight: 700, fontSize: 13 }}>
+              * 포인트/쿠폰 상세 사용 UI는 다음 업데이트에서 제공합니다.
+            </p>
+          </>
+        ) : (
+          <>
+            <p style={{ margin: 0, fontWeight: 900 }}>비회원 주문 중입니다.</p>
+            <p style={{ margin: "6px 0 0", color: "#6b7280", fontWeight: 700, fontSize: 13 }}>
+              회원가입 후 주문하면 매장별 포인트를 적립받을 수 있어요.
+            </p>
+          </>
+        )}
       </div>
 
       <div style={{ marginTop: 18 }}>
