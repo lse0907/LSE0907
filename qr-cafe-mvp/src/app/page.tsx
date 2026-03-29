@@ -305,7 +305,7 @@ function HomeStartInner() {
             </div>
           ) : null}
           {scanError ? <p className="err">{scanError}</p> : null}
-          <button className="btnGhost" onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}>
+          <button className="btnGhost" onClick={() => router.push("/login?next=%2Fme")}>
             로그인
           </button>
         </section>
