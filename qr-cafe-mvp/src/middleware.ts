@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 function createSupabaseMiddlewareClient(req: NextRequest) {
-  let res = NextResponse.next({ request: { headers: req.headers } });
+  const res = NextResponse.next({ request: { headers: req.headers } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,10 +13,10 @@ function createSupabaseMiddlewareClient(req: NextRequest) {
         get(name: string) {
           return req.cookies.get(name)?.value;
         },
-        set(name: string, value: string, options: any) {
+        set(name: string, value: string, options: Record<string, unknown>) {
           res.cookies.set({ name, value, ...options });
         },
-        remove(name: string, options: any) {
+        remove(name: string, options: Record<string, unknown>) {
           res.cookies.set({ name, value: "", ...options });
         },
       },
@@ -32,9 +32,14 @@ export async function middleware(req: NextRequest) {
   const isProtected =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/staff") ||
-    pathname.startsWith("/onboarding");
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/me");
 
-  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const isAuthPage =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/signup-owner") ||
+    pathname.startsWith("/signup-customer");
 
   const { supabase, res } = createSupabaseMiddlewareClient(req);
 
@@ -51,13 +56,32 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 로그인 상태에서 login/signup 접근하면 admin으로 보내기(선택)
+  // 로그인 상태에서 login/signup 접근하면 역할에 맞는 기본 페이지로 이동
   if (isAuthPage && isLoggedIn) {
+    const next = (searchParams.get("next") || "").trim();
     const url = req.nextUrl.clone();
-    url.pathname = "/admin";
-    // 혹시 next가 있으면 그쪽으로
-    const next = searchParams.get("next");
-    if (next) url.pathname = next;
+
+    if (next && next.startsWith("/") && !next.startsWith("//")) {
+      const nextUrl = new URL(next, req.nextUrl.origin);
+      url.pathname = nextUrl.pathname;
+      url.search = nextUrl.search;
+      return NextResponse.redirect(url);
+    }
+
+    const uid = data?.user?.id || null;
+    let isStoreMember = false;
+
+    if (uid) {
+      const { data: memberRow } = await supabase
+        .from("store_members")
+        .select("id")
+        .eq("user_id", uid)
+        .limit(1)
+        .maybeSingle();
+      isStoreMember = !!memberRow;
+    }
+
+    url.pathname = isStoreMember ? "/admin" : "/me";
     return NextResponse.redirect(url);
   }
 
@@ -65,5 +89,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/staff/:path*", "/onboarding/:path*", "/login", "/signup"],
+  matcher: ["/admin/:path*", "/staff/:path*", "/onboarding/:path*", "/me/:path*", "/login", "/signup", "/signup-owner", "/signup-customer"],
 };
