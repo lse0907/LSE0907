@@ -110,6 +110,13 @@ function StatusPageInner() {
   const storeId = useMemo(() => {
     return resolveStoreId(storeFromQuery || lastStoreId);
   }, [storeFromQuery, lastStoreId]);
+  const homeStoreId = useMemo(() => {
+    return (storeFromQuery || lastStoreId || "").trim();
+  }, [storeFromQuery, lastStoreId]);
+  const homeHref = useMemo(() => {
+    if (!homeStoreId) return "/";
+    return `/?store=${encodeURIComponent(homeStoreId)}`;
+  }, [homeStoreId]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -402,7 +409,7 @@ function StatusPageInner() {
           새로고침
         </button>
 
-        <Link className="btn" href="/">
+        <Link className="btn" href={homeHref}>
           홈으로
         </Link>
       </div>
