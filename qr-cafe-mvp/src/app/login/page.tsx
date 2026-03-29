@@ -8,11 +8,19 @@ function LoginPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const initialError = sp.get("error");
+  const next = (sp.get("next") || "").trim();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string>(initialError || "");
   const [loading, setLoading] = useState(false);
+
+  const resolveSafeNext = (raw: string) => {
+    if (!raw) return "";
+    if (!raw.startsWith("/")) return "";
+    if (raw.startsWith("//")) return "";
+    return raw;
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +57,12 @@ function LoginPageInner() {
       .eq("user_id", uid)
       .limit(1)
       .maybeSingle();
+
+    const safeNext = resolveSafeNext(next);
+    if (safeNext) {
+      router.push(safeNext);
+      return;
+    }
 
     router.push(memberRow ? "/admin" : "/me");
   };

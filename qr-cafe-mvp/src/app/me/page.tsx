@@ -26,6 +26,9 @@ function MePageInner() {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [wallets, setWallets] = useState<WalletRow[]>([]);
   const storeFromQuery = useMemo(() => String(sp.get("store") || "").trim(), [sp]);
+  const returnTo = useMemo(() => String(sp.get("return_to") || sp.get("next") || "").trim(), [sp]);
+
+  const isSafeInternalPath = (v: string) => !!v && v.startsWith("/") && !v.startsWith("//");
 
   useEffect(() => {
     (async () => {
@@ -78,6 +81,10 @@ function MePageInner() {
         <button
           type="button"
           onClick={() => {
+            if (isSafeInternalPath(returnTo)) {
+              router.push(returnTo);
+              return;
+            }
             const sid = storeFromQuery || wallets[0]?.store_id || "";
             if (!sid) {
               router.push("/");

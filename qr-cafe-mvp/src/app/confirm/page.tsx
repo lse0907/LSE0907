@@ -175,6 +175,10 @@ function ConfirmPageInner() {
 
   // ✅ 멀티매장 핵심: URL(store) > env fallback
   const storeId = useMemo(() => getStoreIdFromSearchParams(sp), [sp]);
+  const nextUrl = useMemo(() => {
+    const q = sp.toString();
+    return q ? `/confirm?${q}` : "/confirm";
+  }, [sp]);
 
   const tableFromMenu = (sp.get("table") || "").trim();
   const isTableQr = !!tableFromMenu;
@@ -655,7 +659,11 @@ function ConfirmPageInner() {
           {customerUserId ? (
             <>
               <button
-                onClick={() => router.push(`/me?store=${encodeURIComponent(storeId)}`)}
+                onClick={() =>
+                  router.push(
+                    `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`
+                  )
+                }
                 style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
               >
                 내정보
@@ -675,13 +683,13 @@ function ConfirmPageInner() {
           ) : (
             <>
               <button
-                onClick={() => router.push("/login")}
+                onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
                 style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
               >
                 로그인
               </button>
               <button
-                onClick={() => router.push("/signup")}
+                onClick={() => router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)}
                 style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
               >
                 회원가입

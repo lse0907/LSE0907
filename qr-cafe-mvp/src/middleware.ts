@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 function createSupabaseMiddlewareClient(req: NextRequest) {
-  let res = NextResponse.next({ request: { headers: req.headers } });
+  const res = NextResponse.next({ request: { headers: req.headers } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,10 +13,10 @@ function createSupabaseMiddlewareClient(req: NextRequest) {
         get(name: string) {
           return req.cookies.get(name)?.value;
         },
-        set(name: string, value: string, options: any) {
+        set(name: string, value: string, options: Record<string, unknown>) {
           res.cookies.set({ name, value, ...options });
         },
-        remove(name: string, options: any) {
+        remove(name: string, options: Record<string, unknown>) {
           res.cookies.set({ name, value: "", ...options });
         },
       },
@@ -58,11 +58,13 @@ export async function middleware(req: NextRequest) {
 
   // 로그인 상태에서 login/signup 접근하면 역할에 맞는 기본 페이지로 이동
   if (isAuthPage && isLoggedIn) {
-    const next = searchParams.get("next");
+    const next = (searchParams.get("next") || "").trim();
     const url = req.nextUrl.clone();
 
-    if (next) {
-      url.pathname = next;
+    if (next && next.startsWith("/") && !next.startsWith("//")) {
+      const nextUrl = new URL(next, req.nextUrl.origin);
+      url.pathname = nextUrl.pathname;
+      url.search = nextUrl.search;
       return NextResponse.redirect(url);
     }
 

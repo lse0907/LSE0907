@@ -127,6 +127,10 @@ function MenuPageInner() {
 
   const table = (sp.get("table") || "").trim();
   const isTableQr = !!table;
+  const nextUrl = useMemo(() => {
+    const q = sp.toString();
+    return q ? `/menu?${q}` : "/menu";
+  }, [sp]);
   const cartStorageKey = useMemo(
     () => `qrCafeCart:${storeId}:${isTableQr ? table : "counter"}`,
     [storeId, isTableQr, table]
@@ -1338,7 +1342,14 @@ function MenuPageInner() {
             <div className="topActions">
               {customerUserId ? (
                 <>
-                  <button className="topBtn" onClick={() => router.push(`/me?store=${encodeURIComponent(storeId)}`)}>
+                  <button
+                    className="topBtn"
+                    onClick={() =>
+                      router.push(
+                        `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`
+                      )
+                    }
+                  >
                     내정보
                   </button>
                   <button
@@ -1354,8 +1365,12 @@ function MenuPageInner() {
                 </>
               ) : (
                 <>
-                  <button className="topBtn" onClick={() => router.push("/login")}>로그인</button>
-                  <button className="topBtn" onClick={() => router.push("/signup")}>회원가입</button>
+                  <button className="topBtn" onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}>
+                    로그인
+                  </button>
+                  <button className="topBtn" onClick={() => router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)}>
+                    회원가입
+                  </button>
                 </>
               )}
             </div>
