@@ -79,6 +79,26 @@ type WalletSummary = {
   tier: string;
 };
 
+type CouponTemplateSummary = {
+  name: string;
+  discount_type: "fixed_amount" | "percent" | string;
+  discount_value: number;
+  min_order_amount: number;
+  max_discount_amount: number | null;
+};
+
+type IssuedCoupon = {
+  id: string;
+  expires_at: string;
+  template: CouponTemplateSummary | null;
+};
+
+type RawIssuedCoupon = {
+  id: string;
+  expires_at: string;
+  template: CouponTemplateSummary | CouponTemplateSummary[] | null;
+};
+
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 const PREPAY_PENDING_KEY = "qrCafePrepayPending";
 
@@ -239,6 +259,9 @@ function ConfirmPageInner() {
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
   const [issuedCouponCount, setIssuedCouponCount] = useState(0);
+  const [issuedCoupons, setIssuedCoupons] = useState<IssuedCoupon[]>([]);
+  const [usedPointsInput, setUsedPointsInput] = useState("0");
+  const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -292,6 +315,9 @@ function ConfirmPageInner() {
       if (!uid) {
         setWallet(null);
         setIssuedCouponCount(0);
+        setIssuedCoupons([]);
+        setUsedPointsInput("0");
+        setSelectedCouponId(null);
         return;
       }
 
@@ -304,7 +330,10 @@ function ConfirmPageInner() {
           .maybeSingle(),
         supabase
           .from("customer_coupons")
-          .select("id", { count: "exact", head: true })
+          .select(
+            "id,expires_at,template:store_coupon_templates(name,discount_type,discount_value,min_order_amount,max_discount_amount)",
+            { count: "exact" }
+          )
           .eq("customer_user_id", uid)
           .eq("store_id", storeId)
           .eq("status", "issued"),
@@ -313,6 +342,12 @@ function ConfirmPageInner() {
       if (!mounted) return;
       setWallet((walletRes.data as WalletSummary | null) || null);
       setIssuedCouponCount(couponRes.count || 0);
+      const couponRows = (Array.isArray(couponRes.data) ? couponRes.data : []) as RawIssuedCoupon[];
+      const normalized: IssuedCoupon[] = couponRows.map((row) => ({
+          ...row,
+          template: Array.isArray(row.template) ? row.template[0] || null : row.template,
+      }));
+      setIssuedCoupons(normalized);
     })();
 
     return () => {
@@ -351,6 +386,39 @@ function ConfirmPageInner() {
     const active = await fetchPrepayAddonActive();
     return active ? "paid" : "not_required";
   };
+
+  const usedPoints = useMemo(() => {
+    const raw = Math.floor(Number(usedPointsInput || "0"));
+    if (!Number.isFinite(raw) || raw <= 0) return 0;
+    const byBalance = Math.max(0, Number(wallet?.point_balance || 0));
+    const byPrice = Math.max(0, Math.floor(totalPrice));
+    return Math.min(raw, byBalance, byPrice);
+  }, [usedPointsInput, wallet?.point_balance, totalPrice]);
+
+  const selectedCoupon = useMemo(
+    () => issuedCoupons.find((c) => c.id === selectedCouponId) || null,
+    [issuedCoupons, selectedCouponId]
+  );
+
+  const couponDiscount = useMemo(() => {
+    if (!selectedCoupon?.template) return 0;
+    const tpl = selectedCoupon.template;
+    const orderAmount = Math.max(0, Math.floor(totalPrice));
+    if (orderAmount < Math.max(0, Number(tpl.min_order_amount || 0))) return 0;
+    if (tpl.discount_type === "fixed_amount") {
+      return Math.min(orderAmount, Math.max(0, Math.floor(Number(tpl.discount_value || 0))));
+    }
+    if (tpl.discount_type === "percent") {
+      const raw = Math.floor((orderAmount * Math.max(0, Number(tpl.discount_value || 0))) / 100);
+      const cap = tpl.max_discount_amount == null ? raw : Math.max(0, Math.floor(Number(tpl.max_discount_amount || 0)));
+      return Math.min(orderAmount, Math.min(raw, cap));
+    }
+    return 0;
+  }, [selectedCoupon, totalPrice]);
+
+  const selectedCouponIdForApply = selectedCouponId && couponDiscount > 0 ? selectedCouponId : null;
+  const effectiveDiscount = selectedCouponIdForApply ? couponDiscount : usedPoints;
+  const payableAmount = Math.max(0, Math.round(totalPrice) - effectiveDiscount);
 
   // NOTE: helper name intentionally unique to avoid duplicate-declaration merge regressions.
   const insertOrderRowWithPaymentFallback = async (row: Record<string, unknown>) => {
@@ -412,8 +480,8 @@ function ConfirmPageInner() {
           requestNote,
           totalCount,
           totalPrice,
-          usedPoints: 0,
-          usedCouponId: null as string | null,
+          usedPoints: selectedCouponIdForApply ? 0 : usedPoints,
+          usedCouponId: selectedCouponIdForApply,
         };
 
         localStorage.setItem(`${PREPAY_PENDING_KEY}:${payOrderId}`, JSON.stringify(pending));
@@ -427,7 +495,7 @@ function ConfirmPageInner() {
         const failUrl = `${base}/confirm/fail?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}`;
 
         await tossPayments.requestPayment("카드", {
-          amount: Math.round(totalPrice),
+          amount: payableAmount,
           orderId: payOrderId,
           orderName,
           customerName: "QR 고객",
@@ -528,8 +596,8 @@ function ConfirmPageInner() {
           p_store_id: storeId,
           p_customer_user_id: currentCustomerUserId,
           p_order_amount: Math.round(totalPrice),
-          p_used_points: 0,
-          p_used_coupon_id: null,
+          p_used_points: selectedCouponIdForApply ? 0 : usedPoints,
+          p_used_coupon_id: selectedCouponIdForApply,
           p_idempotency_key: `${orderId}:loyalty`,
         });
         if (loyaltyErr) {
@@ -819,9 +887,67 @@ function ConfirmPageInner() {
             <p style={{ margin: 0, fontWeight: 800 }}>
               현재 등급: <b>{wallet?.tier || "general"}</b> · 잔여 포인트: <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 보유 쿠폰: <b>{issuedCouponCount}장</b>
             </p>
-            <p style={{ margin: "6px 0 0", color: "#6b7280", fontWeight: 700, fontSize: 13 }}>
-              * 포인트/쿠폰 상세 사용 UI는 다음 업데이트에서 제공합니다.
-            </p>
+            <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+              <label style={{ display: "grid", gap: 6, fontWeight: 800, color: "#374151" }}>
+                포인트 사용 (쿠폰 선택 시 자동 0)
+                <input
+                  value={usedPointsInput}
+                  onChange={(e) => setUsedPointsInput(e.target.value.replace(/[^\d]/g, ""))}
+                  disabled={!!selectedCouponIdForApply}
+                  inputMode="numeric"
+                  style={{
+                    padding: 10,
+                    borderRadius: 10,
+                    border: "1px solid #d1d5db",
+                    fontWeight: 800,
+                    background: selectedCouponIdForApply ? "#f3f4f6" : "white",
+                  }}
+                />
+              </label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCouponId(null);
+                    setUsedPointsInput("0");
+                  }}
+                  style={{ border: "1px solid #d1d5db", borderRadius: 999, padding: "6px 10px", background: "white", fontWeight: 800 }}
+                >
+                  할인 미사용
+                </button>
+                {issuedCoupons.map((c) => {
+                  const tpl = c.template;
+                  if (!tpl) return null;
+                  const disabledByMin = Math.round(totalPrice) < Math.max(0, Number(tpl.min_order_amount || 0));
+                  const active = selectedCouponIdForApply === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      disabled={disabledByMin}
+                      onClick={() => {
+                        setSelectedCouponId(c.id);
+                        setUsedPointsInput("0");
+                      }}
+                      style={{
+                        border: active ? "1px solid #111827" : "1px solid #d1d5db",
+                        borderRadius: 999,
+                        padding: "6px 10px",
+                        background: active ? "#111827" : "white",
+                        color: active ? "white" : "#111827",
+                        fontWeight: 800,
+                        opacity: disabledByMin ? 0.45 : 1,
+                      }}
+                    >
+                      {tpl.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <p style={{ margin: 0, color: "#6b7280", fontWeight: 700, fontSize: 13 }}>
+                할인 적용: <b>{fmt(effectiveDiscount)}원</b> · 예상 결제금액: <b>{fmt(payableAmount)}원</b>
+              </p>
+            </div>
           </>
         ) : (
           <>
