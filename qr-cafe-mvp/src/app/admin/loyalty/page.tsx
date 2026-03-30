@@ -37,6 +37,33 @@ type CouponTemplateRow = {
   is_active: boolean;
 };
 
+type WalletCustomerRow = {
+  customer_user_id: string;
+  point_balance: number;
+  tier: "general" | "regular" | "vip";
+};
+
+type CustomerProfileRow = {
+  user_id: string;
+  name: string | null;
+  phone: string | null;
+};
+
+type IssuedCouponRow = {
+  id: string;
+  customer_user_id: string;
+  status: string;
+  issued_at: string;
+  expires_at: string | null;
+  template_id: string | null;
+  template?: {
+    name?: string | null;
+    coupon_kind?: string | null;
+    discount_type?: string | null;
+    discount_value?: number | null;
+  } | null;
+};
+
 function toNumber(v: string, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -56,6 +83,9 @@ function AdminLoyaltyInner() {
   const [savingTier, setSavingTier] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [issuingCoupon, setIssuingCoupon] = useState(false);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [issuedLoading, setIssuedLoading] = useState(false);
 
   const [settings, setSettings] = useState<LoyaltySettingsRow>({
     store_id: "",
@@ -78,6 +108,11 @@ function AdminLoyaltyInner() {
   });
 
   const [templates, setTemplates] = useState<CouponTemplateRow[]>([]);
+  const [walletCustomers, setWalletCustomers] = useState<WalletCustomerRow[]>([]);
+  const [customerProfilesById, setCustomerProfilesById] = useState<Record<string, CustomerProfileRow>>({});
+  const [issuedCoupons, setIssuedCoupons] = useState<IssuedCouponRow[]>([]);
+  const [issueCustomerId, setIssueCustomerId] = useState("");
+  const [issueTemplateId, setIssueTemplateId] = useState("");
   const [newTemplate, setNewTemplate] = useState({
     coupon_kind: "event" as CouponTemplateRow["coupon_kind"],
     name: "",
@@ -150,7 +185,7 @@ function AdminLoyaltyInner() {
       setTierRules((prev) => ({ ...prev, store_id: storeId }));
     }
 
-    await loadTemplates();
+    await Promise.all([loadTemplates(), loadWalletCustomers(), loadIssuedCoupons()]);
     setLoading(false);
   };
 
@@ -167,7 +202,80 @@ function AdminLoyaltyInner() {
 
     if (error) setMsg((p) => `${p ? `${p}\n` : ""}쿠폰 목록 조회 실패: ${error.message}`);
     setTemplates((Array.isArray(data) ? data : []) as CouponTemplateRow[]);
+    if (!issueTemplateId && Array.isArray(data) && data.length > 0) {
+      setIssueTemplateId(String(data[0]?.id || ""));
+    }
     setTemplatesLoading(false);
+  };
+
+  const loadWalletCustomers = async () => {
+    if (!storeId) return;
+    setCustomersLoading(true);
+    const { data, error } = await supabase
+      .from("customer_store_wallets")
+      .select("customer_user_id,point_balance,tier")
+      .eq("store_id", storeId)
+      .order("updated_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      setMsg((p) => `${p ? `${p}\n` : ""}고객 목록 조회 실패: ${error.message}`);
+      setWalletCustomers([]);
+      setCustomerProfilesById({});
+      setCustomersLoading(false);
+      return;
+    }
+
+    const rows = (Array.isArray(data) ? data : []) as WalletCustomerRow[];
+    setWalletCustomers(rows);
+
+    const ids = rows.map((r) => r.customer_user_id).filter(Boolean);
+    if (!ids.length) {
+      setCustomerProfilesById({});
+      setCustomersLoading(false);
+      return;
+    }
+
+    const { data: profileData, error: profileErr } = await supabase
+      .from("customer_profiles")
+      .select("user_id,name,phone")
+      .in("user_id", ids);
+    if (profileErr) {
+      setMsg((p) => `${p ? `${p}\n` : ""}고객 프로필 조회 실패: ${profileErr.message}`);
+      setCustomerProfilesById({});
+      setCustomersLoading(false);
+      return;
+    }
+
+    const profileMap: Record<string, CustomerProfileRow> = {};
+    for (const row of Array.isArray(profileData) ? profileData : []) {
+      const r = row as CustomerProfileRow;
+      profileMap[r.user_id] = r;
+    }
+    setCustomerProfilesById(profileMap);
+    setCustomersLoading(false);
+  };
+
+  const loadIssuedCoupons = async () => {
+    if (!storeId) return;
+    setIssuedLoading(true);
+    const { data, error } = await supabase
+      .from("customer_coupons")
+      .select(
+        "id,customer_user_id,status,issued_at,expires_at,template_id,template:store_coupon_templates(name,coupon_kind,discount_type,discount_value)"
+      )
+      .eq("store_id", storeId)
+      .order("issued_at", { ascending: false })
+      .limit(30);
+
+    if (error) {
+      setMsg((p) => `${p ? `${p}\n` : ""}발급 내역 조회 실패: ${error.message}`);
+      setIssuedCoupons([]);
+      setIssuedLoading(false);
+      return;
+    }
+    setIssuedCoupons((Array.isArray(data) ? data : []) as IssuedCouponRow[]);
+    setIssuedLoading(false);
   };
 
   useEffect(() => {
@@ -238,6 +346,35 @@ function AdminLoyaltyInner() {
       await loadTemplates();
     }
     setSavingTemplate(false);
+  };
+
+  const issueCouponToCustomer = async () => {
+    if (!storeId) return;
+    const customerId = issueCustomerId.trim();
+    const templateId = issueTemplateId.trim();
+    if (!customerId) {
+      setMsg("쿠폰을 발급할 고객 UUID를 입력해 주세요.");
+      return;
+    }
+    if (!templateId) {
+      setMsg("발급할 쿠폰 템플릿을 선택해 주세요.");
+      return;
+    }
+
+    setIssuingCoupon(true);
+    setMsg("");
+    const { error } = await supabase.rpc("issue_customer_coupon", {
+      p_store_id: storeId,
+      p_customer_user_id: customerId,
+      p_template_id: templateId,
+    });
+    if (error) {
+      setMsg(`쿠폰 발급 실패: ${error.message}`);
+    } else {
+      setMsg("쿠폰을 발급했습니다.");
+      await Promise.all([loadIssuedCoupons(), loadWalletCustomers()]);
+    }
+    setIssuingCoupon(false);
   };
 
   const toggleTemplate = async (row: CouponTemplateRow) => {
@@ -348,6 +485,87 @@ function AdminLoyaltyInner() {
                   {row.is_active ? "비활성화" : "활성화"}
                 </button>
               </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section style={cardStyle}>
+        <h2 style={titleStyle}>쿠폰 발급</h2>
+        <p style={{ marginTop: 0, color: "#6b7280", fontWeight: 700 }}>
+          고객 UUID를 지정해 선택한 템플릿 쿠폰을 발급합니다.
+        </p>
+        <div style={gridStyle}>
+          <LabelInput
+            label="고객 UUID"
+            value={issueCustomerId}
+            onChange={setIssueCustomerId}
+          />
+          <label style={labelStyle}>
+            <span>발급 템플릿</span>
+            <select
+              style={inputStyle}
+              value={issueTemplateId}
+              onChange={(e) => setIssueTemplateId(e.target.value)}
+            >
+              <option value="">선택해 주세요</option>
+              {templates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>
+                  {tpl.name} ({tpl.coupon_kind}) {tpl.is_active ? "" : "[비활성]"}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <button style={btnStyle} onClick={issueCouponToCustomer} disabled={issuingCoupon}>
+          {issuingCoupon ? "발급 중..." : "쿠폰 발급"}
+        </button>
+
+        <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
+          <h3 style={{ margin: "4px 0", fontSize: 16, fontWeight: 900 }}>최근 고객 (포인트 지갑 기준)</h3>
+          {customersLoading ? <p>고객 목록 로딩 중...</p> : null}
+          {!customersLoading && walletCustomers.length === 0 ? (
+            <p style={{ color: "#6b7280", fontWeight: 700 }}>고객 지갑 데이터가 아직 없습니다.</p>
+          ) : null}
+          {walletCustomers.map((row) => {
+            const profile = customerProfilesById[row.customer_user_id];
+            return (
+              <article key={row.customer_user_id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+                <p style={{ margin: 0, fontWeight: 900 }}>
+                  {profile?.name || "이름 미등록"} · {row.tier.toUpperCase()} · {Number(row.point_balance || 0).toLocaleString()}P
+                </p>
+                <p style={{ margin: "6px 0 0", color: "#4b5563", fontWeight: 700 }}>
+                  UUID: {row.customer_user_id}
+                  {profile?.phone ? ` · ${profile.phone}` : ""}
+                </p>
+                <button
+                  style={{ ...smallBtnStyle, marginTop: 8 }}
+                  onClick={() => setIssueCustomerId(row.customer_user_id)}
+                >
+                  이 고객 선택
+                </button>
+              </article>
+            );
+          })}
+        </div>
+
+        <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
+          <h3 style={{ margin: "4px 0", fontSize: 16, fontWeight: 900 }}>최근 쿠폰 발급 내역</h3>
+          {issuedLoading ? <p>발급 내역 로딩 중...</p> : null}
+          {!issuedLoading && issuedCoupons.length === 0 ? (
+            <p style={{ color: "#6b7280", fontWeight: 700 }}>아직 발급 내역이 없습니다.</p>
+          ) : null}
+          {issuedCoupons.map((row) => (
+            <article key={row.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
+              <p style={{ margin: 0, fontWeight: 900 }}>
+                {row.template?.name || "템플릿 없음"} · {row.status}
+              </p>
+              <p style={{ margin: "6px 0 0", color: "#4b5563", fontWeight: 700 }}>
+                고객 UUID: {row.customer_user_id}
+              </p>
+              <p style={{ margin: "4px 0 0", color: "#4b5563", fontWeight: 700 }}>
+                발급일: {new Date(row.issued_at).toLocaleString()} / 만료일: {row.expires_at ? new Date(row.expires_at).toLocaleString() : "-"}
+              </p>
             </article>
           ))}
         </div>
