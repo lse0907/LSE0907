@@ -460,7 +460,12 @@ function ConfirmPageInner() {
       const accessToken = uuid();
       const createdAtIso = new Date().toISOString();
       const orderDate = todayKey();
-      const currentCustomerUserId = customerUserId;
+      let currentCustomerUserId = customerUserId;
+      if (!currentCustomerUserId) {
+        const { data: authData } = await supabase.auth.getUser();
+        currentCustomerUserId = authData?.user?.id || null;
+        setCustomerUserId(currentCustomerUserId);
+      }
 
       const paymentStatus = await resolvePaymentStatus();
 

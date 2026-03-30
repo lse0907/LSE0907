@@ -125,6 +125,12 @@ function ConfirmSuccessPageInner() {
           throw new Error(String(confirmJson?.message || "결제 승인 확인에 실패했습니다."));
         }
 
+        let loyaltyCustomerUserId = pending.customerUserId || null;
+        if (!loyaltyCustomerUserId) {
+          const { data: authData } = await supabase.auth.getUser();
+          loyaltyCustomerUserId = authData?.user?.id || null;
+        }
+
         const newOrderId = uuid();
         const accessToken = uuid();
         const createdAtIso = new Date().toISOString();
@@ -148,6 +154,7 @@ function ConfirmSuccessPageInner() {
             total_price: Math.round(pending.totalPrice),
             status: "new",
             payment_status: "paid",
+            customer_user_id: loyaltyCustomerUserId,
             store_id: storeId,
           };
 
@@ -204,11 +211,11 @@ function ConfirmSuccessPageInner() {
           if (oioErr) throw new Error(`[order_item_options insert] ${oioErr.message}`);
         }
 
-        if (pending.customerUserId) {
+        if (loyaltyCustomerUserId) {
           const { error: loyaltyErr } = await supabase.rpc("apply_loyalty_on_paid_order", {
             p_order_id: newOrderId,
             p_store_id: storeId,
-            p_customer_user_id: pending.customerUserId,
+            p_customer_user_id: loyaltyCustomerUserId,
             p_order_amount: Math.round(pending.totalPrice),
             p_used_points: Math.max(0, Number(pending.usedPoints || 0)),
             p_used_coupon_id: pending.usedCouponId || null,
