@@ -74,6 +74,31 @@ type OrderRecord = {
   paymentStatus?: PaymentStatus;
 };
 
+type WalletSummary = {
+  point_balance: number;
+  tier: string;
+};
+
+type CouponTemplateSummary = {
+  name: string;
+  discount_type: "fixed_amount" | "percent" | string;
+  discount_value: number;
+  min_order_amount: number;
+  max_discount_amount: number | null;
+};
+
+type IssuedCoupon = {
+  id: string;
+  expires_at: string;
+  template: CouponTemplateSummary | null;
+};
+
+type RawIssuedCoupon = {
+  id: string;
+  expires_at: string;
+  template: CouponTemplateSummary | CouponTemplateSummary[] | null;
+};
+
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 const PREPAY_PENDING_KEY = "qrCafePrepayPending";
 
@@ -170,6 +195,10 @@ function ConfirmPageInner() {
 
   // ✅ 멀티매장 핵심: URL(store) > env fallback
   const storeId = useMemo(() => getStoreIdFromSearchParams(sp), [sp]);
+  const nextUrl = useMemo(() => {
+    const q = sp.toString();
+    return q ? `/confirm?${q}` : "/confirm";
+  }, [sp]);
 
   const tableFromMenu = (sp.get("table") || "").trim();
   const isTableQr = !!tableFromMenu;
@@ -227,6 +256,12 @@ function ConfirmPageInner() {
   const [isPrepayStore, setIsPrepayStore] = useState(false);
   const [prepayLoading, setPrepayLoading] = useState(true);
   const [pgConfig, setPgConfig] = useState<PgConfig>({ clientKey: "", mid: "" });
+  const [customerUserId, setCustomerUserId] = useState<string | null>(null);
+  const [wallet, setWallet] = useState<WalletSummary | null>(null);
+  const [issuedCouponCount, setIssuedCouponCount] = useState(0);
+  const [issuedCoupons, setIssuedCoupons] = useState<IssuedCoupon[]>([]);
+  const [usedPointsInput, setUsedPointsInput] = useState("0");
+  const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -243,14 +278,12 @@ function ConfirmPageInner() {
 
   const fetchPrepayAddonActive = async (): Promise<boolean> => {
     try {
-      const { data, error } = await supabase
-        .from("store_addons")
-        .select("prepay_addon_status")
-        .eq("store_id", storeId)
-        .maybeSingle();
-
+      const { data, error } = await supabase.rpc("get_store_checkout_mode", {
+        p_store_id: storeId,
+      });
       if (error) return false;
-      return String(data?.prepay_addon_status || "inactive") === "active";
+      const row = Array.isArray(data) ? data[0] : null;
+      return !!row?.is_prepay;
     } catch {
       return false;
     }
@@ -274,17 +307,69 @@ function ConfirmPageInner() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      try {
-        const { data } = await supabase
-          .from("store_pg_config")
-          .select("client_key, mid")
+      const { data: authData } = await supabase.auth.getUser();
+      const uid = authData?.user?.id || null;
+      if (!mounted) return;
+      setCustomerUserId(uid);
+
+      if (!uid) {
+        setWallet(null);
+        setIssuedCouponCount(0);
+        setIssuedCoupons([]);
+        setUsedPointsInput("0");
+        setSelectedCouponId(null);
+        return;
+      }
+
+      const [walletRes, couponRes] = await Promise.all([
+        supabase
+          .from("customer_store_wallets")
+          .select("point_balance,tier")
+          .eq("customer_user_id", uid)
           .eq("store_id", storeId)
-          .maybeSingle();
+          .maybeSingle(),
+        supabase
+          .from("customer_coupons")
+          .select(
+            "id,expires_at,template:store_coupon_templates(name,discount_type,discount_value,min_order_amount,max_discount_amount)",
+            { count: "exact" }
+          )
+          .eq("customer_user_id", uid)
+          .eq("store_id", storeId)
+          .eq("status", "issued"),
+      ]);
+
+      if (!mounted) return;
+      setWallet((walletRes.data as WalletSummary | null) || null);
+      setIssuedCouponCount(couponRes.count || 0);
+      const couponRows = (Array.isArray(couponRes.data) ? couponRes.data : []) as RawIssuedCoupon[];
+      const normalized: IssuedCoupon[] = couponRows.map((row) => ({
+          ...row,
+          template: Array.isArray(row.template) ? row.template[0] || null : row.template,
+      }));
+      setIssuedCoupons(normalized);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc("get_store_checkout_client_config", {
+          p_store_id: storeId,
+        });
+
+        if (error) throw error;
+        const row = Array.isArray(data) ? data[0] : null;
 
         if (!mounted) return;
         setPgConfig({
-          clientKey: String(data?.client_key || "").trim(),
-          mid: String(data?.mid || "").trim(),
+          clientKey: String(row?.client_key || "").trim(),
+          mid: String(row?.mid || "").trim(),
         });
       } catch {
         if (!mounted) return;
@@ -301,6 +386,39 @@ function ConfirmPageInner() {
     const active = await fetchPrepayAddonActive();
     return active ? "paid" : "not_required";
   };
+
+  const usedPoints = useMemo(() => {
+    const raw = Math.floor(Number(usedPointsInput || "0"));
+    if (!Number.isFinite(raw) || raw <= 0) return 0;
+    const byBalance = Math.max(0, Number(wallet?.point_balance || 0));
+    const byPrice = Math.max(0, Math.floor(totalPrice));
+    return Math.min(raw, byBalance, byPrice);
+  }, [usedPointsInput, wallet?.point_balance, totalPrice]);
+
+  const selectedCoupon = useMemo(
+    () => issuedCoupons.find((c) => c.id === selectedCouponId) || null,
+    [issuedCoupons, selectedCouponId]
+  );
+
+  const couponDiscount = useMemo(() => {
+    if (!selectedCoupon?.template) return 0;
+    const tpl = selectedCoupon.template;
+    const orderAmount = Math.max(0, Math.floor(totalPrice));
+    if (orderAmount < Math.max(0, Number(tpl.min_order_amount || 0))) return 0;
+    if (tpl.discount_type === "fixed_amount") {
+      return Math.min(orderAmount, Math.max(0, Math.floor(Number(tpl.discount_value || 0))));
+    }
+    if (tpl.discount_type === "percent") {
+      const raw = Math.floor((orderAmount * Math.max(0, Number(tpl.discount_value || 0))) / 100);
+      const cap = tpl.max_discount_amount == null ? raw : Math.max(0, Math.floor(Number(tpl.max_discount_amount || 0)));
+      return Math.min(orderAmount, Math.min(raw, cap));
+    }
+    return 0;
+  }, [selectedCoupon, totalPrice]);
+
+  const selectedCouponIdForApply = selectedCouponId && couponDiscount > 0 ? selectedCouponId : null;
+  const effectiveDiscount = selectedCouponIdForApply ? couponDiscount : usedPoints;
+  const payableAmount = Math.max(0, Math.round(totalPrice) - effectiveDiscount);
 
   // NOTE: helper name intentionally unique to avoid duplicate-declaration merge regressions.
   const insertOrderRowWithPaymentFallback = async (row: Record<string, unknown>) => {
@@ -342,6 +460,12 @@ function ConfirmPageInner() {
       const accessToken = uuid();
       const createdAtIso = new Date().toISOString();
       const orderDate = todayKey();
+      let currentCustomerUserId = customerUserId;
+      if (!currentCustomerUserId) {
+        const { data: authData } = await supabase.auth.getUser();
+        currentCustomerUserId = authData?.user?.id || null;
+        setCustomerUserId(currentCustomerUserId);
+      }
 
       const paymentStatus = await resolvePaymentStatus();
 
@@ -354,12 +478,15 @@ function ConfirmPageInner() {
         const pending = {
           createdAt: Date.now(),
           storeId,
+          customerUserId: currentCustomerUserId,
           cartLines,
           mode: effectiveMode,
           table: effectiveMode === "dine-in" ? effectiveTable : "",
           requestNote,
           totalCount,
           totalPrice,
+          usedPoints: selectedCouponIdForApply ? 0 : usedPoints,
+          usedCouponId: selectedCouponIdForApply,
         };
 
         localStorage.setItem(`${PREPAY_PENDING_KEY}:${payOrderId}`, JSON.stringify(pending));
@@ -373,7 +500,7 @@ function ConfirmPageInner() {
         const failUrl = `${base}/confirm/fail?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}`;
 
         await tossPayments.requestPayment("카드", {
-          amount: Math.round(totalPrice),
+          amount: payableAmount,
           orderId: payOrderId,
           orderName,
           customerName: "QR 고객",
@@ -406,6 +533,12 @@ function ConfirmPageInner() {
           total_price: Math.round(totalPrice),
           status: "new",
           payment_status: paymentStatus,
+          customer_user_id: currentCustomerUserId,
+          used_points: selectedCouponIdForApply ? 0 : usedPoints,
+          used_coupon_id: selectedCouponIdForApply,
+          applied_discount_type: selectedCouponIdForApply
+            ? "coupon"
+            : (usedPoints > 0 ? "point" : null),
           store_id: storeId,
         };
 
@@ -572,20 +705,62 @@ function ConfirmPageInner() {
       <main style={{ padding: 16, maxWidth: 720, margin: "0 auto", color: "#111827" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <h1 style={{ margin: 0, fontWeight: 950 }}>주문 확인</h1>
-        <span
-          style={{
-            border: "1px solid #d1d5db",
-            borderRadius: 999,
-            padding: "4px 10px",
-            color: "#374151",
-            fontWeight: 900,
-            fontSize: 12,
-            background: "white",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {isTableQr ? "테이블 주문" : "카운터 주문"}
-        </span>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <span
+            style={{
+              border: "1px solid #d1d5db",
+              borderRadius: 999,
+              padding: "4px 10px",
+              color: "#374151",
+              fontWeight: 900,
+              fontSize: 12,
+              background: "white",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {isTableQr ? "테이블 주문" : "카운터 주문"}
+          </span>
+          {customerUserId ? (
+            <>
+              <button
+                onClick={() =>
+                  router.push(
+                    `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`
+                  )
+                }
+                style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
+              >
+                내정보
+              </button>
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  setCustomerUserId(null);
+                  setWallet(null);
+                  setIssuedCouponCount(0);
+                }}
+                style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
+              >
+                로그아웃
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
+                style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
+              >
+                로그인
+              </button>
+              <button
+                onClick={() => router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)}
+                style={{ borderRadius: 999, border: "1px solid #d1d5db", padding: "6px 10px", fontWeight: 900, background: "white" }}
+              >
+                회원가입
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -700,6 +875,84 @@ function ConfirmPageInner() {
         <div style={{ fontWeight: 900 }}>
           총 금액: <b>{fmt(totalPrice)}원</b>
         </div>
+      </div>
+
+      <div style={{ marginTop: 10, border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fff" }}>
+        {customerUserId ? (
+          <>
+            <p style={{ margin: 0, fontWeight: 800 }}>
+              현재 등급: <b>{wallet?.tier || "general"}</b> · 잔여 포인트: <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 보유 쿠폰: <b>{issuedCouponCount}장</b>
+            </p>
+            <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+              <label style={{ display: "grid", gap: 6, fontWeight: 800, color: "#374151" }}>
+                포인트 사용 (쿠폰 선택 시 자동 0)
+                <input
+                  value={usedPointsInput}
+                  onChange={(e) => setUsedPointsInput(e.target.value.replace(/[^\d]/g, ""))}
+                  disabled={!!selectedCouponIdForApply}
+                  inputMode="numeric"
+                  style={{
+                    padding: 10,
+                    borderRadius: 10,
+                    border: "1px solid #d1d5db",
+                    fontWeight: 800,
+                    background: selectedCouponIdForApply ? "#f3f4f6" : "white",
+                  }}
+                />
+              </label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCouponId(null);
+                    setUsedPointsInput("0");
+                  }}
+                  style={{ border: "1px solid #d1d5db", borderRadius: 999, padding: "6px 10px", background: "white", fontWeight: 800 }}
+                >
+                  할인 미사용
+                </button>
+                {issuedCoupons.map((c) => {
+                  const tpl = c.template;
+                  if (!tpl) return null;
+                  const disabledByMin = Math.round(totalPrice) < Math.max(0, Number(tpl.min_order_amount || 0));
+                  const active = selectedCouponIdForApply === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      disabled={disabledByMin}
+                      onClick={() => {
+                        setSelectedCouponId(c.id);
+                        setUsedPointsInput("0");
+                      }}
+                      style={{
+                        border: active ? "1px solid #111827" : "1px solid #d1d5db",
+                        borderRadius: 999,
+                        padding: "6px 10px",
+                        background: active ? "#111827" : "white",
+                        color: active ? "white" : "#111827",
+                        fontWeight: 800,
+                        opacity: disabledByMin ? 0.45 : 1,
+                      }}
+                    >
+                      {tpl.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <p style={{ margin: 0, color: "#6b7280", fontWeight: 700, fontSize: 13 }}>
+                할인 적용: <b>{fmt(effectiveDiscount)}원</b> · 예상 결제금액: <b>{fmt(payableAmount)}원</b>
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <p style={{ margin: 0, fontWeight: 900 }}>비회원 주문 중입니다.</p>
+            <p style={{ margin: "6px 0 0", color: "#6b7280", fontWeight: 700, fontSize: 13 }}>
+              회원가입 후 주문하면 매장별 포인트를 적립받을 수 있어요.
+            </p>
+          </>
+        )}
       </div>
 
       <div style={{ marginTop: 18 }}>
