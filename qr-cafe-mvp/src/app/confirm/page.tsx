@@ -533,6 +533,12 @@ function ConfirmPageInner() {
           total_price: Math.round(totalPrice),
           status: "new",
           payment_status: paymentStatus,
+          customer_user_id: currentCustomerUserId,
+          used_points: selectedCouponIdForApply ? 0 : usedPoints,
+          used_coupon_id: selectedCouponIdForApply,
+          applied_discount_type: selectedCouponIdForApply
+            ? "coupon"
+            : (usedPoints > 0 ? "point" : null),
           store_id: storeId,
         };
 

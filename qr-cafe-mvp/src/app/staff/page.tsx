@@ -1034,6 +1034,28 @@ function StaffPageInner() {
       return;
     }
 
+    if (patch.status === "completed") {
+      const { error: finalizeErr } = await supabase.rpc("finalize_order_rewards", {
+        p_store_id: sid,
+        p_order_id: id,
+      });
+      if (finalizeErr) {
+        console.error("[staff] finalize_order_rewards error:", finalizeErr.message);
+        alert(`보상 확정 처리 실패: ${finalizeErr.message}`);
+      }
+    }
+
+    if (patch.status === "cancelled") {
+      const { error: rollbackErr } = await supabase.rpc("rollback_order_rewards", {
+        p_store_id: sid,
+        p_order_id: id,
+      });
+      if (rollbackErr) {
+        console.error("[staff] rollback_order_rewards error:", rollbackErr.message);
+        alert(`보상 롤백 처리 실패: ${rollbackErr.message}`);
+      }
+    }
+
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
   };
 

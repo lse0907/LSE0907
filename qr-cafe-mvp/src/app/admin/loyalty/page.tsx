@@ -10,6 +10,7 @@ type LoyaltySettingsRow = {
   tier_general_rate_pct: number;
   tier_regular_rate_pct: number;
   tier_vip_rate_pct: number;
+  thank_you_every_n_orders: number;
   max_redeem_pct: number;
   min_redeem_points: number;
   point_expiry_months: number;
@@ -92,6 +93,7 @@ function AdminLoyaltyInner() {
     tier_general_rate_pct: 2,
     tier_regular_rate_pct: 3,
     tier_vip_rate_pct: 5,
+    thank_you_every_n_orders: 10,
     max_redeem_pct: 30,
     min_redeem_points: 100,
     point_expiry_months: 12,
@@ -157,7 +159,7 @@ function AdminLoyaltyInner() {
       supabase
         .from("store_loyalty_settings")
         .select(
-          "store_id,tier_general_rate_pct,tier_regular_rate_pct,tier_vip_rate_pct,max_redeem_pct,min_redeem_points,point_expiry_months,allow_point_or_coupon_only"
+          "store_id,tier_general_rate_pct,tier_regular_rate_pct,tier_vip_rate_pct,thank_you_every_n_orders,max_redeem_pct,min_redeem_points,point_expiry_months,allow_point_or_coupon_only"
         )
         .eq("store_id", storeId)
         .maybeSingle(),
@@ -400,6 +402,7 @@ function AdminLoyaltyInner() {
           <LabelInput label="General 적립률(%)" value={String(settings.tier_general_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_general_rate_pct: toNumber(v, p.tier_general_rate_pct) }))} />
           <LabelInput label="Regular 적립률(%)" value={String(settings.tier_regular_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_regular_rate_pct: toNumber(v, p.tier_regular_rate_pct) }))} />
           <LabelInput label="VIP 적립률(%)" value={String(settings.tier_vip_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_vip_rate_pct: toNumber(v, p.tier_vip_rate_pct) }))} />
+          <LabelInput label="감사 쿠폰 발급 기준(주문수)" value={String(settings.thank_you_every_n_orders)} onChange={(v) => setSettings((p) => ({ ...p, thank_you_every_n_orders: Math.max(1, Math.floor(toNumber(v, p.thank_you_every_n_orders))) }))} />
           <LabelInput label="최대 사용 비율(%)" value={String(settings.max_redeem_pct)} onChange={(v) => setSettings((p) => ({ ...p, max_redeem_pct: toNumber(v, p.max_redeem_pct) }))} />
           <LabelInput label="최소 사용 포인트" value={String(settings.min_redeem_points)} onChange={(v) => setSettings((p) => ({ ...p, min_redeem_points: Math.max(0, Math.floor(toNumber(v, p.min_redeem_points))) }))} />
           <LabelInput label="포인트 만료 개월" value={String(settings.point_expiry_months)} onChange={(v) => setSettings((p) => ({ ...p, point_expiry_months: Math.max(0, Math.floor(toNumber(v, p.point_expiry_months))) }))} />

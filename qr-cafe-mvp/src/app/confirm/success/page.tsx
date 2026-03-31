@@ -155,6 +155,11 @@ function ConfirmSuccessPageInner() {
             status: "new",
             payment_status: "paid",
             customer_user_id: loyaltyCustomerUserId,
+            used_points: Math.max(0, Number(pending.usedPoints || 0)),
+            used_coupon_id: pending.usedCouponId || null,
+            applied_discount_type: pending.usedCouponId
+              ? "coupon"
+              : (Math.max(0, Number(pending.usedPoints || 0)) > 0 ? "point" : null),
             store_id: storeId,
           };
 

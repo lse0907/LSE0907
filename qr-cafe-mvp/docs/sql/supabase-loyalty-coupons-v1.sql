@@ -104,6 +104,7 @@ create table if not exists public.store_loyalty_settings (
   tier_general_rate_pct numeric(4,2) not null default 2.00 check (tier_general_rate_pct between 1.00 and 10.00),
   tier_regular_rate_pct numeric(4,2) not null default 3.00 check (tier_regular_rate_pct between 1.00 and 10.00),
   tier_vip_rate_pct numeric(4,2) not null default 5.00 check (tier_vip_rate_pct between 1.00 and 10.00),
+  thank_you_every_n_orders integer not null default 10 check (thank_you_every_n_orders between 1 and 1000),
   max_redeem_pct numeric(5,2) not null default 30.00 check (max_redeem_pct between 0.00 and 100.00),
   min_redeem_points integer not null default 100 check (min_redeem_points >= 0),
   point_expiry_months integer not null default 12 check (point_expiry_months >= 0),
@@ -113,6 +114,9 @@ create table if not exists public.store_loyalty_settings (
   updated_at timestamptz not null default now(),
   check (tier_general_rate_pct <= tier_regular_rate_pct and tier_regular_rate_pct <= tier_vip_rate_pct)
 );
+
+alter table public.store_loyalty_settings
+  add column if not exists thank_you_every_n_orders integer not null default 10;
 
 drop trigger if exists trg_store_loyalty_settings_updated_at on public.store_loyalty_settings;
 create trigger trg_store_loyalty_settings_updated_at
@@ -464,11 +468,11 @@ begin
 
   -- deduct points if used
   if p_used_points > 0 then
-    update public.customer_store_wallets
-    set point_balance = point_balance - p_used_points,
+    update public.customer_store_wallets w
+    set point_balance = w.point_balance - p_used_points,
         updated_at = v_now
-    where customer_user_id = p_customer_user_id
-      and store_id = p_store_id;
+    where w.customer_user_id = p_customer_user_id
+      and w.store_id = p_store_id;
 
     insert into public.point_transactions (
       customer_user_id, store_id, order_id, tx_type, points, balance_after, reason, idempotency_key
@@ -498,14 +502,14 @@ begin
 
   -- earn points
   if v_earned > 0 then
-    update public.customer_store_wallets
-    set point_balance = point_balance + v_earned,
-        lifetime_spent = lifetime_spent + greatest(0, p_order_amount - p_used_points - v_coupon_discount),
-        lifetime_orders = lifetime_orders + 1,
+    update public.customer_store_wallets w
+    set point_balance = w.point_balance + v_earned,
+        lifetime_spent = w.lifetime_spent + greatest(0, p_order_amount - p_used_points - v_coupon_discount),
+        lifetime_orders = w.lifetime_orders + 1,
         last_order_at = v_now,
         updated_at = v_now
-    where customer_user_id = p_customer_user_id
-      and store_id = p_store_id;
+    where w.customer_user_id = p_customer_user_id
+      and w.store_id = p_store_id;
 
     insert into public.point_transactions (
       customer_user_id, store_id, order_id, tx_type, points, balance_after, reason, idempotency_key, expires_at
@@ -523,13 +527,13 @@ begin
     )
     on conflict (idempotency_key) do nothing;
   else
-    update public.customer_store_wallets
-    set lifetime_spent = lifetime_spent + greatest(0, p_order_amount - p_used_points - v_coupon_discount),
-        lifetime_orders = lifetime_orders + 1,
+    update public.customer_store_wallets w
+    set lifetime_spent = w.lifetime_spent + greatest(0, p_order_amount - p_used_points - v_coupon_discount),
+        lifetime_orders = w.lifetime_orders + 1,
         last_order_at = v_now,
         updated_at = v_now
-    where customer_user_id = p_customer_user_id
-      and store_id = p_store_id;
+    where w.customer_user_id = p_customer_user_id
+      and w.store_id = p_store_id;
   end if;
 
   -- store order snapshots
@@ -629,6 +633,250 @@ end;
 $$;
 
 -- ---------------------------------------------------------
+-- 11-1) Auto coupon issue log (for idempotent milestone rewards)
+-- ---------------------------------------------------------
+create table if not exists public.coupon_auto_issue_logs (
+  id uuid primary key default gen_random_uuid(),
+  store_id text not null references public.stores(store_id) on delete cascade,
+  customer_user_id uuid not null references auth.users(id) on delete cascade,
+  order_id uuid not null references public.orders(id) on delete cascade,
+  coupon_kind text not null check (coupon_kind in ('first_order','thank_you')),
+  milestone integer not null default 1,
+  coupon_id uuid references public.customer_coupons(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (store_id, customer_user_id, coupon_kind, milestone)
+);
+
+create index if not exists idx_coupon_auto_issue_logs_store_customer
+  on public.coupon_auto_issue_logs(store_id, customer_user_id, created_at desc);
+
+-- ---------------------------------------------------------
+-- 11-2) Finalize loyalty + auto coupon issue on order completion
+-- ---------------------------------------------------------
+create or replace function public.finalize_order_rewards(
+  p_store_id text,
+  p_order_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.orders%rowtype;
+  v_settings public.store_loyalty_settings%rowtype;
+  v_completed_count integer := 0;
+  v_first_tpl_id uuid;
+  v_thank_tpl_id uuid;
+  v_new_coupon_id uuid;
+  v_thank_every integer := 10;
+begin
+  select * into v_order
+  from public.orders o
+  where o.store_id = p_store_id
+    and o.id = p_order_id
+  for update;
+
+  if not found then
+    raise exception 'order not found';
+  end if;
+
+  if v_order.customer_user_id is null then
+    return jsonb_build_object('ok', true, 'skipped', 'guest_order');
+  end if;
+
+  if v_order.status <> 'completed' then
+    return jsonb_build_object('ok', true, 'skipped', 'order_not_completed');
+  end if;
+
+  if coalesce(v_order.earned_points, 0) > 0 or v_order.loyalty_snapshot is not null then
+    return jsonb_build_object('ok', true, 'skipped', 'already_finalized');
+  end if;
+
+  perform public.apply_loyalty_on_paid_order(
+    v_order.id,
+    p_store_id,
+    v_order.customer_user_id,
+    coalesce(v_order.total_price, 0),
+    coalesce(v_order.used_points, 0),
+    v_order.used_coupon_id,
+    v_order.id::text || ':loyalty'
+  );
+
+  perform public.recalculate_customer_tier(p_store_id, v_order.customer_user_id);
+
+  select * into v_settings
+  from public.store_loyalty_settings
+  where store_id = p_store_id;
+  v_thank_every := greatest(1, coalesce(v_settings.thank_you_every_n_orders, 10));
+
+  select count(*)::integer into v_completed_count
+  from public.orders o
+  where o.store_id = p_store_id
+    and o.customer_user_id = v_order.customer_user_id
+    and o.status = 'completed'
+    and o.payment_status in ('paid', 'not_required');
+
+  if v_completed_count = 1 then
+    select t.id into v_first_tpl_id
+    from public.store_coupon_templates t
+    where t.store_id = p_store_id
+      and t.coupon_kind = 'first_order'
+      and t.is_active = true
+    order by t.created_at desc
+    limit 1;
+
+    if v_first_tpl_id is not null then
+      if not exists (
+        select 1 from public.coupon_auto_issue_logs l
+        where l.store_id = p_store_id
+          and l.customer_user_id = v_order.customer_user_id
+          and l.coupon_kind = 'first_order'
+          and l.milestone = 1
+      ) then
+        v_new_coupon_id := public.issue_customer_coupon(p_store_id, v_order.customer_user_id, v_first_tpl_id);
+        insert into public.coupon_auto_issue_logs(store_id, customer_user_id, order_id, coupon_kind, milestone, coupon_id)
+        values (p_store_id, v_order.customer_user_id, v_order.id, 'first_order', 1, v_new_coupon_id)
+        on conflict (store_id, customer_user_id, coupon_kind, milestone) do nothing;
+      end if;
+    end if;
+  end if;
+
+  if v_completed_count >= v_thank_every and mod(v_completed_count, v_thank_every) = 0 then
+    select t.id into v_thank_tpl_id
+    from public.store_coupon_templates t
+    where t.store_id = p_store_id
+      and t.coupon_kind = 'thank_you'
+      and t.is_active = true
+    order by t.created_at desc
+    limit 1;
+
+    if v_thank_tpl_id is not null then
+      if not exists (
+        select 1 from public.coupon_auto_issue_logs l
+        where l.store_id = p_store_id
+          and l.customer_user_id = v_order.customer_user_id
+          and l.coupon_kind = 'thank_you'
+          and l.milestone = (v_completed_count / v_thank_every)
+      ) then
+        v_new_coupon_id := public.issue_customer_coupon(p_store_id, v_order.customer_user_id, v_thank_tpl_id);
+        insert into public.coupon_auto_issue_logs(store_id, customer_user_id, order_id, coupon_kind, milestone, coupon_id)
+        values (p_store_id, v_order.customer_user_id, v_order.id, 'thank_you', (v_completed_count / v_thank_every), v_new_coupon_id)
+        on conflict (store_id, customer_user_id, coupon_kind, milestone) do nothing;
+      end if;
+    end if;
+  end if;
+
+  return jsonb_build_object('ok', true, 'finalized', true, 'completed_orders', v_completed_count);
+end;
+$$;
+
+-- ---------------------------------------------------------
+-- 11-3) Rollback loyalty + coupon on cancelled/refunded orders
+-- ---------------------------------------------------------
+create or replace function public.rollback_order_rewards(
+  p_store_id text,
+  p_order_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.orders%rowtype;
+  v_now timestamptz := now();
+begin
+  select * into v_order
+  from public.orders o
+  where o.store_id = p_store_id
+    and o.id = p_order_id
+  for update;
+
+  if not found then
+    raise exception 'order not found';
+  end if;
+
+  if v_order.customer_user_id is null then
+    return jsonb_build_object('ok', true, 'skipped', 'guest_order');
+  end if;
+
+  if v_order.status not in ('cancelled', 'refunded') then
+    return jsonb_build_object('ok', true, 'skipped', 'order_not_cancelled_or_refunded');
+  end if;
+
+  if coalesce(v_order.earned_points, 0) = 0 and coalesce(v_order.used_points, 0) = 0 and v_order.used_coupon_id is null then
+    return jsonb_build_object('ok', true, 'skipped', 'no_rewards_to_rollback');
+  end if;
+
+  if coalesce(v_order.earned_points, 0) > 0 then
+    update public.customer_store_wallets w
+    set point_balance = greatest(0, w.point_balance - v_order.earned_points),
+        updated_at = v_now
+    where w.customer_user_id = v_order.customer_user_id
+      and w.store_id = p_store_id;
+
+    insert into public.point_transactions (
+      customer_user_id, store_id, order_id, tx_type, points, balance_after, reason, idempotency_key
+    ) values (
+      v_order.customer_user_id,
+      p_store_id,
+      v_order.id,
+      'rollback',
+      -v_order.earned_points,
+      (select point_balance from public.customer_store_wallets where customer_user_id = v_order.customer_user_id and store_id = p_store_id),
+      'order cancelled/refunded rollback (earn)',
+      v_order.id::text || ':rollback:earn'
+    ) on conflict (idempotency_key) do nothing;
+  end if;
+
+  if coalesce(v_order.used_points, 0) > 0 then
+    update public.customer_store_wallets w
+    set point_balance = w.point_balance + v_order.used_points,
+        updated_at = v_now
+    where w.customer_user_id = v_order.customer_user_id
+      and w.store_id = p_store_id;
+
+    insert into public.point_transactions (
+      customer_user_id, store_id, order_id, tx_type, points, balance_after, reason, idempotency_key
+    ) values (
+      v_order.customer_user_id,
+      p_store_id,
+      v_order.id,
+      'rollback',
+      v_order.used_points,
+      (select point_balance from public.customer_store_wallets where customer_user_id = v_order.customer_user_id and store_id = p_store_id),
+      'order cancelled/refunded rollback (used points)',
+      v_order.id::text || ':rollback:use'
+    ) on conflict (idempotency_key) do nothing;
+  end if;
+
+  if v_order.used_coupon_id is not null then
+    update public.customer_coupons c
+    set status = 'issued',
+        used_at = null,
+        used_order_id = null,
+        updated_at = v_now
+    where c.id = v_order.used_coupon_id
+      and c.store_id = p_store_id
+      and c.customer_user_id = v_order.customer_user_id;
+  end if;
+
+  update public.orders o
+  set earned_points = 0,
+      points_rate_snapshot = null,
+      loyalty_snapshot = null,
+      applied_discount_type = null,
+      used_points = 0,
+      used_coupon_id = null
+  where o.store_id = p_store_id
+    and o.id = p_order_id;
+
+  return jsonb_build_object('ok', true, 'rolled_back', true);
+end;
+$$;
+
+-- ---------------------------------------------------------
 -- 12) RLS policies
 -- ---------------------------------------------------------
 alter table public.customer_profiles enable row level security;
@@ -638,6 +886,7 @@ alter table public.store_loyalty_settings enable row level security;
 alter table public.store_tier_rules enable row level security;
 alter table public.store_coupon_templates enable row level security;
 alter table public.customer_coupons enable row level security;
+alter table public.coupon_auto_issue_logs enable row level security;
 
 -- customer_profiles: customer self
 drop policy if exists customer_profiles_select_self on public.customer_profiles;
@@ -816,6 +1065,18 @@ with check (
   )
 );
 
+drop policy if exists coupon_auto_issue_logs_member_read on public.coupon_auto_issue_logs;
+create policy coupon_auto_issue_logs_member_read
+on public.coupon_auto_issue_logs
+for select
+using (
+  exists (
+    select 1 from public.store_members m
+    where m.store_id = coupon_auto_issue_logs.store_id
+      and m.user_id = auth.uid()
+  )
+);
+
 -- ---------------------------------------------------------
 -- 13) Public checkout-mode RPC for customer/guest pages
 -- ---------------------------------------------------------
@@ -873,6 +1134,8 @@ $$;
 grant execute on function public.issue_customer_coupon(text, uuid, uuid) to authenticated;
 grant execute on function public.apply_loyalty_on_paid_order(uuid, text, uuid, integer, integer, uuid, text) to authenticated;
 grant execute on function public.recalculate_customer_tier(text, uuid) to authenticated;
+grant execute on function public.finalize_order_rewards(text, uuid) to authenticated;
+grant execute on function public.rollback_order_rewards(text, uuid) to authenticated;
 grant execute on function public.get_store_checkout_mode(text) to anon, authenticated;
 grant execute on function public.get_store_checkout_client_config(text) to anon, authenticated;
 
