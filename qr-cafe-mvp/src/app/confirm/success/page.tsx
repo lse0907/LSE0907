@@ -216,6 +216,21 @@ function ConfirmSuccessPageInner() {
           if (oioErr) throw new Error(`[order_item_options insert] ${oioErr.message}`);
         }
 
+        if (loyaltyCustomerUserId) {
+          const { error: loyaltyErr } = await supabase.rpc("apply_loyalty_on_paid_order", {
+            p_order_id: newOrderId,
+            p_store_id: storeId,
+            p_customer_user_id: loyaltyCustomerUserId,
+            p_order_amount: Math.round(pending.totalPrice),
+            p_used_points: Math.max(0, Number(pending.usedPoints || 0)),
+            p_used_coupon_id: pending.usedCouponId || null,
+            p_idempotency_key: `${newOrderId}:loyalty`,
+          });
+          if (loyaltyErr) {
+            console.warn("[loyalty] apply failed:", loyaltyErr.message);
+          }
+        }
+
         localStorage.setItem(lsLastOrderIdKey(storeId), newOrderId);
         localStorage.setItem(lsLastOrderTokenKey(storeId), accessToken);
         localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
