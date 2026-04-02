@@ -828,7 +828,30 @@ function StaffPageInner() {
     if (!cancelTarget) return;
     const id = cancelTarget.id;
     closeCancelModal();
-    await updateOrderInDb(id, { status: "cancelled" });
+    const sid = storeIdRef.current || storeId;
+    if (!sid) return;
+    try {
+      const res = await fetch("/api/orders/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actor: "staff",
+          storeId: sid,
+          orderId: id,
+          reason: "매장 주문 취소",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(String(json?.message || "주문 취소 처리 실패"));
+      }
+      setOrders((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, status: "cancelled" } : o))
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`주문 취소 실패: ${msg}`);
+    }
   };
 
   const nextBatch = useMemo(() => {
@@ -1032,6 +1055,28 @@ function StaffPageInner() {
       console.error("[staff] update order error:", error.message);
       alert(`저장 실패: ${error.message}`);
       return;
+    }
+
+    if (patch.status === "completed") {
+      const { error: finalizeErr } = await supabase.rpc("finalize_order_rewards", {
+        p_store_id: sid,
+        p_order_id: id,
+      });
+      if (finalizeErr) {
+        console.error("[staff] finalize_order_rewards error:", finalizeErr.message);
+        alert(`보상 확정 처리 실패: ${finalizeErr.message}`);
+      }
+    }
+
+    if (patch.status === "cancelled") {
+      const { error: rollbackErr } = await supabase.rpc("rollback_order_rewards", {
+        p_store_id: sid,
+        p_order_id: id,
+      });
+      if (rollbackErr) {
+        console.error("[staff] rollback_order_rewards error:", rollbackErr.message);
+        alert(`보상 롤백 처리 실패: ${rollbackErr.message}`);
+      }
     }
 
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));

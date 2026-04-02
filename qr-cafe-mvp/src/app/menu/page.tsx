@@ -73,6 +73,11 @@ type MenuSection = {
   items: MenuItem[];
 };
 
+type WalletSummary = {
+  point_balance: number;
+  tier: string;
+};
+
 function uid(prefix = "line") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random()
     .toString(16)
@@ -122,6 +127,10 @@ function MenuPageInner() {
 
   const table = (sp.get("table") || "").trim();
   const isTableQr = !!table;
+  const nextUrl = useMemo(() => {
+    const q = sp.toString();
+    return q ? `/menu?${q}` : "/menu";
+  }, [sp]);
   const cartStorageKey = useMemo(
     () => `qrCafeCart:${storeId}:${isTableQr ? table : "counter"}`,
     [storeId, isTableQr, table]
@@ -148,6 +157,8 @@ function MenuPageInner() {
 
   const [optSel, setOptSel] = useState<Record<string, Record<string, number>>>({});
   const [optQty, setOptQty] = useState(1);
+  const [customerUserId, setCustomerUserId] = useState<string | null>(null);
+  const [wallet, setWallet] = useState<WalletSummary | null>(null);
 
   const fetchOptionsFromDb = async () => {
     setOptionsLoading(true);
@@ -235,6 +246,35 @@ function MenuPageInner() {
 
     setCategories(rows);
   };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      const uid = authData?.user?.id || null;
+      if (!mounted) return;
+      setCustomerUserId(uid);
+
+      if (!uid) {
+        setWallet(null);
+        return;
+      }
+
+      const { data: walletRow } = await supabase
+        .from("customer_store_wallets")
+        .select("point_balance,tier")
+        .eq("customer_user_id", uid)
+        .eq("store_id", storeId)
+        .maybeSingle();
+
+      if (!mounted) return;
+      setWallet((walletRow as WalletSummary | null) || null);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
 
   // ✅ storeId가 바뀌면 옵션/메뉴를 다시 불러오고, 장바구니는 현재 매장/테이블 키로 복원
   useEffect(() => {
@@ -790,6 +830,24 @@ function MenuPageInner() {
           display: grid;
           align-content: end;
         }
+        .topActions {
+          position: absolute;
+          top: 10px;
+          right: 12px;
+          display: flex;
+          gap: 8px;
+          z-index: 3;
+        }
+        .topBtn {
+          border: 1px solid rgba(255, 255, 255, 0.35);
+          background: rgba(17, 24, 39, 0.5);
+          color: #fff;
+          font-weight: 900;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          cursor: pointer;
+        }
         .stickyHead {
           background: rgba(246, 247, 249, 0.95);
           backdrop-filter: blur(8px);
@@ -1281,6 +1339,41 @@ function MenuPageInner() {
           <img className="heroImg" src={headerImage} alt="hero" />
           <div className="overlay" style={{ background: overlayBg }} />
           <div className="heroInner">
+            <div className="topActions">
+              {customerUserId ? (
+                <>
+                  <button
+                    className="topBtn"
+                    onClick={() =>
+                      router.push(
+                        `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`
+                      )
+                    }
+                  >
+                    내정보
+                  </button>
+                  <button
+                    className="topBtn"
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      setCustomerUserId(null);
+                      setWallet(null);
+                    }}
+                  >
+                    로그아웃
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="topBtn" onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}>
+                    로그인
+                  </button>
+                  <button className="topBtn" onClick={() => router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)}>
+                    회원가입
+                  </button>
+                </>
+              )}
+            </div>
             <div className="titleRow">
               <h1 className="h1">{profile.storeName || "메뉴"}</h1>
               <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
@@ -1290,6 +1383,28 @@ function MenuPageInner() {
 
         <section className="stickyHead">
           <div className="stickyInner">
+            <div
+              style={{
+                border: "1px solid #c7d2fe",
+                borderRadius: 10,
+                padding: "8px 10px",
+                background: "#eef2ff",
+                fontWeight: 800,
+                fontSize: 13,
+              }}
+            >
+              {customerUserId ? (
+                <span>
+                  등급 <b>{wallet?.tier || "general"}</b> · 포인트{" "}
+                  <b>{fmt(Number(wallet?.point_balance || 0))}P</b>
+                </span>
+              ) : (
+                <span>
+                  비회원 주문 중 · 회원가입하면 주문 시 매장별 포인트를 적립받을 수 있어요.
+                </span>
+              )}
+            </div>
+
             {!menuLoading && !optionsLoading ? (
               <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
                 <button
