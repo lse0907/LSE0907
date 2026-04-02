@@ -99,6 +99,7 @@ function StatusPageInner() {
   const [errMsg, setErrMsg] = useState<string>("");
 
   const [showReadyPopup, setShowReadyPopup] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const readyShownRef = useRef<Record<string, boolean>>({});
   const lastStatusRef = useRef<Record<string, OrderStatus | undefined>>({});
@@ -247,6 +248,37 @@ function StatusPageInner() {
     setLoading(true);
     await fetchOrder(orderId);
     setLoading(false);
+  };
+
+  const onCancelOrder = async () => {
+    if (!visibleOrder || !storeId || !accessToken || cancelling) return;
+    const ok = window.confirm("주문을 취소할까요? 매장에서 주문 확인 전까지만 취소할 수 있어요.");
+    if (!ok) return;
+
+    try {
+      setCancelling(true);
+      const res = await fetch("/api/orders/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actor: "customer",
+          storeId,
+          orderId: visibleOrder.id,
+          accessToken,
+          reason: "고객 앱 주문 취소",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(String(json?.message || "주문 취소에 실패했습니다."));
+      }
+      await onRefresh();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(msg);
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const visibleOrder =
@@ -459,6 +491,17 @@ function StatusPageInner() {
             </div>
             <div className="hint" style={{ marginTop: 6 }}>
               * 진동벨은 직원이 지급한 경우에만 표시됩니다.
+            </div>
+            <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              {visibleOrder.status === "new" ? (
+                <button className="btn" onClick={onCancelOrder} disabled={cancelling}>
+                  {cancelling ? "취소 처리 중..." : "주문 취소"}
+                </button>
+              ) : (
+                <span className="hint" style={{ marginTop: 0 }}>
+                  매장에서 주문 확인 후에는 앱에서 직접 취소할 수 없어요.
+                </span>
+              )}
             </div>
           </div>
 

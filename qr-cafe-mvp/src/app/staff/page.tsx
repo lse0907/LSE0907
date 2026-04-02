@@ -828,7 +828,30 @@ function StaffPageInner() {
     if (!cancelTarget) return;
     const id = cancelTarget.id;
     closeCancelModal();
-    await updateOrderInDb(id, { status: "cancelled" });
+    const sid = storeIdRef.current || storeId;
+    if (!sid) return;
+    try {
+      const res = await fetch("/api/orders/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actor: "staff",
+          storeId: sid,
+          orderId: id,
+          reason: "매장 주문 취소",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(String(json?.message || "주문 취소 처리 실패"));
+      }
+      setOrders((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, status: "cancelled" } : o))
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`주문 취소 실패: ${msg}`);
+    }
   };
 
   const nextBatch = useMemo(() => {

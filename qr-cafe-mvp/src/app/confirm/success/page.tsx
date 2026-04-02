@@ -154,6 +154,7 @@ function ConfirmSuccessPageInner() {
             total_price: Math.round(pending.totalPrice),
             status: "new",
             payment_status: "paid",
+            payment_key: paymentKey,
             customer_user_id: loyaltyCustomerUserId,
             used_points: Math.max(0, Number(pending.usedPoints || 0)),
             used_coupon_id: pending.usedCouponId || null,
@@ -163,7 +164,18 @@ function ConfirmSuccessPageInner() {
             store_id: storeId,
           };
 
-          const insertOrder = await supabase.from("orders").insert([orderRow]);
+          let insertOrder = await supabase.from("orders").insert([orderRow]);
+          if (insertOrder.error) {
+            const low = String(insertOrder.error.message || "").toLowerCase();
+            const missingPaymentKeyColumn = low.includes("payment_key") && (low.includes("column") || low.includes("schema cache"));
+            const missingPaymentStatusColumn = low.includes("payment_status") && (low.includes("column") || low.includes("schema cache"));
+            if (missingPaymentKeyColumn || missingPaymentStatusColumn) {
+              const fallbackRow = { ...orderRow };
+              if (missingPaymentKeyColumn) delete (fallbackRow as any).payment_key;
+              if (missingPaymentStatusColumn) delete (fallbackRow as any).payment_status;
+              insertOrder = await supabase.from("orders").insert([fallbackRow]);
+            }
+          }
           if (!insertOrder.error) break;
 
           const msg = insertOrder.error.message || String(insertOrder.error);

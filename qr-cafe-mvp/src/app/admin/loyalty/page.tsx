@@ -70,6 +70,18 @@ function toNumber(v: string, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function tierLabel(tier: string) {
+  if (tier === "vip") return "VIP";
+  if (tier === "regular") return "단골";
+  return "일반";
+}
+
+function couponKindLabel(kind: string | null | undefined) {
+  if (kind === "first_order") return "자동(첫주문)";
+  if (kind === "thank_you") return "자동(감사)";
+  return "수동(이벤트)";
+}
+
 function AdminLoyaltyInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -399,8 +411,8 @@ function AdminLoyaltyInner() {
       <section style={cardStyle}>
         <h2 style={titleStyle}>포인트 정책</h2>
         <div style={gridStyle}>
-          <LabelInput label="General 적립률(%)" value={String(settings.tier_general_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_general_rate_pct: toNumber(v, p.tier_general_rate_pct) }))} />
-          <LabelInput label="Regular 적립률(%)" value={String(settings.tier_regular_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_regular_rate_pct: toNumber(v, p.tier_regular_rate_pct) }))} />
+          <LabelInput label="일반 적립률(%)" value={String(settings.tier_general_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_general_rate_pct: toNumber(v, p.tier_general_rate_pct) }))} />
+          <LabelInput label="단골 적립률(%)" value={String(settings.tier_regular_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_regular_rate_pct: toNumber(v, p.tier_regular_rate_pct) }))} />
           <LabelInput label="VIP 적립률(%)" value={String(settings.tier_vip_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_vip_rate_pct: toNumber(v, p.tier_vip_rate_pct) }))} />
           <LabelInput label="감사 쿠폰 발급 기준(주문수)" value={String(settings.thank_you_every_n_orders)} onChange={(v) => setSettings((p) => ({ ...p, thank_you_every_n_orders: Math.max(1, Math.floor(toNumber(v, p.thank_you_every_n_orders))) }))} />
           <LabelInput label="최대 사용 비율(%)" value={String(settings.max_redeem_pct)} onChange={(v) => setSettings((p) => ({ ...p, max_redeem_pct: toNumber(v, p.max_redeem_pct) }))} />
@@ -426,8 +438,8 @@ function AdminLoyaltyInner() {
         <h2 style={titleStyle}>등급 규칙</h2>
         <div style={gridStyle}>
           <LabelInput label="집계 기간(개월)" value={String(tierRules.lookback_months)} onChange={(v) => setTierRules((p) => ({ ...p, lookback_months: Math.max(1, Math.floor(toNumber(v, p.lookback_months))) }))} />
-          <LabelInput label="Regular 최소 누적결제" value={String(tierRules.regular_min_spent)} onChange={(v) => setTierRules((p) => ({ ...p, regular_min_spent: Math.max(0, Math.floor(toNumber(v, p.regular_min_spent))) }))} />
-          <LabelInput label="Regular 최소 주문수" value={String(tierRules.regular_min_orders)} onChange={(v) => setTierRules((p) => ({ ...p, regular_min_orders: Math.max(0, Math.floor(toNumber(v, p.regular_min_orders))) }))} />
+          <LabelInput label="단골 최소 누적결제" value={String(tierRules.regular_min_spent)} onChange={(v) => setTierRules((p) => ({ ...p, regular_min_spent: Math.max(0, Math.floor(toNumber(v, p.regular_min_spent))) }))} />
+          <LabelInput label="단골 최소 주문수" value={String(tierRules.regular_min_orders)} onChange={(v) => setTierRules((p) => ({ ...p, regular_min_orders: Math.max(0, Math.floor(toNumber(v, p.regular_min_orders))) }))} />
           <LabelInput label="VIP 최소 누적결제" value={String(tierRules.vip_min_spent)} onChange={(v) => setTierRules((p) => ({ ...p, vip_min_spent: Math.max(0, Math.floor(toNumber(v, p.vip_min_spent))) }))} />
           <LabelInput label="VIP 최소 주문수" value={String(tierRules.vip_min_orders)} onChange={(v) => setTierRules((p) => ({ ...p, vip_min_orders: Math.max(0, Math.floor(toNumber(v, p.vip_min_orders))) }))} />
         </div>
@@ -447,9 +459,9 @@ function AdminLoyaltyInner() {
               value={newTemplate.coupon_kind}
               onChange={(e) => setNewTemplate((p) => ({ ...p, coupon_kind: e.target.value as CouponTemplateRow["coupon_kind"] }))}
             >
-              <option value="first_order">first_order</option>
-              <option value="thank_you">thank_you</option>
-              <option value="event">event</option>
+              <option value="first_order">자동(첫주문)</option>
+              <option value="thank_you">자동(감사)</option>
+              <option value="event">수동(이벤트)</option>
             </select>
           </label>
           <label style={labelStyle}>
@@ -478,10 +490,13 @@ function AdminLoyaltyInner() {
           {templates.map((row) => (
             <article key={row.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
               <p style={{ margin: 0, fontWeight: 900 }}>
-                {row.name} <span style={{ color: "#6b7280", fontWeight: 700 }}>({row.coupon_kind})</span>
+                {row.name} <span style={{ color: "#6b7280", fontWeight: 700 }}>({couponKindLabel(row.coupon_kind)})</span>
               </p>
               <p style={{ margin: "6px 0 0", color: "#4b5563", fontWeight: 700 }}>
                 {row.discount_type === "fixed_amount" ? `정액 ${row.discount_value}원` : `정률 ${row.discount_value}%`} · 최소주문 {row.min_order_amount}원 · 유효 {row.valid_days}일
+              </p>
+              <p style={{ margin: "4px 0 0", color: "#6b7280", fontWeight: 700, fontSize: 12 }}>
+                {row.coupon_kind === "event" ? "관리자 수동 발급용 쿠폰" : "조건 충족 시 자동 발급되는 쿠폰"}
               </p>
               <div style={{ marginTop: 8 }}>
                 <button style={smallBtnStyle} onClick={() => toggleTemplate(row)}>
@@ -514,7 +529,7 @@ function AdminLoyaltyInner() {
               <option value="">선택해 주세요</option>
               {templates.map((tpl) => (
                 <option key={tpl.id} value={tpl.id}>
-                  {tpl.name} ({tpl.coupon_kind}) {tpl.is_active ? "" : "[비활성]"}
+                  {tpl.name} ({couponKindLabel(tpl.coupon_kind)}) {tpl.is_active ? "" : "[비활성]"}
                 </option>
               ))}
             </select>
@@ -535,7 +550,7 @@ function AdminLoyaltyInner() {
             return (
               <article key={row.customer_user_id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
                 <p style={{ margin: 0, fontWeight: 900 }}>
-                  {profile?.name || "이름 미등록"} · {row.tier.toUpperCase()} · {Number(row.point_balance || 0).toLocaleString()}P
+                  {profile?.name || "이름 미등록"} · {tierLabel(row.tier)} · {Number(row.point_balance || 0).toLocaleString()}P
                 </p>
                 <p style={{ margin: "6px 0 0", color: "#4b5563", fontWeight: 700 }}>
                   UUID: {row.customer_user_id}

@@ -926,31 +926,74 @@ function ConfirmPageInner() {
                 >
                   할인 미사용
                 </button>
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
                 {issuedCoupons.map((c) => {
                   const tpl = c.template;
                   if (!tpl) return null;
-                  const disabledByMin = Math.round(totalPrice) < Math.max(0, Number(tpl.min_order_amount || 0));
+                  const orderAmount = Math.max(0, Math.floor(totalPrice));
+                  const minOrder = Math.max(0, Number(tpl.min_order_amount || 0));
+                  const disabledByMin = orderAmount < minOrder;
+                  const maxDiscount = tpl.max_discount_amount == null ? null : Math.max(0, Math.floor(Number(tpl.max_discount_amount || 0)));
+                  const expectedDiscount =
+                    tpl.discount_type === "fixed_amount"
+                      ? Math.min(orderAmount, Math.max(0, Math.floor(Number(tpl.discount_value || 0))))
+                      : Math.min(
+                          orderAmount,
+                          Math.min(
+                            Math.floor((orderAmount * Math.max(0, Number(tpl.discount_value || 0))) / 100),
+                            maxDiscount == null
+                              ? Math.floor((orderAmount * Math.max(0, Number(tpl.discount_value || 0))) / 100)
+                              : maxDiscount
+                          )
+                        );
+                  const disabledByDiscount = expectedDiscount <= 0;
+                  const reason = disabledByMin
+                    ? `최소주문 ${fmt(minOrder)}원 이상 사용 가능`
+                    : disabledByDiscount
+                      ? "현재 주문에는 할인 적용이 어려워요"
+                      : null;
                   const active = selectedCouponIdForApply === c.id;
+                  const expires = c.expires_at ? new Date(c.expires_at) : null;
+                  const expiresText =
+                    expires && Number.isFinite(expires.getTime())
+                      ? `만료 ${expires.toLocaleDateString()}`
+                      : "만료일 정보 없음";
+                  const label =
+                    tpl.discount_type === "fixed_amount"
+                      ? `정액 ${fmt(Number(tpl.discount_value || 0))}원`
+                      : `정률 ${Number(tpl.discount_value || 0)}%`;
+
                   return (
                     <button
                       key={c.id}
                       type="button"
-                      disabled={disabledByMin}
+                      disabled={!!reason}
                       onClick={() => {
                         setSelectedCouponId(c.id);
                         setUsedPointsInput("0");
                       }}
                       style={{
+                        textAlign: "left",
                         border: active ? "1px solid #111827" : "1px solid #d1d5db",
-                        borderRadius: 999,
-                        padding: "6px 10px",
-                        background: active ? "#111827" : "white",
-                        color: active ? "white" : "#111827",
+                        borderRadius: 12,
+                        padding: "10px 12px",
+                        background: active ? "#f9fafb" : "white",
+                        color: "#111827",
                         fontWeight: 800,
-                        opacity: disabledByMin ? 0.45 : 1,
+                        opacity: reason ? 0.6 : 1,
                       }}
                     >
-                      {tpl.name}
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <span style={{ fontWeight: 900 }}>{tpl.name}</span>
+                        <span style={{ color: "#374151", fontSize: 12 }}>{label}</span>
+                      </div>
+                      <div style={{ marginTop: 4, color: "#4b5563", fontSize: 12, fontWeight: 700 }}>
+                        최소주문 {fmt(minOrder)}원 · 예상 할인 {fmt(expectedDiscount)}원 · {expiresText}
+                      </div>
+                      {reason ? (
+                        <div style={{ marginTop: 4, color: "#b45309", fontSize: 12, fontWeight: 800 }}>{reason}</div>
+                      ) : null}
                     </button>
                   );
                 })}
