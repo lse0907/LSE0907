@@ -11,7 +11,7 @@ type CancelBody = {
 
 async function cancelTossPaymentByOrder(
   secretKey: string,
-  orderId: string,
+  tossOrderId: string,
   paymentKey: string | null,
   cancelReason: string
 ) {
@@ -19,7 +19,7 @@ async function cancelTossPaymentByOrder(
   let resolvedPaymentKey = String(paymentKey || "").trim();
 
   if (!resolvedPaymentKey) {
-    const lookupRes = await fetch(`https://api.tosspayments.com/v1/payments/orders/${encodeURIComponent(orderId)}`, {
+    const lookupRes = await fetch(`https://api.tosspayments.com/v1/payments/orders/${encodeURIComponent(tossOrderId)}`, {
       method: "GET",
       headers: {
         Authorization: `Basic ${basicToken}`,
@@ -121,14 +121,15 @@ export async function POST(req: NextRequest) {
 
     let orderQuery = await supabaseAdmin
       .from("orders")
-      .select("id,store_id,status,payment_status,access_token,payment_key")
+      .select("id,store_id,status,payment_status,access_token,payment_key,toss_order_id")
       .eq("id", orderId)
       .eq("store_id", storeId)
       .maybeSingle();
     if (orderQuery.error) {
       const low = String(orderQuery.error.message || "").toLowerCase();
       const missingPaymentKeyColumn = low.includes("payment_key") && (low.includes("column") || low.includes("schema cache"));
-      if (missingPaymentKeyColumn) {
+      const missingTossOrderIdColumn = low.includes("toss_order_id") && (low.includes("column") || low.includes("schema cache"));
+      if (missingPaymentKeyColumn || missingTossOrderIdColumn) {
         orderQuery = await supabaseAdmin
           .from("orders")
           .select("id,store_id,status,payment_status,access_token")
@@ -184,10 +185,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, message: "매장 Secret Key가 없습니다." }, { status: 400 });
       }
 
+      const tossOrderId = String((order as any)?.toss_order_id || "").trim();
+      const knownPaymentKey = String((order as any)?.payment_key || "").trim() || null;
+      if (!knownPaymentKey && !tossOrderId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            message: "결제 취소 식별자(payment_key / toss_order_id)가 없어 취소할 수 없습니다. DB 마이그레이션 반영이 필요합니다.",
+          },
+          { status: 409 }
+        );
+      }
+
       const cancelRes = await cancelTossPaymentByOrder(
         secretKey,
-        orderId,
-        String((order as any)?.payment_key || "").trim() || null,
+        tossOrderId,
+        knownPaymentKey,
         reason
       );
       if (!cancelRes.ok) {

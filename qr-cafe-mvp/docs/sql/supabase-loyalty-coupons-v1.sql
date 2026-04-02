@@ -217,6 +217,8 @@ for each row execute function public.set_updated_at();
 -- ---------------------------------------------------------
 alter table public.orders
   add column if not exists customer_user_id uuid references auth.users(id) on delete set null,
+  add column if not exists payment_key text,
+  add column if not exists toss_order_id text,
   add column if not exists applied_discount_type text check (applied_discount_type in ('point','coupon')),
   add column if not exists used_points integer not null default 0 check (used_points >= 0),
   add column if not exists used_coupon_id uuid references public.customer_coupons(id) on delete set null,
