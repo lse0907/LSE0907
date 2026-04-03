@@ -189,6 +189,13 @@ function paymentOrderId() {
   return `pay_${raw}`.slice(0, 64);
 }
 
+function tierLabel(raw: string | null | undefined) {
+  const v = String(raw || "").toLowerCase();
+  if (v === "vip") return "VIP";
+  if (v === "regular") return "단골";
+  return "일반";
+}
+
 function ConfirmPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -895,9 +902,9 @@ function ConfirmPageInner() {
       <div style={{ marginTop: 10, border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fff" }}>
         {customerUserId ? (
           <>
-            <p style={{ margin: 0, fontWeight: 800 }}>
-              현재 등급: <b>{wallet?.tier || "general"}</b> · 잔여 포인트: <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 보유 쿠폰: <b>{issuedCouponCount}장</b>
-            </p>
+              <p style={{ margin: 0, fontWeight: 800 }}>
+                현재 등급: <b>{tierLabel(wallet?.tier)}</b> · 잔여 포인트: <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 보유 쿠폰: <b>{issuedCouponCount}장</b>
+              </p>
             <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
               <label style={{ display: "grid", gap: 6, fontWeight: 800, color: "#374151" }}>
                 포인트 사용 (쿠폰 선택 시 자동 0)
@@ -930,7 +937,33 @@ function ConfirmPageInner() {
               <div style={{ display: "grid", gap: 8 }}>
                 {issuedCoupons.map((c) => {
                   const tpl = c.template;
-                  if (!tpl) return null;
+                  if (!tpl) {
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        disabled
+                        style={{
+                          textAlign: "left",
+                          border: "1px solid #d1d5db",
+                          borderRadius: 12,
+                          padding: "10px 12px",
+                          background: "white",
+                          color: "#111827",
+                          fontWeight: 800,
+                          opacity: 0.6,
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <span style={{ fontWeight: 900 }}>사용 불가 쿠폰</span>
+                          <span style={{ color: "#374151", fontSize: 12 }}>템플릿 없음</span>
+                        </div>
+                        <div style={{ marginTop: 4, color: "#b45309", fontSize: 12, fontWeight: 800 }}>
+                          쿠폰 템플릿 정보를 찾을 수 없어 사용할 수 없습니다. 관리자에게 문의해 주세요.
+                        </div>
+                      </button>
+                    );
+                  }
                   const orderAmount = Math.max(0, Math.floor(totalPrice));
                   const minOrder = Math.max(0, Number(tpl.min_order_amount || 0));
                   const disabledByMin = orderAmount < minOrder;
