@@ -441,6 +441,12 @@ function StatusPageInner() {
           새로고침
         </button>
 
+        {visibleOrder?.status === "new" ? (
+          <button className="btn" onClick={onCancelOrder} disabled={cancelling}>
+            {cancelling ? "취소 처리 중..." : "주문 취소"}
+          </button>
+        ) : null}
+
         <Link className="btn" href={homeHref}>
           홈으로
         </Link>

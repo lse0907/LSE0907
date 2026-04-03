@@ -250,6 +250,12 @@ function ConfirmSuccessPageInner() {
         localStorage.setItem(lsLastOrderTokenKey(storeId), accessToken);
         localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
         localStorage.removeItem(`${PREPAY_PENDING_KEY}:${poid}`);
+        try {
+          const cartKey = `qrCafeCart:${storeId}:${pending.mode === "dine-in" && pending.table ? pending.table : "counter"}`;
+          sessionStorage.removeItem(cartKey);
+        } catch {
+          // ignore storage cleanup errors
+        }
 
         if (mounted) {
           setStatus("done");
