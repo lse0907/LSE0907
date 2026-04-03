@@ -485,7 +485,12 @@ begin
       p_order_id,
       'use',
       -p_used_points,
-      (select point_balance from public.customer_store_wallets where customer_user_id = p_customer_user_id and store_id = p_store_id),
+      (
+        select w.point_balance
+        from public.customer_store_wallets w
+        where w.customer_user_id = p_customer_user_id
+          and w.store_id = p_store_id
+      ),
       'order payment',
       case when p_idempotency_key is null then null else p_idempotency_key || ':use' end
     )
@@ -522,7 +527,12 @@ begin
       p_order_id,
       'earn',
       v_earned,
-      (select point_balance from public.customer_store_wallets where customer_user_id = p_customer_user_id and store_id = p_store_id),
+      (
+        select w.point_balance
+        from public.customer_store_wallets w
+        where w.customer_user_id = p_customer_user_id
+          and w.store_id = p_store_id
+      ),
       'order payment',
       case when p_idempotency_key is null then null else p_idempotency_key || ':earn' end,
       case when v_settings.point_expiry_months = 0 then null else (v_now + make_interval(months => v_settings.point_expiry_months)) end
