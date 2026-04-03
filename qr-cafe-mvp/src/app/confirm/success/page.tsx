@@ -35,12 +35,15 @@ type CartLine = {
 type PendingPrepay = {
   createdAt: number;
   storeId: string;
+  customerUserId?: string | null;
   cartLines: CartLine[];
   mode: "dine-in" | "takeout";
   table: string;
   requestNote: string;
   totalCount: number;
   totalPrice: number;
+  usedPoints?: number;
+  usedCouponId?: string | null;
 };
 
 const PREPAY_PENDING_KEY = "qrCafePrepayPending";
@@ -122,6 +125,12 @@ function ConfirmSuccessPageInner() {
           throw new Error(String(confirmJson?.message || "결제 승인 확인에 실패했습니다."));
         }
 
+        let loyaltyCustomerUserId = pending.customerUserId || null;
+        if (!loyaltyCustomerUserId) {
+          const { data: authData } = await supabase.auth.getUser();
+          loyaltyCustomerUserId = authData?.user?.id || null;
+        }
+
         const newOrderId = uuid();
         const accessToken = uuid();
         const createdAtIso = new Date().toISOString();
@@ -145,10 +154,31 @@ function ConfirmSuccessPageInner() {
             total_price: Math.round(pending.totalPrice),
             status: "new",
             payment_status: "paid",
+            payment_key: paymentKey,
+            toss_order_id: orderId,
+            customer_user_id: loyaltyCustomerUserId,
+            used_points: Math.max(0, Number(pending.usedPoints || 0)),
+            used_coupon_id: pending.usedCouponId || null,
+            applied_discount_type: pending.usedCouponId
+              ? "coupon"
+              : (Math.max(0, Number(pending.usedPoints || 0)) > 0 ? "point" : null),
             store_id: storeId,
           };
 
-          const insertOrder = await supabase.from("orders").insert([orderRow]);
+          let insertOrder = await supabase.from("orders").insert([orderRow]);
+          if (insertOrder.error) {
+            const low = String(insertOrder.error.message || "").toLowerCase();
+            const missingPaymentKeyColumn = low.includes("payment_key") && (low.includes("column") || low.includes("schema cache"));
+            const missingPaymentStatusColumn = low.includes("payment_status") && (low.includes("column") || low.includes("schema cache"));
+            const missingTossOrderIdColumn = low.includes("toss_order_id") && (low.includes("column") || low.includes("schema cache"));
+            if (missingPaymentKeyColumn || missingPaymentStatusColumn || missingTossOrderIdColumn) {
+              const fallbackRow = { ...orderRow };
+              if (missingPaymentKeyColumn) delete (fallbackRow as any).payment_key;
+              if (missingPaymentStatusColumn) delete (fallbackRow as any).payment_status;
+              if (missingTossOrderIdColumn) delete (fallbackRow as any).toss_order_id;
+              insertOrder = await supabase.from("orders").insert([fallbackRow]);
+            }
+          }
           if (!insertOrder.error) break;
 
           const msg = insertOrder.error.message || String(insertOrder.error);
