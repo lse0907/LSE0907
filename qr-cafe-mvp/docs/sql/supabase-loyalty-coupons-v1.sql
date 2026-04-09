@@ -407,6 +407,10 @@ declare
   v_max_redeem integer;
   v_earned integer;
   v_coupon_template_id uuid;
+  v_coupon_discount_type text;
+  v_coupon_discount_value integer;
+  v_coupon_min_order_amount integer;
+  v_coupon_max_discount_amount integer;
   v_coupon_discount integer := 0;
 begin
   if p_customer_user_id is null then
@@ -466,8 +470,18 @@ begin
 
   if p_used_coupon_id is not null then
     -- lock and validate coupon
-    select cc.template_id
-    into v_coupon_template_id
+    select
+      cc.template_id,
+      cc.discount_type_snapshot,
+      cc.discount_value_snapshot,
+      cc.min_order_amount_snapshot,
+      cc.max_discount_amount_snapshot
+    into
+      v_coupon_template_id,
+      v_coupon_discount_type,
+      v_coupon_discount_value,
+      v_coupon_min_order_amount,
+      v_coupon_max_discount_amount
     from public.customer_coupons cc
     where cc.id = p_used_coupon_id
       and cc.customer_user_id = p_customer_user_id
@@ -480,7 +494,29 @@ begin
       raise exception 'coupon is not valid';
     end if;
 
-    v_coupon_discount := public.calculate_coupon_discount(v_coupon_template_id, p_order_amount);
+    -- Prefer issuance-time snapshot values; fallback to template for legacy rows.
+    if v_coupon_discount_type is not null
+      and v_coupon_discount_value is not null
+      and v_coupon_min_order_amount is not null then
+      if p_order_amount < v_coupon_min_order_amount then
+        raise exception 'Order amount is below coupon minimum';
+      end if;
+
+      if v_coupon_discount_type = 'fixed_amount' then
+        v_coupon_discount := least(v_coupon_discount_value, p_order_amount);
+      else
+        v_coupon_discount := floor((p_order_amount::numeric * v_coupon_discount_value::numeric) / 100.0)::integer;
+        if v_coupon_max_discount_amount is not null then
+          v_coupon_discount := least(v_coupon_discount, v_coupon_max_discount_amount);
+        end if;
+        v_coupon_discount := least(v_coupon_discount, p_order_amount);
+      end if;
+      v_coupon_discount := greatest(v_coupon_discount, 0);
+    elsif v_coupon_template_id is not null then
+      v_coupon_discount := public.calculate_coupon_discount(v_coupon_template_id, p_order_amount);
+    else
+      raise exception 'coupon template data is missing; please reissue this coupon';
+    end if;
   end if;
 
   -- load latest tier before earning
