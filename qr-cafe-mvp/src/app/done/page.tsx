@@ -85,6 +85,7 @@ function DonePageInner() {
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<OrderView | null>(null);
   const [errMsg, setErrMsg] = useState<string>("");
+  const [cancelling, setCancelling] = useState(false);
 
   const storeIdForLinks = useMemo(() => {
     if (storeFromQuery) return resolveStoreId(storeFromQuery);
@@ -103,6 +104,11 @@ function DonePageInner() {
       return "";
     }
   }, [accessTokenFromQuery, storeIdForLinks]);
+
+  const homeHref = useMemo(() => {
+    if (!storeIdForLinks) return "/";
+    return `/?store=${encodeURIComponent(storeIdForLinks)}`;
+  }, [storeIdForLinks]);
 
 
   const globalPageStyle = (
@@ -299,7 +305,7 @@ function DonePageInner() {
         </Link>
 
         <Link
-          href="/"
+          href={homeHref}
           style={{
             flex: 1,
             textAlign: "center",
@@ -315,6 +321,52 @@ function DonePageInner() {
           홈으로
         </Link>
       </div>
+      {order.status === "new" ? (
+        <button
+          onClick={async () => {
+            if (cancelling) return;
+            const ok = window.confirm("주문을 취소할까요? 매장에서 주문 확인 전까지만 취소할 수 있어요.");
+            if (!ok) return;
+            try {
+              setCancelling(true);
+              const res = await fetch("/api/orders/cancel", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  actor: "customer",
+                  storeId: storeIdForLinks,
+                  orderId: order.id,
+                  accessToken: accessTokenForLinks,
+                  reason: "고객 앱 주문 취소",
+                }),
+              });
+              const json = await res.json();
+              if (!res.ok || !json?.ok) throw new Error(String(json?.message || "주문 취소 실패"));
+              window.location.href = `/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(order.id)}&accessToken=${encodeURIComponent(accessTokenForLinks)}`;
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : String(e);
+              alert(msg);
+            } finally {
+              setCancelling(false);
+            }
+          }}
+          style={{
+            marginTop: 10,
+            width: "100%",
+            padding: 12,
+            borderRadius: 10,
+            border: "1px solid #d1d5db",
+            background: "#fff",
+            fontWeight: 900,
+          }}
+        >
+          {cancelling ? "취소 처리 중..." : "주문 취소"}
+        </button>
+      ) : (
+        <p style={{ marginTop: 10, color: "#6b7280", fontWeight: 800 }}>
+          매장에서 주문 확인 후에는 앱에서 직접 취소할 수 없어요.
+        </p>
+      )}
       </main>
     </>
   );
