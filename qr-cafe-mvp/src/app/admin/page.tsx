@@ -440,6 +440,9 @@ function AdminPageInner() {
             <button className="subBtn" onClick={() => go("/admin/billing")}>
               PG 설정
             </button>
+            <button className="subBtn" onClick={() => go("/admin/loyalty")}>
+              포인트/쿠폰
+            </button>
           </div>
         ) : null}
 
