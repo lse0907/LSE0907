@@ -97,6 +97,11 @@ type RawIssuedCoupon = {
   id: string;
   expires_at: string;
   template: CouponTemplateSummary | CouponTemplateSummary[] | null;
+  coupon_name_snapshot: string | null;
+  discount_type_snapshot: "fixed_amount" | "percent" | string | null;
+  discount_value_snapshot: number | null;
+  min_order_amount_snapshot: number | null;
+  max_discount_amount_snapshot: number | null;
 };
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
@@ -338,7 +343,7 @@ function ConfirmPageInner() {
         supabase
           .from("customer_coupons")
           .select(
-            "id,expires_at,template:store_coupon_templates(name,discount_type,discount_value,min_order_amount,max_discount_amount)",
+            "id,expires_at,coupon_name_snapshot,discount_type_snapshot,discount_value_snapshot,min_order_amount_snapshot,max_discount_amount_snapshot,template:store_coupon_templates(name,discount_type,discount_value,min_order_amount,max_discount_amount)",
             { count: "exact" }
           )
           .eq("customer_user_id", uid)
@@ -351,8 +356,24 @@ function ConfirmPageInner() {
       setIssuedCouponCount(couponRes.count || 0);
       const couponRows = (Array.isArray(couponRes.data) ? couponRes.data : []) as RawIssuedCoupon[];
       const normalized: IssuedCoupon[] = couponRows.map((row) => ({
-          ...row,
-          template: Array.isArray(row.template) ? row.template[0] || null : row.template,
+          id: row.id,
+          expires_at: row.expires_at,
+          template:
+            (Array.isArray(row.template) ? row.template[0] || null : row.template) ||
+            (row.discount_type_snapshot &&
+            row.discount_value_snapshot != null &&
+            row.min_order_amount_snapshot != null
+              ? {
+                  name: String(row.coupon_name_snapshot || "발급 쿠폰"),
+                  discount_type: row.discount_type_snapshot,
+                  discount_value: Number(row.discount_value_snapshot || 0),
+                  min_order_amount: Number(row.min_order_amount_snapshot || 0),
+                  max_discount_amount:
+                    row.max_discount_amount_snapshot == null
+                      ? null
+                      : Number(row.max_discount_amount_snapshot),
+                }
+              : null),
       }));
       setIssuedCoupons(normalized);
     })();
