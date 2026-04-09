@@ -88,6 +88,13 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString();
 }
 
+function tierLabel(raw: string | null | undefined) {
+  const v = String(raw || "").toLowerCase();
+  if (v === "vip") return "VIP";
+  if (v === "regular") return "단골";
+  return "일반";
+}
+
 function toStr(v: any) {
   return typeof v === "string" ? v : v == null ? "" : String(v);
 }
@@ -1200,6 +1207,20 @@ function MenuPageInner() {
         }
         .gName {
           font-weight: 950;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .reqBadge {
+          border: 1px solid #fdba74;
+          background: #fff7ed;
+          color: #c2410c;
+          border-radius: 999px;
+          padding: 2px 7px;
+          font-size: 11px;
+          font-weight: 900;
+          line-height: 1.2;
+          white-space: nowrap;
         }
         .gHint {
           color: var(--muted);
@@ -1395,7 +1416,7 @@ function MenuPageInner() {
             >
               {customerUserId ? (
                 <span>
-                  등급 <b>{wallet?.tier || "general"}</b> · 포인트{" "}
+                  내 등급 <b>{tierLabel(wallet?.tier)}</b> · 내 포인트{" "}
                   <b>{fmt(Number(wallet?.point_balance || 0))}P</b>
                 </span>
               ) : (
@@ -1572,7 +1593,17 @@ function MenuPageInner() {
               {(Array.isArray((optTarget as any).optionGroupIds)
                 ? (optTarget as any).optionGroupIds
                 : []
-              ).map((gid: string) => {
+              )
+                .slice()
+                .sort((a: string, b: string) => {
+                  const ga = findGroup(a);
+                  const gb = findGroup(b);
+                  const wa = ga?.required ? 0 : 1;
+                  const wb = gb?.required ? 0 : 1;
+                  if (wa !== wb) return wa - wb;
+                  return 0;
+                })
+                .map((gid: string) => {
                 const g = findGroup(gid);
                 if (!g) return null;
 
@@ -1587,7 +1618,8 @@ function MenuPageInner() {
                     <div key={gid} className="gCard">
                       <div className="gTitleRow">
                         <div className="gName">
-                          {g.name} {g.required ? "(필수)" : "(선택)"}
+                          {g.name}
+                          {g.required ? <span className="reqBadge">필수</span> : null}
                         </div>
                         <div className="gHint">
                           {hintText}
@@ -1617,7 +1649,8 @@ function MenuPageInner() {
                   <div key={gid} className="gCard">
                     <div className="gTitleRow">
                       <div className="gName">
-                        {g.name} {g.required ? "(필수)" : "(선택)"}
+                        {g.name}
+                        {g.required ? <span className="reqBadge">필수</span> : null}
                       </div>
                       <div className="gHint">
                         {hintText}

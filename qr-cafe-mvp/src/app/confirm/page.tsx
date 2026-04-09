@@ -428,6 +428,12 @@ function ConfirmPageInner() {
     [issuedCoupons, selectedCouponId]
   );
 
+  const maxUsablePoints = useMemo(() => {
+    const byBalance = Math.max(0, Number(wallet?.point_balance || 0));
+    const byPrice = Math.max(0, Math.floor(totalPrice));
+    return Math.min(byBalance, byPrice);
+  }, [wallet?.point_balance, totalPrice]);
+
   const couponDiscount = useMemo(() => {
     if (!selectedCoupon?.template) return 0;
     const tpl = selectedCoupon.template;
@@ -950,10 +956,11 @@ function ConfirmPageInner() {
                   type="button"
                   onClick={() => {
                     setSelectedCouponId(null);
+                    setUsedPointsInput(String(maxUsablePoints));
                   }}
                   style={{ border: "1px solid #d1d5db", borderRadius: 999, padding: "6px 10px", background: "white", fontWeight: 800 }}
                 >
-                  포인트 사용
+                  최대 사용
                 </button>
                 <button
                   type="button"
