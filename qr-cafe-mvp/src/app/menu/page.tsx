@@ -73,6 +73,11 @@ type MenuSection = {
   items: MenuItem[];
 };
 
+type WalletSummary = {
+  point_balance: number;
+  tier: string;
+};
+
 function uid(prefix = "line") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random()
     .toString(16)
@@ -81,6 +86,13 @@ function uid(prefix = "line") {
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString();
+}
+
+function tierLabel(raw: string | null | undefined) {
+  const v = String(raw || "").toLowerCase();
+  if (v === "vip") return "VIP";
+  if (v === "regular") return "단골";
+  return "일반";
 }
 
 function toStr(v: any) {
@@ -122,6 +134,10 @@ function MenuPageInner() {
 
   const table = (sp.get("table") || "").trim();
   const isTableQr = !!table;
+  const nextUrl = useMemo(() => {
+    const q = sp.toString();
+    return q ? `/menu?${q}` : "/menu";
+  }, [sp]);
   const cartStorageKey = useMemo(
     () => `qrCafeCart:${storeId}:${isTableQr ? table : "counter"}`,
     [storeId, isTableQr, table]
@@ -148,6 +164,8 @@ function MenuPageInner() {
 
   const [optSel, setOptSel] = useState<Record<string, Record<string, number>>>({});
   const [optQty, setOptQty] = useState(1);
+  const [customerUserId, setCustomerUserId] = useState<string | null>(null);
+  const [wallet, setWallet] = useState<WalletSummary | null>(null);
 
   const fetchOptionsFromDb = async () => {
     setOptionsLoading(true);
@@ -235,6 +253,35 @@ function MenuPageInner() {
 
     setCategories(rows);
   };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      const uid = authData?.user?.id || null;
+      if (!mounted) return;
+      setCustomerUserId(uid);
+
+      if (!uid) {
+        setWallet(null);
+        return;
+      }
+
+      const { data: walletRow } = await supabase
+        .from("customer_store_wallets")
+        .select("point_balance,tier")
+        .eq("customer_user_id", uid)
+        .eq("store_id", storeId)
+        .maybeSingle();
+
+      if (!mounted) return;
+      setWallet((walletRow as WalletSummary | null) || null);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
 
   // ✅ storeId가 바뀌면 옵션/메뉴를 다시 불러오고, 장바구니는 현재 매장/테이블 키로 복원
   useEffect(() => {
@@ -790,6 +837,24 @@ function MenuPageInner() {
           display: grid;
           align-content: end;
         }
+        .topActions {
+          position: absolute;
+          top: 10px;
+          right: 12px;
+          display: flex;
+          gap: 8px;
+          z-index: 3;
+        }
+        .topBtn {
+          border: 1px solid rgba(255, 255, 255, 0.35);
+          background: rgba(17, 24, 39, 0.5);
+          color: #fff;
+          font-weight: 900;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          cursor: pointer;
+        }
         .stickyHead {
           background: rgba(246, 247, 249, 0.95);
           backdrop-filter: blur(8px);
@@ -1142,6 +1207,20 @@ function MenuPageInner() {
         }
         .gName {
           font-weight: 950;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .reqBadge {
+          border: 1px solid #fdba74;
+          background: #fff7ed;
+          color: #c2410c;
+          border-radius: 999px;
+          padding: 2px 7px;
+          font-size: 11px;
+          font-weight: 900;
+          line-height: 1.2;
+          white-space: nowrap;
         }
         .gHint {
           color: var(--muted);
@@ -1281,6 +1360,41 @@ function MenuPageInner() {
           <img className="heroImg" src={headerImage} alt="hero" />
           <div className="overlay" style={{ background: overlayBg }} />
           <div className="heroInner">
+            <div className="topActions">
+              {customerUserId ? (
+                <>
+                  <button
+                    className="topBtn"
+                    onClick={() =>
+                      router.push(
+                        `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`
+                      )
+                    }
+                  >
+                    내정보
+                  </button>
+                  <button
+                    className="topBtn"
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      setCustomerUserId(null);
+                      setWallet(null);
+                    }}
+                  >
+                    로그아웃
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="topBtn" onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}>
+                    로그인
+                  </button>
+                  <button className="topBtn" onClick={() => router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)}>
+                    회원가입
+                  </button>
+                </>
+              )}
+            </div>
             <div className="titleRow">
               <h1 className="h1">{profile.storeName || "메뉴"}</h1>
               <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
@@ -1290,6 +1404,28 @@ function MenuPageInner() {
 
         <section className="stickyHead">
           <div className="stickyInner">
+            <div
+              style={{
+                border: "1px solid #c7d2fe",
+                borderRadius: 10,
+                padding: "8px 10px",
+                background: "#eef2ff",
+                fontWeight: 800,
+                fontSize: 13,
+              }}
+            >
+              {customerUserId ? (
+                <span>
+                  내 등급 <b>{tierLabel(wallet?.tier)}</b> · 내 포인트{" "}
+                  <b>{fmt(Number(wallet?.point_balance || 0))}P</b>
+                </span>
+              ) : (
+                <span>
+                  비회원 주문 중 · 회원가입하면 주문 시 매장별 포인트를 적립받을 수 있어요.
+                </span>
+              )}
+            </div>
+
             {!menuLoading && !optionsLoading ? (
               <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
                 <button
@@ -1457,7 +1593,17 @@ function MenuPageInner() {
               {(Array.isArray((optTarget as any).optionGroupIds)
                 ? (optTarget as any).optionGroupIds
                 : []
-              ).map((gid: string) => {
+              )
+                .slice()
+                .sort((a: string, b: string) => {
+                  const ga = findGroup(a);
+                  const gb = findGroup(b);
+                  const wa = ga?.required ? 0 : 1;
+                  const wb = gb?.required ? 0 : 1;
+                  if (wa !== wb) return wa - wb;
+                  return 0;
+                })
+                .map((gid: string) => {
                 const g = findGroup(gid);
                 if (!g) return null;
 
@@ -1472,7 +1618,8 @@ function MenuPageInner() {
                     <div key={gid} className="gCard">
                       <div className="gTitleRow">
                         <div className="gName">
-                          {g.name} {g.required ? "(필수)" : "(선택)"}
+                          {g.name}
+                          {g.required ? <span className="reqBadge">필수</span> : null}
                         </div>
                         <div className="gHint">
                           {hintText}
@@ -1502,7 +1649,8 @@ function MenuPageInner() {
                   <div key={gid} className="gCard">
                     <div className="gTitleRow">
                       <div className="gName">
-                        {g.name} {g.required ? "(필수)" : "(선택)"}
+                        {g.name}
+                        {g.required ? <span className="reqBadge">필수</span> : null}
                       </div>
                       <div className="gHint">
                         {hintText}
