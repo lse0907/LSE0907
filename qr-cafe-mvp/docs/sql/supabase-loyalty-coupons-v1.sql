@@ -192,6 +192,11 @@ create table if not exists public.customer_coupons (
   customer_user_id uuid not null references auth.users(id) on delete cascade,
   store_id text not null references public.stores(store_id) on delete cascade,
   template_id uuid references public.store_coupon_templates(id) on delete set null,
+  coupon_name_snapshot text,
+  discount_type_snapshot text check (discount_type_snapshot in ('fixed_amount','percent')),
+  discount_value_snapshot integer,
+  min_order_amount_snapshot integer,
+  max_discount_amount_snapshot integer,
   status text not null default 'issued' check (status in ('issued','used','expired','cancelled')),
   issued_at timestamptz not null default now(),
   expires_at timestamptz not null,
@@ -200,6 +205,13 @@ create table if not exists public.customer_coupons (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.customer_coupons
+  add column if not exists coupon_name_snapshot text,
+  add column if not exists discount_type_snapshot text check (discount_type_snapshot in ('fixed_amount','percent')),
+  add column if not exists discount_value_snapshot integer,
+  add column if not exists min_order_amount_snapshot integer,
+  add column if not exists max_discount_amount_snapshot integer;
 
 create index if not exists idx_customer_coupons_customer_store_status
   on public.customer_coupons(customer_user_id, store_id, status);
@@ -337,12 +349,22 @@ begin
     customer_user_id,
     store_id,
     template_id,
+    coupon_name_snapshot,
+    discount_type_snapshot,
+    discount_value_snapshot,
+    min_order_amount_snapshot,
+    max_discount_amount_snapshot,
     status,
     expires_at
   ) values (
     p_customer_user_id,
     p_store_id,
     p_template_id,
+    t.name,
+    t.discount_type,
+    t.discount_value,
+    t.min_order_amount,
+    t.max_discount_amount,
     'issued',
     now() + make_interval(days => t.valid_days)
   )
