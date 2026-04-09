@@ -629,6 +629,21 @@ function ConfirmPageInner() {
         if (oioErr) throw new Error(`[order_item_options insert] ${oioErr.message}`);
       }
 
+      if (currentCustomerUserId) {
+        const { error: loyaltyErr } = await supabase.rpc("apply_loyalty_on_paid_order", {
+          p_order_id: orderId,
+          p_store_id: storeId,
+          p_customer_user_id: currentCustomerUserId,
+          p_order_amount: Math.round(totalPrice),
+          p_used_points: selectedCouponIdForApply ? 0 : usedPoints,
+          p_used_coupon_id: selectedCouponIdForApply,
+          p_idempotency_key: `${orderId}:loyalty`,
+        });
+        if (loyaltyErr) {
+          console.warn("[loyalty] apply failed:", loyaltyErr.message);
+        }
+      }
+
       // 로컬 저장(임시 유지)
       const order: OrderRecord = {
         id: orderId,
