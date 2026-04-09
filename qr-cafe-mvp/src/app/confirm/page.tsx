@@ -749,20 +749,6 @@ function ConfirmPageInner() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <h1 style={{ margin: 0, fontWeight: 950 }}>주문 확인</h1>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <span
-            style={{
-              border: "1px solid #d1d5db",
-              borderRadius: 999,
-              padding: "4px 10px",
-              color: "#374151",
-              fontWeight: 900,
-              fontSize: 12,
-              background: "white",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {isTableQr ? "테이블 주문" : "카운터 주문"}
-          </span>
           {customerUserId ? (
             <>
               <button
@@ -807,7 +793,23 @@ function ConfirmPageInner() {
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <h2 style={{ margin: 0, fontWeight: 950 }}>주문 내역</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <h2 style={{ margin: 0, fontWeight: 950 }}>주문 내역</h2>
+          <span
+            style={{
+              border: "1px solid #d1d5db",
+              borderRadius: 999,
+              padding: "4px 10px",
+              color: "#374151",
+              fontWeight: 900,
+              fontSize: 12,
+              background: "white",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {isTableQr ? "QR 주문" : "카운터 주문"}
+          </span>
+        </div>
 
         {cartLines.length === 0 ? (
           <p style={{ color: "crimson", fontWeight: 900, marginTop: 10 }}>
@@ -924,7 +926,7 @@ function ConfirmPageInner() {
         {customerUserId ? (
           <>
               <p style={{ margin: 0, fontWeight: 800 }}>
-                현재 등급: <b>{tierLabel(wallet?.tier)}</b> · 잔여 포인트: <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 보유 쿠폰: <b>{issuedCouponCount}장</b>
+                내 등급: <b>{tierLabel(wallet?.tier)}</b> · 내 포인트: <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 내 쿠폰: <b>{issuedCouponCount}장</b>
               </p>
             <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
               <label style={{ display: "grid", gap: 6, fontWeight: 800, color: "#374151" }}>
@@ -948,11 +950,20 @@ function ConfirmPageInner() {
                   type="button"
                   onClick={() => {
                     setSelectedCouponId(null);
+                  }}
+                  style={{ border: "1px solid #d1d5db", borderRadius: 999, padding: "6px 10px", background: "white", fontWeight: 800 }}
+                >
+                  포인트 사용
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCouponId(null);
                     setUsedPointsInput("0");
                   }}
                   style={{ border: "1px solid #d1d5db", borderRadius: 999, padding: "6px 10px", background: "white", fontWeight: 800 }}
                 >
-                  할인 미사용
+                  초기화
                 </button>
               </div>
               <div style={{ display: "grid", gap: 8 }}>
@@ -1040,7 +1051,23 @@ function ConfirmPageInner() {
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                         <span style={{ fontWeight: 900 }}>{tpl.name}</span>
-                        <span style={{ color: "#374151", fontSize: 12 }}>{label}</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          {active ? (
+                            <span
+                              style={{
+                                background: "#111827",
+                                color: "white",
+                                borderRadius: 999,
+                                padding: "2px 8px",
+                                fontSize: 11,
+                                fontWeight: 900,
+                              }}
+                            >
+                              선택됨
+                            </span>
+                          ) : null}
+                          <span style={{ color: "#374151", fontSize: 12 }}>{label}</span>
+                        </span>
                       </div>
                       <div style={{ marginTop: 4, color: "#4b5563", fontSize: 12, fontWeight: 700 }}>
                         최소주문 {fmt(minOrder)}원 · 예상 할인 {fmt(expectedDiscount)}원 · {expiresText}
