@@ -166,6 +166,7 @@ function MenuPageInner() {
   const [optQty, setOptQty] = useState(1);
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
+  const [issuedCouponCount, setIssuedCouponCount] = useState(0);
 
   const fetchOptionsFromDb = async () => {
     setOptionsLoading(true);
@@ -264,18 +265,28 @@ function MenuPageInner() {
 
       if (!uid) {
         setWallet(null);
+        setIssuedCouponCount(0);
         return;
       }
 
-      const { data: walletRow } = await supabase
-        .from("customer_store_wallets")
-        .select("point_balance,tier")
-        .eq("customer_user_id", uid)
-        .eq("store_id", storeId)
-        .maybeSingle();
+      const [walletRes, couponRes] = await Promise.all([
+        supabase
+          .from("customer_store_wallets")
+          .select("point_balance,tier")
+          .eq("customer_user_id", uid)
+          .eq("store_id", storeId)
+          .maybeSingle(),
+        supabase
+          .from("customer_coupons")
+          .select("id", { count: "exact", head: true })
+          .eq("customer_user_id", uid)
+          .eq("store_id", storeId)
+          .eq("status", "issued"),
+      ]);
 
       if (!mounted) return;
-      setWallet((walletRow as WalletSummary | null) || null);
+      setWallet((walletRes.data as WalletSummary | null) || null);
+      setIssuedCouponCount(couponRes.count || 0);
     })();
 
     return () => {
@@ -1416,8 +1427,12 @@ function MenuPageInner() {
             >
               {customerUserId ? (
                 <span>
-                  내 등급 <b>{tierLabel(wallet?.tier)}</b> · 내 포인트{" "}
-                  <b>{fmt(Number(wallet?.point_balance || 0))}P</b>
+                  <span style={{ color: "#334155", fontWeight: 700 }}>내 등급:</span>{" "}
+                  <b style={{ color: "#1d4ed8" }}>{tierLabel(wallet?.tier)}</b> ·{" "}
+                  <span style={{ color: "#334155", fontWeight: 700 }}>내 포인트:</span>{" "}
+                  <b style={{ color: "#7c3aed" }}>{fmt(Number(wallet?.point_balance || 0))}P</b> ·{" "}
+                  <span style={{ color: "#334155", fontWeight: 700 }}>내 쿠폰:</span>{" "}
+                  <b style={{ color: "#be123c" }}>{issuedCouponCount}장</b>
                 </span>
               ) : (
                 <span>
