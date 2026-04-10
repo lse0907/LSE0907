@@ -26,19 +26,22 @@ create index if not exists idx_customer_favorite_stores_store
 alter table public.customer_favorite_stores enable row level security;
 
 -- 로그인한 사용자 본인 즐겨찾기만 조회
-create policy if not exists "favorites_select_own"
+drop policy if exists "favorites_select_own" on public.customer_favorite_stores;
+create policy "favorites_select_own"
   on public.customer_favorite_stores
   for select
   using (auth.uid() = customer_user_id);
 
 -- 로그인한 사용자 본인 즐겨찾기만 추가
-create policy if not exists "favorites_insert_own"
+drop policy if exists "favorites_insert_own" on public.customer_favorite_stores;
+create policy "favorites_insert_own"
   on public.customer_favorite_stores
   for insert
   with check (auth.uid() = customer_user_id);
 
 -- 로그인한 사용자 본인 즐겨찾기만 삭제
-create policy if not exists "favorites_delete_own"
+drop policy if exists "favorites_delete_own" on public.customer_favorite_stores;
+create policy "favorites_delete_own"
   on public.customer_favorite_stores
   for delete
   using (auth.uid() = customer_user_id);
