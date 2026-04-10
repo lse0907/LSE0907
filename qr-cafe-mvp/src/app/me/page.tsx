@@ -10,6 +10,7 @@ type WalletRow = {
   tier: "general" | "regular" | "vip" | string;
   lifetime_spent: number;
   lifetime_orders: number;
+  updated_at?: string | null;
 };
 
 type ProfileRow = {
@@ -39,6 +40,19 @@ function formatWon(v: number) {
   return `${Math.max(0, Number(v || 0)).toLocaleString()}원`;
 }
 
+function formatPhone(raw: string) {
+  const digits = String(raw || "").replace(/[^\d]/g, "").slice(0, 11);
+  if (digits.length < 4) return digits;
+  if (digits.length < 8) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  if (digits.length < 11) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+function isValidPhone(raw: string) {
+  const digits = String(raw || "").replace(/[^\d]/g, "");
+  return digits.length === 0 || (digits.length >= 9 && digits.length <= 11);
+}
+
 function MePageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -54,6 +68,7 @@ function MePageInner() {
   const [scanning, setScanning] = useState(false);
   const [showStores, setShowStores] = useState(false);
   const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<"recent" | "orders" | "points">("recent");
   const [favoriteStoreIds, setFavoriteStoreIds] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -109,14 +124,15 @@ function MePageInner() {
         supabase.from("customer_profiles").select("name,phone").eq("user_id", uid).maybeSingle(),
         supabase
           .from("customer_store_wallets")
-          .select("store_id, point_balance, tier, lifetime_spent, lifetime_orders")
+          .select("store_id, point_balance, tier, lifetime_spent, lifetime_orders, updated_at")
           .eq("customer_user_id", uid)
           .order("updated_at", { ascending: false }),
         supabase
           .from("customer_coupons")
-          .select("store_id")
+          .select("store_id,expires_at")
           .eq("customer_user_id", uid)
-          .eq("status", "issued"),
+          .eq("status", "issued")
+          .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`),
       ]);
 
       if (profileRes.error) {
@@ -139,7 +155,7 @@ function MePageInner() {
       if (couponRes.error) {
         setMsg((prev) => (prev ? `${prev}\n` : "") + `쿠폰 조회 실패: ${couponRes.error.message}`);
       } else {
-        const rows = (couponRes.data || []) as Array<{ store_id: string | null }>;
+        const rows = (couponRes.data || []) as Array<{ store_id: string | null; expires_at?: string | null }>;
         const map: Record<string, number> = {};
         for (const row of rows) {
           const sid = String(row.store_id || "").trim();
@@ -273,7 +289,15 @@ function MePageInner() {
       const af = favoriteSet.has(a.store_id) ? 1 : 0;
       const bf = favoriteSet.has(b.store_id) ? 1 : 0;
       if (af !== bf) return bf - af;
-      return Number(b.lifetime_orders || 0) - Number(a.lifetime_orders || 0);
+      if (sortKey === "points") {
+        return Number(b.point_balance || 0) - Number(a.point_balance || 0);
+      }
+      if (sortKey === "orders") {
+        return Number(b.lifetime_orders || 0) - Number(a.lifetime_orders || 0);
+      }
+      const ad = new Date(String(a.updated_at || 0)).getTime() || 0;
+      const bd = new Date(String(b.updated_at || 0)).getTime() || 0;
+      return bd - ad;
     });
 
     if (!q) return arranged;
@@ -283,7 +307,7 @@ function MePageInner() {
       const sid = String(w.store_id || "").toLowerCase();
       return name.includes(q) || sid.includes(q);
     });
-  }, [wallets, query, favoriteSet, storeNameMap]);
+  }, [wallets, query, favoriteSet, storeNameMap, sortKey]);
 
   const persistFavorites = (next: string[]) => {
     setFavoriteStoreIds(next);
@@ -318,8 +342,14 @@ function MePageInner() {
     const payload = {
       user_id: uid,
       name: editName.trim() || null,
-      phone: editPhone.trim() || null,
+      phone: formatPhone(editPhone).trim() || null,
     };
+
+    if (!isValidPhone(payload.phone || "")) {
+      setMsg("전화번호 형식이 올바르지 않아요. 숫자 기준 9~11자리로 입력해 주세요.");
+      setSavingBasic(false);
+      return;
+    }
 
     const { data: upserted, error } = await supabase
       .from("customer_profiles")
@@ -463,7 +493,7 @@ function MePageInner() {
                 전화번호
                 <input
                   value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
+                  onChange={(e) => setEditPhone(formatPhone(e.target.value))}
                   style={{ ...inputStyle, border: `1px solid ${theme.btnSecondaryBorder}`, background: theme.inputBg, color: theme.inputText }}
                   placeholder="전화번호를 입력해 주세요"
                 />
@@ -506,12 +536,23 @@ function MePageInner() {
         <section style={{ ...cardStyle, border: `1px solid ${theme.cardBorder}`, background: theme.cardBg, color: theme.cardText }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
             <h2 style={sectionTitleStyle}>내 매장 목록</h2>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="매장명 검색"
-              style={{ ...inputStyle, width: 220, border: `1px solid ${theme.btnSecondaryBorder}`, background: theme.inputBg, color: theme.inputText }}
-            />
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as "recent" | "orders" | "points")}
+                style={{ ...inputStyle, padding: "10px", border: `1px solid ${theme.btnSecondaryBorder}`, background: theme.inputBg, color: theme.inputText }}
+              >
+                <option value="recent">최근 주문순</option>
+                <option value="orders">주문횟수순</option>
+                <option value="points">포인트순</option>
+              </select>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="매장명 검색"
+                style={{ ...inputStyle, width: 220, border: `1px solid ${theme.btnSecondaryBorder}`, background: theme.inputBg, color: theme.inputText }}
+              />
+            </div>
           </div>
 
           {wallets.length === 0 ? (

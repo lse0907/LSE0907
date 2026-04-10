@@ -281,7 +281,8 @@ function MenuPageInner() {
           .select("id", { count: "exact", head: true })
           .eq("customer_user_id", uid)
           .eq("store_id", storeId)
-          .eq("status", "issued"),
+          .eq("status", "issued")
+          .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`),
       ]);
 
       if (!mounted) return;
