@@ -170,9 +170,7 @@ function MePageInner() {
       const storeIds = Array.from(new Set(nextWallets.map((w) => String(w.store_id || "").trim()).filter(Boolean)));
       if (storeIds.length) {
         const { data: storeRows, error: storeErr } = await supabase
-          .from("stores")
-          .select("store_id,store_name")
-          .in("store_id", storeIds);
+          .rpc("get_store_names", { p_store_ids: storeIds });
 
         if (storeErr) {
           setMsg((prev) => (prev ? `${prev}\n` : "") + `매장명 조회 실패: ${storeErr.message}`);
