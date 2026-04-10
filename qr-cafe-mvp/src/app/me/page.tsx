@@ -69,6 +69,7 @@ function MePageInner() {
   const [showStores, setShowStores] = useState(false);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<"recent" | "orders" | "points">("recent");
+  const [currentUserId, setCurrentUserId] = useState("");
   const [favoriteStoreIds, setFavoriteStoreIds] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -118,6 +119,7 @@ function MePageInner() {
       }
 
       const uid = userData.user.id;
+      setCurrentUserId(uid);
       setEmail(String(userData.user.email || ""));
 
       const [profileRes, walletsRes, couponRes] = await Promise.all([
@@ -185,6 +187,27 @@ function MePageInner() {
         }
       } else {
         setStoreNameMap({});
+      }
+
+      const favoriteRes = await supabase
+        .from("customer_favorite_stores")
+        .select("store_id")
+        .eq("customer_user_id", uid);
+
+      if (favoriteRes.error) {
+        if (favoriteRes.error.code !== "42P01") {
+          setMsg((prev) => (prev ? `${prev}\n` : "") + `즐겨찾기 조회 실패: ${favoriteRes.error.message}`);
+        }
+      } else {
+        const dbFavorites = (favoriteRes.data || [])
+          .map((row: { store_id: string | null }) => String(row.store_id || "").trim())
+          .filter(Boolean);
+        setFavoriteStoreIds(dbFavorites);
+        try {
+          localStorage.setItem("qrCafeFavoriteStores", JSON.stringify(dbFavorites));
+        } catch {
+          // ignore
+        }
       }
 
       setLoading(false);
@@ -318,13 +341,41 @@ function MePageInner() {
     }
   };
 
-  const toggleFavorite = (storeId: string) => {
+  const toggleFavorite = async (storeId: string) => {
     const sid = String(storeId || "").trim();
     if (!sid) return;
-    if (favoriteSet.has(sid)) {
-      persistFavorites(favoriteStoreIds.filter((id) => id !== sid));
-    } else {
-      persistFavorites([sid, ...favoriteStoreIds.filter((id) => id !== sid)]);
+
+    const removing = favoriteSet.has(sid);
+    const next = removing
+      ? favoriteStoreIds.filter((id) => id !== sid)
+      : [sid, ...favoriteStoreIds.filter((id) => id !== sid)];
+    persistFavorites(next);
+
+    if (!currentUserId) return;
+
+    if (removing) {
+      const { error } = await supabase
+        .from("customer_favorite_stores")
+        .delete()
+        .eq("customer_user_id", currentUserId)
+        .eq("store_id", sid);
+      if (error && error.code !== "42P01") {
+        setMsg((prev) => (prev ? `${prev}\n` : "") + `즐겨찾기 해제 저장 실패: ${error.message}`);
+      }
+      return;
+    }
+
+    const { error } = await supabase
+      .from("customer_favorite_stores")
+      .upsert(
+        {
+          customer_user_id: currentUserId,
+          store_id: sid,
+        },
+        { onConflict: "customer_user_id,store_id" }
+      );
+    if (error && error.code !== "42P01") {
+      setMsg((prev) => (prev ? `${prev}\n` : "") + `즐겨찾기 저장 실패: ${error.message}`);
     }
   };
 
