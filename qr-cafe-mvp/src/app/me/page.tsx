@@ -181,7 +181,7 @@ function MePageInner() {
           for (const row of ((storeRows || []) as StoreNameRow[])) {
             const sid = String(row.store_id || "").trim();
             if (!sid) continue;
-            map[sid] = String(row.store_name || sid).trim() || sid;
+            map[sid] = String(row.store_name || "").trim();
           }
           setStoreNameMap(map);
         }
@@ -327,8 +327,7 @@ function MePageInner() {
 
     return arranged.filter((w) => {
       const name = String(storeNameMap[w.store_id] || "").toLowerCase();
-      const sid = String(w.store_id || "").toLowerCase();
-      return name.includes(q) || sid.includes(q);
+      return name.includes(q);
     });
   }, [wallets, query, favoriteSet, storeNameMap, sortKey]);
 
@@ -617,7 +616,7 @@ function MePageInner() {
                   <article key={sid} style={{ ...walletItemStyle, border: `1px solid ${theme.itemBorder}`, background: theme.itemBg, color: theme.cardText }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <p style={{ margin: 0, fontWeight: 900 }}>
-                        매장명: {storeNameMap[sid] || sid}
+                        매장명: {storeNameMap[sid] || "등록된 매장"}
                       </p>
                       <button
                         type="button"
