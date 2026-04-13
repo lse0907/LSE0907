@@ -40,6 +40,7 @@ type BillingPending = {
 };
 
 const BILLING_PENDING_KEY = "qrCafeBillingPending";
+const BILLING_PENDING_TTL_MS = 30 * 60 * 1000;
 type TossPaymentParams = {
   amount: number;
   orderId: string;
@@ -152,6 +153,12 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       const pending = rawPending ? (JSON.parse(rawPending) as BillingPending) : null;
       if (!pending || pending.storeId !== storeId) {
         setPayMsg("결제 대기 정보가 없어 승인 반영을 진행할 수 없습니다. 다시 결제해 주세요.");
+        onConsumeReturnParams();
+        return;
+      }
+      if (Date.now() - Number(pending.createdAt || 0) > BILLING_PENDING_TTL_MS) {
+        sessionStorage.removeItem(`${BILLING_PENDING_KEY}:${orderId}`);
+        setPayMsg("결제 대기 정보가 만료되었습니다. 다시 결제해 주세요.");
         onConsumeReturnParams();
         return;
       }

@@ -65,7 +65,10 @@ export async function POST(req: NextRequest) {
 
     const secretKey = String(pgRow?.secret_key || "").trim();
     if (!secretKey) {
-      return NextResponse.json({ ok: false, message: "매장 Secret Key가 없습니다." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, message: pgMode === "platform" ? "플랫폼 Secret Key가 없습니다." : "매장 Secret Key가 없습니다." },
+        { status: 400 }
+      );
     }
 
     const basicToken = Buffer.from(`${secretKey}:`).toString("base64");
