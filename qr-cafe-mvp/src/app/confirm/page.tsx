@@ -79,6 +79,14 @@ type WalletSummary = {
   tier: string;
 };
 
+function toPaymentCustomerName(name?: string | null, phone?: string | null) {
+  const trimmedName = String(name || "").trim();
+  if (trimmedName) return trimmedName.slice(0, 30);
+  const digits = String(phone || "").replace(/[^\d]/g, "");
+  if (digits.length >= 4) return `고객 ${"*".repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+  return "현장고객";
+}
+
 type CouponTemplateSummary = {
   name: string;
   discount_type: "fixed_amount" | "percent" | string;
@@ -269,6 +277,7 @@ function ConfirmPageInner() {
   const [prepayLoading, setPrepayLoading] = useState(true);
   const [pgConfig, setPgConfig] = useState<PgConfig>({ clientKey: "", mid: "" });
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
+  const [customerPayName, setCustomerPayName] = useState("현장고객");
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
   const [issuedCouponCount, setIssuedCouponCount] = useState(0);
   const [issuedCoupons, setIssuedCoupons] = useState<IssuedCoupon[]>([]);
@@ -325,6 +334,7 @@ function ConfirmPageInner() {
       setCustomerUserId(uid);
 
       if (!uid) {
+        setCustomerPayName("현장고객");
         setWallet(null);
         setIssuedCouponCount(0);
         setIssuedCoupons([]);
@@ -333,7 +343,7 @@ function ConfirmPageInner() {
         return;
       }
 
-      const [walletRes, couponRes] = await Promise.all([
+      const [walletRes, couponRes, profileRes] = await Promise.all([
         supabase
           .from("customer_store_wallets")
           .select("point_balance,tier")
@@ -349,10 +359,21 @@ function ConfirmPageInner() {
           .eq("customer_user_id", uid)
           .eq("store_id", storeId)
           .eq("status", "issued"),
+        supabase
+          .from("customer_profiles")
+          .select("name,phone")
+          .eq("user_id", uid)
+          .maybeSingle(),
       ]);
 
       if (!mounted) return;
       setWallet((walletRes.data as WalletSummary | null) || null);
+      setCustomerPayName(
+        toPaymentCustomerName(
+          (profileRes.data as { name?: string | null; phone?: string | null } | null)?.name,
+          (profileRes.data as { name?: string | null; phone?: string | null } | null)?.phone
+        )
+      );
       setIssuedCouponCount(couponRes.count || 0);
       const couponRows = (Array.isArray(couponRes.data) ? couponRes.data : []) as RawIssuedCoupon[];
       const normalized: IssuedCoupon[] = couponRows.map((row) => ({
@@ -537,7 +558,7 @@ function ConfirmPageInner() {
           amount: payableAmount,
           orderId: payOrderId,
           orderName,
-          customerName: "QR 고객",
+          customerName: customerPayName,
           successUrl,
           failUrl,
         });

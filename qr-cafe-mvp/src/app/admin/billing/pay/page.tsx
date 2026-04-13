@@ -169,25 +169,25 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
     <section className="card">
       <div className="pill">결제 대상 매장: {storeName} ({storeId})</div>
 
-      <h2 className="h2">테스트 승인 체크</h2>
+      <h2 className="h2">구독 상태 체크</h2>
       <div className="payGrid">
         <label className="toggleRow">
           <input type="checkbox" checked={baseApproved} onChange={(e) => setBaseApproved(e.target.checked)} />
-          <span>기본 구독 테스트 승인</span>
+          <span>기본 구독 활성 상태</span>
         </label>
 
         <label className="toggleRow">
           <input type="checkbox" checked={addonApproved} onChange={(e) => setAddonApproved(e.target.checked)} />
-          <span>선결재 옵션 테스트 승인</span>
+          <span>선결제 옵션 활성 상태</span>
         </label>
       </div>
       <div className="row">
-        <button className="btn" type="button" onClick={onSaveApproval}>승인 상태 저장</button>
+        <button className="btn" type="button" onClick={onSaveApproval}>상태 저장</button>
         {saveMsg ? <span className="muted">{saveMsg}</span> : null}
       </div>
 
-      <h2 className="h2">기간형 결제 테스트 (owner 전용)</h2>
-      <p className="muted">옵션도 기간제로 계산됩니다. 총액 = 개월수 × (기본 + 옵션선택금액)</p>
+      <h2 className="h2">기간형 구독 결제 (owner 전용)</h2>
+      <p className="muted">옵션도 기간제로 계산됩니다. 총액 = 개월수 × (기본 + 옵션 선택 금액)</p>
 
       <div className="payGrid">
         <label className="toggleRow">
@@ -223,7 +223,7 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
 
       <div className="row">
         <button className="btn primary" type="button" onClick={onApplyTestPayment} disabled={paying}>
-          {paying ? "반영 중..." : "결제 반영 테스트 실행"}
+          {paying ? "처리 중..." : "결제 실행"}
         </button>
         {payMsg ? <span className="muted">{payMsg}</span> : null}
       </div>
