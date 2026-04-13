@@ -392,6 +392,28 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         {addonFeatureMsg ? <div className="muted">{addonFeatureMsg}</div> : null}
       </div>
 
+      <div className="card" style={{ gap: 8 }}>
+        <div style={{ fontWeight: 900 }}>구독/결제 상태</div>
+        <div className="muted">최근 결제일자: {fmt(runtime.lastPaidAt)}</div>
+        <div className="muted">기본 기능: {fmtStatusKo(runtime.baseStatus)} / 만료일: {fmt(runtime.basePaidUntil)} (남은 {calcRemainDays(runtime.basePaidUntil) ?? "-"}일)</div>
+        <div className="muted">옵션 기능: {fmtStatusKo(runtime.addonStatus)} / 만료일: {fmt(runtime.addonPaidUntil)} (남은 {calcRemainDays(runtime.addonPaidUntil) ?? "-"}일)</div>
+        <label className="toggleRow">
+          <input
+            type="checkbox"
+            checked={addonFeatureEnabled}
+            disabled={!isAddonSubscribed || addonToggling}
+            onChange={(e) => {
+              void onToggleAddonFeature(e.target.checked);
+            }}
+          />
+          <span>선결제 옵션 사용 설정</span>
+        </label>
+        {!isAddonSubscribed ? (
+          <div className="muted">옵션 구독이 활성 상태일 때만 기능을 켤 수 있습니다.</div>
+        ) : null}
+        {addonFeatureMsg ? <div className="muted">{addonFeatureMsg}</div> : null}
+      </div>
+
       <div className="payGrid">
         <label className="toggleRow">
           <input type="checkbox" checked={payBase} onChange={(e) => setPayBase(e.target.checked)} />
