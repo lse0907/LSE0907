@@ -357,7 +357,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       <p className="muted">플랫폼 PG 연결 상태: {pgClientKey ? "연결됨 ✅" : "미연결 ⚠️"}</p>
 
       <div className="card" style={{ gap: 8 }}>
-        <div style={{ fontWeight: 900 }}>현재 구독/결제 요약</div>
+        <div style={{ fontWeight: 900 }}>구독/결제 상태</div>
         <div className="muted">최근 결제일자: {fmt(runtime.lastPaidAt)}</div>
         <div className="muted">기본 기능: {fmtStatusKo(runtime.baseStatus)} / 만료일: {fmt(runtime.basePaidUntil)} (남은 {calcRemainDays(runtime.basePaidUntil) ?? "-"}일)</div>
         <div className="muted">옵션 기능: {fmtStatusKo(runtime.addonStatus)} / 만료일: {fmt(runtime.addonPaidUntil)} (남은 {calcRemainDays(runtime.addonPaidUntil) ?? "-"}일)</div>
@@ -408,9 +408,9 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
 
       <div className="row">
         <button className="btn primary" type="button" onClick={onStartPayment} disabled={paying}>
-          {paying ? "결제창 준비 중..." : "결제창 열기"}
+          {paying ? "결제창 준비 중..." : "구독 결제"}
         </button>
-        <button className="btn" type="button" onClick={onGoCancelPage}>
+        <button className="btn" type="button" onClick={onGoCancelPage} style={{ color: "#dc2626", borderColor: "#fecaca" }}>
           구독 해지
         </button>
         {(payMsg || failCode || failMessage) ? (
