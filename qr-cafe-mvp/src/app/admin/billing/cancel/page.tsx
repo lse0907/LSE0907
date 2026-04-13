@@ -155,7 +155,7 @@ function BillingCancelPageInner() {
         <h1 className="h1">구독 해지/취소</h1>
         <div className="row">
           <button className="btn" type="button" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>
-            결제 페이지로
+            구독 결제
           </button>
           <button className="btn" type="button" onClick={() => router.back()}>
             관리자 홈
@@ -164,7 +164,7 @@ function BillingCancelPageInner() {
       </header>
 
       <section className="card">
-        <div className="pill">매장: {storeName} ({storeId})</div>
+        <div className="pill">{storeName} ({storeId})</div>
         <p className="warn">결제 직후 {CANCEL_WINDOW_MINUTES}분 이내 결제건만 즉시 취소(환불) 가능합니다.</p>
         <p className="warn">기간이 소요된 결제 건의 취소/환불은 지원센터로 문의해 주세요.</p>
         {msg ? <p className="muted">{msg}</p> : null}
@@ -175,40 +175,42 @@ function BillingCancelPageInner() {
         {loading ? <p className="muted">로딩 중...</p> : null}
         {!loading && rows.length === 0 ? <p className="muted">결제 이력이 없습니다.</p> : null}
         {!loading && rows.length > 0 ? (
-          <table>
-            <thead>
-              <tr>
-                <th>선택</th>
-                <th>결제일시</th>
-                <th>구독</th>
-                <th>상태</th>
-                <th>종료일자</th>
-                <th>해지가능</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const check = canCancel(row);
-                return (
-                  <tr key={row.id} className={selectedId === row.id ? "sel" : ""}>
-                    <td>
-                      <input type="radio" checked={selectedId === row.id} onChange={() => setSelectedId(row.id)} />
-                    </td>
-                    <td>{new Date(row.paid_at).toLocaleString("ko-KR", { hour12: false })}</td>
-                    <td>
-                      {row.base_paid ? "기본" : ""}{row.base_paid && row.addon_paid ? " + " : ""}{row.addon_paid ? "옵션" : ""}
-                      <div className="muted">{Number(row.amount_krw || 0).toLocaleString()}원 / {row.plan_months || "-"}개월</div>
-                    </td>
-                    <td>{row.status}</td>
-                    <td>{row.after_paid_until ? new Date(row.after_paid_until).toLocaleString("ko-KR", { hour12: false }) : "-"}</td>
-                    <td>
-                      {check.ok ? <span className="ok">가능</span> : <span className="warn">불가</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>선택</th>
+                  <th>결제일시</th>
+                  <th>구독</th>
+                  <th>상태</th>
+                  <th>종료일자</th>
+                  <th>해지가능</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const check = canCancel(row);
+                  return (
+                    <tr key={row.id} className={selectedId === row.id ? "sel" : ""}>
+                      <td>
+                        <input type="radio" checked={selectedId === row.id} onChange={() => setSelectedId(row.id)} />
+                      </td>
+                      <td className="cellNowrap">{new Date(row.paid_at).toLocaleString("ko-KR", { hour12: false })}</td>
+                      <td>
+                        {row.base_paid ? "기본" : ""}{row.base_paid && row.addon_paid ? " + " : ""}{row.addon_paid ? "옵션" : ""}
+                        <div className="muted">{Number(row.amount_krw || 0).toLocaleString()}원 / {row.plan_months || "-"}개월</div>
+                      </td>
+                      <td className="cellNowrap">{row.status}</td>
+                      <td className="cellNowrap">{row.after_paid_until ? new Date(row.after_paid_until).toLocaleString("ko-KR", { hour12: false }) : "-"}</td>
+                      <td className="cellNowrap">
+                        {check.ok ? <span className="ok">가능</span> : <span className="warn">불가</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : null}
       </section>
 
@@ -251,7 +253,7 @@ const css = `
   .h1 { margin:0; font-size:22px; font-weight:900; }
   .h2 { margin:0 0 8px; font-size:16px; font-weight:900; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; display:grid; gap:10px; }
-  .pill { border:1px solid #dbeafe; background:#eff6ff; color:#1e3a8a; border-radius:999px; padding:6px 10px; font-weight:800; width:fit-content; }
+  .pill { border:1px solid #dbeafe; background:#eff6ff; color:#1e3a8a; border-radius:999px; padding:4px 8px; font-weight:800; font-size:12px; width:fit-content; }
   .muted { color:var(--muted); margin:0; font-size:13px; }
   .row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .btn { border:1px solid var(--line); background:#fff; color:var(--txt); border-radius:10px; padding:10px 12px; font-weight:800; cursor:pointer; }
@@ -261,12 +263,21 @@ const css = `
   th, td { border-bottom:1px solid #eef2f7; padding:8px; text-align:left; vertical-align:top; }
   tr.sel { background:#eff6ff; }
   .ok { color:var(--ok); font-weight:800; }
-  .warn { color:var(--warn); font-weight:800; }
+  .warn { color:var(--warn); font-weight:800; font-size:12px; }
+  .tableWrap { overflow-x:auto; }
+  .cellNowrap { white-space:nowrap; }
+  th:nth-child(1), td:nth-child(1) { width:56px; text-align:center; }
+  th:nth-child(4), td:nth-child(4) { width:88px; }
+  th:nth-child(6), td:nth-child(6) { width:72px; text-align:center; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 12px; cursor:pointer; font-weight:700; }
   .chip.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; }
   .field { display:grid; gap:6px; }
   .input { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px; }
+  @media (max-width: 640px) {
+    table { font-size:12px; }
+    th, td { padding:6px; }
+  }
 `;
 
 export default function BillingCancelPage() {

@@ -223,9 +223,19 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
   }, [nowMs, runtime.addonPaidUntil, runtime.addonStatus]);
 
   const addonFeatureEnabled = runtime.addonStatus === "active";
+  const canToggleAddonFeature = addonFeatureEnabled || isAddonSubscribed;
+  const canAddonOnlyPayment = useMemo(() => {
+    const paidUntilMs = runtime.basePaidUntil ? new Date(runtime.basePaidUntil).getTime() : NaN;
+    const hasRemaining = Number.isFinite(paidUntilMs) && paidUntilMs > nowMs;
+    return hasRemaining || runtime.baseStatus === "active";
+  }, [nowMs, runtime.basePaidUntil, runtime.baseStatus]);
 
   const onToggleAddonFeature = async (enabled: boolean) => {
-    if (!isAddonSubscribed) {
+    if (!enabled && addonFeatureEnabled) {
+      const ok = window.confirm("선결제 기능을 해제하시겠습니까?");
+      if (!ok) return;
+    }
+    if (enabled && !isAddonSubscribed) {
       setAddonFeatureMsg("옵션 구독이 활성 상태일 때만 기능을 켤 수 있습니다.");
       return;
     }
@@ -278,6 +288,10 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
     setPayMsg("");
     if (!payBase && !payAddon) {
       setPayMsg("기본 또는 옵션 중 하나 이상 선택해 주세요.");
+      return;
+    }
+    if (!payBase && payAddon && !canAddonOnlyPayment) {
+      setPayMsg("옵션 단독 결제는 기본 기능 구독이 활성 상태일 때만 가능합니다.");
       return;
     }
     if (!pgClientKey) {
@@ -351,10 +365,32 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
 
   return (
     <section className="card">
-      <div className="pill">결제 대상 매장: {storeName} ({storeId})</div>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <h2 className="h2" style={{ margin: 0 }}>리온오더 구독 결제(점주용)</h2>
+        <div className="pill" style={{ padding: "4px 8px", fontSize: 12 }}>{storeName} ({storeId})</div>
+      </div>
 
-      <h2 className="h2">리온오더 구독 결제(점주용)</h2>
-      <p className="muted">플랫폼 PG 연결 상태: {pgClientKey ? "연결됨 ✅" : "미연결 ⚠️"}</p>
+      <div className="card" style={{ gap: 8 }}>
+        <div style={{ fontWeight: 900 }}>구독/결제 상태</div>
+        <div className="muted">최근 결제일자: {fmt(runtime.lastPaidAt)}</div>
+        <div className="muted">기본 기능: {fmtStatusKo(runtime.baseStatus)} / 만료일: {fmt(runtime.basePaidUntil)} (남은 {calcRemainDays(runtime.basePaidUntil) ?? "-"}일)</div>
+        <div className="muted">옵션 기능: {fmtStatusKo(runtime.addonStatus)} / 만료일: {fmt(runtime.addonPaidUntil)} (남은 {calcRemainDays(runtime.addonPaidUntil) ?? "-"}일)</div>
+        <label className="toggleRow">
+          <input
+            type="checkbox"
+            checked={addonFeatureEnabled}
+            disabled={!canToggleAddonFeature || addonToggling}
+            onChange={(e) => {
+              void onToggleAddonFeature(e.target.checked);
+            }}
+          />
+          <span>선결제 옵션 사용 설정</span>
+        </label>
+        {!isAddonSubscribed ? (
+          <div className="muted">옵션 구독이 활성 상태일 때만 기능을 켤 수 있습니다.</div>
+        ) : null}
+        {addonFeatureMsg ? <div className="muted">{addonFeatureMsg}</div> : null}
+      </div>
 
       <div className="card" style={{ gap: 8 }}>
         <div style={{ fontWeight: 900 }}>구독/결제 상태</div>
