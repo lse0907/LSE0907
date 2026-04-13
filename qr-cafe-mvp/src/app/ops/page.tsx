@@ -116,14 +116,14 @@ export default function OpsPage() {
     (async () => {
       const { data, error } = await supabase
         .from("platform_pg_config")
-        .select("mid, client_key, secret_key")
+        .select("mid, client_key")
         .eq("id", 1)
         .maybeSingle();
       if (error) return;
       setPgForm({
         mid: String(data?.mid || ""),
         clientKey: String(data?.client_key || ""),
-        secretKey: String(data?.secret_key || ""),
+        secretKey: "",
       });
     })();
   }, [isOps]);
@@ -157,17 +157,22 @@ export default function OpsPage() {
   }
 
   const savePg = async () => {
-    const { error } = await supabase.from("platform_pg_config").upsert(
-      {
-        id: 1,
-        mid: pgForm.mid.trim(),
-        client_key: pgForm.clientKey.trim(),
-        secret_key: pgForm.secretKey.trim(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
+    const payload: {
+      id: number;
+      mid: string;
+      client_key: string;
+      secret_key?: string;
+      updated_at: string;
+    } = {
+      id: 1,
+      mid: pgForm.mid.trim(),
+      client_key: pgForm.clientKey.trim(),
+      updated_at: new Date().toISOString(),
+    };
+    if (pgForm.secretKey.trim()) payload.secret_key = pgForm.secretKey.trim();
+    const { error } = await supabase.from("platform_pg_config").upsert(payload, { onConflict: "id" });
     setMsg(error ? `PG 저장 실패: ${error.message}` : "PG 저장 완료");
+    if (!error) setPgForm((prev) => ({ ...prev, secretKey: "" }));
   };
 
   const updateTicket = async (ticketId: number, patch: Partial<Pick<SupportTicketRow, "status" | "ops_note">>) => {
@@ -276,12 +281,9 @@ export default function OpsPage() {
           <p className="muted">점주 구독 결제는 플랫폼 사업자 PG(공통 MID) 기준으로 처리합니다.</p>
           <div className="row"><input className="input" placeholder="MID" value={pgForm.mid} onChange={(e) => setPgForm((p) => ({ ...p, mid: e.target.value }))} /></div>
           <div className="row"><input className="input" placeholder="Client Key" value={pgForm.clientKey} onChange={(e) => setPgForm((p) => ({ ...p, clientKey: e.target.value }))} /></div>
-          <div className="row"><input className="input" placeholder="Secret Key" value={pgForm.secretKey} onChange={(e) => setPgForm((p) => ({ ...p, secretKey: e.target.value }))} /></div>
+          <div className="row"><input className="input" type="password" placeholder="Secret Key (변경 시에만 입력)" value={pgForm.secretKey} onChange={(e) => setPgForm((p) => ({ ...p, secretKey: e.target.value }))} /></div>
           <div className="row">
             <button className="btn primary" onClick={savePg}>PG 저장</button>
-            <button className="btn" onClick={() => selectedStoreId && router.push(`/admin/billing/pay?store=${encodeURIComponent(selectedStoreId)}`)} disabled={!selectedStoreId}>
-              결제/구독 테스트로 이동
-            </button>
           </div>
           <hr />
           <h3>문의/장애 관리</h3>
