@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
+import { maskToken } from "@/app/lib/billingSettings";
 
 type StoreBillingRow = {
   store_id: string;
@@ -30,6 +31,12 @@ type SupportTicketRow = {
   created_at: string;
   updated_at: string;
 };
+type SavedPlatformPg = {
+  mid: string;
+  clientKey: string;
+  hasSecret: boolean;
+  updatedAt: string | null;
+};
 
 export default function OpsPage() {
   const router = useRouter();
@@ -39,6 +46,7 @@ export default function OpsPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [pgForm, setPgForm] = useState({ mid: "", clientKey: "", secretKey: "" });
+  const [savedPg, setSavedPg] = useState<SavedPlatformPg | null>(null);
   const [tickets, setTickets] = useState<SupportTicketRow[]>([]);
   const [ticketMsg, setTicketMsg] = useState("");
 
@@ -116,7 +124,7 @@ export default function OpsPage() {
     (async () => {
       const { data, error } = await supabase
         .from("platform_pg_config")
-        .select("mid, client_key")
+        .select("mid, client_key, secret_key, updated_at")
         .eq("id", 1)
         .maybeSingle();
       if (error) return;
@@ -124,6 +132,12 @@ export default function OpsPage() {
         mid: String(data?.mid || ""),
         clientKey: String(data?.client_key || ""),
         secretKey: "",
+      });
+      setSavedPg({
+        mid: String(data?.mid || ""),
+        clientKey: String(data?.client_key || ""),
+        hasSecret: !!String(data?.secret_key || "").trim(),
+        updatedAt: String(data?.updated_at || "").trim() || null,
       });
     })();
   }, [isOps]);
@@ -172,7 +186,15 @@ export default function OpsPage() {
     if (pgForm.secretKey.trim()) payload.secret_key = pgForm.secretKey.trim();
     const { error } = await supabase.from("platform_pg_config").upsert(payload, { onConflict: "id" });
     setMsg(error ? `PG 저장 실패: ${error.message}` : "PG 저장 완료");
-    if (!error) setPgForm((prev) => ({ ...prev, secretKey: "" }));
+    if (!error) {
+      setSavedPg({
+        mid: payload.mid,
+        clientKey: payload.client_key,
+        hasSecret: payload.secret_key ? true : savedPg?.hasSecret || false,
+        updatedAt: payload.updated_at,
+      });
+      setPgForm((prev) => ({ ...prev, secretKey: "" }));
+    }
   };
 
   const updateTicket = async (ticketId: number, patch: Partial<Pick<SupportTicketRow, "status" | "ops_note">>) => {
@@ -279,6 +301,13 @@ export default function OpsPage() {
         <article className="card">
           <h2>플랫폼 PG 연결 (단일 MID)</h2>
           <p className="muted">점주 구독 결제는 플랫폼 사업자 PG(공통 MID) 기준으로 처리합니다.</p>
+          <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12, display: "grid", gap: 6 }}>
+            <div><strong>등록 MID:</strong> {savedPg?.mid || "-"}</div>
+            <div><strong>등록 Client Key:</strong> {savedPg?.clientKey ? maskToken(savedPg.clientKey) : "-"}</div>
+            <div><strong>등록 Secret Key:</strong> {savedPg?.hasSecret ? "********(등록됨)" : "-"}</div>
+            <div className="muted">최근 수정: {savedPg?.updatedAt ? new Date(savedPg.updatedAt).toLocaleString("ko-KR", { hour12: false }) : "-"}</div>
+          </div>
+          <p className="muted">아래 입력 폼에서 변경할 값만 입력 후 저장해 주세요. Secret Key는 변경할 때만 입력합니다.</p>
           <div className="row"><input className="input" placeholder="MID" value={pgForm.mid} onChange={(e) => setPgForm((p) => ({ ...p, mid: e.target.value }))} /></div>
           <div className="row"><input className="input" placeholder="Client Key" value={pgForm.clientKey} onChange={(e) => setPgForm((p) => ({ ...p, clientKey: e.target.value }))} /></div>
           <div className="row"><input className="input" type="password" placeholder="Secret Key (변경 시에만 입력)" value={pgForm.secretKey} onChange={(e) => setPgForm((p) => ({ ...p, secretKey: e.target.value }))} /></div>

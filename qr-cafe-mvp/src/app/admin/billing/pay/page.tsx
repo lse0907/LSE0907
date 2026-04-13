@@ -28,6 +28,7 @@ type BillingPayFormProps = {
   failCode: string;
   failMessage: string;
   onConsumeReturnParams: () => void;
+  onGoCancelPage: () => void;
 };
 
 type BillingPending = {
@@ -54,7 +55,7 @@ type TossPaymentsInstance = {
 };
 type TossPaymentsFactory = (clientKey: string) => TossPaymentsInstance;
 
-function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failCode, failMessage, onConsumeReturnParams }: BillingPayFormProps) {
+function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failCode, failMessage, onConsumeReturnParams, onGoCancelPage }: BillingPayFormProps) {
   const [planMonths, setPlanMonths] = useState<1 | 3 | 6 | 12>(1);
   const [payBase, setPayBase] = useState(true);
   const [payAddon, setPayAddon] = useState(true);
@@ -215,31 +216,6 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
     return unit * planMonths;
   }, [payAddon, payBase, planMonths, runtime.addonPrice, runtime.basePrice]);
 
-  const onCancelAddon = async () => {
-    setAddonMsg("");
-    setAddonCanceling(true);
-    const nowIso = new Date().toISOString();
-    const { error } = await supabase
-      .from("store_addons")
-      .upsert(
-        {
-          store_id: storeId,
-          prepay_addon_status: "inactive",
-          addon_paid_until: nowIso,
-          updated_at: nowIso,
-        },
-        { onConflict: "store_id" }
-      );
-    if (error) {
-      setAddonMsg(`옵션 구독 해지 실패: ${error.message}`);
-      setAddonCanceling(false);
-      return;
-    }
-    setAddonMsg("옵션 구독을 해지했습니다.");
-    await refreshRuntime();
-    setAddonCanceling(false);
-  };
-
   const loadTossScript = () =>
     new Promise<void>((resolve, reject) => {
       const existingFactory = (window as unknown as { TossPayments?: TossPaymentsFactory }).TossPayments;
@@ -379,6 +355,9 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         <button className="btn primary" type="button" onClick={onStartPayment} disabled={paying}>
           {paying ? "결제창 준비 중..." : "결제창 열기"}
         </button>
+        <button className="btn" type="button" onClick={onGoCancelPage}>
+          구독 해지
+        </button>
         {(payMsg || failCode || failMessage) ? (
           <span className="muted">
             {payMsg || `${failReasonLabel || "결제 실패"} ${failCode ? `[${failCode}]` : ""} ${failMessage || ""}`.trim()}
@@ -412,6 +391,10 @@ function AdminBillingPayPageInner() {
   const consumeReturnParams = useCallback(() => {
     if (!storeId) return;
     router.replace(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`);
+  }, [router, storeId]);
+  const goCancelPage = useCallback(() => {
+    if (!storeId) return;
+    router.push(`/admin/billing/cancel?store=${encodeURIComponent(storeId)}`);
   }, [router, storeId]);
 
   useEffect(() => {
@@ -457,6 +440,7 @@ function AdminBillingPayPageInner() {
           failCode={failCode}
           failMessage={failMessage}
           onConsumeReturnParams={consumeReturnParams}
+          onGoCancelPage={goCancelPage}
         />
       ) : null}
     </main>
