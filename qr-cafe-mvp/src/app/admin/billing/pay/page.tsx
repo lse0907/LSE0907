@@ -61,8 +61,8 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
   const [payAddon, setPayAddon] = useState(true);
   const [paying, setPaying] = useState(false);
   const [payMsg, setPayMsg] = useState("");
-  const [addonCanceling, setAddonCanceling] = useState(false);
-  const [addonMsg, setAddonMsg] = useState("");
+  const [addonToggling, setAddonToggling] = useState(false);
+  const [addonFeatureMsg, setAddonFeatureMsg] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pgClientKey, setPgClientKey] = useState("");
   const [handledPaymentOrderId, setHandledPaymentOrderId] = useState("");
@@ -216,6 +216,42 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
     return unit * planMonths;
   }, [payAddon, payBase, planMonths, runtime.addonPrice, runtime.basePrice]);
 
+  const isAddonSubscribed = useMemo(() => {
+    const paidUntilMs = runtime.addonPaidUntil ? new Date(runtime.addonPaidUntil).getTime() : NaN;
+    const hasRemaining = Number.isFinite(paidUntilMs) && paidUntilMs > nowMs;
+    return hasRemaining || runtime.addonStatus === "active";
+  }, [nowMs, runtime.addonPaidUntil, runtime.addonStatus]);
+
+  const addonFeatureEnabled = runtime.addonStatus === "active";
+
+  const onToggleAddonFeature = async (enabled: boolean) => {
+    if (!isAddonSubscribed) {
+      setAddonFeatureMsg("옵션 구독이 활성 상태일 때만 기능을 켤 수 있습니다.");
+      return;
+    }
+    setAddonFeatureMsg("");
+    setAddonToggling(true);
+    const { error } = await supabase
+      .from("store_addons")
+      .upsert(
+        {
+          store_id: storeId,
+          prepay_addon_status: enabled ? "active" : "inactive",
+          addon_paid_until: runtime.addonPaidUntil,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "store_id" }
+      );
+    if (error) {
+      setAddonFeatureMsg(`옵션 기능 상태 변경 실패: ${error.message}`);
+      setAddonToggling(false);
+      return;
+    }
+    setAddonFeatureMsg(enabled ? "옵션 기능을 켰습니다." : "옵션 기능을 껐습니다.");
+    await refreshRuntime();
+    setAddonToggling(false);
+  };
+
   const loadTossScript = () =>
     new Promise<void>((resolve, reject) => {
       const existingFactory = (window as unknown as { TossPayments?: TossPaymentsFactory }).TossPayments;
@@ -304,14 +340,43 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
   };
 
   const remainDays = calcRemainDays(runtime.lastAfterPaidUntil);
+  const fmtStatusKo = (status: string) => {
+    const key = String(status || "").toLowerCase();
+    if (key === "active") return "활성";
+    if (key === "inactive") return "비활성";
+    if (key === "past_due") return "결제필요";
+    if (key === "trialing") return "체험중";
+    return status || "-";
+  };
 
   return (
     <section className="card">
       <div className="pill">결제 대상 매장: {storeName} ({storeId})</div>
 
-      <h2 className="h2">기간형 구독 결제 (owner 전용)</h2>
-      <p className="muted">플랫폼 PG 결제창을 통해 승인 후 구독기간이 반영됩니다.</p>
+      <h2 className="h2">리온오더 구독 결제(점주용)</h2>
       <p className="muted">플랫폼 PG 연결 상태: {pgClientKey ? "연결됨 ✅" : "미연결 ⚠️"}</p>
+
+      <div className="card" style={{ gap: 8 }}>
+        <div style={{ fontWeight: 900 }}>현재 구독/결제 요약</div>
+        <div className="muted">최근 결제일자: {fmt(runtime.lastPaidAt)}</div>
+        <div className="muted">기본 기능: {fmtStatusKo(runtime.baseStatus)} / 만료일: {fmt(runtime.basePaidUntil)} (남은 {calcRemainDays(runtime.basePaidUntil) ?? "-"}일)</div>
+        <div className="muted">옵션 기능: {fmtStatusKo(runtime.addonStatus)} / 만료일: {fmt(runtime.addonPaidUntil)} (남은 {calcRemainDays(runtime.addonPaidUntil) ?? "-"}일)</div>
+        <label className="toggleRow">
+          <input
+            type="checkbox"
+            checked={addonFeatureEnabled}
+            disabled={!isAddonSubscribed || addonToggling}
+            onChange={(e) => {
+              void onToggleAddonFeature(e.target.checked);
+            }}
+          />
+          <span>선결제 옵션 사용 설정</span>
+        </label>
+        {!isAddonSubscribed ? (
+          <div className="muted">옵션 구독이 활성 상태일 때만 기능을 켤 수 있습니다.</div>
+        ) : null}
+        {addonFeatureMsg ? <div className="muted">{addonFeatureMsg}</div> : null}
+      </div>
 
       <div className="payGrid">
         <label className="toggleRow">
@@ -338,17 +403,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       <div className="card" style={{ gap: 6 }}>
         <div className="muted">예상 결제금액</div>
         <div style={{ fontWeight: 900, fontSize: 20 }}>{totalAmount.toLocaleString()}원</div>
-        <div className="muted">최근 결제일자: {fmt(runtime.lastPaidAt)}</div>
-        <div className="muted">최근 사용기간: {fmt(runtime.lastPaidAt)} ~ {fmt(runtime.lastAfterPaidUntil)} ({runtime.lastPlanMonths ?? "-"}개월 결제)</div>
         <div className="muted">최근 결제 기준 남은일자: {remainDays == null ? "-" : `${remainDays}일`}</div>
-        <div className="muted">기본 상태: {runtime.baseStatus} / 기본 만료일: {fmt(runtime.basePaidUntil)} (최근 {runtime.baseMonths ?? "-"}개월)</div>
-        <div className="muted">옵션 상태: {runtime.addonStatus} / 옵션 만료일: {fmt(runtime.addonPaidUntil)} (최근 {runtime.addonMonths ?? "-"}개월)</div>
-        <div className="row">
-          <button className="btn" type="button" onClick={onCancelAddon} disabled={addonCanceling || runtime.addonStatus !== "active"}>
-            {addonCanceling ? "해지 처리 중..." : "옵션 구독 해지"}
-          </button>
-          {addonMsg ? <span className="muted">{addonMsg}</span> : null}
-        </div>
       </div>
 
       <div className="row">
