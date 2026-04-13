@@ -55,14 +55,13 @@ type TossPaymentsInstance = {
 type TossPaymentsFactory = (clientKey: string) => TossPaymentsInstance;
 
 function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failCode, failMessage, onConsumeReturnParams }: BillingPayFormProps) {
-  const [baseApproved, setBaseApproved] = useState(false);
-  const [addonApproved, setAddonApproved] = useState(false);
-  const [saveMsg, setSaveMsg] = useState("");
   const [planMonths, setPlanMonths] = useState<1 | 3 | 6 | 12>(1);
   const [payBase, setPayBase] = useState(true);
   const [payAddon, setPayAddon] = useState(true);
   const [paying, setPaying] = useState(false);
   const [payMsg, setPayMsg] = useState("");
+  const [addonCanceling, setAddonCanceling] = useState(false);
+  const [addonMsg, setAddonMsg] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pgClientKey, setPgClientKey] = useState("");
   const [handledPaymentOrderId, setHandledPaymentOrderId] = useState("");
@@ -121,9 +120,6 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       lastAfterPaidUntil: String(paymentRes.data?.after_paid_until || "").trim() || null,
       lastPlanMonths: Number.isFinite(Number(paymentRes.data?.plan_months)) ? Number(paymentRes.data?.plan_months) : null,
     });
-
-    setBaseApproved(String(baseRes.data?.base_plan_status || "inactive") === "active");
-    setAddonApproved(String(addonRes.data?.prepay_addon_status || "inactive") === "active");
     setPgClientKey(String(pgRes.data?.client_key || "").trim());
   }, [storeId]);
 
@@ -219,21 +215,29 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
     return unit * planMonths;
   }, [payAddon, payBase, planMonths, runtime.addonPrice, runtime.basePrice]);
 
-  const onSaveApproval = async () => {
-    setSaveMsg("");
+  const onCancelAddon = async () => {
+    setAddonMsg("");
+    setAddonCanceling(true);
     const nowIso = new Date().toISOString();
-    const [baseRes, addonRes] = await Promise.all([
-      supabase.from("store_billing").upsert({ store_id: storeId, base_plan_status: baseApproved ? "active" : "inactive", updated_at: nowIso }, { onConflict: "store_id" }),
-      supabase.from("store_addons").upsert({ store_id: storeId, prepay_addon_status: addonApproved ? "active" : "inactive", updated_at: nowIso }, { onConflict: "store_id" }),
-    ]);
-
-    if (baseRes.error || addonRes.error) {
-      setSaveMsg(`상태 저장 실패: ${baseRes.error?.message || addonRes.error?.message}`);
+    const { error } = await supabase
+      .from("store_addons")
+      .upsert(
+        {
+          store_id: storeId,
+          prepay_addon_status: "inactive",
+          addon_paid_until: nowIso,
+          updated_at: nowIso,
+        },
+        { onConflict: "store_id" }
+      );
+    if (error) {
+      setAddonMsg(`옵션 구독 해지 실패: ${error.message}`);
+      setAddonCanceling(false);
       return;
     }
-
-    setSaveMsg("상태 저장 완료");
+    setAddonMsg("옵션 구독을 해지했습니다.");
     await refreshRuntime();
+    setAddonCanceling(false);
   };
 
   const loadTossScript = () =>
@@ -329,23 +333,6 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
     <section className="card">
       <div className="pill">결제 대상 매장: {storeName} ({storeId})</div>
 
-      <h2 className="h2">구독 상태 체크</h2>
-      <div className="payGrid">
-        <label className="toggleRow">
-          <input type="checkbox" checked={baseApproved} onChange={(e) => setBaseApproved(e.target.checked)} />
-          <span>기본 구독 활성 상태</span>
-        </label>
-
-        <label className="toggleRow">
-          <input type="checkbox" checked={addonApproved} onChange={(e) => setAddonApproved(e.target.checked)} />
-          <span>선결제 옵션 활성 상태</span>
-        </label>
-      </div>
-      <div className="row">
-        <button className="btn" type="button" onClick={onSaveApproval}>상태 저장</button>
-        {saveMsg ? <span className="muted">{saveMsg}</span> : null}
-      </div>
-
       <h2 className="h2">기간형 구독 결제 (owner 전용)</h2>
       <p className="muted">플랫폼 PG 결제창을 통해 승인 후 구독기간이 반영됩니다.</p>
       <p className="muted">플랫폼 PG 연결 상태: {pgClientKey ? "연결됨 ✅" : "미연결 ⚠️"}</p>
@@ -380,6 +367,12 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         <div className="muted">최근 결제 기준 남은일자: {remainDays == null ? "-" : `${remainDays}일`}</div>
         <div className="muted">기본 상태: {runtime.baseStatus} / 기본 만료일: {fmt(runtime.basePaidUntil)} (최근 {runtime.baseMonths ?? "-"}개월)</div>
         <div className="muted">옵션 상태: {runtime.addonStatus} / 옵션 만료일: {fmt(runtime.addonPaidUntil)} (최근 {runtime.addonMonths ?? "-"}개월)</div>
+        <div className="row">
+          <button className="btn" type="button" onClick={onCancelAddon} disabled={addonCanceling || runtime.addonStatus !== "active"}>
+            {addonCanceling ? "해지 처리 중..." : "옵션 구독 해지"}
+          </button>
+          {addonMsg ? <span className="muted">{addonMsg}</span> : null}
+        </div>
       </div>
 
       <div className="row">

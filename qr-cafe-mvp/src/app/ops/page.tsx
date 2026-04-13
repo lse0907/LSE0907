@@ -284,9 +284,6 @@ export default function OpsPage() {
           <div className="row"><input className="input" type="password" placeholder="Secret Key (변경 시에만 입력)" value={pgForm.secretKey} onChange={(e) => setPgForm((p) => ({ ...p, secretKey: e.target.value }))} /></div>
           <div className="row">
             <button className="btn primary" onClick={savePg}>PG 저장</button>
-            <button className="btn" onClick={() => selectedStoreId && router.push(`/admin/billing/pay?store=${encodeURIComponent(selectedStoreId)}`)} disabled={!selectedStoreId}>
-              결제/구독 테스트로 이동
-            </button>
           </div>
           <hr />
           <h3>문의/장애 관리</h3>
