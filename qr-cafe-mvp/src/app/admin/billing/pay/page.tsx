@@ -27,6 +27,7 @@ type BillingPayFormProps = {
   amount: number;
   failCode: string;
   failMessage: string;
+  onConsumeReturnParams: () => void;
 };
 
 type BillingPending = {
@@ -52,7 +53,7 @@ type TossPaymentsInstance = {
 };
 type TossPaymentsFactory = (clientKey: string) => TossPaymentsInstance;
 
-function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failCode, failMessage }: BillingPayFormProps) {
+function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failCode, failMessage, onConsumeReturnParams }: BillingPayFormProps) {
   const [baseApproved, setBaseApproved] = useState(false);
   const [addonApproved, setAddonApproved] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
@@ -64,6 +65,14 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pgClientKey, setPgClientKey] = useState("");
   const [handledPaymentOrderId, setHandledPaymentOrderId] = useState("");
+  const failReasonLabel = useMemo(() => {
+    const code = (failCode || "").toUpperCase();
+    if (!code) return "";
+    if (code.includes("USER_CANCEL")) return "사용자가 결제를 취소했어요.";
+    if (code.includes("INVALID")) return "결제 요청 정보가 올바르지 않습니다.";
+    if (code.includes("PAY_PROCESS_CANCELED")) return "결제가 취소되었습니다.";
+    return "결제 승인에 실패했습니다.";
+  }, [failCode]);
 
   const [runtime, setRuntime] = useState<BillingRuntimeStatus>({
     basePaidUntil: null,
@@ -143,6 +152,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       const pending = rawPending ? (JSON.parse(rawPending) as BillingPending) : null;
       if (!pending || pending.storeId !== storeId) {
         setPayMsg("결제 대기 정보가 없어 승인 반영을 진행할 수 없습니다. 다시 결제해 주세요.");
+        onConsumeReturnParams();
         return;
       }
 
@@ -162,6 +172,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       if (!confirmRes.ok || !confirmJson?.ok) {
         if (cancelled) return;
         setPayMsg(`토스 승인 실패: ${String(confirmJson?.message || "알 수 없는 오류")}`);
+        onConsumeReturnParams();
         return;
       }
 
@@ -179,6 +190,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       if (error) {
         if (cancelled) return;
         setPayMsg(`결제 반영 실패: ${error.message}`);
+        onConsumeReturnParams();
         return;
       }
 
@@ -186,13 +198,14 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       await refreshRuntime();
       if (!cancelled) {
         setPayMsg(`결제 승인 및 반영 완료 ✅ (${pending.planMonths}개월 / ${amount.toLocaleString()}원)`);
+        onConsumeReturnParams();
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [amount, handledPaymentOrderId, orderId, paymentKey, refreshRuntime, storeId]);
+  }, [amount, handledPaymentOrderId, onConsumeReturnParams, orderId, paymentKey, refreshRuntime, storeId]);
 
   const totalAmount = useMemo(() => {
     const unit = (payBase ? runtime.basePrice : 0) + (payAddon ? runtime.addonPrice : 0);
@@ -274,7 +287,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         amount: totalAmount,
         orderId,
         orderName: `${storeName} 구독 ${planMonths}개월`,
-        customerName: "점주 결제",
+        customerName: `${(storeName || "매장").slice(0, 24)} 점주`,
         successUrl,
         failUrl,
       });
@@ -328,6 +341,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
 
       <h2 className="h2">기간형 구독 결제 (owner 전용)</h2>
       <p className="muted">플랫폼 PG 결제창을 통해 승인 후 구독기간이 반영됩니다.</p>
+      <p className="muted">플랫폼 PG 연결 상태: {pgClientKey ? "연결됨 ✅" : "미연결 ⚠️"}</p>
 
       <div className="payGrid">
         <label className="toggleRow">
@@ -365,7 +379,14 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         <button className="btn primary" type="button" onClick={onStartPayment} disabled={paying}>
           {paying ? "결제창 준비 중..." : "결제창 열기"}
         </button>
-        {(payMsg || failCode || failMessage) ? <span className="muted">{payMsg || `결제 실패: ${failCode || "-"} ${failMessage || ""}`.trim()}</span> : null}
+        {(payMsg || failCode || failMessage) ? (
+          <span className="muted">
+            {payMsg || `${failReasonLabel || "결제 실패"} ${failCode ? `[${failCode}]` : ""} ${failMessage || ""}`.trim()}
+          </span>
+        ) : null}
+        {(failCode || failMessage) ? (
+          <button className="btn" type="button" onClick={onConsumeReturnParams}>다시 시도</button>
+        ) : null}
       </div>
     </section>
   );
@@ -387,6 +408,11 @@ function AdminBillingPayPageInner() {
   const amount = Number(sp.get("amount") || 0);
   const failCode = String(sp.get("code") || "").trim();
   const failMessage = String(sp.get("message") || "").trim();
+
+  const consumeReturnParams = useCallback(() => {
+    if (!storeId) return;
+    router.replace(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`);
+  }, [router, storeId]);
 
   useEffect(() => {
     if (!storeId) {
@@ -430,6 +456,7 @@ function AdminBillingPayPageInner() {
           amount={amount}
           failCode={failCode}
           failMessage={failMessage}
+          onConsumeReturnParams={consumeReturnParams}
         />
       ) : null}
     </main>
