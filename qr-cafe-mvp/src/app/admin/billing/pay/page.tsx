@@ -216,6 +216,31 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
     return unit * planMonths;
   }, [payAddon, payBase, planMonths, runtime.addonPrice, runtime.basePrice]);
 
+  const onCancelAddon = async () => {
+    setAddonMsg("");
+    setAddonCanceling(true);
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase
+      .from("store_addons")
+      .upsert(
+        {
+          store_id: storeId,
+          prepay_addon_status: "inactive",
+          addon_paid_until: nowIso,
+          updated_at: nowIso,
+        },
+        { onConflict: "store_id" }
+      );
+    if (error) {
+      setAddonMsg(`옵션 구독 해지 실패: ${error.message}`);
+      setAddonCanceling(false);
+      return;
+    }
+    setAddonMsg("옵션 구독을 해지했습니다.");
+    await refreshRuntime();
+    setAddonCanceling(false);
+  };
+
   const loadTossScript = () =>
     new Promise<void>((resolve, reject) => {
       const existingFactory = (window as unknown as { TossPayments?: TossPaymentsFactory }).TossPayments;
