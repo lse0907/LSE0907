@@ -165,9 +165,8 @@ function BillingCancelPageInner() {
 
       <section className="card">
         <div className="pill">매장: {storeName} ({storeId})</div>
-        <p className="muted">
-          정책: 사용기간이 소요된 결제건은 해지 불가합니다. 결제 직후 {CANCEL_WINDOW_MINUTES}분 이내 결제건만 즉시 취소(환불) 가능합니다.
-        </p>
+        <p className="warn">결제 직후 {CANCEL_WINDOW_MINUTES}분 이내 결제건만 즉시 취소(환불) 가능합니다.</p>
+        <p className="warn">기간이 소요된 결제 건의 취소/환불은 지원센터로 문의해 주세요.</p>
         {msg ? <p className="muted">{msg}</p> : null}
       </section>
 
@@ -204,7 +203,6 @@ function BillingCancelPageInner() {
                     <td>{row.after_paid_until ? new Date(row.after_paid_until).toLocaleString("ko-KR", { hour12: false }) : "-"}</td>
                     <td>
                       {check.ok ? <span className="ok">가능</span> : <span className="warn">불가</span>}
-                      {!check.ok ? <div className="muted">{check.reason}</div> : null}
                     </td>
                   </tr>
                 );
