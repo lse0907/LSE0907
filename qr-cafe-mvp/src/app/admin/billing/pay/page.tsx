@@ -19,7 +19,40 @@ type BillingRuntimeStatus = {
   lastPlanMonths: number | null;
 };
 
-function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: string }) {
+type BillingPayFormProps = {
+  storeId: string;
+  storeName: string;
+  paymentKey: string;
+  orderId: string;
+  amount: number;
+  failCode: string;
+  failMessage: string;
+};
+
+type BillingPending = {
+  storeId: string;
+  planMonths: 1 | 3 | 6 | 12;
+  payBase: boolean;
+  payAddon: boolean;
+  amount: number;
+  createdAt: number;
+};
+
+const BILLING_PENDING_KEY = "qrCafeBillingPending";
+type TossPaymentParams = {
+  amount: number;
+  orderId: string;
+  orderName: string;
+  customerName: string;
+  successUrl: string;
+  failUrl: string;
+};
+type TossPaymentsInstance = {
+  requestPayment: (method: "카드", params: TossPaymentParams) => Promise<void>;
+};
+type TossPaymentsFactory = (clientKey: string) => TossPaymentsInstance;
+
+function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failCode, failMessage }: BillingPayFormProps) {
   const [baseApproved, setBaseApproved] = useState(false);
   const [addonApproved, setAddonApproved] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
@@ -29,6 +62,9 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
   const [paying, setPaying] = useState(false);
   const [payMsg, setPayMsg] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [pgClientKey, setPgClientKey] = useState("");
+  const [handledPaymentOrderId, setHandledPaymentOrderId] = useState("");
+
   const [runtime, setRuntime] = useState<BillingRuntimeStatus>({
     basePaidUntil: null,
     addonPaidUntil: null,
@@ -44,7 +80,7 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
   });
 
   const refreshRuntime = useCallback(async () => {
-    const [baseRes, addonRes, paymentRes] = await Promise.all([
+    const [baseRes, addonRes, paymentRes, pgRes] = await Promise.all([
       supabase.from("store_billing").select("paid_until, current_plan_months, base_price_krw, base_plan_status").eq("store_id", storeId).maybeSingle(),
       supabase
         .from("store_addons")
@@ -59,6 +95,7 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
         .order("paid_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase.from("platform_pg_config").select("client_key").eq("id", 1).maybeSingle(),
     ]);
 
     setRuntime({
@@ -77,6 +114,7 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
 
     setBaseApproved(String(baseRes.data?.base_plan_status || "inactive") === "active");
     setAddonApproved(String(addonRes.data?.prepay_addon_status || "inactive") === "active");
+    setPgClientKey(String(pgRes.data?.client_key || "").trim());
   }, [storeId]);
 
   useEffect(() => {
@@ -90,6 +128,71 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
     const timer = setInterval(() => setNowMs(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!paymentKey || !orderId || !Number.isFinite(amount) || amount <= 0) return;
+    if (handledPaymentOrderId === orderId) return;
+
+    let cancelled = false;
+
+    (async () => {
+      setHandledPaymentOrderId(orderId);
+      setPayMsg("결제 승인 확인 중...");
+
+      const rawPending = sessionStorage.getItem(`${BILLING_PENDING_KEY}:${orderId}`);
+      const pending = rawPending ? (JSON.parse(rawPending) as BillingPending) : null;
+      if (!pending || pending.storeId !== storeId) {
+        setPayMsg("결제 대기 정보가 없어 승인 반영을 진행할 수 없습니다. 다시 결제해 주세요.");
+        return;
+      }
+
+      const confirmRes = await fetch("/api/payments/toss/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentKey,
+          orderId,
+          amount,
+          storeId,
+          pgMode: "platform",
+        }),
+      });
+
+      const confirmJson = await confirmRes.json().catch(() => ({}));
+      if (!confirmRes.ok || !confirmJson?.ok) {
+        if (cancelled) return;
+        setPayMsg(`토스 승인 실패: ${String(confirmJson?.message || "알 수 없는 오류")}`);
+        return;
+      }
+
+      const { error } = await supabase.rpc("apply_store_billing_payment", {
+        p_store_id: storeId,
+        p_plan_months: pending.planMonths,
+        p_base_paid: pending.payBase,
+        p_addon_paid: pending.payAddon,
+        p_payment_key: paymentKey,
+        p_order_id: orderId,
+        p_amount_krw: amount,
+        p_note: `플랫폼 PG 결제 ${pending.planMonths}개월`,
+      });
+
+      if (error) {
+        if (cancelled) return;
+        setPayMsg(`결제 반영 실패: ${error.message}`);
+        return;
+      }
+
+      sessionStorage.removeItem(`${BILLING_PENDING_KEY}:${orderId}`);
+      await refreshRuntime();
+      if (!cancelled) {
+        setPayMsg(`결제 승인 및 반영 완료 ✅ (${pending.planMonths}개월 / ${amount.toLocaleString()}원)`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [amount, handledPaymentOrderId, orderId, paymentKey, refreshRuntime, storeId]);
 
   const totalAmount = useMemo(() => {
     const unit = (payBase ? runtime.basePrice : 0) + (payAddon ? runtime.addonPrice : 0);
@@ -105,46 +208,83 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
     ]);
 
     if (baseRes.error || addonRes.error) {
-      setSaveMsg(`테스트 승인 저장 실패: ${baseRes.error?.message || addonRes.error?.message}`);
+      setSaveMsg(`상태 저장 실패: ${baseRes.error?.message || addonRes.error?.message}`);
       return;
     }
 
-    setSaveMsg("테스트 승인 저장 완료");
+    setSaveMsg("상태 저장 완료");
     await refreshRuntime();
   };
 
-  const onApplyTestPayment = async () => {
+  const loadTossScript = () =>
+    new Promise<void>((resolve, reject) => {
+      const existingFactory = (window as unknown as { TossPayments?: TossPaymentsFactory }).TossPayments;
+      if (typeof window !== "undefined" && existingFactory) {
+        resolve();
+        return;
+      }
+      const existing = document.querySelector<HTMLScriptElement>('script[data-toss="billing"]');
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error("토스 스크립트 로드 실패")), { once: true });
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://js.tosspayments.com/v1/payment";
+      script.async = true;
+      script.dataset.toss = "billing";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("토스 결제 스크립트를 불러오지 못했습니다."));
+      document.head.appendChild(script);
+    });
+
+  const onStartPayment = async () => {
     setPayMsg("");
     if (!payBase && !payAddon) {
       setPayMsg("기본 또는 옵션 중 하나 이상 선택해 주세요.");
       return;
     }
+    if (!pgClientKey) {
+      setPayMsg("플랫폼 PG Client Key가 없습니다. OPS 페이지에서 먼저 저장해 주세요.");
+      return;
+    }
 
     setPaying(true);
-    const suffix = `${Date.now()}`;
-    const orderId = `bill_${storeId}_${suffix}`;
-    const paymentKey = `test_pay_${suffix}`;
-    const note = `관리자 테스트 결제 ${planMonths}개월`;
+    try {
+      const orderId = `bill_${storeId}_${Date.now()}`;
+      const pending: BillingPending = {
+        storeId,
+        planMonths,
+        payBase,
+        payAddon,
+        amount: totalAmount,
+        createdAt: Date.now(),
+      };
+      sessionStorage.setItem(`${BILLING_PENDING_KEY}:${orderId}`, JSON.stringify(pending));
 
-    const { error } = await supabase.rpc("apply_store_billing_payment", {
-      p_store_id: storeId,
-      p_plan_months: planMonths,
-      p_base_paid: payBase,
-      p_addon_paid: payAddon,
-      p_payment_key: paymentKey,
-      p_order_id: orderId,
-      p_amount_krw: totalAmount,
-      p_note: note,
-    });
+      await loadTossScript();
+      const tossFactory = (window as unknown as { TossPayments?: TossPaymentsFactory }).TossPayments;
+      if (!tossFactory) throw new Error("토스 결제 객체를 찾을 수 없습니다.");
+      const tossPayments = tossFactory(pgClientKey);
+      const base = window.location.origin;
+      const successUrl = `${base}/admin/billing/pay?store=${encodeURIComponent(storeId)}&billing=1`;
+      const failUrl = `${base}/admin/billing/pay?store=${encodeURIComponent(storeId)}&billing=1`;
 
-    if (error) {
-      setPayMsg(`결제 반영 실패: ${error.message}`);
+      await tossPayments.requestPayment("카드", {
+        amount: totalAmount,
+        orderId,
+        orderName: `${storeName} 구독 ${planMonths}개월`,
+        customerName: "점주 결제",
+        successUrl,
+        failUrl,
+      });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setPayMsg(`결제 요청 실패: ${message}`);
       setPaying(false);
       return;
     }
 
-    await refreshRuntime();
-    setPayMsg(`결제 반영 완료 ✅ (${planMonths}개월 / ${totalAmount.toLocaleString()}원)`);
     setPaying(false);
   };
 
@@ -187,7 +327,7 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
       </div>
 
       <h2 className="h2">기간형 구독 결제 (owner 전용)</h2>
-      <p className="muted">옵션도 기간제로 계산됩니다. 총액 = 개월수 × (기본 + 옵션 선택 금액)</p>
+      <p className="muted">플랫폼 PG 결제창을 통해 승인 후 구독기간이 반영됩니다.</p>
 
       <div className="payGrid">
         <label className="toggleRow">
@@ -222,10 +362,10 @@ function BillingPayForm({ storeId, storeName }: { storeId: string; storeName: st
       </div>
 
       <div className="row">
-        <button className="btn primary" type="button" onClick={onApplyTestPayment} disabled={paying}>
-          {paying ? "처리 중..." : "결제 실행"}
+        <button className="btn primary" type="button" onClick={onStartPayment} disabled={paying}>
+          {paying ? "결제창 준비 중..." : "결제창 열기"}
         </button>
-        {payMsg ? <span className="muted">{payMsg}</span> : null}
+        {(payMsg || failCode || failMessage) ? <span className="muted">{payMsg || `결제 실패: ${failCode || "-"} ${failMessage || ""}`.trim()}</span> : null}
       </div>
     </section>
   );
@@ -241,6 +381,12 @@ function AdminBillingPayPageInner() {
     return queryStore || savedStore;
   }, [sp]);
   const [storeName, setStoreName] = useState("-");
+
+  const paymentKey = String(sp.get("paymentKey") || "").trim();
+  const orderId = String(sp.get("orderId") || "").trim();
+  const amount = Number(sp.get("amount") || 0);
+  const failCode = String(sp.get("code") || "").trim();
+  const failMessage = String(sp.get("message") || "").trim();
 
   useEffect(() => {
     if (!storeId) {
@@ -274,7 +420,18 @@ function AdminBillingPayPageInner() {
         </div>
       </header>
 
-      {storeId ? <BillingPayForm key={storeId} storeId={storeId} storeName={storeName} /> : null}
+      {storeId ? (
+        <BillingPayForm
+          key={storeId}
+          storeId={storeId}
+          storeName={storeName}
+          paymentKey={paymentKey}
+          orderId={orderId}
+          amount={amount}
+          failCode={failCode}
+          failMessage={failMessage}
+        />
+      ) : null}
     </main>
   );
 }
