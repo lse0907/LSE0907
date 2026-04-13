@@ -61,6 +61,8 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
   const [payAddon, setPayAddon] = useState(true);
   const [paying, setPaying] = useState(false);
   const [payMsg, setPayMsg] = useState("");
+  const [addonCanceling, setAddonCanceling] = useState(false);
+  const [addonMsg, setAddonMsg] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [pgClientKey, setPgClientKey] = useState("");
   const [handledPaymentOrderId, setHandledPaymentOrderId] = useState("");
@@ -341,6 +343,12 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         <div className="muted">최근 결제 기준 남은일자: {remainDays == null ? "-" : `${remainDays}일`}</div>
         <div className="muted">기본 상태: {runtime.baseStatus} / 기본 만료일: {fmt(runtime.basePaidUntil)} (최근 {runtime.baseMonths ?? "-"}개월)</div>
         <div className="muted">옵션 상태: {runtime.addonStatus} / 옵션 만료일: {fmt(runtime.addonPaidUntil)} (최근 {runtime.addonMonths ?? "-"}개월)</div>
+        <div className="row">
+          <button className="btn" type="button" onClick={onCancelAddon} disabled={addonCanceling || runtime.addonStatus !== "active"}>
+            {addonCanceling ? "해지 처리 중..." : "옵션 구독 해지"}
+          </button>
+          {addonMsg ? <span className="muted">{addonMsg}</span> : null}
+        </div>
       </div>
 
       <div className="row">
