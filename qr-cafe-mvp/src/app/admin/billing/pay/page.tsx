@@ -370,7 +370,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
               void onToggleAddonFeature(e.target.checked);
             }}
           />
-          <span>선결제 옵션 기능 사용</span>
+          <span>선결제 옵션 사용 설정</span>
         </label>
         {!isAddonSubscribed ? (
           <div className="muted">옵션 구독이 활성 상태일 때만 기능을 켤 수 있습니다.</div>
