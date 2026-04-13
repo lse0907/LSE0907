@@ -6,6 +6,7 @@ type ConfirmBody = {
   orderId?: string;
   amount?: number;
   storeId?: string;
+  pgMode?: "store" | "platform" | string;
 };
 
 export async function POST(req: NextRequest) {
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest) {
     const paymentKey = String(body?.paymentKey || "").trim();
     const orderId = String(body?.orderId || "").trim();
     const storeId = String(body?.storeId || "").trim();
+    const pgMode = String(body?.pgMode || "store").trim();
     const amount = Number(body?.amount || 0);
 
     if (!paymentKey || !orderId || !storeId || !Number.isFinite(amount) || amount <= 0) {
@@ -42,11 +44,20 @@ export async function POST(req: NextRequest) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data: pgRow, error: pgErr } = await supabaseAdmin
-      .from("store_pg_config")
-      .select("secret_key")
-      .eq("store_id", storeId)
-      .maybeSingle();
+    const pgRes =
+      pgMode === "platform"
+        ? await supabaseAdmin
+            .from("platform_pg_config")
+            .select("secret_key")
+            .eq("id", 1)
+            .maybeSingle()
+        : await supabaseAdmin
+            .from("store_pg_config")
+            .select("secret_key")
+            .eq("store_id", storeId)
+            .maybeSingle();
+    const pgRow = pgRes.data;
+    const pgErr = pgRes.error;
 
     if (pgErr) {
       return NextResponse.json({ ok: false, message: `PG 조회 실패: ${pgErr.message}` }, { status: 500 });
@@ -54,7 +65,10 @@ export async function POST(req: NextRequest) {
 
     const secretKey = String(pgRow?.secret_key || "").trim();
     if (!secretKey) {
-      return NextResponse.json({ ok: false, message: "매장 Secret Key가 없습니다." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, message: pgMode === "platform" ? "플랫폼 Secret Key가 없습니다." : "매장 Secret Key가 없습니다." },
+        { status: 400 }
+      );
     }
 
     const basicToken = Buffer.from(`${secretKey}:`).toString("base64");
