@@ -280,6 +280,21 @@ function CategoriesPageInner() {
           .topActionRow .btn {
             flex: 0 0 auto;
           }
+          .copyRow {
+            flex-wrap: wrap;
+          }
+          .copySelect,
+          .copyBtn {
+            width: 100%;
+            flex: 1 1 100%;
+          }
+          .copyBtn {
+            white-space: normal;
+          }
+          .createRow > .input {
+            width: 100% !important;
+            min-width: 0;
+          }
         }
       `}</style>
 
@@ -309,7 +324,7 @@ function CategoriesPageInner() {
       </section>
 
       <section className="card">
-        <div className="row">
+        <div className="row createRow">
           <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
           <input className="input" inputMode="numeric" style={{ width: 120 }} placeholder="순서" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} />
           <button className="btn btnPrimary" onClick={onCreate} disabled={saving || loading || !name.trim()}>생성</button>
