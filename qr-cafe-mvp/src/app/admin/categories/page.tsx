@@ -257,6 +257,7 @@ function CategoriesPageInner() {
         .wrap{max-width:900px;margin:0 auto;padding:14px;display:grid;gap:12px}
         .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px;display:grid;gap:10px}
         .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+        .headerRow{justify-content:space-between}
         .topActionRow{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:nowrap}
         .copyRow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:nowrap}
         .copySelect{flex:1;min-width:0}
@@ -267,7 +268,12 @@ function CategoriesPageInner() {
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
         @media (max-width: 640px) {
+          .headerRow {
+            align-items: flex-start;
+            gap: 10px;
+          }
           .topActionRow {
+            width: 100%;
             flex-wrap: wrap;
             justify-content: flex-start;
           }
@@ -277,7 +283,7 @@ function CategoriesPageInner() {
         }
       `}</style>
 
-      <header className="row" style={{ justifyContent: "space-between" }}>
+      <header className="row headerRow">
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 950 }}>카테고리 관리</h1>
         <div className="topActionRow">
           <button className="btn" onClick={() => router.push(storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")}>관리자 홈 </button>
