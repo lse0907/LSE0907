@@ -52,6 +52,10 @@ type MenuOptionPrice = {
   option_item_id: string;
   price_delta: number;
 };
+type MyStore = {
+  store_id: string;
+  store_name: string | null;
+};
 
 type MenuDraft = {
   id: string;
@@ -129,6 +133,9 @@ function AdminMenuPageInner() {
   const [selectedExclusiveGroupId, setSelectedExclusiveGroupId] = useState("");
   const [exclusiveEdit, setExclusiveEdit] = useState({ name: "", max: "1" });
   const [newSelectedExclusiveItem, setNewSelectedExclusiveItem] = useState({ name: "", price: "" });
+  const [myStores, setMyStores] = useState<MyStore[]>([]);
+  const [copySourceStoreId, setCopySourceStoreId] = useState("");
+  const [copying, setCopying] = useState(false);
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -235,6 +242,48 @@ function AdminMenuPageInner() {
       setTimeout(() => setBadge("idle"), 1600);
     } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !authData?.user) return;
+      const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
+      if (memRes.error) return;
+      const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
+      if (!ids.length) return;
+      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", ids).order("store_name");
+      if (storeRes.error || !mounted) return;
+      const list = ((storeRes.data || []) as MyStore[]).filter((s) => s.store_id !== storeId);
+      setMyStores(list);
+      if (!copySourceStoreId && list.length > 0) setCopySourceStoreId(list[0].store_id);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [storeId, copySourceStoreId]);
+
+  const onCopyMenus = async () => {
+    if (!storeId) return setMsg("대상 매장을 먼저 선택해주세요.");
+    if (!copySourceStoreId) return setMsg("원본 매장을 선택해주세요.");
+    if (!confirm("선택한 매장의 메뉴를 현재 매장으로 복사할까요?")) return;
+    try {
+      setCopying(true);
+      setMsg("");
+      const { error } = await supabase.rpc("admin_copy_menus_v1", {
+        p_source_store_id: copySourceStoreId,
+        p_target_store_id: storeId,
+      });
+      if (error) throw error;
+      await refresh();
+      setMsg("메뉴 복사가 완료되었습니다.");
+    } catch (e: any) {
+      setMsg(`메뉴 복사 실패: ${String(e?.message || e)}`);
+    } finally {
+      setCopying(false);
     }
   };
 
@@ -955,11 +1004,24 @@ function AdminMenuPageInner() {
           display: flex;
           gap: 8px;
           margin-top: 0;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           justify-content: flex-end;
         }
-        .sub + .sub + .headerActionRow {
-          display: none;
+        .copyRow {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: nowrap;
+          margin-top: 8px;
+        }
+        .copySelect {
+          flex: 1;
+          min-width: 0;
+        }
+        .copyBtn {
+          flex: 0 0 auto;
+          white-space: nowrap;
         }
         .btn {
           border: 1px solid var(--line);
@@ -1270,6 +1332,9 @@ function AdminMenuPageInner() {
               <button className="btn" onClick={onBack}>
                 관리자 홈
               </button>
+              <a className="btn" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                카테고리관리
+              </a>
               <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
                 옵션관리
               </a>
@@ -1279,13 +1344,18 @@ function AdminMenuPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
-          <div className="headerActionRow">
-            <button className="btn" onClick={onBack}>
-              관리자 홈
+          <div className="copyRow">
+            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn copyBtn" onClick={onCopyMenus} disabled={copying || loading || !copySourceStoreId}>
+              {copying ? "복사 중..." : "다른 매장 메뉴 복사"}
             </button>
-            <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-              옵션관리
-            </a>
           </div>
           {msg ? (
             <p className="sub" style={{ marginTop: 6, color: "#b91c1c" }}>
