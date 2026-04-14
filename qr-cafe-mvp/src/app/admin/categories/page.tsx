@@ -257,6 +257,10 @@ function CategoriesPageInner() {
         .wrap{max-width:900px;margin:0 auto;padding:14px;display:grid;gap:12px}
         .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px;display:grid;gap:10px}
         .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+        .topActionRow{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:nowrap}
+        .copyRow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:nowrap}
+        .copySelect{flex:1;min-width:0}
+        .copyBtn{flex:0 0 auto;white-space:nowrap}
         .btn{border:1px solid #d1d5db;background:#fff;color:#111827;-webkit-text-fill-color:currentColor;padding:10px 12px;border-radius:10px;font-weight:900;cursor:pointer}
         .btnPrimary{background:#111827;color:#fff;border-color:#111827}
         .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px}
@@ -266,14 +270,16 @@ function CategoriesPageInner() {
 
       <header className="row" style={{ justifyContent: "space-between" }}>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 950 }}>카테고리 관리</h1>
-        <div className="row">
+        <div className="topActionRow">
           <button className="btn" onClick={() => router.push(storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")}>관리자 홈 </button>
+          <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>옵션관리</a>
+          <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>메뉴관리</a>
         </div>
       </header>
 
       <section className="card">
-        <div className="row" style={{ justifyContent: "flex-end" }}>
-          <select className="input" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)} style={{ maxWidth: 280 }}>
+        <div className="copyRow">
+          <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
             <option value="">원본 매장 선택</option>
             {myStores.map((s) => (
               <option key={s.store_id} value={s.store_id}>
@@ -281,7 +287,7 @@ function CategoriesPageInner() {
               </option>
             ))}
           </select>
-          <button className="btn" onClick={onCopyCategories} disabled={copying || loading || !copySourceStoreId}>
+          <button className="btn copyBtn" onClick={onCopyCategories} disabled={copying || loading || !copySourceStoreId}>
             {copying ? "복사 중..." : "다른 매장 카테고리 복사"}
           </button>
         </div>

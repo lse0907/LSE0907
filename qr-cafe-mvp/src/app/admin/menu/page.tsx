@@ -1004,11 +1004,24 @@ function AdminMenuPageInner() {
           display: flex;
           gap: 8px;
           margin-top: 0;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           justify-content: flex-end;
         }
-        .sub + .sub + .headerActionRow {
-          display: none;
+        .copyRow {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: nowrap;
+          margin-top: 8px;
+        }
+        .copySelect {
+          flex: 1;
+          min-width: 0;
+        }
+        .copyBtn {
+          flex: 0 0 auto;
+          white-space: nowrap;
         }
         .btn {
           border: 1px solid var(--line);
@@ -1319,6 +1332,9 @@ function AdminMenuPageInner() {
               <button className="btn" onClick={onBack}>
                 관리자 홈
               </button>
+              <a className="btn" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                카테고리관리
+              </a>
               <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
                 옵션관리
               </a>
@@ -1328,13 +1344,18 @@ function AdminMenuPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
-          <div className="headerActionRow">
-            <button className="btn" onClick={onBack}>
-              관리자 홈
+          <div className="copyRow">
+            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn copyBtn" onClick={onCopyMenus} disabled={copying || loading || !copySourceStoreId}>
+              {copying ? "복사 중..." : "다른 매장 메뉴 복사"}
             </button>
-            <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-              옵션관리
-            </a>
           </div>
           <div className="headerActionRow" style={{ marginTop: 8 }}>
             <select className="input" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)} style={{ minWidth: 220 }}>

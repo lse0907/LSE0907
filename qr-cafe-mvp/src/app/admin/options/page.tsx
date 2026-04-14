@@ -582,12 +582,24 @@ function AdminOptionsPageInner() {
           display: flex;
           gap: 8px;
           margin-top: 0;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           justify-content: flex-end;
         }
-        /* 중복으로 내려오는 보조 액션 행이 있으면 숨기고 타이틀 옆 액션만 유지 */
-        .sub + .sub + .headerActionRow {
-          display: none;
+        .copyRow {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: nowrap;
+          margin-top: 8px;
+        }
+        .copySelect {
+          flex: 1;
+          min-width: 0;
+        }
+        .copyBtn {
+          flex: 0 0 auto;
+          white-space: nowrap;
         }
         .btnPrimary {
           background: var(--brand);
@@ -786,6 +798,9 @@ function AdminOptionsPageInner() {
               <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
                 관리자 홈
               </a>
+              <a className="btn" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                카테고리관리
+              </a>
               <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
                 메뉴관리
               </a>
@@ -797,13 +812,18 @@ function AdminOptionsPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
-          <div className="headerActionRow">
-            <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-              관리자 홈
-            </a>
-            <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-              메뉴관리
-            </a>
+          <div className="copyRow">
+            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn copyBtn" type="button" onClick={onCopyOptions} disabled={copying || loading || !copySourceStoreId}>
+              {copying ? "복사 중..." : "다른 매장 옵션 복사"}
+            </button>
           </div>
           <div className="headerActionRow" style={{ marginTop: 8 }}>
             <select className="input" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)} style={{ minWidth: 220 }}>
