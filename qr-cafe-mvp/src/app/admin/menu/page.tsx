@@ -1357,6 +1357,19 @@ function AdminMenuPageInner() {
               {copying ? "복사 중..." : "다른 매장 메뉴 복사"}
             </button>
           </div>
+          <div className="headerActionRow" style={{ marginTop: 8 }}>
+            <select className="input" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)} style={{ minWidth: 220 }}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn" onClick={onCopyMenus} disabled={copying || loading || !copySourceStoreId}>
+              {copying ? "복사 중..." : "다른 매장 메뉴 복사"}
+            </button>
+          </div>
           {msg ? (
             <p className="sub" style={{ marginTop: 6, color: "#b91c1c" }}>
               {msg}
