@@ -183,25 +183,31 @@ function BillingCancelPageInner() {
                   <th>결제일시</th>
                   <th>구독</th>
                   <th>상태</th>
-                  <th>종료일자</th>
                   <th>해지가능</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => {
                   const check = canCancel(row);
+                  const paidAt = new Date(row.paid_at);
+                  const paidDate = Number.isFinite(paidAt.getTime()) ? paidAt.toLocaleDateString("ko-KR") : "-";
+                  const paidTime = Number.isFinite(paidAt.getTime())
+                    ? paidAt.toLocaleTimeString("ko-KR", { hour12: false })
+                    : "-";
                   return (
                     <tr key={row.id} className={selectedId === row.id ? "sel" : ""}>
                       <td>
                         <input type="radio" checked={selectedId === row.id} onChange={() => setSelectedId(row.id)} />
                       </td>
-                      <td className="cellNowrap">{new Date(row.paid_at).toLocaleString("ko-KR", { hour12: false })}</td>
+                      <td className="cellNowrap">
+                        <div>{paidDate}</div>
+                        <div className="muted" style={{ fontSize: 12 }}>{paidTime}</div>
+                      </td>
                       <td>
                         {row.base_paid ? "기본" : ""}{row.base_paid && row.addon_paid ? " + " : ""}{row.addon_paid ? "옵션" : ""}
                         <div className="muted">{Number(row.amount_krw || 0).toLocaleString()}원 / {row.plan_months || "-"}개월</div>
                       </td>
                       <td className="cellNowrap">{row.status}</td>
-                      <td className="cellNowrap">{row.after_paid_until ? new Date(row.after_paid_until).toLocaleString("ko-KR", { hour12: false }) : "-"}</td>
                       <td className="cellNowrap">
                         {check.ok ? <span className="ok">가능</span> : <span className="warn">불가</span>}
                       </td>
@@ -268,7 +274,7 @@ const css = `
   .cellNowrap { white-space:nowrap; }
   th:nth-child(1), td:nth-child(1) { width:56px; text-align:center; }
   th:nth-child(4), td:nth-child(4) { width:88px; }
-  th:nth-child(6), td:nth-child(6) { width:72px; text-align:center; }
+  th:nth-child(5), td:nth-child(5) { width:72px; text-align:center; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 12px; cursor:pointer; font-weight:700; }
   .chip.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; }
