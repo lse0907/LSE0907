@@ -262,6 +262,7 @@ function CategoriesPageInner() {
         .copyRow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:nowrap}
         .copySelect{flex:1;min-width:0}
         .copyBtn{flex:0 0 auto;white-space:nowrap}
+        .copyBtnShort{display:none}
         .btn{border:1px solid #d1d5db;background:#fff;color:#111827;-webkit-text-fill-color:currentColor;padding:10px 12px;border-radius:10px;font-weight:900;font-size:14px;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer}
         .btnPrimary{background:#111827;color:#fff;border-color:#111827}
         .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
@@ -281,16 +282,10 @@ function CategoriesPageInner() {
             flex: 0 0 auto;
           }
           .copyRow {
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
           }
-          .copySelect,
-          .copyBtn {
-            width: 100%;
-            flex: 1 1 100%;
-          }
-          .copyBtn {
-            white-space: normal;
-          }
+          .copyBtnLong{display:none}
+          .copyBtnShort{display:inline}
           .createRow > .input {
             width: 100% !important;
             min-width: 0;
@@ -318,7 +313,7 @@ function CategoriesPageInner() {
             ))}
           </select>
           <button className="btn copyBtn" onClick={onCopyCategories} disabled={copying || loading || !copySourceStoreId}>
-            {copying ? "복사 중..." : "다른 매장 카테고리 복사"}
+            {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
           </button>
         </div>
       </section>
