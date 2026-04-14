@@ -492,7 +492,7 @@ function AdminBillingPayPageInner() {
           <button className="btn" type="button" onClick={() => router.push(`/admin/billing?store=${encodeURIComponent(storeId)}`)}>
             PG 설정
           </button>
-          <button className="btn" type="button" onClick={() => router.back()}>
+          <button className="btn" type="button" onClick={() => router.push("/admin")}>
             관리자 홈
           </button>
         </div>

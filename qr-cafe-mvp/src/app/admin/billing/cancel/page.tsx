@@ -165,7 +165,7 @@ function BillingCancelPageInner() {
           <button className="btn" type="button" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>
             구독 결제
           </button>
-          <button className="btn" type="button" onClick={() => router.back()}>
+          <button className="btn" type="button" onClick={() => router.push("/admin")}>
             관리자 홈
           </button>
         </div>
