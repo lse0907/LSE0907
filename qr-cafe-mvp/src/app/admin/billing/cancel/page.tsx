@@ -283,7 +283,7 @@ const css = `
   thead th { position:sticky; top:0; background:#fff; z-index:1; }
   th:nth-child(1), td:nth-child(1) { width:56px; text-align:center; }
   th:nth-child(4), td:nth-child(4) { width:56px; text-align:center; }
-  th:nth-child(5), td:nth-child(5) { width:60px; text-align:center; }
+  th:nth-child(5), td:nth-child(5) { width:76px; text-align:center; white-space:nowrap; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 12px; cursor:pointer; font-weight:700; }
   .chip.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; }
