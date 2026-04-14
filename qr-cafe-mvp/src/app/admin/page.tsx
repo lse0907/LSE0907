@@ -412,7 +412,7 @@ function AdminPageInner() {
             onClick={() => setActiveSection((prev) => (prev === "ops" ? null : "ops"))}
             disabled={!selectedStoreId}
           >
-            <div className="cardBtnTitle">매장운영</div>
+            <div className="cardBtnTitle">메뉴설정</div>
           </button>
 
           <button
@@ -424,8 +424,8 @@ function AdminPageInner() {
           </button>
 
           <button
-            className="cardBtn"
-            onClick={() => go("/admin/support")}
+            className={`cardBtn ${activeSection === "support" ? "cardBtnOn" : ""}`}
+            onClick={() => setActiveSection((prev) => (prev === "support" ? null : "support"))}
             disabled={!selectedStoreId}
           >
             <div className="cardBtnTitle">지원센터</div>
@@ -438,10 +438,13 @@ function AdminPageInner() {
               매장정보
             </button>
             <button className="subBtn" onClick={() => go("/admin/billing")}>
-              PG 설정
+              PG 설정(선결재)
+            </button>
+            <button className="subBtn" onClick={() => go("/admin/qr")}>
+              매장 QR 생성
             </button>
             <button className="subBtn" onClick={() => go("/admin/loyalty")}>
-              포인트/쿠폰
+              포인트/쿠폰 설정
             </button>
           </div>
         ) : null}
@@ -456,9 +459,6 @@ function AdminPageInner() {
             </button>
             <button className="subBtn" onClick={() => go("/admin/options")}>
               옵션관리
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/qr")}>
-              QR 생성
             </button>
           </div>
         ) : null}
@@ -489,7 +489,7 @@ function AdminPageInner() {
         {activeSection === "support" ? (
           <div className="subPanel">
             <button className="subBtn subBtnPrimary" onClick={() => go("/admin/support")}>
-              지원센터 이동
+              문의하기
             </button>
           </div>
         ) : null}
