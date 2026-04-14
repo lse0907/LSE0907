@@ -266,6 +266,15 @@ function CategoriesPageInner() {
         .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
+        @media (max-width: 640px) {
+          .topActionRow {
+            flex-wrap: wrap;
+            justify-content: flex-start;
+          }
+          .topActionRow .btn {
+            flex: 0 0 auto;
+          }
+        }
       `}</style>
 
       <header className="row" style={{ justifyContent: "space-between" }}>
