@@ -704,6 +704,7 @@ function AdminOptionsPageInner() {
           border: 1px solid var(--line);
           background: #fff;
           font-weight: 800;
+          font-size: 14px;
           width: 100%;
         }
         .row3 {
@@ -822,19 +823,6 @@ function AdminOptionsPageInner() {
               ))}
             </select>
             <button className="btn copyBtn" type="button" onClick={onCopyOptions} disabled={copying || loading || !copySourceStoreId}>
-              {copying ? "복사 중..." : "다른 매장 옵션 복사"}
-            </button>
-          </div>
-          <div className="headerActionRow" style={{ marginTop: 8 }}>
-            <select className="input" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)} style={{ minWidth: 220 }}>
-              <option value="">원본 매장 선택</option>
-              {myStores.map((s) => (
-                <option key={s.store_id} value={s.store_id}>
-                  {s.store_name || s.store_id} ({s.store_id})
-                </option>
-              ))}
-            </select>
-            <button className="btn" type="button" onClick={onCopyOptions} disabled={copying || loading || !copySourceStoreId}>
               {copying ? "복사 중..." : "다른 매장 옵션 복사"}
             </button>
           </div>

@@ -261,9 +261,9 @@ function CategoriesPageInner() {
         .copyRow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:nowrap}
         .copySelect{flex:1;min-width:0}
         .copyBtn{flex:0 0 auto;white-space:nowrap}
-        .btn{border:1px solid #d1d5db;background:#fff;color:#111827;-webkit-text-fill-color:currentColor;padding:10px 12px;border-radius:10px;font-weight:900;cursor:pointer}
+        .btn{border:1px solid #d1d5db;background:#fff;color:#111827;-webkit-text-fill-color:currentColor;padding:10px 12px;border-radius:10px;font-weight:900;font-size:14px;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer}
         .btnPrimary{background:#111827;color:#fff;border-color:#111827}
-        .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px}
+        .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
       `}</style>
