@@ -30,6 +30,10 @@ type MenuSummary = {
   name: string;
   option_group_ids?: string[] | null;
 };
+type MyStore = {
+  store_id: string;
+  store_name: string | null;
+};
 
 function uid(prefix = "opt") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
@@ -65,6 +69,9 @@ function AdminOptionsPageInner() {
   });
   const [showCreateItemForm, setShowCreateItemForm] = useState(false);
   const [newItemDraft, setNewItemDraft] = useState({ name: "", price: "" });
+  const [myStores, setMyStores] = useState<MyStore[]>([]);
+  const [copySourceStoreId, setCopySourceStoreId] = useState("");
+  const [copying, setCopying] = useState(false);
 
   // 1) storeId 로드
   useEffect(() => {
@@ -164,6 +171,47 @@ function AdminOptionsPageInner() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !authData?.user) return;
+      const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
+      if (memRes.error) return;
+      const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
+      if (!ids.length) return;
+      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", ids).order("store_name");
+      if (storeRes.error || !mounted) return;
+      const list = ((storeRes.data || []) as MyStore[]).filter((s) => s.store_id !== storeId);
+      setMyStores(list);
+      if (!copySourceStoreId && list.length > 0) setCopySourceStoreId(list[0].store_id);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [storeId, copySourceStoreId]);
+
+  const onCopyOptions = async () => {
+    if (!storeId) return alert("대상 매장을 먼저 선택해주세요.");
+    if (!copySourceStoreId) return alert("원본 매장을 선택해주세요.");
+    if (!confirm("선택한 매장의 옵션 그룹/항목을 현재 매장으로 복사할까요?")) return;
+    try {
+      setCopying(true);
+      const { error } = await supabase.rpc("admin_copy_options_v1", {
+        p_source_store_id: copySourceStoreId,
+        p_target_store_id: storeId,
+      });
+      if (error) throw error;
+      await refresh();
+      alert("옵션 복사가 완료되었습니다.");
+    } catch (e: any) {
+      alert(`옵션 복사 실패: ${String(e?.message || e)}`);
+    } finally {
+      setCopying(false);
+    }
+  };
 
   const selectedGroup = useMemo(
     () => groups.find((g) => g.id === selectedGroupId) || null,
@@ -756,6 +804,19 @@ function AdminOptionsPageInner() {
             <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
               메뉴관리
             </a>
+          </div>
+          <div className="headerActionRow" style={{ marginTop: 8 }}>
+            <select className="input" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)} style={{ minWidth: 220 }}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn" type="button" onClick={onCopyOptions} disabled={copying || loading || !copySourceStoreId}>
+              {copying ? "복사 중..." : "다른 매장 옵션 복사"}
+            </button>
           </div>
           <div className="scopeRow">
             {[
