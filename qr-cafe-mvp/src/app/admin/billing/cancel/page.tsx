@@ -101,6 +101,14 @@ function BillingCancelPageInner() {
 
   const selected = rows.find((r) => r.id === selectedId) || null;
   const selectedCheck = selected ? canCancel(selected) : { ok: false, reason: "취소할 결제건을 선택해 주세요." };
+  const fmtPaymentStatus = (status: string) => {
+    const s = String(status || "").toLowerCase();
+    if (s === "paid") return "지불";
+    if (s === "canceled" || s === "cancelled") return "해지";
+    if (s === "refunded") return "환불";
+    if (s === "failed") return "실패";
+    return status || "-";
+  };
 
   const onSubmitCancel = async () => {
     if (!selected) {
@@ -207,7 +215,7 @@ function BillingCancelPageInner() {
                         {row.base_paid ? "기본" : ""}{row.base_paid && row.addon_paid ? " + " : ""}{row.addon_paid ? "옵션" : ""}
                         <div className="muted">{Number(row.amount_krw || 0).toLocaleString()}원 / {row.plan_months || "-"}개월</div>
                       </td>
-                      <td className="cellNowrap">{row.status}</td>
+                      <td className="cellNowrap">{fmtPaymentStatus(row.status)}</td>
                       <td className="cellNowrap">
                         {check.ok ? <span className="ok">가능</span> : <span className="warn">불가</span>}
                       </td>
@@ -273,8 +281,8 @@ const css = `
   .tableWrap { overflow-x:auto; }
   .cellNowrap { white-space:nowrap; }
   th:nth-child(1), td:nth-child(1) { width:56px; text-align:center; }
-  th:nth-child(4), td:nth-child(4) { width:88px; }
-  th:nth-child(5), td:nth-child(5) { width:72px; text-align:center; }
+  th:nth-child(4), td:nth-child(4) { width:56px; text-align:center; }
+  th:nth-child(5), td:nth-child(5) { width:60px; text-align:center; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 12px; cursor:pointer; font-weight:700; }
   .chip.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; }
