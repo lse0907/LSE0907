@@ -18,6 +18,10 @@ type MenuItem = {
   name: string;
   category_id: string | null;
 };
+type MyStore = {
+  store_id: string;
+  store_name: string | null;
+};
 
 function uid(prefix = "cat") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
@@ -40,6 +44,9 @@ function CategoriesPageInner() {
   const [name, setName] = useState("");
   const [sortOrder, setSortOrder] = useState("");
   const [msg, setMsg] = useState("");
+  const [myStores, setMyStores] = useState<MyStore[]>([]);
+  const [copySourceStoreId, setCopySourceStoreId] = useState("");
+  const [copying, setCopying] = useState(false);
 
   const [editId, setEditId] = useState("");
   const [editName, setEditName] = useState("");
@@ -88,6 +95,52 @@ function CategoriesPageInner() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !authData?.user) return;
+      const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
+      if (memRes.error) return;
+      const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
+      if (!ids.length) {
+        if (mounted) setMyStores([]);
+        return;
+      }
+      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", ids).order("store_name");
+      if (storeRes.error) return;
+      if (!mounted) return;
+      const list = ((storeRes.data || []) as MyStore[]).filter((s) => s.store_id !== storeId);
+      setMyStores(list);
+      if (!copySourceStoreId && list.length > 0) setCopySourceStoreId(list[0].store_id);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [storeId, copySourceStoreId]);
+
+  const onCopyCategories = async () => {
+    if (!storeId) return setMsg("현재 매장을 먼저 선택해주세요.");
+    if (!copySourceStoreId) return setMsg("원본 매장을 선택해주세요.");
+    if (copySourceStoreId === storeId) return setMsg("원본/대상 매장은 동일할 수 없습니다.");
+    if (!confirm("선택한 매장의 카테고리를 현재 매장으로 복사할까요?")) return;
+    setCopying(true);
+    setMsg("");
+    const { error } = await supabase.rpc("admin_copy_categories_v1", {
+      p_source_store_id: copySourceStoreId,
+      p_target_store_id: storeId,
+    });
+    if (error) {
+      setMsg(`카테고리 복사 실패: ${error.message}`);
+      setCopying(false);
+      return;
+    }
+    await refresh();
+    setMsg("카테고리 복사가 완료되었습니다.");
+    setCopying(false);
+  };
 
   const countByCategory = useMemo(() => {
     const map = new Map<string, number>();
@@ -204,22 +257,74 @@ function CategoriesPageInner() {
         .wrap{max-width:900px;margin:0 auto;padding:14px;display:grid;gap:12px}
         .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px;display:grid;gap:10px}
         .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-        .btn{border:1px solid #d1d5db;background:#fff;color:#111827;-webkit-text-fill-color:currentColor;padding:10px 12px;border-radius:10px;font-weight:900;cursor:pointer}
+        .headerRow{justify-content:space-between}
+        .topActionRow{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:nowrap}
+        .copyRow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:nowrap}
+        .copySelect{flex:1;min-width:0}
+        .copyBtn{flex:0 0 auto;white-space:nowrap}
+        .btn{border:1px solid #d1d5db;background:#fff;color:#111827;-webkit-text-fill-color:currentColor;padding:10px 12px;border-radius:10px;font-weight:900;font-size:14px;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer}
         .btnPrimary{background:#111827;color:#fff;border-color:#111827}
-        .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px}
+        .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
+        @media (max-width: 640px) {
+          .headerRow {
+            align-items: flex-start;
+            gap: 10px;
+          }
+          .topActionRow {
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+          }
+          .topActionRow .btn {
+            flex: 0 0 auto;
+          }
+          .copyRow {
+            flex-wrap: wrap;
+          }
+          .copySelect,
+          .copyBtn {
+            width: 100%;
+            flex: 1 1 100%;
+          }
+          .copyBtn {
+            white-space: normal;
+          }
+          .createRow > .input {
+            width: 100% !important;
+            min-width: 0;
+          }
+        }
       `}</style>
 
-      <header className="row" style={{ justifyContent: "space-between" }}>
+      <header className="row headerRow">
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 950 }}>카테고리 관리</h1>
-        <div className="row">
+        <div className="topActionRow">
           <button className="btn" onClick={() => router.push(storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")}>관리자 홈 </button>
+          <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>옵션관리</a>
+          <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>메뉴관리</a>
         </div>
       </header>
 
       <section className="card">
-        <div className="row">
+        <div className="copyRow">
+          <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+            <option value="">원본 매장 선택</option>
+            {myStores.map((s) => (
+              <option key={s.store_id} value={s.store_id}>
+                {s.store_name || s.store_id} ({s.store_id})
+              </option>
+            ))}
+          </select>
+          <button className="btn copyBtn" onClick={onCopyCategories} disabled={copying || loading || !copySourceStoreId}>
+            {copying ? "복사 중..." : "다른 매장 카테고리 복사"}
+          </button>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="row createRow">
           <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
           <input className="input" inputMode="numeric" style={{ width: 120 }} placeholder="순서" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} />
           <button className="btn btnPrimary" onClick={onCreate} disabled={saving || loading || !name.trim()}>생성</button>
