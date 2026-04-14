@@ -278,8 +278,9 @@ const css = `
   tr.sel { background:#eff6ff; }
   .ok { color:var(--ok); font-weight:800; }
   .warn { color:var(--warn); font-weight:800; font-size:12px; }
-  .tableWrap { overflow-x:auto; }
+  .tableWrap { overflow:auto; max-height:52vh; min-height:240px; border:1px solid #eef2f7; border-radius:10px; }
   .cellNowrap { white-space:nowrap; }
+  thead th { position:sticky; top:0; background:#fff; z-index:1; }
   th:nth-child(1), td:nth-child(1) { width:56px; text-align:center; }
   th:nth-child(4), td:nth-child(4) { width:56px; text-align:center; }
   th:nth-child(5), td:nth-child(5) { width:60px; text-align:center; }
@@ -291,6 +292,7 @@ const css = `
   @media (max-width: 640px) {
     table { font-size:12px; }
     th, td { padding:6px; }
+    .tableWrap { max-height:48vh; min-height:220px; }
   }
 `;
 
