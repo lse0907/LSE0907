@@ -268,6 +268,14 @@ function CategoriesPageInner() {
         .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
+        .subText{margin:0;color:#6b7280;font-size:12px;font-weight:800;line-height:1.45}
+        .categoryListScroll{
+          max-height:56vh;
+          overflow-y:auto;
+          padding-right:4px;
+        }
+        .categoryListScroll::-webkit-scrollbar{width:8px}
+        .categoryListScroll::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:999px}
         @media (max-width: 640px) {
           .headerRow {
             align-items: flex-start;
@@ -290,6 +298,14 @@ function CategoriesPageInner() {
             width: 100% !important;
             min-width: 0;
           }
+          .categoryListScroll{
+            max-height:45vh;
+          }
+        }
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .categoryListScroll{
+            max-height:50vh;
+          }
         }
       `}</style>
 
@@ -301,6 +317,10 @@ function CategoriesPageInner() {
           <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>메뉴관리</a>
         </div>
       </header>
+      <p className="subText">메뉴 분류(카테고리)를 등록/수정/정렬합니다.</p>
+      <p className="subText">
+        현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
+      </p>
 
       <section className="card">
         <div className="copyRow">
@@ -331,7 +351,8 @@ function CategoriesPageInner() {
 
       <section className="card">
         {loading ? <p className="muted">불러오는 중...</p> : cats.length === 0 ? <p className="muted">등록된 카테고리가 없습니다.</p> : (
-          <div style={{ display: "grid", gap: 8 }}>
+          <div className="categoryListScroll">
+            <div style={{ display: "grid", gap: 8 }}>
             {cats.map((cat) => {
               const isEditing = editId === cat.id;
               return (
@@ -381,6 +402,7 @@ function CategoriesPageInner() {
                 </div>
               );
             })}
+            </div>
           </div>
         )}
       </section>
