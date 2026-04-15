@@ -87,7 +87,6 @@ function AdminOptionsPageInner() {
     description: "",
     action: null,
   });
-  const [itemsOpen, setItemsOpen] = useState(true);
   const [editingItemId, setEditingItemId] = useState("");
   const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
 
@@ -95,8 +94,6 @@ function AdminOptionsPageInner() {
     if (e instanceof Error) return e.message;
     return String(e ?? "알 수 없는 오류");
   };
-  const shortId = (id: string) => (id.length > 14 ? `${id.slice(0, 6)}…${id.slice(-6)}` : id);
-
   // 1) storeId 로드
   useEffect(() => {
     const queryStore = (sp.get("store") || "").trim();
@@ -608,19 +605,6 @@ function AdminOptionsPageInner() {
     });
   };
 
-  const copyGroupId = async () => {
-    if (!selectedGroup?.id) return;
-    try {
-      if (!navigator?.clipboard?.writeText) throw new Error("클립보드 권한을 확인해 주세요.");
-      await navigator.clipboard.writeText(selectedGroup.id);
-      setMsgTone("success");
-      setMsg("그룹 ID를 복사했습니다.");
-    } catch (e: unknown) {
-      setMsgTone("error");
-      setMsg(`그룹 ID 복사 실패: ${toErrMsg(e)}`);
-    }
-  };
-
   return (
     <main className="wrap">
       <style jsx global>{`
@@ -727,6 +711,9 @@ function AdminOptionsPageInner() {
           padding: 14px;
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
         }
+        .detailCard {
+          padding: 12px;
+        }
         .cardTitle {
           margin: 0;
           font-size: 16px;
@@ -795,6 +782,11 @@ function AdminOptionsPageInner() {
           display: grid;
           gap: 10px;
           margin-top: 12px;
+        }
+        .groupList {
+          max-height: clamp(320px, 58vh, 640px);
+          overflow-y: auto;
+          padding-right: 4px;
         }
         .rowBtn {
           text-align: left;
@@ -929,33 +921,35 @@ function AdminOptionsPageInner() {
           font-size: 14px;
           width: 100%;
         }
-        .row3 {
-          display: grid;
-          grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr);
-          gap: 10px;
-          align-items: end;
-        }
-        .row2 {
-          display: grid;
-          grid-template-columns: 1fr auto;
-          gap: 10px;
-          align-items: end;
-        }
         .groupTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-columns: minmax(0, 1.6fr) auto minmax(88px, 110px);
           gap: 10px;
-          align-items: start;
+          align-items: end;
         }
         .idValue {
-          font-weight: 900;
+          font-weight: 500;
           background: #f8fafc;
           border: 1px dashed var(--line);
-          border-radius: 12px;
-          padding: 10px 12px;
-          min-height: 42px;
+          border-radius: 10px;
+          padding: 7px 10px;
           display: flex;
           align-items: center;
+        }
+        .idInlineRow {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 8px;
+          align-items: center;
+          margin-top: 8px;
+        }
+        .idInlineRow .label {
+          white-space: nowrap;
+        }
+        .idFull {
+          font-size: 12px;
+          line-height: 1.35;
+          word-break: break-all;
         }
         .itemCollapsedHint {
           margin-top: 8px;
@@ -995,6 +989,10 @@ function AdminOptionsPageInner() {
           align-items: center;
           gap: 10px;
         }
+        .itemName {
+          font-size: 15px;
+          font-weight: 900;
+        }
         .itemPrice {
           color: var(--muted);
           font-weight: 900;
@@ -1004,6 +1002,25 @@ function AdminOptionsPageInner() {
         .itemActions {
           display: inline-flex;
           gap: 8px;
+        }
+        .itemActionBtn {
+          font-size: 12px;
+          font-weight: 800;
+          padding: 6px 9px;
+          border-radius: 9px;
+        }
+        .detailCard .field {
+          margin-top: 8px;
+        }
+        .detailCard .input {
+          font-size: 13px;
+          padding: 8px 10px;
+          border-radius: 10px;
+        }
+        .detailCard .btn {
+          font-size: 13px;
+          padding: 8px 10px;
+          border-radius: 10px;
         }
 
         .itemCard {
@@ -1044,14 +1061,9 @@ function AdminOptionsPageInner() {
           .grid {
             grid-template-columns: 1fr;
           }
-          .row3 {
-            grid-template-columns: 1fr;
-          }
-          .row2 {
-            grid-template-columns: 1fr;
-          }
           .groupTopRow {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr minmax(86px, 110px);
+            align-items: end;
           }
           .name {
             font-size: 14px;
@@ -1062,6 +1074,13 @@ function AdminOptionsPageInner() {
           }
           .itemLine {
             grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr);
+          }
+          .itemName {
+            font-size: 14px;
+          }
+          .itemActionBtn {
+            font-size: 11px;
+            padding: 5px 8px;
           }
           .itemSaveBtn {
             width: 100%;
@@ -1169,7 +1188,7 @@ function AdminOptionsPageInner() {
               </div>
             ) : null}
 
-            <div className="list">
+            <div className="list groupList">
               {scopedGroups.map((g) => (
                 <button
                   key={g.id}
@@ -1203,7 +1222,7 @@ function AdminOptionsPageInner() {
           </div>
 
           {/* 상세 */}
-          <div className="card">
+          <div className="card detailCard">
             <h2 className="cardTitle">옵션그룹 상세</h2>
 
             {!selectedGroup ? (
@@ -1250,9 +1269,6 @@ function AdminOptionsPageInner() {
                       필수
                     </label>
                   </div>
-                </div>
-
-                <div className="row3" style={{ alignItems: "end" }}>
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">최대 선택</div>
                     <input
@@ -1263,16 +1279,12 @@ function AdminOptionsPageInner() {
                       disabled={actionBusy || loading || isExclusiveSelected}
                     />
                   </div>
-                  <div className="field" style={{ marginTop: 0 }}>
-                    <div className="label">그룹 ID</div>
-                    <div className="row2">
-                      <div className="idValue" title={selectedGroup.id}>
-                        {shortId(selectedGroup.id)}
-                      </div>
-                      <button className="btn" type="button" onClick={copyGroupId} disabled={actionBusy || loading}>
-                        ID 복사
-                      </button>
-                    </div>
+                </div>
+
+                <div className="idInlineRow">
+                  <div className="label">그룹 ID</div>
+                  <div className="idValue idFull" title={selectedGroup.id}>
+                    {selectedGroup.id}
                   </div>
                 </div>
 
@@ -1302,32 +1314,10 @@ function AdminOptionsPageInner() {
                   </button>
                 </div>
 
-                <button className="sectionToggle" type="button" onClick={() => setItemsOpen((v) => !v)}>
-                  {itemsOpen ? `▼ 옵션 항목 관리(접기) · ${itemStatus}` : `▶ 옵션 항목 관리(펼치기) · ${itemStatus}`}
-                </button>
-                {!itemsOpen ? (
-                  <div className="itemCollapsedHint">
-                    <div className="muted">옵션 항목은 주문 화면 노출에 필요합니다. 최소 1개 이상 등록해 주세요.</div>
-                    <div className="btnRow" style={{ marginTop: 0 }}>
-                      <button className="btn btnPrimary" type="button" onClick={() => setItemsOpen(true)}>
-                        옵션 항목 펼치기
-                      </button>
-                      {!isExclusiveSelected ? (
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => {
-                            setItemsOpen(true);
-                            setShowCreateItemForm(true);
-                          }}
-                        >
-                          + 옵션 항목 바로 등록
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                {itemsOpen && !isExclusiveSelected ? (
+                <div className="itemCollapsedHint">
+                  <div className="muted">옵션 항목은 주문 화면 노출에 필요합니다. 최소 1개 이상 등록해 주세요. · {itemStatus}</div>
+                </div>
+                {!isExclusiveSelected ? (
                   <div className="btnRow" style={{ marginTop: 12 }}>
                     <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={actionBusy || loading}>
                       + 옵션 추가
@@ -1335,8 +1325,7 @@ function AdminOptionsPageInner() {
                   </div>
                 ) : null}
 
-                {itemsOpen ? (
-                  <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
                     <h3 className="sectionSubTitle">옵션 항목 ({groupItems.length})</h3>
 
                     <div className="list" style={{ marginTop: 10 }}>
@@ -1373,14 +1362,14 @@ function AdminOptionsPageInner() {
                           ) : (
                             <>
                               <div className="savedItemMeta">
-                                <div style={{ fontWeight: 950 }}>{it.name}</div>
+                                <div className="itemName">{it.name}</div>
                                 <div className="itemPrice">{Number(it.price_delta ?? 0).toLocaleString()}원</div>
                               </div>
                               <div className="itemActions">
-                                <button className="btn" onClick={() => beginEditItem(it)} disabled={actionBusy || loading}>
+                                <button className="btn itemActionBtn" onClick={() => beginEditItem(it)} disabled={actionBusy || loading}>
                                   수정
                                 </button>
-                                <button className="btn btnDanger" onClick={() => deleteItem(it.id)} disabled={actionBusy || loading}>
+                                <button className="btn btnDanger itemActionBtn" onClick={() => deleteItem(it.id)} disabled={actionBusy || loading}>
                                   삭제
                                 </button>
                               </div>
@@ -1434,7 +1423,6 @@ function AdminOptionsPageInner() {
                       ) : null}
                     </div>
                   </div>
-                ) : null}
 
                 <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
                   <div className="label">연결된 메뉴</div>
