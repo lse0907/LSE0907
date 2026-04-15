@@ -87,7 +87,6 @@ function AdminOptionsPageInner() {
     description: "",
     action: null,
   });
-  const [detailOpen, setDetailOpen] = useState(true);
   const [itemsOpen, setItemsOpen] = useState(true);
   const [editingItemId, setEditingItemId] = useState("");
   const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
@@ -96,6 +95,7 @@ function AdminOptionsPageInner() {
     if (e instanceof Error) return e.message;
     return String(e ?? "알 수 없는 오류");
   };
+  const shortId = (id: string) => (id.length > 14 ? `${id.slice(0, 6)}…${id.slice(-6)}` : id);
 
   // 1) storeId 로드
   useEffect(() => {
@@ -602,6 +602,18 @@ function AdminOptionsPageInner() {
     });
   };
 
+  const copyGroupId = async () => {
+    if (!selectedGroup?.id) return;
+    try {
+      await navigator.clipboard.writeText(selectedGroup.id);
+      setMsgTone("success");
+      setMsg("그룹 ID를 복사했습니다.");
+    } catch (e: unknown) {
+      setMsgTone("error");
+      setMsg(`그룹 ID 복사 실패: ${toErrMsg(e)}`);
+    }
+  };
+
   return (
     <main className="wrap">
       <style jsx global>{`
@@ -654,7 +666,7 @@ function AdminOptionsPageInner() {
         .sub {
           margin: 6px 0 0 0;
           color: var(--muted);
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 800;
         }
         .msgBox {
@@ -790,6 +802,37 @@ function AdminOptionsPageInner() {
         }
         .name {
           font-weight: 950;
+          font-size: 15px;
+        }
+        .rowMain {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .rowMeta {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          white-space: nowrap;
+        }
+        .statusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 900;
+          padding: 4px 8px;
+        }
+        .statusRequired {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+        .statusOptional {
+          background: #e5e7eb;
+          color: #374151;
         }
         .rowMain {
           display: flex;
@@ -824,7 +867,7 @@ function AdminOptionsPageInner() {
         .muted {
           color: var(--muted);
           font-weight: 800;
-          font-size: 12px;
+          font-size: 13px;
         }
 
         .scopeRow {
@@ -891,7 +934,7 @@ function AdminOptionsPageInner() {
           text-align: right;
         }
         .label {
-          font-size: 12px;
+          font-size: 13px;
           color: var(--muted);
           font-weight: 900;
         }
@@ -918,9 +961,28 @@ function AdminOptionsPageInner() {
         }
         .groupTopRow {
           display: grid;
-          grid-template-columns: 70% auto;
+          grid-template-columns: minmax(0, 1fr) auto;
           gap: 10px;
           align-items: start;
+        }
+        .idValue {
+          font-weight: 900;
+          background: #f8fafc;
+          border: 1px dashed var(--line);
+          border-radius: 12px;
+          padding: 10px 12px;
+          min-height: 42px;
+          display: flex;
+          align-items: center;
+        }
+        .itemCollapsedHint {
+          margin-top: 8px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #f8fafc;
+          padding: 10px 12px;
+          display: grid;
+          gap: 8px;
         }
         .maxInput {
           width: 100%;
@@ -1007,7 +1069,14 @@ function AdminOptionsPageInner() {
             grid-template-columns: 1fr;
           }
           .groupTopRow {
-            grid-template-columns: 70% auto;
+            grid-template-columns: 1fr;
+          }
+          .name {
+            font-size: 14px;
+          }
+          .muted,
+          .label {
+            font-size: 12px;
           }
           .itemLine {
             grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr);
@@ -1219,7 +1288,14 @@ function AdminOptionsPageInner() {
                   </div>
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">그룹 ID</div>
-                    <input className="input" value={selectedGroup.id} readOnly />
+                    <div className="row2">
+                      <div className="idValue" title={selectedGroup.id}>
+                        {shortId(selectedGroup.id)}
+                      </div>
+                      <button className="btn" type="button" onClick={copyGroupId} disabled={actionBusy || loading}>
+                        ID 복사
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1248,12 +1324,20 @@ function AdminOptionsPageInner() {
                     그룹 삭제
                   </button>
                 </div>
-                  </>
-                ) : null}
 
                 <button className="sectionToggle" type="button" onClick={() => setItemsOpen((v) => !v)}>
                   {itemsOpen ? "▼ 옵션 항목 관리(접기)" : "▶ 옵션 항목 관리(펼치기)"}
                 </button>
+                {!itemsOpen ? (
+                  <div className="itemCollapsedHint">
+                    <div className="muted">옵션 항목은 주문 화면 노출에 필요합니다. 최소 1개 이상 등록해 주세요.</div>
+                    <div>
+                      <button className="btn btnPrimary" type="button" onClick={() => setItemsOpen(true)}>
+                        옵션 항목 펼치기
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 {itemsOpen && !isExclusiveSelected ? (
                   <div className="btnRow" style={{ marginTop: 12 }}>
                     <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={actionBusy || loading}>
