@@ -88,8 +88,9 @@ function AdminOptionsPageInner() {
     action: null,
   });
   const [detailOpen, setDetailOpen] = useState(true);
-  const [linkedOpen, setLinkedOpen] = useState(true);
   const [itemsOpen, setItemsOpen] = useState(true);
+  const [editingItemId, setEditingItemId] = useState("");
+  const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
 
   const toErrMsg = (e: unknown) => {
     if (e instanceof Error) return e.message;
@@ -525,6 +526,52 @@ function AdminOptionsPageInner() {
     }
   };
 
+  const beginEditItem = (it: OptionItem) => {
+    setEditingItemId(it.id);
+    setEditItemDraft({
+      name: it.name || "",
+      price: String(it.price_delta ?? 0),
+    });
+  };
+
+  const cancelEditItem = () => {
+    setEditingItemId("");
+    setEditItemDraft({ name: "", price: "" });
+  };
+
+  const saveItem = async (id: string) => {
+    const nextName = editItemDraft.name.trim();
+    if (!nextName) {
+      setMsgTone("error");
+      return setMsg("옵션명을 입력하세요.");
+    }
+    try {
+      setSaving(true);
+      setBadge("idle");
+      const { error } = await supabase
+        .from("option_items")
+        .update({
+          name: nextName,
+          price_delta: toInt(editItemDraft.price, 0),
+        })
+        .eq("id", id)
+        .eq("store_id", storeId);
+      if (error) throw error;
+      await refresh();
+      cancelEditItem();
+      markSaved();
+      setMsgTone("success");
+      setMsg("옵션 항목을 수정했습니다.");
+    } catch (e: unknown) {
+      console.error("[admin/options] saveItem:", toErrMsg(e));
+      markError();
+      setMsgTone("error");
+      setMsg(`옵션 수정 실패: ${toErrMsg(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const deleteItem = async (id: string) => {
     openConfirm("옵션 삭제", "이 옵션을 삭제할까요?", async () => {
       closeConfirm();
@@ -744,6 +791,36 @@ function AdminOptionsPageInner() {
         .name {
           font-weight: 950;
         }
+        .rowMain {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .rowMeta {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          white-space: nowrap;
+        }
+        .statusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 900;
+          padding: 4px 8px;
+        }
+        .statusRequired {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+        .statusOptional {
+          background: #e5e7eb;
+          color: #374151;
+        }
         .muted {
           color: var(--muted);
           font-weight: 800;
@@ -869,8 +946,20 @@ function AdminOptionsPageInner() {
           align-items: center;
         }
         .savedItemMeta {
-          display: grid;
-          gap: 4px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+        }
+        .itemPrice {
+          color: var(--muted);
+          font-weight: 900;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        .itemActions {
+          display: inline-flex;
+          gap: 8px;
         }
 
         .itemCard {
@@ -1036,9 +1125,14 @@ function AdminOptionsPageInner() {
                   className={`rowBtn ${g.id === selectedGroupId ? "rowBtnOn" : ""}`}
                   onClick={() => setSelectedGroupId(g.id)}
                 >
-                  <div className="name">{g.name}</div>
-                  <div className="muted">
-                    {g.required ? "필수" : "선택"} · {g.min}~{g.max}개
+                  <div className="rowMain">
+                    <div className="name">{g.name}</div>
+                    <div className="rowMeta">
+                      <span className={`statusBadge ${g.required ? "statusRequired" : "statusOptional"}`}>
+                        {g.required ? "필수" : "선택"}
+                      </span>
+                      <span className="muted">{g.min}~{g.max}개</span>
+                    </div>
                   </div>
                   {activeScope === "exclusive" ? (
                     <div className="muted" style={{ marginTop: 4 }}>
@@ -1112,7 +1206,7 @@ function AdminOptionsPageInner() {
                   </div>
                 </div>
 
-                <div className="row3" style={{ alignItems: isExclusiveSelected ? "start" : "end" }}>
+                <div className="row3" style={{ alignItems: "end" }}>
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">최대 선택</div>
                     <input
@@ -1123,29 +1217,10 @@ function AdminOptionsPageInner() {
                       disabled={actionBusy || loading || isExclusiveSelected}
                     />
                   </div>
-                  {!isExclusiveSelected ? (
-                    <div className="field" style={{ marginTop: 0 }}>
-                      <div className="label">그룹 ID</div>
-                      <input className="input" value={selectedGroup.id} readOnly />
-                    </div>
-                  ) : (
-                    <div className="field linkedMenuField" style={{ marginTop: 0 }}>
-                      <div className="label">연결된 메뉴</div>
-                      {linkedMenus.length === 0 ? (
-                        <div className="muted" style={{ marginTop: 6 }}>
-                          아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
-                        </div>
-                      ) : (
-                        <div className="scopeRow">
-                          {linkedMenus.map((m) => (
-                            <span key={m.id} className="pill">
-                              {m.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div className="field" style={{ marginTop: 0 }}>
+                    <div className="label">그룹 ID</div>
+                    <input className="input" value={selectedGroup.id} readOnly />
+                  </div>
                 </div>
 
                 <div className="btnRow">
@@ -1153,7 +1228,7 @@ function AdminOptionsPageInner() {
                     <button
                       className="btn"
                       onClick={() => {
-                        const min = 0;
+                        const min = groupDraft.required ? 1 : 0;
                         const max = Math.max(toInt(groupDraft.max, selectedGroup.max), 0);
                         updateGroup({
                           name: groupDraft.name.trim() || selectedGroup.name,
@@ -1176,28 +1251,6 @@ function AdminOptionsPageInner() {
                   </>
                 ) : null}
 
-                <button className="sectionToggle" type="button" onClick={() => setLinkedOpen((v) => !v)}>
-                  {linkedOpen ? "▼ 연결 메뉴 접기" : "▶ 연결 메뉴 펼치기"}
-                </button>
-                {linkedOpen && !isExclusiveSelected ? (
-                  <div style={{ marginTop: 12 }}>
-                    <div className="label">연결된 메뉴</div>
-                    {linkedMenus.length === 0 ? (
-                      <div className="muted" style={{ marginTop: 6 }}>
-                        아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
-                      </div>
-                    ) : (
-                      <div className="scopeRow">
-                        {linkedMenus.map((m) => (
-                          <span key={m.id} className="pill">
-                            {m.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-
                 <button className="sectionToggle" type="button" onClick={() => setItemsOpen((v) => !v)}>
                   {itemsOpen ? "▼ 옵션 항목 관리(접기)" : "▶ 옵션 항목 관리(펼치기)"}
                 </button>
@@ -1218,17 +1271,50 @@ function AdminOptionsPageInner() {
                   <div className="list" style={{ marginTop: 10 }}>
                     {groupItems.map((it) => (
                       <div key={it.id} className="savedItemRow">
-                        <div className="savedItemMeta">
-                          <div style={{ fontWeight: 950 }}>{it.name}</div>
-                          <div className="muted">단가: {Number(it.price_delta ?? 0).toLocaleString()}원</div>
-                        </div>
-                        <button
-                          className="btn btnDanger"
-                          onClick={() => deleteItem(it.id)}
-                          disabled={actionBusy || loading}
-                        >
-                          삭제
-                        </button>
+                        {editingItemId === it.id ? (
+                          <>
+                            <div className="itemLine" style={{ gridColumn: "1 / -1" }}>
+                              <input
+                                className="input"
+                                value={editItemDraft.name}
+                                onChange={(e) => setEditItemDraft((p) => ({ ...p, name: e.target.value }))}
+                                placeholder="옵션 항목명"
+                                disabled={actionBusy || loading}
+                              />
+                              <input
+                                className="input"
+                                inputMode="numeric"
+                                value={editItemDraft.price}
+                                onChange={(e) => setEditItemDraft((p) => ({ ...p, price: e.target.value }))}
+                                placeholder="단가 입력"
+                                disabled={actionBusy || loading}
+                              />
+                            </div>
+                            <div className="itemActions" style={{ gridColumn: "1 / -1", justifyContent: "flex-end" }}>
+                              <button className="btn" onClick={() => saveItem(it.id)} disabled={actionBusy || loading}>
+                                저장
+                              </button>
+                              <button className="btn" onClick={cancelEditItem} disabled={actionBusy || loading}>
+                                취소
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="savedItemMeta">
+                              <div style={{ fontWeight: 950 }}>{it.name}</div>
+                              <div className="itemPrice">{Number(it.price_delta ?? 0).toLocaleString()}원</div>
+                            </div>
+                            <div className="itemActions">
+                              <button className="btn" onClick={() => beginEditItem(it)} disabled={actionBusy || loading}>
+                                수정
+                              </button>
+                              <button className="btn btnDanger" onClick={() => deleteItem(it.id)} disabled={actionBusy || loading}>
+                                삭제
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
 
@@ -1261,12 +1347,40 @@ function AdminOptionsPageInner() {
                           <button className="btn itemSaveBtn" onClick={addItem} disabled={actionBusy || loading}>
                             항목 저장
                           </button>
+                          <button
+                            className="btn itemSaveBtn"
+                            type="button"
+                            onClick={() => {
+                              setShowCreateItemForm(false);
+                              setNewItemDraft({ name: "", price: "" });
+                            }}
+                            disabled={actionBusy || loading}
+                          >
+                            취소
+                          </button>
                         </div>
                       </div>
                     ) : null}
                   </div>
                 </div>
                 ) : null}
+
+                <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                  <div className="label">연결된 메뉴</div>
+                  {linkedMenus.length === 0 ? (
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
+                    </div>
+                  ) : (
+                    <div className="scopeRow">
+                      {linkedMenus.map((m) => (
+                        <span key={m.id} className="pill">
+                          {m.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
