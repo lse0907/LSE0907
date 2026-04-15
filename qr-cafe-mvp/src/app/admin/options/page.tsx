@@ -30,6 +30,16 @@ type MenuSummary = {
   name: string;
   option_group_ids?: string[] | null;
 };
+type MyStore = {
+  store_id: string;
+  store_name: string | null;
+};
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  description: string;
+  action: null | (() => void);
+};
 
 function uid(prefix = "opt") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
@@ -65,6 +75,27 @@ function AdminOptionsPageInner() {
   });
   const [showCreateItemForm, setShowCreateItemForm] = useState(false);
   const [newItemDraft, setNewItemDraft] = useState({ name: "", price: "" });
+  const [myStores, setMyStores] = useState<MyStore[]>([]);
+  const [copySourceStoreId, setCopySourceStoreId] = useState("");
+  const [copying, setCopying] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [msgTone, setMsgTone] = useState<"neutral" | "success" | "error">("neutral");
+  const actionBusy = saving || copying;
+  const [confirmState, setConfirmState] = useState<ConfirmState>({
+    open: false,
+    title: "",
+    description: "",
+    action: null,
+  });
+  const [detailOpen, setDetailOpen] = useState(true);
+  const [itemsOpen, setItemsOpen] = useState(true);
+  const [editingItemId, setEditingItemId] = useState("");
+  const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
+
+  const toErrMsg = (e: unknown) => {
+    if (e instanceof Error) return e.message;
+    return String(e ?? "알 수 없는 오류");
+  };
 
   // 1) storeId 로드
   useEffect(() => {
@@ -84,6 +115,8 @@ function AdminOptionsPageInner() {
     if (!storeId) return;
 
     setLoading(true);
+    setMsg("");
+    setMsgTone("neutral");
     try {
       // 로그인 체크(원인 파악 쉬움)
       const { data: authData, error: authErr } = await supabase.auth.getUser();
@@ -151,10 +184,12 @@ function AdminOptionsPageInner() {
         if (prev && nextGroups.some((x) => x.id === prev)) return prev;
         return nextGroups[0]?.id || "";
       });
-    } catch (e: any) {
-      console.error("[admin/options] refresh error:", e?.message || e);
+    } catch (e: unknown) {
+      console.error("[admin/options] refresh error:", toErrMsg(e));
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setMsgTone("error");
+      setMsg(`옵션 데이터 로드 실패: ${toErrMsg(e)}`);
     } finally {
       setLoading(false);
     }
@@ -164,6 +199,67 @@ function AdminOptionsPageInner() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !authData?.user) return;
+      const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
+      if (memRes.error) return;
+      const ids = (memRes.data || [])
+        .map((x: { store_id?: string | null }) => String(x.store_id || ""))
+        .filter(Boolean);
+      if (!ids.length) return;
+      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", ids).order("store_name");
+      if (storeRes.error || !mounted) return;
+      const list = ((storeRes.data || []) as MyStore[]).filter((s) => s.store_id !== storeId);
+      setMyStores(list);
+      if (!copySourceStoreId && list.length > 0) setCopySourceStoreId(list[0].store_id);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [storeId, copySourceStoreId]);
+
+  const onCopyOptions = async () => {
+    if (actionBusy) return;
+    if (!storeId) {
+      setMsgTone("error");
+      return setMsg("대상 매장을 먼저 선택해주세요.");
+    }
+    if (!copySourceStoreId) {
+      setMsgTone("error");
+      return setMsg("원본 매장을 선택해주세요.");
+    }
+    openConfirm(
+      "옵션 복사 확인",
+      `원본 매장(${copySourceStoreId})의 옵션 그룹/항목을 현재 매장(${storeId})으로 복사할까요?`,
+      async () => {
+        closeConfirm();
+        try {
+          setCopying(true);
+          setMsg("");
+          setMsgTone("neutral");
+          const { error } = await supabase.rpc("admin_copy_options_v1", {
+            p_source_store_id: copySourceStoreId,
+            p_target_store_id: storeId,
+          });
+          if (error) throw error;
+          await refresh();
+          setMsgTone("success");
+          setMsg("옵션 복사가 완료되었습니다.");
+        } catch (e: unknown) {
+          setMsgTone("error");
+          setMsg(`옵션 복사 실패: ${toErrMsg(e)}`);
+        } finally {
+          setCopying(false);
+        }
+      }
+    );
+    return;
+  };
 
   const selectedGroup = useMemo(
     () => groups.find((g) => g.id === selectedGroupId) || null,
@@ -231,17 +327,28 @@ function AdminOptionsPageInner() {
     setBadge("error");
     setTimeout(() => setBadge("idle"), 1600);
   };
+  const openConfirm = (title: string, description: string, action: () => void) => {
+    setConfirmState({ open: true, title, description, action });
+  };
+  const closeConfirm = () => {
+    setConfirmState({ open: false, title: "", description: "", action: null });
+  };
 
   // ===== 그룹 CRUD =====
   const addGroup = async () => {
-    if (!storeId) return alert("선택된 매장이 없습니다. 매장을 먼저 선택/생성하세요.");
+    if (!storeId) {
+      setMsgTone("error");
+      return setMsg("선택된 매장이 없습니다. 매장을 먼저 선택/생성하세요.");
+    }
     if (activeScope === "exclusive") {
       markError();
-      return alert("전용옵션 그룹 등록은 메뉴관리에서만 가능합니다.");
+      setMsgTone("error");
+      return setMsg("전용옵션 그룹 등록은 메뉴관리에서만 가능합니다.");
     }
     if (!hasLinkedMenuColumn) {
       markError();
-      return alert("DB에 linked_menu_id 컬럼이 없어 전용옵션 그룹을 만들 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+      setMsgTone("error");
+      return setMsg("DB에 linked_menu_id 컬럼이 없어 전용옵션 그룹을 만들 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.");
     }
     try {
       setSaving(true);
@@ -265,10 +372,13 @@ function AdminOptionsPageInner() {
       await refresh();
       setSelectedGroupId(id);
       markSaved();
-    } catch (e: any) {
-      console.error("[admin/options] addGroup:", e?.message || e);
+      setMsgTone("success");
+      setMsg("옵션 그룹을 생성했습니다.");
+    } catch (e: unknown) {
+      console.error("[admin/options] addGroup:", toErrMsg(e));
       markError();
-      alert(`그룹 생성 실패: ${String(e?.message || e)}`);
+      setMsgTone("error");
+      setMsg(`그룹 생성 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -278,12 +388,14 @@ function AdminOptionsPageInner() {
     if (!selectedGroup) return;
     if (isExclusiveSelected) {
       markError();
-      return alert("전용옵션 그룹은 옵션관리에서 수정할 수 없습니다. 메뉴관리에서 수정하거나 여기서는 삭제만 해주세요.");
+      setMsgTone("error");
+      return setMsg("전용옵션 그룹은 옵션관리에서 수정할 수 없습니다. 메뉴관리에서 수정하거나 여기서는 삭제만 해주세요.");
     }
     const nextScope = patch.scope ?? selectedGroup.scope ?? "common";
     if (!hasLinkedMenuColumn && (nextScope === "exclusive" || patch.linked_menu_id != null)) {
       markError();
-      return alert("DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가능합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+      setMsgTone("error");
+      return setMsg("DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가능합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
     }
     try {
       setSaving(true);
@@ -309,10 +421,13 @@ function AdminOptionsPageInner() {
 
       await refresh();
       markSaved();
-    } catch (e: any) {
-      console.error("[admin/options] updateGroup:", e?.message || e);
+      setMsgTone("success");
+      setMsg("옵션 그룹을 저장했습니다.");
+    } catch (e: unknown) {
+      console.error("[admin/options] updateGroup:", toErrMsg(e));
       markError();
-      alert(`그룹 저장 실패: ${String(e?.message || e)}`);
+      setMsgTone("error");
+      setMsg(`그룹 저장 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -320,50 +435,66 @@ function AdminOptionsPageInner() {
 
   const deleteGroup = async () => {
     if (!selectedGroup) return;
-    if (!confirm("이 옵션그룹을 삭제할까요? (그룹의 옵션아이템도 함께 삭제됩니다)")) return;
+    openConfirm(
+      "옵션 그룹 삭제",
+      "이 옵션그룹을 삭제할까요? (그룹의 옵션아이템도 함께 삭제됩니다)",
+      async () => {
+        closeConfirm();
+        try {
+          setSaving(true);
+          setBadge("idle");
 
-    try {
-      setSaving(true);
-      setBadge("idle");
+          // 아이템 먼저 삭제
+          const delItems = await supabase
+            .from("option_items")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("group_id", selectedGroup.id);
 
-      // 아이템 먼저 삭제
-      const delItems = await supabase
-        .from("option_items")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("group_id", selectedGroup.id);
+          if (delItems.error) throw delItems.error;
 
-      if (delItems.error) throw delItems.error;
+          // 그룹 삭제
+          const delGroup = await supabase
+            .from("option_groups")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("id", selectedGroup.id);
 
-      // 그룹 삭제
-      const delGroup = await supabase
-        .from("option_groups")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("id", selectedGroup.id);
+          if (delGroup.error) throw delGroup.error;
 
-      if (delGroup.error) throw delGroup.error;
-
-      await refresh();
-      markSaved();
-    } catch (e: any) {
-      console.error("[admin/options] deleteGroup:", e?.message || e);
-      markError();
-      alert(`그룹 삭제 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
+          await refresh();
+          markSaved();
+          setMsgTone("success");
+          setMsg("옵션 그룹을 삭제했습니다.");
+        } catch (e: unknown) {
+          console.error("[admin/options] deleteGroup:", toErrMsg(e));
+          markError();
+          setMsgTone("error");
+          setMsg(`그룹 삭제 실패: ${toErrMsg(e)}`);
+        } finally {
+          setSaving(false);
+        }
+      }
+    );
+    return;
   };
 
   // ===== 아이템 CRUD =====
   const addItem = async () => {
-    if (!selectedGroup) return alert("그룹을 먼저 선택하세요.");
+    if (!selectedGroup) {
+      setMsgTone("error");
+      return setMsg("그룹을 먼저 선택하세요.");
+    }
     if (isExclusiveSelected) {
       markError();
-      return alert("전용옵션 항목 등록은 메뉴관리에서만 가능합니다.");
+      setMsgTone("error");
+      return setMsg("전용옵션 항목 등록은 메뉴관리에서만 가능합니다.");
     }
     const nextName = newItemDraft.name.trim();
-    if (!nextName) return alert("옵션명을 입력하세요.");
+    if (!nextName) {
+      setMsgTone("error");
+      return setMsg("옵션명을 입력하세요.");
+    }
     try {
       setSaving(true);
       setBadge("idle");
@@ -383,38 +514,92 @@ function AdminOptionsPageInner() {
       setShowCreateItemForm(false);
       setNewItemDraft({ name: "", price: "" });
       markSaved();
-    } catch (e: any) {
-      console.error("[admin/options] addItem:", e?.message || e);
+      setMsgTone("success");
+      setMsg("옵션 항목을 추가했습니다.");
+    } catch (e: unknown) {
+      console.error("[admin/options] addItem:", toErrMsg(e));
       markError();
-      alert(`옵션 추가 실패: ${String(e?.message || e)}`);
+      setMsgTone("error");
+      setMsg(`옵션 추가 실패: ${toErrMsg(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const beginEditItem = (it: OptionItem) => {
+    setEditingItemId(it.id);
+    setEditItemDraft({
+      name: it.name || "",
+      price: String(it.price_delta ?? 0),
+    });
+  };
+
+  const cancelEditItem = () => {
+    setEditingItemId("");
+    setEditItemDraft({ name: "", price: "" });
+  };
+
+  const saveItem = async (id: string) => {
+    const nextName = editItemDraft.name.trim();
+    if (!nextName) {
+      setMsgTone("error");
+      return setMsg("옵션명을 입력하세요.");
+    }
+    try {
+      setSaving(true);
+      setBadge("idle");
+      const { error } = await supabase
+        .from("option_items")
+        .update({
+          name: nextName,
+          price_delta: toInt(editItemDraft.price, 0),
+        })
+        .eq("id", id)
+        .eq("store_id", storeId);
+      if (error) throw error;
+      await refresh();
+      cancelEditItem();
+      markSaved();
+      setMsgTone("success");
+      setMsg("옵션 항목을 수정했습니다.");
+    } catch (e: unknown) {
+      console.error("[admin/options] saveItem:", toErrMsg(e));
+      markError();
+      setMsgTone("error");
+      setMsg(`옵션 수정 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
   };
 
   const deleteItem = async (id: string) => {
-    if (!confirm("이 옵션을 삭제할까요?")) return;
-    try {
-      setSaving(true);
-      setBadge("idle");
+    openConfirm("옵션 삭제", "이 옵션을 삭제할까요?", async () => {
+      closeConfirm();
+      try {
+        setSaving(true);
+        setBadge("idle");
 
-      const { error } = await supabase
-        .from("option_items")
-        .delete()
-        .eq("id", id)
-        .eq("store_id", storeId);
+        const { error } = await supabase
+          .from("option_items")
+          .delete()
+          .eq("id", id)
+          .eq("store_id", storeId);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      await refresh();
-      markSaved();
-    } catch (e: any) {
-      console.error("[admin/options] deleteItem:", e?.message || e);
-      markError();
-      alert(`옵션 삭제 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
+        await refresh();
+        markSaved();
+        setMsgTone("success");
+        setMsg("옵션 항목을 삭제했습니다.");
+      } catch (e: unknown) {
+        console.error("[admin/options] deleteItem:", toErrMsg(e));
+        markError();
+        setMsgTone("error");
+        setMsg(`옵션 삭제 실패: ${toErrMsg(e)}`);
+      } finally {
+        setSaving(false);
+      }
+    });
   };
 
   return (
@@ -471,6 +656,25 @@ function AdminOptionsPageInner() {
           color: var(--muted);
           font-size: 12px;
           font-weight: 800;
+        }
+        .msgBox {
+          border-radius: 12px;
+          padding: 10px 12px;
+          margin-top: 8px;
+          font-weight: 900;
+          border: 1px solid #e5e7eb;
+          background: #f8fafc;
+          color: #374151;
+        }
+        .msgBoxSuccess {
+          border-color: #bbf7d0;
+          background: #f0fdf4;
+          color: #166534;
+        }
+        .msgBoxError {
+          border-color: #fecaca;
+          background: #fef2f2;
+          color: #991b1b;
         }
         .badge {
           padding: 8px 10px;
@@ -534,12 +738,24 @@ function AdminOptionsPageInner() {
           display: flex;
           gap: 8px;
           margin-top: 0;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           justify-content: flex-end;
         }
-        /* 중복으로 내려오는 보조 액션 행이 있으면 숨기고 타이틀 옆 액션만 유지 */
-        .sub + .sub + .headerActionRow {
-          display: none;
+        .copyRow {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: nowrap;
+          margin-top: 8px;
+        }
+        .copySelect {
+          flex: 1;
+          min-width: 0;
+        }
+        .copyBtn {
+          flex: 0 0 auto;
+          white-space: nowrap;
         }
         .btnPrimary {
           background: var(--brand);
@@ -574,6 +790,36 @@ function AdminOptionsPageInner() {
         }
         .name {
           font-weight: 950;
+        }
+        .rowMain {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .rowMeta {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          white-space: nowrap;
+        }
+        .statusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 900;
+          padding: 4px 8px;
+        }
+        .statusRequired {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+        .statusOptional {
+          background: #e5e7eb;
+          color: #374151;
         }
         .muted {
           color: var(--muted);
@@ -620,6 +866,17 @@ function AdminOptionsPageInner() {
           gap: 6px;
           margin-top: 10px;
         }
+        .sectionToggle {
+          width: 100%;
+          text-align: left;
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-weight: 950;
+          cursor: pointer;
+          margin-top: 10px;
+        }
         .linkedMenuField {
           justify-items: end;
         }
@@ -644,6 +901,7 @@ function AdminOptionsPageInner() {
           border: 1px solid var(--line);
           background: #fff;
           font-weight: 800;
+          font-size: 14px;
           width: 100%;
         }
         .row3 {
@@ -688,8 +946,20 @@ function AdminOptionsPageInner() {
           align-items: center;
         }
         .savedItemMeta {
-          display: grid;
-          gap: 4px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+        }
+        .itemPrice {
+          color: var(--muted);
+          font-weight: 900;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        .itemActions {
+          display: inline-flex;
+          gap: 8px;
         }
 
         .itemCard {
@@ -705,6 +975,25 @@ function AdminOptionsPageInner() {
           justify-content: space-between;
           gap: 10px;
           align-items: center;
+        }
+        .modalOverlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.45);
+          display: grid;
+          place-items: center;
+          padding: 16px;
+          z-index: 90;
+        }
+        .modalCard {
+          width: min(460px, 100%);
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 14px;
+          display: grid;
+          gap: 10px;
+          box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
         }
 
         @media (max-width: 980px) {
@@ -738,6 +1027,9 @@ function AdminOptionsPageInner() {
               <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
                 관리자 홈
               </a>
+              <a className="btn" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                카테고리관리
+              </a>
               <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
                 메뉴관리
               </a>
@@ -749,18 +1041,28 @@ function AdminOptionsPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
-          <div className="headerActionRow">
-            <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-              관리자 홈
-            </a>
-            <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-              메뉴관리
-            </a>
+          {msg ? (
+            <div className={`msgBox ${msgTone === "success" ? "msgBoxSuccess" : msgTone === "error" ? "msgBoxError" : ""}`}>
+              {msg}
+            </div>
+          ) : null}
+          <div className="copyRow">
+            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn copyBtn" type="button" onClick={onCopyOptions} disabled={actionBusy || loading || !copySourceStoreId}>
+              {copying ? "복사 중..." : "다른 매장 옵션 복사"}
+            </button>
           </div>
           <div className="scopeRow">
             {[
               { key: "common", label: "공통옵션" },
-              { key: "exclusive", label: "전용옵션" },
+              { key: "exclusive", label: "전용옵션(조회)" },
             ].map((scope) => (
               <button
                 key={scope.key}
@@ -797,12 +1099,20 @@ function AdminOptionsPageInner() {
               {activeScope === "common" ? "공통옵션 그룹" : "전용옵션 그룹"} ({scopedGroups.length})
             </h2>
 
+            {activeScope === "exclusive" ? (
+              <div className="btnRow" style={{ marginTop: 8 }}>
+                <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
+                  메뉴관리로 이동
+                </a>
+              </div>
+            ) : null}
+
             {activeScope === "common" ? (
               <div className="btnRow">
-                <button className="btn btnPrimary" onClick={addGroup} disabled={saving || loading}>
+                <button className="btn btnPrimary" onClick={addGroup} disabled={actionBusy || loading}>
                   + 새 그룹
                 </button>
-                <button className="btn" onClick={refresh} disabled={saving || loading}>
+                <button className="btn" onClick={refresh} disabled={actionBusy || loading}>
                   새로고침
                 </button>
               </div>
@@ -815,9 +1125,14 @@ function AdminOptionsPageInner() {
                   className={`rowBtn ${g.id === selectedGroupId ? "rowBtnOn" : ""}`}
                   onClick={() => setSelectedGroupId(g.id)}
                 >
-                  <div className="name">{g.name}</div>
-                  <div className="muted">
-                    {g.required ? "필수" : "선택"} · {g.min}~{g.max}개
+                  <div className="rowMain">
+                    <div className="name">{g.name}</div>
+                    <div className="rowMeta">
+                      <span className={`statusBadge ${g.required ? "statusRequired" : "statusOptional"}`}>
+                        {g.required ? "필수" : "선택"}
+                      </span>
+                      <span className="muted">{g.min}~{g.max}개</span>
+                    </div>
                   </div>
                   {activeScope === "exclusive" ? (
                     <div className="muted" style={{ marginTop: 4 }}>
@@ -859,6 +1174,11 @@ function AdminOptionsPageInner() {
                   </div>
                 </div>
 
+                <button className="sectionToggle" type="button" onClick={() => setDetailOpen((v) => !v)}>
+                  {detailOpen ? "▼ 그룹 정보 관리(접기)" : "▶ 그룹 정보 관리(펼치기)"}
+                </button>
+                {detailOpen ? (
+                  <>
                 <div className="groupTopRow">
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">그룹명</div>
@@ -866,7 +1186,7 @@ function AdminOptionsPageInner() {
                       className="input"
                       value={groupDraft.name}
                       onChange={(e) => setGroupDraft((prev) => ({ ...prev, name: e.target.value }))}
-                      disabled={saving || loading || isExclusiveSelected}
+                      disabled={actionBusy || loading || isExclusiveSelected}
                     />
                   </div>
 
@@ -879,14 +1199,14 @@ function AdminOptionsPageInner() {
                         onChange={(e) =>
                           setGroupDraft((prev) => ({ ...prev, required: e.target.checked, min: e.target.checked ? "1" : "0" }))
                         }
-                        disabled={saving || loading || isExclusiveSelected}
+                        disabled={actionBusy || loading || isExclusiveSelected}
                       />
                       필수
                     </label>
                   </div>
                 </div>
 
-                <div className="row3" style={{ alignItems: isExclusiveSelected ? "start" : "end" }}>
+                <div className="row3" style={{ alignItems: "end" }}>
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">최대 선택</div>
                     <input
@@ -894,32 +1214,13 @@ function AdminOptionsPageInner() {
                       inputMode="numeric"
                       value={groupDraft.max}
                       onChange={(e) => setGroupDraft((prev) => ({ ...prev, max: e.target.value }))}
-                      disabled={saving || loading || isExclusiveSelected}
+                      disabled={actionBusy || loading || isExclusiveSelected}
                     />
                   </div>
-                  {!isExclusiveSelected ? (
-                    <div className="field" style={{ marginTop: 0 }}>
-                      <div className="label">그룹 ID</div>
-                      <input className="input" value={selectedGroup.id} readOnly />
-                    </div>
-                  ) : (
-                    <div className="field linkedMenuField" style={{ marginTop: 0 }}>
-                      <div className="label">연결된 메뉴</div>
-                      {linkedMenus.length === 0 ? (
-                        <div className="muted" style={{ marginTop: 6 }}>
-                          아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
-                        </div>
-                      ) : (
-                        <div className="scopeRow">
-                          {linkedMenus.map((m) => (
-                            <span key={m.id} className="pill">
-                              {m.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div className="field" style={{ marginTop: 0 }}>
+                    <div className="label">그룹 ID</div>
+                    <input className="input" value={selectedGroup.id} readOnly />
+                  </div>
                 </div>
 
                 <div className="btnRow">
@@ -927,7 +1228,7 @@ function AdminOptionsPageInner() {
                     <button
                       className="btn"
                       onClick={() => {
-                        const min = 0;
+                        const min = groupDraft.required ? 1 : 0;
                         const max = Math.max(toInt(groupDraft.max, selectedGroup.max), 0);
                         updateGroup({
                           name: groupDraft.name.trim() || selectedGroup.name,
@@ -938,43 +1239,30 @@ function AdminOptionsPageInner() {
                           linked_menu_id: groupDraft.scope === "exclusive" ? groupDraft.linkedMenuId || null : null,
                         });
                       }}
-                      disabled={saving || loading || !groupDraft.name.trim()}
+                      disabled={actionBusy || loading || !groupDraft.name.trim()}
                     >
                       그룹 저장
                     </button>
                   ) : null}
-                  <button className="btn btnDanger" onClick={deleteGroup} disabled={saving || loading}>
+                  <button className="btn btnDanger" onClick={deleteGroup} disabled={actionBusy || loading}>
                     그룹 삭제
                   </button>
                 </div>
-
-                {!isExclusiveSelected ? (
-                  <div style={{ marginTop: 12 }}>
-                    <div className="label">연결된 메뉴</div>
-                    {linkedMenus.length === 0 ? (
-                      <div className="muted" style={{ marginTop: 6 }}>
-                        아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
-                      </div>
-                    ) : (
-                      <div className="scopeRow">
-                        {linkedMenus.map((m) => (
-                          <span key={m.id} className="pill">
-                            {m.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  </>
                 ) : null}
 
-                {!isExclusiveSelected ? (
+                <button className="sectionToggle" type="button" onClick={() => setItemsOpen((v) => !v)}>
+                  {itemsOpen ? "▼ 옵션 항목 관리(접기)" : "▶ 옵션 항목 관리(펼치기)"}
+                </button>
+                {itemsOpen && !isExclusiveSelected ? (
                   <div className="btnRow" style={{ marginTop: 12 }}>
-                    <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={saving || loading}>
+                    <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={actionBusy || loading}>
                       + 옵션 추가
                     </button>
                   </div>
                 ) : null}
 
+                {itemsOpen ? (
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 950 }}>
                     옵션 항목 ({groupItems.length})
@@ -983,17 +1271,50 @@ function AdminOptionsPageInner() {
                   <div className="list" style={{ marginTop: 10 }}>
                     {groupItems.map((it) => (
                       <div key={it.id} className="savedItemRow">
-                        <div className="savedItemMeta">
-                          <div style={{ fontWeight: 950 }}>{it.name}</div>
-                          <div className="muted">단가: {Number(it.price_delta ?? 0).toLocaleString()}원</div>
-                        </div>
-                        <button
-                          className="btn btnDanger"
-                          onClick={() => deleteItem(it.id)}
-                          disabled={saving || loading}
-                        >
-                          삭제
-                        </button>
+                        {editingItemId === it.id ? (
+                          <>
+                            <div className="itemLine" style={{ gridColumn: "1 / -1" }}>
+                              <input
+                                className="input"
+                                value={editItemDraft.name}
+                                onChange={(e) => setEditItemDraft((p) => ({ ...p, name: e.target.value }))}
+                                placeholder="옵션 항목명"
+                                disabled={actionBusy || loading}
+                              />
+                              <input
+                                className="input"
+                                inputMode="numeric"
+                                value={editItemDraft.price}
+                                onChange={(e) => setEditItemDraft((p) => ({ ...p, price: e.target.value }))}
+                                placeholder="단가 입력"
+                                disabled={actionBusy || loading}
+                              />
+                            </div>
+                            <div className="itemActions" style={{ gridColumn: "1 / -1", justifyContent: "flex-end" }}>
+                              <button className="btn" onClick={() => saveItem(it.id)} disabled={actionBusy || loading}>
+                                저장
+                              </button>
+                              <button className="btn" onClick={cancelEditItem} disabled={actionBusy || loading}>
+                                취소
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="savedItemMeta">
+                              <div style={{ fontWeight: 950 }}>{it.name}</div>
+                              <div className="itemPrice">{Number(it.price_delta ?? 0).toLocaleString()}원</div>
+                            </div>
+                            <div className="itemActions">
+                              <button className="btn" onClick={() => beginEditItem(it)} disabled={actionBusy || loading}>
+                                수정
+                              </button>
+                              <button className="btn btnDanger" onClick={() => deleteItem(it.id)} disabled={actionBusy || loading}>
+                                삭제
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
 
@@ -1013,7 +1334,7 @@ function AdminOptionsPageInner() {
                             value={newItemDraft.name}
                             onChange={(e) => setNewItemDraft((p) => ({ ...p, name: e.target.value }))}
                             placeholder="옵션 항목명"
-                            disabled={saving || loading}
+                            disabled={actionBusy || loading}
                           />
                           <input
                             className="input"
@@ -1021,21 +1342,69 @@ function AdminOptionsPageInner() {
                             value={newItemDraft.price}
                             onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
                             placeholder="단가 입력"
-                            disabled={saving || loading}
+                            disabled={actionBusy || loading}
                           />
-                          <button className="btn itemSaveBtn" onClick={addItem} disabled={saving || loading}>
+                          <button className="btn itemSaveBtn" onClick={addItem} disabled={actionBusy || loading}>
                             항목 저장
+                          </button>
+                          <button
+                            className="btn itemSaveBtn"
+                            type="button"
+                            onClick={() => {
+                              setShowCreateItemForm(false);
+                              setNewItemDraft({ name: "", price: "" });
+                            }}
+                            disabled={actionBusy || loading}
+                          >
+                            취소
                           </button>
                         </div>
                       </div>
                     ) : null}
                   </div>
                 </div>
+                ) : null}
+
+                <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                  <div className="label">연결된 메뉴</div>
+                  {linkedMenus.length === 0 ? (
+                    <div className="muted" style={{ marginTop: 6 }}>
+                      아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
+                    </div>
+                  ) : (
+                    <div className="scopeRow">
+                      {linkedMenus.map((m) => (
+                        <span key={m.id} className="pill">
+                          {m.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
         </section>
       )}
+
+      {confirmState.open ? (
+        <div className="modalOverlay">
+          <div className="modalCard">
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 950 }}>{confirmState.title}</h3>
+            <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
+              {confirmState.description}
+            </p>
+            <div className="btnRow" style={{ justifyContent: "flex-end", marginTop: 4 }}>
+              <button className="btn" type="button" onClick={closeConfirm}>
+                취소
+              </button>
+              <button className="btn btnPrimary" type="button" onClick={() => confirmState.action?.()} disabled={actionBusy}>
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
