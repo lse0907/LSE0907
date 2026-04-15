@@ -1081,7 +1081,7 @@ function AdminOptionsPageInner() {
                 </div>
 
                 <button className="sectionToggle" type="button" onClick={() => setDetailOpen((v) => !v)}>
-                  {detailOpen ? "▼ 그룹 정보 접기" : "▶ 그룹 정보 펼치기"}
+                  {detailOpen ? "▼ 그룹 정보 관리(접기)" : "▶ 그룹 정보 관리(펼치기)"}
                 </button>
                 {detailOpen ? (
                   <>
@@ -1199,7 +1199,7 @@ function AdminOptionsPageInner() {
                 ) : null}
 
                 <button className="sectionToggle" type="button" onClick={() => setItemsOpen((v) => !v)}>
-                  {itemsOpen ? "▼ 옵션 항목 접기" : "▶ 옵션 항목 펼치기"}
+                  {itemsOpen ? "▼ 옵션 항목 관리(접기)" : "▶ 옵션 항목 관리(펼치기)"}
                 </button>
                 {itemsOpen && !isExclusiveSelected ? (
                   <div className="btnRow" style={{ marginTop: 12 }}>
