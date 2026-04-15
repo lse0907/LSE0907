@@ -897,6 +897,11 @@ function AdminOptionsPageInner() {
           cursor: pointer;
           margin-top: 10px;
         }
+        .sectionSubTitle {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 900;
+        }
         .linkedMenuField {
           justify-items: end;
         }
@@ -1040,7 +1045,7 @@ function AdminOptionsPageInner() {
             grid-template-columns: 1fr;
           }
           .row3 {
-            grid-template-columns: minmax(72px, 1fr) minmax(0, 3fr);
+            grid-template-columns: 1fr;
           }
           .row2 {
             grid-template-columns: 1fr;
@@ -1220,11 +1225,6 @@ function AdminOptionsPageInner() {
                   </div>
                 </div>
 
-                <button className="sectionToggle" type="button" onClick={() => setDetailOpen((v) => !v)}>
-                  {detailOpen ? "▼ 그룹 정보 관리(접기)" : "▶ 그룹 정보 관리(펼치기)"}
-                </button>
-                {detailOpen ? (
-                  <>
                 <div className="groupTopRow">
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">그룹명</div>
@@ -1336,106 +1336,104 @@ function AdminOptionsPageInner() {
                 ) : null}
 
                 {itemsOpen ? (
-                <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 950 }}>
-                    옵션 항목 ({groupItems.length})
-                  </h3>
+                  <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                    <h3 className="sectionSubTitle">옵션 항목 ({groupItems.length})</h3>
 
-                  <div className="list" style={{ marginTop: 10 }}>
-                    {groupItems.map((it) => (
-                      <div key={it.id} className="savedItemRow">
-                        {editingItemId === it.id ? (
-                          <>
-                            <div className="itemLine" style={{ gridColumn: "1 / -1" }}>
-                              <input
-                                className="input"
-                                value={editItemDraft.name}
-                                onChange={(e) => setEditItemDraft((p) => ({ ...p, name: e.target.value }))}
-                                placeholder="옵션 항목명"
-                                disabled={actionBusy || loading}
-                              />
-                              <input
-                                className="input"
-                                inputMode="numeric"
-                                value={editItemDraft.price}
-                                onChange={(e) => setEditItemDraft((p) => ({ ...p, price: e.target.value }))}
-                                placeholder="단가 입력"
-                                disabled={actionBusy || loading}
-                              />
-                            </div>
-                            <div className="itemActions" style={{ gridColumn: "1 / -1", justifyContent: "flex-end" }}>
-                              <button className="btn" onClick={() => saveItem(it.id)} disabled={actionBusy || loading}>
-                                저장
-                              </button>
-                              <button className="btn" onClick={cancelEditItem} disabled={actionBusy || loading}>
-                                취소
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="savedItemMeta">
-                              <div style={{ fontWeight: 950 }}>{it.name}</div>
-                              <div className="itemPrice">{Number(it.price_delta ?? 0).toLocaleString()}원</div>
-                            </div>
-                            <div className="itemActions">
-                              <button className="btn" onClick={() => beginEditItem(it)} disabled={actionBusy || loading}>
-                                수정
-                              </button>
-                              <button className="btn btnDanger" onClick={() => deleteItem(it.id)} disabled={actionBusy || loading}>
-                                삭제
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-
-                    {!loading && groupItems.length === 0 ? (
-                      <div className="muted" style={{ marginTop: 10 }}>
-                        {isExclusiveSelected
-                          ? "이 그룹에는 옵션 항목이 없습니다."
-                          : "이 그룹에는 옵션 항목이 없습니다. “+ 옵션 추가”를 눌러주세요."}
-                      </div>
-                    ) : null}
-
-                    {!isExclusiveSelected && showCreateItemForm ? (
-                      <div className="itemCard">
-                        <div className="itemLine">
-                          <input
-                            className="input"
-                            value={newItemDraft.name}
-                            onChange={(e) => setNewItemDraft((p) => ({ ...p, name: e.target.value }))}
-                            placeholder="옵션 항목명"
-                            disabled={actionBusy || loading}
-                          />
-                          <input
-                            className="input"
-                            inputMode="numeric"
-                            value={newItemDraft.price}
-                            onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
-                            placeholder="단가 입력"
-                            disabled={actionBusy || loading}
-                          />
-                          <button className="btn itemSaveBtn" onClick={addItem} disabled={actionBusy || loading}>
-                            항목 저장
-                          </button>
-                          <button
-                            className="btn itemSaveBtn"
-                            type="button"
-                            onClick={() => {
-                              setShowCreateItemForm(false);
-                              setNewItemDraft({ name: "", price: "" });
-                            }}
-                            disabled={actionBusy || loading}
-                          >
-                            취소
-                          </button>
+                    <div className="list" style={{ marginTop: 10 }}>
+                      {groupItems.map((it) => (
+                        <div key={it.id} className="savedItemRow">
+                          {editingItemId === it.id ? (
+                            <>
+                              <div className="itemLine" style={{ gridColumn: "1 / -1" }}>
+                                <input
+                                  className="input"
+                                  value={editItemDraft.name}
+                                  onChange={(e) => setEditItemDraft((p) => ({ ...p, name: e.target.value }))}
+                                  placeholder="옵션 항목명"
+                                  disabled={actionBusy || loading}
+                                />
+                                <input
+                                  className="input"
+                                  inputMode="numeric"
+                                  value={editItemDraft.price}
+                                  onChange={(e) => setEditItemDraft((p) => ({ ...p, price: e.target.value }))}
+                                  placeholder="단가 입력"
+                                  disabled={actionBusy || loading}
+                                />
+                              </div>
+                              <div className="itemActions" style={{ gridColumn: "1 / -1", justifyContent: "flex-end" }}>
+                                <button className="btn" onClick={() => saveItem(it.id)} disabled={actionBusy || loading}>
+                                  저장
+                                </button>
+                                <button className="btn" onClick={cancelEditItem} disabled={actionBusy || loading}>
+                                  취소
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="savedItemMeta">
+                                <div style={{ fontWeight: 950 }}>{it.name}</div>
+                                <div className="itemPrice">{Number(it.price_delta ?? 0).toLocaleString()}원</div>
+                              </div>
+                              <div className="itemActions">
+                                <button className="btn" onClick={() => beginEditItem(it)} disabled={actionBusy || loading}>
+                                  수정
+                                </button>
+                                <button className="btn btnDanger" onClick={() => deleteItem(it.id)} disabled={actionBusy || loading}>
+                                  삭제
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
-                      </div>
-                    ) : null}
+                      ))}
+
+                      {!loading && groupItems.length === 0 ? (
+                        <div className="muted" style={{ marginTop: 10 }}>
+                          {isExclusiveSelected
+                            ? "이 그룹에는 옵션 항목이 없습니다."
+                            : "이 그룹에는 옵션 항목이 없습니다. “+ 옵션 추가”를 눌러주세요."}
+                        </div>
+                      ) : null}
+
+                      {!isExclusiveSelected && showCreateItemForm ? (
+                        <div className="itemCard">
+                          <div className="itemLine">
+                            <input
+                              className="input"
+                              value={newItemDraft.name}
+                              onChange={(e) => setNewItemDraft((p) => ({ ...p, name: e.target.value }))}
+                              placeholder="옵션 항목명"
+                              disabled={actionBusy || loading}
+                            />
+                            <input
+                              className="input"
+                              inputMode="numeric"
+                              value={newItemDraft.price}
+                              onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
+                              placeholder="단가 입력"
+                              disabled={actionBusy || loading}
+                            />
+                            <button className="btn itemSaveBtn" onClick={addItem} disabled={actionBusy || loading}>
+                              항목 저장
+                            </button>
+                            <button
+                              className="btn itemSaveBtn"
+                              type="button"
+                              onClick={() => {
+                                setShowCreateItemForm(false);
+                                setNewItemDraft({ name: "", price: "" });
+                              }}
+                              disabled={actionBusy || loading}
+                            >
+                              취소
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
                 ) : null}
 
                 <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
