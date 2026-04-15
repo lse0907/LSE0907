@@ -44,6 +44,7 @@ function CategoriesPageInner() {
   const [name, setName] = useState("");
   const [sortOrder, setSortOrder] = useState("");
   const [msg, setMsg] = useState("");
+  const [msgTone, setMsgTone] = useState<"error" | "success" | "neutral">("neutral");
   const [myStores, setMyStores] = useState<MyStore[]>([]);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
@@ -51,6 +52,7 @@ function CategoriesPageInner() {
   const [editId, setEditId] = useState("");
   const [editName, setEditName] = useState("");
   const [editSortOrder, setEditSortOrder] = useState("");
+  const actionBusy = saving || copying;
 
   useEffect(() => {
     const queryStore = (sp.get("store") || "").trim();
@@ -64,6 +66,7 @@ function CategoriesPageInner() {
     if (!storeId) return;
     setLoading(true);
     setMsg("");
+    setMsgTone("neutral");
     const [{ data: cData, error: cErr }, { data: mData, error: mErr }] = await Promise.all([
       supabase
         .from("menu_categories")
@@ -75,6 +78,7 @@ function CategoriesPageInner() {
     ]);
 
     if (cErr) {
+      setMsgTone("error");
       setMsg(cErr.message);
       setCats([]);
     } else {
@@ -82,6 +86,7 @@ function CategoriesPageInner() {
     }
 
     if (mErr) {
+      setMsgTone("error");
       setMsg((prev) => prev || mErr.message);
       setMenus([]);
     } else {
@@ -122,22 +127,35 @@ function CategoriesPageInner() {
   }, [storeId, copySourceStoreId]);
 
   const onCopyCategories = async () => {
-    if (!storeId) return setMsg("현재 매장을 먼저 선택해주세요.");
-    if (!copySourceStoreId) return setMsg("원본 매장을 선택해주세요.");
-    if (copySourceStoreId === storeId) return setMsg("원본/대상 매장은 동일할 수 없습니다.");
+    if (actionBusy) return;
+    if (!storeId) {
+      setMsgTone("error");
+      return setMsg("현재 매장을 먼저 선택해주세요.");
+    }
+    if (!copySourceStoreId) {
+      setMsgTone("error");
+      return setMsg("원본 매장을 선택해주세요.");
+    }
+    if (copySourceStoreId === storeId) {
+      setMsgTone("error");
+      return setMsg("원본/대상 매장은 동일할 수 없습니다.");
+    }
     if (!confirm("선택한 매장의 카테고리를 현재 매장으로 복사할까요?")) return;
     setCopying(true);
     setMsg("");
+    setMsgTone("neutral");
     const { error } = await supabase.rpc("admin_copy_categories_v1", {
       p_source_store_id: copySourceStoreId,
       p_target_store_id: storeId,
     });
     if (error) {
+      setMsgTone("error");
       setMsg(`카테고리 복사 실패: ${error.message}`);
       setCopying(false);
       return;
     }
     await refresh();
+    setMsgTone("success");
     setMsg("카테고리 복사가 완료되었습니다.");
     setCopying(false);
   };
@@ -152,9 +170,11 @@ function CategoriesPageInner() {
   }, [menus]);
 
   const onCreate = async () => {
+    if (actionBusy) return;
     if (!storeId || !name.trim()) return;
     setSaving(true);
     setMsg("");
+    setMsgTone("neutral");
     const row = {
       id: uid(),
       store_id: storeId,
@@ -163,11 +183,16 @@ function CategoriesPageInner() {
       is_active: true,
     };
     const { error } = await supabase.from("menu_categories").insert([row]);
-    if (error) setMsg(error.message);
+    if (error) {
+      setMsgTone("error");
+      setMsg(error.message);
+    }
     else {
       setName("");
       setSortOrder("");
       await refresh();
+      setMsgTone("success");
+      setMsg("카테고리를 생성했습니다.");
     }
     setSaving(false);
   };
@@ -186,12 +211,15 @@ function CategoriesPageInner() {
   };
 
   const onSaveEdit = async (cat: MenuCategory) => {
+    if (actionBusy) return;
     if (!storeId || !editName.trim()) {
+      setMsgTone("error");
       setMsg("카테고리명을 입력해 주세요.");
       return;
     }
     setSaving(true);
     setMsg("");
+    setMsgTone("neutral");
     const { error } = await supabase
       .from("menu_categories")
       .update({
@@ -202,6 +230,7 @@ function CategoriesPageInner() {
       .eq("store_id", storeId);
 
     if (error) {
+      setMsgTone("error");
       setMsg(error.message);
       setSaving(false);
       return;
@@ -209,22 +238,32 @@ function CategoriesPageInner() {
 
     cancelEdit();
     await refresh();
+    setMsgTone("success");
+    setMsg("카테고리를 수정했습니다.");
     setSaving(false);
   };
 
   const onDisable = async (cat: MenuCategory) => {
+    if (actionBusy) return;
     const { error } = await supabase
       .from("menu_categories")
       .update({ is_active: false })
       .eq("id", cat.id)
       .eq("store_id", storeId);
-    if (error) return setMsg(error.message);
+    if (error) {
+      setMsgTone("error");
+      return setMsg(error.message);
+    }
     await refresh();
+    setMsgTone("success");
+    setMsg("카테고리를 비활성화했습니다.");
   };
 
   const onDeleteWithReassign = async (cat: MenuCategory) => {
+    if (actionBusy) return;
     const others = cats.filter((c) => c.id !== cat.id && c.is_active !== false);
     if (!others.length) {
+      setMsgTone("error");
       setMsg("재할당 가능한 카테고리가 없어 삭제할 수 없습니다. 먼저 다른 카테고리를 만들어주세요.");
       return;
     }
@@ -238,12 +277,19 @@ function CategoriesPageInner() {
       .eq("category_id", cat.id);
     if (upd.error) {
       setSaving(false);
+      setMsgTone("error");
       return setMsg(upd.error.message);
     }
 
     const del = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
-    if (del.error) setMsg(del.error.message);
-    else await refresh();
+    if (del.error) {
+      setMsgTone("error");
+      setMsg(del.error.message);
+    } else {
+      await refresh();
+      setMsgTone("success");
+      setMsg("카테고리를 삭제하고 메뉴를 재할당했습니다.");
+    }
     setSaving(false);
   };
 
@@ -332,7 +378,7 @@ function CategoriesPageInner() {
               </option>
             ))}
           </select>
-          <button className="btn copyBtn" onClick={onCopyCategories} disabled={copying || loading || !copySourceStoreId}>
+          <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !copySourceStoreId}>
             {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
           </button>
         </div>
@@ -342,11 +388,20 @@ function CategoriesPageInner() {
         <div className="row createRow">
           <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
           <input className="input" inputMode="numeric" style={{ width: 120 }} placeholder="순서" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} />
-          <button className="btn btnPrimary" onClick={onCreate} disabled={saving || loading || !name.trim()}>생성</button>
+          <button className="btn btnPrimary" onClick={onCreate} disabled={actionBusy || loading || !name.trim()}>생성</button>
         </div>
         <p className="muted">삭제 정책: 재할당 강제(삭제 시 첫 번째 활성 카테고리로 메뉴 이동)</p>
         <p className="muted">생성 후에도 카테고리명/순서는 수정 가능합니다.</p>
-        {msg ? <div style={{ color: "#b91c1c", fontWeight: 900 }}>{msg}</div> : null}
+        {msg ? (
+          <div
+            style={{
+              color: msgTone === "success" ? "#065f46" : msgTone === "error" ? "#b91c1c" : "#374151",
+              fontWeight: 900,
+            }}
+          >
+            {msg}
+          </div>
+        ) : null}
       </section>
 
       <section className="card">
@@ -365,7 +420,7 @@ function CategoriesPageInner() {
                           placeholder="카테고리명"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          disabled={saving || loading}
+                          disabled={actionBusy || loading}
                         />
                         <input
                           className="input"
@@ -374,7 +429,7 @@ function CategoriesPageInner() {
                           placeholder="순서"
                           value={editSortOrder}
                           onChange={(e) => setEditSortOrder(e.target.value)}
-                          disabled={saving || loading}
+                          disabled={actionBusy || loading}
                         />
                       </>
                     ) : (
@@ -388,14 +443,14 @@ function CategoriesPageInner() {
                   <div className="row">
                     {isEditing ? (
                       <>
-                        <button className="btn btnPrimary" onClick={() => onSaveEdit(cat)} disabled={saving || loading || !editName.trim()}>저장</button>
-                        <button className="btn" onClick={cancelEdit} disabled={saving || loading}>취소</button>
+                        <button className="btn btnPrimary" onClick={() => onSaveEdit(cat)} disabled={actionBusy || loading || !editName.trim()}>저장</button>
+                        <button className="btn" onClick={cancelEdit} disabled={actionBusy || loading}>취소</button>
                       </>
                     ) : (
                       <>
-                        <button className="btn" onClick={() => startEdit(cat)} disabled={saving || loading}>수정</button>
-                        <button className="btn" onClick={() => onDisable(cat)} disabled={saving || loading || cat.is_active === false}>비활성화</button>
-                        <button className="btn" onClick={() => onDeleteWithReassign(cat)} disabled={saving || loading}>삭제(재할당)</button>
+                        <button className="btn" onClick={() => startEdit(cat)} disabled={actionBusy || loading}>수정</button>
+                        <button className="btn" onClick={() => onDisable(cat)} disabled={actionBusy || loading || cat.is_active === false}>비활성화</button>
+                        <button className="btn" onClick={() => onDeleteWithReassign(cat)} disabled={actionBusy || loading}>삭제(재할당)</button>
                       </>
                     )}
                   </div>
