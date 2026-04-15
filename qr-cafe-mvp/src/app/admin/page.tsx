@@ -454,11 +454,11 @@ function AdminPageInner() {
             <button className="subBtn" onClick={() => go("/admin/categories")}>
               카테고리 관리
             </button>
-            <button className="subBtn" onClick={() => go("/admin/menu")}>
-              메뉴관리
-            </button>
             <button className="subBtn" onClick={() => go("/admin/options")}>
               옵션관리
+            </button>
+            <button className="subBtn" onClick={() => go("/admin/menu")}>
+              메뉴관리
             </button>
           </div>
         ) : null}
