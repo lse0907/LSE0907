@@ -13,6 +13,7 @@ type OptionGroup = {
   required: boolean;
   min: number;
   max: number;
+  sort_order?: number | null;
   scope?: "common" | "exclusive" | null;
   linked_menu_id?: string | null;
 };
@@ -59,6 +60,7 @@ function AdminOptionsPageInner() {
   const [items, setItems] = useState<OptionItem[]>([]);
   const [menus, setMenus] = useState<MenuSummary[]>([]);
   const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
+  const [hasSortOrderColumn, setHasSortOrderColumn] = useState(true);
   const [loading, setLoading] = useState<boolean>(true);
 
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
@@ -70,6 +72,7 @@ function AdminOptionsPageInner() {
     required: false,
     min: "0",
     max: "1",
+    sortOrder: "",
     scope: "common" as "common" | "exclusive",
     linkedMenuId: "",
   });
@@ -129,27 +132,37 @@ function AdminOptionsPageInner() {
       let nextGroups: OptionGroup[] = [];
       const gRes = await supabase
         .from("option_groups")
-        .select("id, store_id, name, required, min, max, scope, linked_menu_id")
+        .select("id, store_id, name, required, min, max, sort_order, scope, linked_menu_id")
         .eq("store_id", storeId)
-        .order("created_at", { ascending: false });
+        .order("sort_order", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
 
       if (gRes.error) {
+        const errText = `${gRes.error.code || ""} ${gRes.error.message || ""}`;
         const missingLinkedMenuColumn =
-          gRes.error.code === "42703" && String(gRes.error.message || "").includes("linked_menu_id");
+          gRes.error.code === "42703" && errText.includes("linked_menu_id");
+        const missingSortOrderColumn =
+          gRes.error.code === "42703" && errText.includes("sort_order");
 
-        if (!missingLinkedMenuColumn) throw gRes.error;
+        if (!missingLinkedMenuColumn && !missingSortOrderColumn) throw gRes.error;
 
+        const fallbackSelect = missingLinkedMenuColumn
+          ? "id, store_id, name, required, min, max, scope"
+          : "id, store_id, name, required, min, max, scope, linked_menu_id";
         const fallbackRes = await supabase
           .from("option_groups")
-          .select("id, store_id, name, required, min, max, scope")
+          .select(fallbackSelect)
           .eq("store_id", storeId)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: true });
         if (fallbackRes.error) throw fallbackRes.error;
 
-        setHasLinkedMenuColumn(false);
-        nextGroups = (fallbackRes.data || []).map((g) => ({ ...g, linked_menu_id: null })) as OptionGroup[];
+        setHasLinkedMenuColumn(!missingLinkedMenuColumn);
+        setHasSortOrderColumn(!missingSortOrderColumn);
+        const fallbackRows = (fallbackRes.data || []) as unknown as Array<Record<string, unknown>>;
+        nextGroups = fallbackRows.map((g, i) => ({ ...g, sort_order: i + 1 })) as OptionGroup[];
       } else {
         setHasLinkedMenuColumn(true);
+        setHasSortOrderColumn(true);
         nextGroups = (gRes.data || []) as OptionGroup[];
       }
 
@@ -265,7 +278,7 @@ function AdminOptionsPageInner() {
 
   useEffect(() => {
     if (!selectedGroup) {
-      setGroupDraft({ name: "", required: false, min: "0", max: "1", scope: "common", linkedMenuId: "" });
+      setGroupDraft({ name: "", required: false, min: "0", max: "1", sortOrder: "", scope: "common", linkedMenuId: "" });
       setShowCreateItemForm(false);
       setNewItemDraft({ name: "", price: "" });
       return;
@@ -275,6 +288,7 @@ function AdminOptionsPageInner() {
       required: Boolean(selectedGroup.required),
       min: String(selectedGroup.min ?? 0),
       max: String(selectedGroup.max ?? 1),
+      sortOrder: selectedGroup.sort_order == null ? "" : String(selectedGroup.sort_order),
       scope: selectedGroup.scope === "exclusive" ? "exclusive" : "common",
       linkedMenuId: selectedGroup.linked_menu_id || "",
     });
@@ -358,6 +372,7 @@ function AdminOptionsPageInner() {
         required: false,
         min: 0,
         max: 1,
+        sort_order: scopedGroups.length + 1,
         scope: activeScope,
         linked_menu_id: null,
       };
@@ -404,6 +419,7 @@ function AdminOptionsPageInner() {
           required: patch.required ?? selectedGroup.required,
           min: typeof patch.min === "number" ? patch.min : selectedGroup.min,
           max: typeof patch.max === "number" ? patch.max : selectedGroup.max,
+          sort_order: typeof patch.sort_order === "number" ? patch.sort_order : selectedGroup.sort_order ?? 0,
           scope: patch.scope ?? selectedGroup.scope ?? "common",
           linked_menu_id:
             patch.scope === "exclusive" || (patch.scope == null && (selectedGroup.scope ?? "common") === "exclusive")
@@ -916,7 +932,7 @@ function AdminOptionsPageInner() {
         }
         .groupTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1.6fr) auto minmax(88px, 110px);
+          grid-template-columns: minmax(0, 1.6fr) auto minmax(88px, 110px) minmax(88px, 110px);
           gap: 10px;
           align-items: end;
         }
@@ -1191,6 +1207,7 @@ function AdminOptionsPageInner() {
                   <div className="rowMain">
                     <div className="name">{g.name}</div>
                     <div className="rowMeta">
+                      <span className="pill">우선순위 {g.sort_order ?? "-"}</span>
                       <span className={`statusBadge ${g.required ? "statusRequired" : "statusOptional"}`}>
                         {g.required ? "필수" : "선택"}
                       </span>
@@ -1272,6 +1289,17 @@ function AdminOptionsPageInner() {
                       disabled={actionBusy || loading || isExclusiveSelected}
                     />
                   </div>
+                  <div className="field" style={{ marginTop: 0 }}>
+                    <div className="label">우선순위</div>
+                    <input
+                      className="input maxInput"
+                      inputMode="numeric"
+                      value={groupDraft.sortOrder}
+                      onChange={(e) => setGroupDraft((prev) => ({ ...prev, sortOrder: e.target.value }))}
+                      disabled={actionBusy || loading || isExclusiveSelected || !hasSortOrderColumn}
+                      placeholder={hasSortOrderColumn ? "숫자" : "DB 컬럼 필요"}
+                    />
+                  </div>
                 </div>
 
                 <div className="idInlineRow">
@@ -1288,11 +1316,13 @@ function AdminOptionsPageInner() {
                       onClick={() => {
                         const min = groupDraft.required ? 1 : 0;
                         const max = Math.max(toInt(groupDraft.max, selectedGroup.max), 0);
+                        const sortOrder = Math.max(toInt(groupDraft.sortOrder, selectedGroup.sort_order ?? 1), 1);
                         updateGroup({
                           name: groupDraft.name.trim() || selectedGroup.name,
                           required: groupDraft.required,
                           min,
                           max,
+                          sort_order: sortOrder,
                           scope: groupDraft.scope,
                           linked_menu_id: groupDraft.scope === "exclusive" ? groupDraft.linkedMenuId || null : null,
                         });
@@ -1306,6 +1336,12 @@ function AdminOptionsPageInner() {
                     그룹 삭제
                   </button>
                 </div>
+
+                {!hasSortOrderColumn ? (
+                  <div className="muted" style={{ marginTop: 8 }}>
+                    DB에 sort_order 컬럼이 없어 우선순위 저장이 비활성화되었습니다. 2차 SQL을 먼저 실행해주세요.
+                  </div>
+                ) : null}
 
                 <div className="itemCollapsedHint">
                   <div className="muted">옵션 항목은 최소 1개 이상 등록해주세요.</div>
