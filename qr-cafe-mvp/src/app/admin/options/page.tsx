@@ -34,6 +34,12 @@ type MyStore = {
   store_id: string;
   store_name: string | null;
 };
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  description: string;
+  action: null | (() => void);
+};
 
 function uid(prefix = "opt") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
@@ -75,6 +81,20 @@ function AdminOptionsPageInner() {
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"neutral" | "success" | "error">("neutral");
   const actionBusy = saving || copying;
+  const [confirmState, setConfirmState] = useState<ConfirmState>({
+    open: false,
+    title: "",
+    description: "",
+    action: null,
+  });
+  const [detailOpen, setDetailOpen] = useState(true);
+  const [linkedOpen, setLinkedOpen] = useState(true);
+  const [itemsOpen, setItemsOpen] = useState(true);
+
+  const toErrMsg = (e: unknown) => {
+    if (e instanceof Error) return e.message;
+    return String(e ?? "알 수 없는 오류");
+  };
 
   // 1) storeId 로드
   useEffect(() => {
@@ -163,12 +183,12 @@ function AdminOptionsPageInner() {
         if (prev && nextGroups.some((x) => x.id === prev)) return prev;
         return nextGroups[0]?.id || "";
       });
-    } catch (e: any) {
-      console.error("[admin/options] refresh error:", e?.message || e);
+    } catch (e: unknown) {
+      console.error("[admin/options] refresh error:", toErrMsg(e));
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
       setMsgTone("error");
-      setMsg(`옵션 데이터 로드 실패: ${String(e?.message || e)}`);
+      setMsg(`옵션 데이터 로드 실패: ${toErrMsg(e)}`);
     } finally {
       setLoading(false);
     }
@@ -187,7 +207,9 @@ function AdminOptionsPageInner() {
       if (authErr || !authData?.user) return;
       const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
       if (memRes.error) return;
-      const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
+      const ids = (memRes.data || [])
+        .map((x: { store_id?: string | null }) => String(x.store_id || ""))
+        .filter(Boolean);
       if (!ids.length) return;
       const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", ids).order("store_name");
       if (storeRes.error || !mounted) return;
@@ -210,25 +232,32 @@ function AdminOptionsPageInner() {
       setMsgTone("error");
       return setMsg("원본 매장을 선택해주세요.");
     }
-    if (!confirm("선택한 매장의 옵션 그룹/항목을 현재 매장으로 복사할까요?")) return;
-    try {
-      setCopying(true);
-      setMsg("");
-      setMsgTone("neutral");
-      const { error } = await supabase.rpc("admin_copy_options_v1", {
-        p_source_store_id: copySourceStoreId,
-        p_target_store_id: storeId,
-      });
-      if (error) throw error;
-      await refresh();
-      setMsgTone("success");
-      setMsg("옵션 복사가 완료되었습니다.");
-    } catch (e: any) {
-      setMsgTone("error");
-      setMsg(`옵션 복사 실패: ${String(e?.message || e)}`);
-    } finally {
-      setCopying(false);
-    }
+    openConfirm(
+      "옵션 복사 확인",
+      `원본 매장(${copySourceStoreId})의 옵션 그룹/항목을 현재 매장(${storeId})으로 복사할까요?`,
+      async () => {
+        closeConfirm();
+        try {
+          setCopying(true);
+          setMsg("");
+          setMsgTone("neutral");
+          const { error } = await supabase.rpc("admin_copy_options_v1", {
+            p_source_store_id: copySourceStoreId,
+            p_target_store_id: storeId,
+          });
+          if (error) throw error;
+          await refresh();
+          setMsgTone("success");
+          setMsg("옵션 복사가 완료되었습니다.");
+        } catch (e: unknown) {
+          setMsgTone("error");
+          setMsg(`옵션 복사 실패: ${toErrMsg(e)}`);
+        } finally {
+          setCopying(false);
+        }
+      }
+    );
+    return;
   };
 
   const selectedGroup = useMemo(
@@ -297,6 +326,12 @@ function AdminOptionsPageInner() {
     setBadge("error");
     setTimeout(() => setBadge("idle"), 1600);
   };
+  const openConfirm = (title: string, description: string, action: () => void) => {
+    setConfirmState({ open: true, title, description, action });
+  };
+  const closeConfirm = () => {
+    setConfirmState({ open: false, title: "", description: "", action: null });
+  };
 
   // ===== 그룹 CRUD =====
   const addGroup = async () => {
@@ -338,11 +373,11 @@ function AdminOptionsPageInner() {
       markSaved();
       setMsgTone("success");
       setMsg("옵션 그룹을 생성했습니다.");
-    } catch (e: any) {
-      console.error("[admin/options] addGroup:", e?.message || e);
+    } catch (e: unknown) {
+      console.error("[admin/options] addGroup:", toErrMsg(e));
       markError();
       setMsgTone("error");
-      setMsg(`그룹 생성 실패: ${String(e?.message || e)}`);
+      setMsg(`그룹 생성 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -387,11 +422,11 @@ function AdminOptionsPageInner() {
       markSaved();
       setMsgTone("success");
       setMsg("옵션 그룹을 저장했습니다.");
-    } catch (e: any) {
-      console.error("[admin/options] updateGroup:", e?.message || e);
+    } catch (e: unknown) {
+      console.error("[admin/options] updateGroup:", toErrMsg(e));
       markError();
       setMsgTone("error");
-      setMsg(`그룹 저장 실패: ${String(e?.message || e)}`);
+      setMsg(`그룹 저장 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -399,42 +434,48 @@ function AdminOptionsPageInner() {
 
   const deleteGroup = async () => {
     if (!selectedGroup) return;
-    if (!confirm("이 옵션그룹을 삭제할까요? (그룹의 옵션아이템도 함께 삭제됩니다)")) return;
+    openConfirm(
+      "옵션 그룹 삭제",
+      "이 옵션그룹을 삭제할까요? (그룹의 옵션아이템도 함께 삭제됩니다)",
+      async () => {
+        closeConfirm();
+        try {
+          setSaving(true);
+          setBadge("idle");
 
-    try {
-      setSaving(true);
-      setBadge("idle");
+          // 아이템 먼저 삭제
+          const delItems = await supabase
+            .from("option_items")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("group_id", selectedGroup.id);
 
-      // 아이템 먼저 삭제
-      const delItems = await supabase
-        .from("option_items")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("group_id", selectedGroup.id);
+          if (delItems.error) throw delItems.error;
 
-      if (delItems.error) throw delItems.error;
+          // 그룹 삭제
+          const delGroup = await supabase
+            .from("option_groups")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("id", selectedGroup.id);
 
-      // 그룹 삭제
-      const delGroup = await supabase
-        .from("option_groups")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("id", selectedGroup.id);
+          if (delGroup.error) throw delGroup.error;
 
-      if (delGroup.error) throw delGroup.error;
-
-      await refresh();
-      markSaved();
-      setMsgTone("success");
-      setMsg("옵션 그룹을 삭제했습니다.");
-    } catch (e: any) {
-      console.error("[admin/options] deleteGroup:", e?.message || e);
-      markError();
-      setMsgTone("error");
-      setMsg(`그룹 삭제 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
+          await refresh();
+          markSaved();
+          setMsgTone("success");
+          setMsg("옵션 그룹을 삭제했습니다.");
+        } catch (e: unknown) {
+          console.error("[admin/options] deleteGroup:", toErrMsg(e));
+          markError();
+          setMsgTone("error");
+          setMsg(`그룹 삭제 실패: ${toErrMsg(e)}`);
+        } finally {
+          setSaving(false);
+        }
+      }
+    );
+    return;
   };
 
   // ===== 아이템 CRUD =====
@@ -474,42 +515,44 @@ function AdminOptionsPageInner() {
       markSaved();
       setMsgTone("success");
       setMsg("옵션 항목을 추가했습니다.");
-    } catch (e: any) {
-      console.error("[admin/options] addItem:", e?.message || e);
+    } catch (e: unknown) {
+      console.error("[admin/options] addItem:", toErrMsg(e));
       markError();
       setMsgTone("error");
-      setMsg(`옵션 추가 실패: ${String(e?.message || e)}`);
+      setMsg(`옵션 추가 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
   };
 
   const deleteItem = async (id: string) => {
-    if (!confirm("이 옵션을 삭제할까요?")) return;
-    try {
-      setSaving(true);
-      setBadge("idle");
+    openConfirm("옵션 삭제", "이 옵션을 삭제할까요?", async () => {
+      closeConfirm();
+      try {
+        setSaving(true);
+        setBadge("idle");
 
-      const { error } = await supabase
-        .from("option_items")
-        .delete()
-        .eq("id", id)
-        .eq("store_id", storeId);
+        const { error } = await supabase
+          .from("option_items")
+          .delete()
+          .eq("id", id)
+          .eq("store_id", storeId);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      await refresh();
-      markSaved();
-      setMsgTone("success");
-      setMsg("옵션 항목을 삭제했습니다.");
-    } catch (e: any) {
-      console.error("[admin/options] deleteItem:", e?.message || e);
-      markError();
-      setMsgTone("error");
-      setMsg(`옵션 삭제 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
+        await refresh();
+        markSaved();
+        setMsgTone("success");
+        setMsg("옵션 항목을 삭제했습니다.");
+      } catch (e: unknown) {
+        console.error("[admin/options] deleteItem:", toErrMsg(e));
+        markError();
+        setMsgTone("error");
+        setMsg(`옵션 삭제 실패: ${toErrMsg(e)}`);
+      } finally {
+        setSaving(false);
+      }
+    });
   };
 
   return (
@@ -746,6 +789,17 @@ function AdminOptionsPageInner() {
           gap: 6px;
           margin-top: 10px;
         }
+        .sectionToggle {
+          width: 100%;
+          text-align: left;
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-weight: 950;
+          cursor: pointer;
+          margin-top: 10px;
+        }
         .linkedMenuField {
           justify-items: end;
         }
@@ -832,6 +886,25 @@ function AdminOptionsPageInner() {
           justify-content: space-between;
           gap: 10px;
           align-items: center;
+        }
+        .modalOverlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.45);
+          display: grid;
+          place-items: center;
+          padding: 16px;
+          z-index: 90;
+        }
+        .modalCard {
+          width: min(460px, 100%);
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 14px;
+          display: grid;
+          gap: 10px;
+          box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
         }
 
         @media (max-width: 980px) {
@@ -1007,6 +1080,11 @@ function AdminOptionsPageInner() {
                   </div>
                 </div>
 
+                <button className="sectionToggle" type="button" onClick={() => setDetailOpen((v) => !v)}>
+                  {detailOpen ? "▼ 그룹 정보 접기" : "▶ 그룹 정보 펼치기"}
+                </button>
+                {detailOpen ? (
+                  <>
                 <div className="groupTopRow">
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">그룹명</div>
@@ -1095,8 +1173,13 @@ function AdminOptionsPageInner() {
                     그룹 삭제
                   </button>
                 </div>
+                  </>
+                ) : null}
 
-                {!isExclusiveSelected ? (
+                <button className="sectionToggle" type="button" onClick={() => setLinkedOpen((v) => !v)}>
+                  {linkedOpen ? "▼ 연결 메뉴 접기" : "▶ 연결 메뉴 펼치기"}
+                </button>
+                {linkedOpen && !isExclusiveSelected ? (
                   <div style={{ marginTop: 12 }}>
                     <div className="label">연결된 메뉴</div>
                     {linkedMenus.length === 0 ? (
@@ -1115,7 +1198,10 @@ function AdminOptionsPageInner() {
                   </div>
                 ) : null}
 
-                {!isExclusiveSelected ? (
+                <button className="sectionToggle" type="button" onClick={() => setItemsOpen((v) => !v)}>
+                  {itemsOpen ? "▼ 옵션 항목 접기" : "▶ 옵션 항목 펼치기"}
+                </button>
+                {itemsOpen && !isExclusiveSelected ? (
                   <div className="btnRow" style={{ marginTop: 12 }}>
                     <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={actionBusy || loading}>
                       + 옵션 추가
@@ -1123,6 +1209,7 @@ function AdminOptionsPageInner() {
                   </div>
                 ) : null}
 
+                {itemsOpen ? (
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 950 }}>
                     옵션 항목 ({groupItems.length})
@@ -1179,11 +1266,31 @@ function AdminOptionsPageInner() {
                     ) : null}
                   </div>
                 </div>
+                ) : null}
               </>
             )}
           </div>
         </section>
       )}
+
+      {confirmState.open ? (
+        <div className="modalOverlay">
+          <div className="modalCard">
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 950 }}>{confirmState.title}</h3>
+            <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
+              {confirmState.description}
+            </p>
+            <div className="btnRow" style={{ justifyContent: "flex-end", marginTop: 4 }}>
+              <button className="btn" type="button" onClick={closeConfirm}>
+                취소
+              </button>
+              <button className="btn btnPrimary" type="button" onClick={() => confirmState.action?.()} disabled={actionBusy}>
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
