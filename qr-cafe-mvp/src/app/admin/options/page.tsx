@@ -1220,6 +1220,11 @@ function AdminOptionsPageInner() {
                   </div>
                 </div>
 
+                <button className="sectionToggle" type="button" onClick={() => setDetailOpen((v) => !v)}>
+                  {detailOpen ? "▼ 그룹 정보 관리(접기)" : "▶ 그룹 정보 관리(펼치기)"}
+                </button>
+                {detailOpen ? (
+                  <>
                 <div className="groupTopRow">
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">그룹명</div>
