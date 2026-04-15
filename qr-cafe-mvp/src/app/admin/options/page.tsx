@@ -13,6 +13,7 @@ type OptionGroup = {
   required: boolean;
   min: number;
   max: number;
+  sort_order?: number | null;
   scope?: "common" | "exclusive" | null;
   linked_menu_id?: string | null;
 };
@@ -59,6 +60,7 @@ function AdminOptionsPageInner() {
   const [items, setItems] = useState<OptionItem[]>([]);
   const [menus, setMenus] = useState<MenuSummary[]>([]);
   const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
+  const [hasSortOrderColumn, setHasSortOrderColumn] = useState(true);
   const [loading, setLoading] = useState<boolean>(true);
 
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
@@ -70,6 +72,7 @@ function AdminOptionsPageInner() {
     required: false,
     min: "0",
     max: "1",
+    sortOrder: "",
     scope: "common" as "common" | "exclusive",
     linkedMenuId: "",
   });
@@ -87,7 +90,6 @@ function AdminOptionsPageInner() {
     description: "",
     action: null,
   });
-  const [itemsOpen, setItemsOpen] = useState(true);
   const [editingItemId, setEditingItemId] = useState("");
   const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
 
@@ -95,8 +97,6 @@ function AdminOptionsPageInner() {
     if (e instanceof Error) return e.message;
     return String(e ?? "알 수 없는 오류");
   };
-  const shortId = (id: string) => (id.length > 14 ? `${id.slice(0, 6)}…${id.slice(-6)}` : id);
-
   // 1) storeId 로드
   useEffect(() => {
     const queryStore = (sp.get("store") || "").trim();
@@ -132,27 +132,37 @@ function AdminOptionsPageInner() {
       let nextGroups: OptionGroup[] = [];
       const gRes = await supabase
         .from("option_groups")
-        .select("id, store_id, name, required, min, max, scope, linked_menu_id")
+        .select("id, store_id, name, required, min, max, sort_order, scope, linked_menu_id")
         .eq("store_id", storeId)
-        .order("created_at", { ascending: false });
+        .order("sort_order", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
 
       if (gRes.error) {
+        const errText = `${gRes.error.code || ""} ${gRes.error.message || ""}`;
         const missingLinkedMenuColumn =
-          gRes.error.code === "42703" && String(gRes.error.message || "").includes("linked_menu_id");
+          gRes.error.code === "42703" && errText.includes("linked_menu_id");
+        const missingSortOrderColumn =
+          gRes.error.code === "42703" && errText.includes("sort_order");
 
-        if (!missingLinkedMenuColumn) throw gRes.error;
+        if (!missingLinkedMenuColumn && !missingSortOrderColumn) throw gRes.error;
 
+        const fallbackSelect = missingLinkedMenuColumn
+          ? "id, store_id, name, required, min, max, scope"
+          : "id, store_id, name, required, min, max, scope, linked_menu_id";
         const fallbackRes = await supabase
           .from("option_groups")
-          .select("id, store_id, name, required, min, max, scope")
+          .select(fallbackSelect)
           .eq("store_id", storeId)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: true });
         if (fallbackRes.error) throw fallbackRes.error;
 
-        setHasLinkedMenuColumn(false);
-        nextGroups = (fallbackRes.data || []).map((g) => ({ ...g, linked_menu_id: null })) as OptionGroup[];
+        setHasLinkedMenuColumn(!missingLinkedMenuColumn);
+        setHasSortOrderColumn(!missingSortOrderColumn);
+        const fallbackRows = (fallbackRes.data || []) as unknown as Array<Record<string, unknown>>;
+        nextGroups = fallbackRows.map((g, i) => ({ ...g, sort_order: i + 1 })) as OptionGroup[];
       } else {
         setHasLinkedMenuColumn(true);
+        setHasSortOrderColumn(true);
         nextGroups = (gRes.data || []) as OptionGroup[];
       }
 
@@ -268,7 +278,7 @@ function AdminOptionsPageInner() {
 
   useEffect(() => {
     if (!selectedGroup) {
-      setGroupDraft({ name: "", required: false, min: "0", max: "1", scope: "common", linkedMenuId: "" });
+      setGroupDraft({ name: "", required: false, min: "0", max: "1", sortOrder: "", scope: "common", linkedMenuId: "" });
       setShowCreateItemForm(false);
       setNewItemDraft({ name: "", price: "" });
       return;
@@ -278,6 +288,7 @@ function AdminOptionsPageInner() {
       required: Boolean(selectedGroup.required),
       min: String(selectedGroup.min ?? 0),
       max: String(selectedGroup.max ?? 1),
+      sortOrder: selectedGroup.sort_order == null ? "" : String(selectedGroup.sort_order),
       scope: selectedGroup.scope === "exclusive" ? "exclusive" : "common",
       linkedMenuId: selectedGroup.linked_menu_id || "",
     });
@@ -287,13 +298,6 @@ function AdminOptionsPageInner() {
     () => items.filter((it) => it.group_id === selectedGroupId),
     [items, selectedGroupId]
   );
-  const itemStatus = useMemo(() => {
-    const count = groupItems.length;
-    if (count === 0) return "미등록";
-    if (count === 1) return "1개 등록";
-    return `${count}개 등록`;
-  }, [groupItems]);
-
   const scopedGroups = useMemo(
     () => groups.filter((g) => (g.scope || "common") === activeScope),
     [groups, activeScope]
@@ -368,6 +372,7 @@ function AdminOptionsPageInner() {
         required: false,
         min: 0,
         max: 1,
+        sort_order: scopedGroups.length + 1,
         scope: activeScope,
         linked_menu_id: null,
       };
@@ -414,6 +419,7 @@ function AdminOptionsPageInner() {
           required: patch.required ?? selectedGroup.required,
           min: typeof patch.min === "number" ? patch.min : selectedGroup.min,
           max: typeof patch.max === "number" ? patch.max : selectedGroup.max,
+          sort_order: typeof patch.sort_order === "number" ? patch.sort_order : selectedGroup.sort_order ?? 0,
           scope: patch.scope ?? selectedGroup.scope ?? "common",
           linked_menu_id:
             patch.scope === "exclusive" || (patch.scope == null && (selectedGroup.scope ?? "common") === "exclusive")
@@ -608,19 +614,6 @@ function AdminOptionsPageInner() {
     });
   };
 
-  const copyGroupId = async () => {
-    if (!selectedGroup?.id) return;
-    try {
-      if (!navigator?.clipboard?.writeText) throw new Error("클립보드 권한을 확인해 주세요.");
-      await navigator.clipboard.writeText(selectedGroup.id);
-      setMsgTone("success");
-      setMsg("그룹 ID를 복사했습니다.");
-    } catch (e: unknown) {
-      setMsgTone("error");
-      setMsg(`그룹 ID 복사 실패: ${toErrMsg(e)}`);
-    }
-  };
-
   return (
     <main className="wrap">
       <style jsx global>{`
@@ -727,6 +720,9 @@ function AdminOptionsPageInner() {
           padding: 14px;
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
         }
+        .detailCard {
+          padding: 12px;
+        }
         .cardTitle {
           margin: 0;
           font-size: 16px;
@@ -795,6 +791,11 @@ function AdminOptionsPageInner() {
           display: grid;
           gap: 10px;
           margin-top: 12px;
+        }
+        .groupList {
+          max-height: clamp(320px, 58vh, 640px);
+          overflow-y: auto;
+          padding-right: 4px;
         }
         .rowBtn {
           text-align: left;
@@ -897,6 +898,11 @@ function AdminOptionsPageInner() {
           cursor: pointer;
           margin-top: 10px;
         }
+        .sectionSubTitle {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 900;
+        }
         .linkedMenuField {
           justify-items: end;
         }
@@ -924,33 +930,35 @@ function AdminOptionsPageInner() {
           font-size: 14px;
           width: 100%;
         }
-        .row3 {
-          display: grid;
-          grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr);
-          gap: 10px;
-          align-items: end;
-        }
-        .row2 {
-          display: grid;
-          grid-template-columns: 1fr auto;
-          gap: 10px;
-          align-items: end;
-        }
         .groupTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-columns: minmax(0, 1.6fr) auto minmax(88px, 110px) minmax(88px, 110px);
           gap: 10px;
-          align-items: start;
+          align-items: end;
         }
         .idValue {
-          font-weight: 900;
+          font-weight: 500;
           background: #f8fafc;
           border: 1px dashed var(--line);
-          border-radius: 12px;
-          padding: 10px 12px;
-          min-height: 42px;
+          border-radius: 10px;
+          padding: 7px 10px;
           display: flex;
           align-items: center;
+        }
+        .idInlineRow {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 8px;
+          align-items: center;
+          margin-top: 8px;
+        }
+        .idInlineRow .label {
+          white-space: nowrap;
+        }
+        .idFull {
+          font-size: 12px;
+          line-height: 1.35;
+          word-break: break-all;
         }
         .itemCollapsedHint {
           margin-top: 8px;
@@ -990,6 +998,10 @@ function AdminOptionsPageInner() {
           align-items: center;
           gap: 10px;
         }
+        .itemName {
+          font-size: 15px;
+          font-weight: 900;
+        }
         .itemPrice {
           color: var(--muted);
           font-weight: 900;
@@ -999,6 +1011,25 @@ function AdminOptionsPageInner() {
         .itemActions {
           display: inline-flex;
           gap: 8px;
+        }
+        .itemActionBtn {
+          font-size: 12px;
+          font-weight: 800;
+          padding: 6px 9px;
+          border-radius: 9px;
+        }
+        .detailCard .field {
+          margin-top: 8px;
+        }
+        .detailCard .input {
+          font-size: 13px;
+          padding: 8px 10px;
+          border-radius: 10px;
+        }
+        .detailCard .btn {
+          font-size: 13px;
+          padding: 8px 10px;
+          border-radius: 10px;
         }
 
         .itemCard {
@@ -1039,14 +1070,9 @@ function AdminOptionsPageInner() {
           .grid {
             grid-template-columns: 1fr;
           }
-          .row3 {
-            grid-template-columns: minmax(72px, 1fr) minmax(0, 3fr);
-          }
-          .row2 {
-            grid-template-columns: 1fr;
-          }
           .groupTopRow {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr minmax(86px, 110px);
+            align-items: end;
           }
           .name {
             font-size: 14px;
@@ -1057,6 +1083,13 @@ function AdminOptionsPageInner() {
           }
           .itemLine {
             grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr);
+          }
+          .itemName {
+            font-size: 14px;
+          }
+          .itemActionBtn {
+            font-size: 11px;
+            padding: 5px 8px;
           }
           .itemSaveBtn {
             width: 100%;
@@ -1164,7 +1197,7 @@ function AdminOptionsPageInner() {
               </div>
             ) : null}
 
-            <div className="list">
+            <div className="list groupList">
               {scopedGroups.map((g) => (
                 <button
                   key={g.id}
@@ -1174,6 +1207,7 @@ function AdminOptionsPageInner() {
                   <div className="rowMain">
                     <div className="name">{g.name}</div>
                     <div className="rowMeta">
+                      <span className="pill">우선순위 {g.sort_order ?? "-"}</span>
                       <span className={`statusBadge ${g.required ? "statusRequired" : "statusOptional"}`}>
                         {g.required ? "필수" : "선택"}
                       </span>
@@ -1198,7 +1232,7 @@ function AdminOptionsPageInner() {
           </div>
 
           {/* 상세 */}
-          <div className="card">
+          <div className="card detailCard">
             <h2 className="cardTitle">옵션그룹 상세</h2>
 
             {!selectedGroup ? (
@@ -1220,11 +1254,6 @@ function AdminOptionsPageInner() {
                   </div>
                 </div>
 
-                <button className="sectionToggle" type="button" onClick={() => setDetailOpen((v) => !v)}>
-                  {detailOpen ? "▼ 그룹 정보 관리(접기)" : "▶ 그룹 정보 관리(펼치기)"}
-                </button>
-                {detailOpen ? (
-                  <>
                 <div className="groupTopRow">
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">그룹명</div>
@@ -1250,9 +1279,6 @@ function AdminOptionsPageInner() {
                       필수
                     </label>
                   </div>
-                </div>
-
-                <div className="row3" style={{ alignItems: "end" }}>
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">최대 선택</div>
                     <input
@@ -1264,15 +1290,22 @@ function AdminOptionsPageInner() {
                     />
                   </div>
                   <div className="field" style={{ marginTop: 0 }}>
-                    <div className="label">그룹 ID</div>
-                    <div className="row2">
-                      <div className="idValue" title={selectedGroup.id}>
-                        {shortId(selectedGroup.id)}
-                      </div>
-                      <button className="btn" type="button" onClick={copyGroupId} disabled={actionBusy || loading}>
-                        ID 복사
-                      </button>
-                    </div>
+                    <div className="label">우선순위</div>
+                    <input
+                      className="input maxInput"
+                      inputMode="numeric"
+                      value={groupDraft.sortOrder}
+                      onChange={(e) => setGroupDraft((prev) => ({ ...prev, sortOrder: e.target.value }))}
+                      disabled={actionBusy || loading || isExclusiveSelected || !hasSortOrderColumn}
+                      placeholder={hasSortOrderColumn ? "숫자" : "DB 컬럼 필요"}
+                    />
+                  </div>
+                </div>
+
+                <div className="idInlineRow">
+                  <div className="label">그룹 ID</div>
+                  <div className="idValue idFull" title={selectedGroup.id}>
+                    {selectedGroup.id}
                   </div>
                 </div>
 
@@ -1283,11 +1316,13 @@ function AdminOptionsPageInner() {
                       onClick={() => {
                         const min = groupDraft.required ? 1 : 0;
                         const max = Math.max(toInt(groupDraft.max, selectedGroup.max), 0);
+                        const sortOrder = Math.max(toInt(groupDraft.sortOrder, selectedGroup.sort_order ?? 1), 1);
                         updateGroup({
                           name: groupDraft.name.trim() || selectedGroup.name,
                           required: groupDraft.required,
                           min,
                           max,
+                          sort_order: sortOrder,
                           scope: groupDraft.scope,
                           linked_menu_id: groupDraft.scope === "exclusive" ? groupDraft.linkedMenuId || null : null,
                         });
@@ -1302,32 +1337,16 @@ function AdminOptionsPageInner() {
                   </button>
                 </div>
 
-                <button className="sectionToggle" type="button" onClick={() => setItemsOpen((v) => !v)}>
-                  {itemsOpen ? `▼ 옵션 항목 관리(접기) · ${itemStatus}` : `▶ 옵션 항목 관리(펼치기) · ${itemStatus}`}
-                </button>
-                {!itemsOpen ? (
-                  <div className="itemCollapsedHint">
-                    <div className="muted">옵션 항목은 주문 화면 노출에 필요합니다. 최소 1개 이상 등록해 주세요.</div>
-                    <div className="btnRow" style={{ marginTop: 0 }}>
-                      <button className="btn btnPrimary" type="button" onClick={() => setItemsOpen(true)}>
-                        옵션 항목 펼치기
-                      </button>
-                      {!isExclusiveSelected ? (
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => {
-                            setItemsOpen(true);
-                            setShowCreateItemForm(true);
-                          }}
-                        >
-                          + 옵션 항목 바로 등록
-                        </button>
-                      ) : null}
-                    </div>
+                {!hasSortOrderColumn ? (
+                  <div className="muted" style={{ marginTop: 8 }}>
+                    DB에 sort_order 컬럼이 없어 우선순위 저장이 비활성화되었습니다. 2차 SQL을 먼저 실행해주세요.
                   </div>
                 ) : null}
-                {itemsOpen && !isExclusiveSelected ? (
+
+                <div className="itemCollapsedHint">
+                  <div className="muted">옵션 항목은 최소 1개 이상 등록해주세요.</div>
+                </div>
+                {!isExclusiveSelected ? (
                   <div className="btnRow" style={{ marginTop: 12 }}>
                     <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={actionBusy || loading}>
                       + 옵션 추가
@@ -1335,108 +1354,98 @@ function AdminOptionsPageInner() {
                   </div>
                 ) : null}
 
-                {itemsOpen ? (
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 950 }}>
-                    옵션 항목 ({groupItems.length})
-                  </h3>
+                    <h3 className="sectionSubTitle">옵션 항목</h3>
 
-                  <div className="list" style={{ marginTop: 10 }}>
-                    {groupItems.map((it) => (
-                      <div key={it.id} className="savedItemRow">
-                        {editingItemId === it.id ? (
-                          <>
-                            <div className="itemLine" style={{ gridColumn: "1 / -1" }}>
-                              <input
-                                className="input"
-                                value={editItemDraft.name}
-                                onChange={(e) => setEditItemDraft((p) => ({ ...p, name: e.target.value }))}
-                                placeholder="옵션 항목명"
-                                disabled={actionBusy || loading}
-                              />
-                              <input
-                                className="input"
-                                inputMode="numeric"
-                                value={editItemDraft.price}
-                                onChange={(e) => setEditItemDraft((p) => ({ ...p, price: e.target.value }))}
-                                placeholder="단가 입력"
-                                disabled={actionBusy || loading}
-                              />
-                            </div>
-                            <div className="itemActions" style={{ gridColumn: "1 / -1", justifyContent: "flex-end" }}>
-                              <button className="btn" onClick={() => saveItem(it.id)} disabled={actionBusy || loading}>
-                                저장
-                              </button>
-                              <button className="btn" onClick={cancelEditItem} disabled={actionBusy || loading}>
-                                취소
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="savedItemMeta">
-                              <div style={{ fontWeight: 950 }}>{it.name}</div>
-                              <div className="itemPrice">{Number(it.price_delta ?? 0).toLocaleString()}원</div>
-                            </div>
-                            <div className="itemActions">
-                              <button className="btn" onClick={() => beginEditItem(it)} disabled={actionBusy || loading}>
-                                수정
-                              </button>
-                              <button className="btn btnDanger" onClick={() => deleteItem(it.id)} disabled={actionBusy || loading}>
-                                삭제
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-
-                    {!loading && groupItems.length === 0 ? (
-                      <div className="muted" style={{ marginTop: 10 }}>
-                        {isExclusiveSelected
-                          ? "이 그룹에는 옵션 항목이 없습니다."
-                          : "이 그룹에는 옵션 항목이 없습니다. “+ 옵션 추가”를 눌러주세요."}
-                      </div>
-                    ) : null}
-
-                    {!isExclusiveSelected && showCreateItemForm ? (
-                      <div className="itemCard">
-                        <div className="itemLine">
-                          <input
-                            className="input"
-                            value={newItemDraft.name}
-                            onChange={(e) => setNewItemDraft((p) => ({ ...p, name: e.target.value }))}
-                            placeholder="옵션 항목명"
-                            disabled={actionBusy || loading}
-                          />
-                          <input
-                            className="input"
-                            inputMode="numeric"
-                            value={newItemDraft.price}
-                            onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
-                            placeholder="단가 입력"
-                            disabled={actionBusy || loading}
-                          />
-                          <button className="btn itemSaveBtn" onClick={addItem} disabled={actionBusy || loading}>
-                            항목 저장
-                          </button>
-                          <button
-                            className="btn itemSaveBtn"
-                            type="button"
-                            onClick={() => {
-                              setShowCreateItemForm(false);
-                              setNewItemDraft({ name: "", price: "" });
-                            }}
-                            disabled={actionBusy || loading}
-                          >
-                            취소
-                          </button>
+                    <div className="list" style={{ marginTop: 10 }}>
+                      {groupItems.map((it) => (
+                        <div key={it.id} className="savedItemRow">
+                          {editingItemId === it.id ? (
+                            <>
+                              <div className="itemLine" style={{ gridColumn: "1 / -1" }}>
+                                <input
+                                  className="input"
+                                  value={editItemDraft.name}
+                                  onChange={(e) => setEditItemDraft((p) => ({ ...p, name: e.target.value }))}
+                                  placeholder="옵션 항목명"
+                                  disabled={actionBusy || loading}
+                                />
+                                <input
+                                  className="input"
+                                  inputMode="numeric"
+                                  value={editItemDraft.price}
+                                  onChange={(e) => setEditItemDraft((p) => ({ ...p, price: e.target.value }))}
+                                  placeholder="단가 입력"
+                                  disabled={actionBusy || loading}
+                                />
+                              </div>
+                              <div className="itemActions" style={{ gridColumn: "1 / -1", justifyContent: "flex-end" }}>
+                                <button className="btn" onClick={() => saveItem(it.id)} disabled={actionBusy || loading}>
+                                  저장
+                                </button>
+                                <button className="btn" onClick={cancelEditItem} disabled={actionBusy || loading}>
+                                  취소
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="savedItemMeta">
+                                <div className="itemName">{it.name}</div>
+                                <div className="itemPrice">{Number(it.price_delta ?? 0).toLocaleString()}원</div>
+                              </div>
+                              <div className="itemActions">
+                                <button className="btn itemActionBtn" onClick={() => beginEditItem(it)} disabled={actionBusy || loading}>
+                                  수정
+                                </button>
+                                <button className="btn btnDanger itemActionBtn" onClick={() => deleteItem(it.id)} disabled={actionBusy || loading}>
+                                  삭제
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
-                      </div>
-                    ) : null}
+                      ))}
+
+                      {!loading && groupItems.length === 0 ? <div className="muted" style={{ marginTop: 10 }}>옵션 항목을 추가해주세요.</div> : null}
+
+                      {!isExclusiveSelected && showCreateItemForm ? (
+                        <div className="itemCard">
+                          <div className="itemLine">
+                            <input
+                              className="input"
+                              value={newItemDraft.name}
+                              onChange={(e) => setNewItemDraft((p) => ({ ...p, name: e.target.value }))}
+                              placeholder="옵션 항목명"
+                              disabled={actionBusy || loading}
+                            />
+                            <input
+                              className="input"
+                              inputMode="numeric"
+                              value={newItemDraft.price}
+                              onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
+                              placeholder="단가 입력"
+                              disabled={actionBusy || loading}
+                            />
+                            <button className="btn itemSaveBtn" onClick={addItem} disabled={actionBusy || loading}>
+                              항목 저장
+                            </button>
+                            <button
+                              className="btn itemSaveBtn"
+                              type="button"
+                              onClick={() => {
+                                setShowCreateItemForm(false);
+                                setNewItemDraft({ name: "", price: "" });
+                              }}
+                              disabled={actionBusy || loading}
+                            >
+                              취소
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-                ) : null}
 
                 <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
                   <div className="label">연결된 메뉴</div>
