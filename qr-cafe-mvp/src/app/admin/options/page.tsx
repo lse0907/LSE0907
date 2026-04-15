@@ -284,13 +284,6 @@ function AdminOptionsPageInner() {
     () => items.filter((it) => it.group_id === selectedGroupId),
     [items, selectedGroupId]
   );
-  const itemStatus = useMemo(() => {
-    const count = groupItems.length;
-    if (count === 0) return "미등록";
-    if (count === 1) return "1개 등록";
-    return `${count}개 등록`;
-  }, [groupItems]);
-
   const scopedGroups = useMemo(
     () => groups.filter((g) => (g.scope || "common") === activeScope),
     [groups, activeScope]
@@ -1315,7 +1308,7 @@ function AdminOptionsPageInner() {
                 </div>
 
                 <div className="itemCollapsedHint">
-                  <div className="muted">옵션 항목은 주문 화면 노출에 필요합니다. 최소 1개 이상 등록해 주세요. · {itemStatus}</div>
+                  <div className="muted">옵션 항목은 최소 1개 이상 등록해주세요.</div>
                 </div>
                 {!isExclusiveSelected ? (
                   <div className="btnRow" style={{ marginTop: 12 }}>
@@ -1326,7 +1319,7 @@ function AdminOptionsPageInner() {
                 ) : null}
 
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-                    <h3 className="sectionSubTitle">옵션 항목 ({groupItems.length})</h3>
+                    <h3 className="sectionSubTitle">옵션 항목</h3>
 
                     <div className="list" style={{ marginTop: 10 }}>
                       {groupItems.map((it) => (
@@ -1378,13 +1371,7 @@ function AdminOptionsPageInner() {
                         </div>
                       ))}
 
-                      {!loading && groupItems.length === 0 ? (
-                        <div className="muted" style={{ marginTop: 10 }}>
-                          {isExclusiveSelected
-                            ? "이 그룹에는 옵션 항목이 없습니다."
-                            : "이 그룹에는 옵션 항목이 없습니다. “+ 옵션 추가”를 눌러주세요."}
-                        </div>
-                      ) : null}
+                      {!loading && groupItems.length === 0 ? <div className="muted" style={{ marginTop: 10 }}>옵션 항목을 추가해주세요.</div> : null}
 
                       {!isExclusiveSelected && showCreateItemForm ? (
                         <div className="itemCard">
