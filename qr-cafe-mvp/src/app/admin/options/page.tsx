@@ -834,6 +834,36 @@ function AdminOptionsPageInner() {
           background: #e5e7eb;
           color: #374151;
         }
+        .rowMain {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .rowMeta {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          white-space: nowrap;
+        }
+        .statusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 900;
+          padding: 4px 8px;
+        }
+        .statusRequired {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+        .statusOptional {
+          background: #e5e7eb;
+          color: #374151;
+        }
         .muted {
           color: var(--muted);
           font-weight: 800;
@@ -1213,6 +1243,11 @@ function AdminOptionsPageInner() {
                   </div>
                 </div>
 
+                <button className="sectionToggle" type="button" onClick={() => setDetailOpen((v) => !v)}>
+                  {detailOpen ? "▼ 그룹 정보 관리(접기)" : "▶ 그룹 정보 관리(펼치기)"}
+                </button>
+                {detailOpen ? (
+                  <>
                 <div className="groupTopRow">
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">그룹명</div>
