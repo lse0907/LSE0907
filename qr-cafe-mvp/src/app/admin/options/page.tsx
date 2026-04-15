@@ -287,6 +287,12 @@ function AdminOptionsPageInner() {
     () => items.filter((it) => it.group_id === selectedGroupId),
     [items, selectedGroupId]
   );
+  const itemStatus = useMemo(() => {
+    const count = groupItems.length;
+    if (count === 0) return "미등록";
+    if (count === 1) return "1개 등록";
+    return `${count}개 등록`;
+  }, [groupItems]);
 
   const scopedGroups = useMemo(
     () => groups.filter((g) => (g.scope || "common") === activeScope),
@@ -605,6 +611,7 @@ function AdminOptionsPageInner() {
   const copyGroupId = async () => {
     if (!selectedGroup?.id) return;
     try {
+      if (!navigator?.clipboard?.writeText) throw new Error("클립보드 권한을 확인해 주세요.");
       await navigator.clipboard.writeText(selectedGroup.id);
       setMsgTone("success");
       setMsg("그룹 ID를 복사했습니다.");
@@ -803,36 +810,6 @@ function AdminOptionsPageInner() {
         .name {
           font-weight: 950;
           font-size: 15px;
-        }
-        .rowMain {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-        .rowMeta {
-          display: inline-flex;
-          gap: 6px;
-          align-items: center;
-          white-space: nowrap;
-        }
-        .statusBadge {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 900;
-          padding: 4px 8px;
-        }
-        .statusRequired {
-          background: #fee2e2;
-          color: #991b1b;
-        }
-        .statusOptional {
-          background: #e5e7eb;
-          color: #374151;
         }
         .rowMain {
           display: flex;
@@ -1326,15 +1303,27 @@ function AdminOptionsPageInner() {
                 </div>
 
                 <button className="sectionToggle" type="button" onClick={() => setItemsOpen((v) => !v)}>
-                  {itemsOpen ? "▼ 옵션 항목 관리(접기)" : "▶ 옵션 항목 관리(펼치기)"}
+                  {itemsOpen ? `▼ 옵션 항목 관리(접기) · ${itemStatus}` : `▶ 옵션 항목 관리(펼치기) · ${itemStatus}`}
                 </button>
                 {!itemsOpen ? (
                   <div className="itemCollapsedHint">
                     <div className="muted">옵션 항목은 주문 화면 노출에 필요합니다. 최소 1개 이상 등록해 주세요.</div>
-                    <div>
+                    <div className="btnRow" style={{ marginTop: 0 }}>
                       <button className="btn btnPrimary" type="button" onClick={() => setItemsOpen(true)}>
                         옵션 항목 펼치기
                       </button>
+                      {!isExclusiveSelected ? (
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => {
+                            setItemsOpen(true);
+                            setShowCreateItemForm(true);
+                          }}
+                        >
+                          + 옵션 항목 바로 등록
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
@@ -1348,7 +1337,7 @@ function AdminOptionsPageInner() {
 
                 {itemsOpen ? (
                 <div style={{ marginTop: 14, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 950 }}>
+                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 950 }}>
                     옵션 항목 ({groupItems.length})
                   </h3>
 
