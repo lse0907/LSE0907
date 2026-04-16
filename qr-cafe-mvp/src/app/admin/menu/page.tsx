@@ -56,6 +56,12 @@ type MyStore = {
   store_id: string;
   store_name: string | null;
 };
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  description: string;
+  action: null | (() => void | Promise<void>);
+};
 
 type MenuDraft = {
   id: string;
@@ -137,6 +143,12 @@ function AdminMenuPageInner() {
   const [myStores, setMyStores] = useState<MyStore[]>([]);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
+  const [confirmState, setConfirmState] = useState<ConfirmState>({
+    open: false,
+    title: "",
+    description: "",
+    action: null,
+  });
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -147,6 +159,12 @@ function AdminMenuPageInner() {
   const clearStatus = () => {
     setMsgTone("neutral");
     setMsg("");
+  };
+  const openConfirm = (title: string, description: string, action: () => void | Promise<void>) => {
+    setConfirmState({ open: true, title, description, action });
+  };
+  const closeConfirm = () => {
+    setConfirmState({ open: false, title: "", description: "", action: null });
   };
 
   useEffect(() => {
@@ -279,22 +297,28 @@ function AdminMenuPageInner() {
   const onCopyMenus = async () => {
     if (!storeId) return setStatus("error", "대상 매장을 먼저 선택해주세요.");
     if (!copySourceStoreId) return setStatus("error", "원본 매장을 선택해주세요.");
-    if (!confirm("선택한 매장의 메뉴를 현재 매장으로 복사할까요?")) return;
-    try {
-      setCopying(true);
-      clearStatus();
-      const { error } = await supabase.rpc("admin_copy_menus_v1", {
-        p_source_store_id: copySourceStoreId,
-        p_target_store_id: storeId,
-      });
-      if (error) throw error;
-      await refresh();
-      setStatus("success", "메뉴 복사가 완료되었습니다.");
-    } catch (e: any) {
-      setStatus("error", `메뉴 복사 실패: ${String(e?.message || e)}`);
-    } finally {
-      setCopying(false);
-    }
+    openConfirm(
+      "메뉴 복사 확인",
+      "선택한 매장의 메뉴를 현재 매장으로 복사할까요?",
+      async () => {
+        closeConfirm();
+        try {
+          setCopying(true);
+          clearStatus();
+          const { error } = await supabase.rpc("admin_copy_menus_v1", {
+            p_source_store_id: copySourceStoreId,
+            p_target_store_id: storeId,
+          });
+          if (error) throw error;
+          await refresh();
+          setStatus("success", "메뉴 복사가 완료되었습니다.");
+        } catch (e: any) {
+          setStatus("error", `메뉴 복사 실패: ${String(e?.message || e)}`);
+        } finally {
+          setCopying(false);
+        }
+      }
+    );
   };
 
   useEffect(() => {
@@ -578,39 +602,44 @@ function AdminMenuPageInner() {
 
   const deleteExclusiveItemInMenu = async (itemId: string) => {
     if (!storeId || !draft.id.trim()) return;
-    if (!confirm("옵션 항목을 삭제할까요?")) return;
+    openConfirm(
+      "옵션 항목 삭제",
+      "선택한 옵션 항목을 삭제할까요?",
+      async () => {
+        closeConfirm();
+        setSaving(true);
+        clearStatus();
+        try {
+          const delPrice = await supabase
+            .from("menu_option_prices")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("menu_id", draft.id.trim())
+            .eq("option_item_id", itemId);
+          if (delPrice.error) throw delPrice.error;
 
-    setSaving(true);
-    clearStatus();
-    try {
-      const delPrice = await supabase
-        .from("menu_option_prices")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("menu_id", draft.id.trim())
-        .eq("option_item_id", itemId);
-      if (delPrice.error) throw delPrice.error;
+          const delItem = await supabase
+            .from("option_items")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("id", itemId);
+          if (delItem.error) throw delItem.error;
 
-      const delItem = await supabase
-        .from("option_items")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("id", itemId);
-      if (delItem.error) throw delItem.error;
+          setDraft((prev) => {
+            const nextPrices = { ...prev.optionPriceByItem };
+            delete nextPrices[itemId];
+            return { ...prev, optionPriceByItem: nextPrices };
+          });
 
-      setDraft((prev) => {
-        const nextPrices = { ...prev.optionPriceByItem };
-        delete nextPrices[itemId];
-        return { ...prev, optionPriceByItem: nextPrices };
-      });
-
-      await refresh();
-      setStatus("success", "옵션 항목을 삭제했습니다.");
-    } catch (e: any) {
-      setStatus("error", `옵션 항목 삭제 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
+          await refresh();
+          setStatus("success", "옵션 항목을 삭제했습니다.");
+        } catch (e: any) {
+          setStatus("error", `옵션 항목 삭제 실패: ${String(e?.message || e)}`);
+        } finally {
+          setSaving(false);
+        }
+      }
+    );
   };
 
   const saveCommonPricesInMenu = async () => {
@@ -693,56 +722,61 @@ function AdminMenuPageInner() {
 
   const deleteExclusiveGroupInMenu = async (groupId: string) => {
     if (!storeId) return;
-    if (!confirm(`등록된 전용옵션 그룹을 삭제할까요?\n연결된 옵션 항목도 함께 삭제됩니다.`)) return;
+    openConfirm(
+      "전용옵션 그룹 삭제",
+      "등록된 전용옵션 그룹과 연결된 옵션 항목을 함께 삭제할까요?",
+      async () => {
+        closeConfirm();
+        setSaving(true);
+        clearStatus();
+        try {
+          const groupItems = itemsByGroup.get(groupId) || [];
+          const itemIds = groupItems.map((it) => it.id);
 
-    setSaving(true);
-    clearStatus();
-    try {
-      const groupItems = itemsByGroup.get(groupId) || [];
-      const itemIds = groupItems.map((it) => it.id);
+          if (itemIds.length > 0) {
+            const delPrices = await supabase
+              .from("menu_option_prices")
+              .delete()
+              .eq("store_id", storeId)
+              .eq("menu_id", draft.id.trim())
+              .in("option_item_id", itemIds);
+            if (delPrices.error) throw delPrices.error;
+          }
 
-      if (itemIds.length > 0) {
-        const delPrices = await supabase
-          .from("menu_option_prices")
-          .delete()
-          .eq("store_id", storeId)
-          .eq("menu_id", draft.id.trim())
-          .in("option_item_id", itemIds);
-        if (delPrices.error) throw delPrices.error;
+          const delItems = await supabase
+            .from("option_items")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("group_id", groupId);
+          if (delItems.error) throw delItems.error;
+
+          const delGroup = await supabase
+            .from("option_groups")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("id", groupId);
+          if (delGroup.error) throw delGroup.error;
+
+          setDraft((prev) => {
+            const nextPrices = { ...prev.optionPriceByItem };
+            itemIds.forEach((id) => delete nextPrices[id]);
+            return {
+              ...prev,
+              optionGroupIds: prev.optionGroupIds.filter((id) => id !== groupId),
+              optionPriceByItem: nextPrices,
+            };
+          });
+
+          await refresh();
+          setSelectedExclusiveGroupId((prev) => (prev === groupId ? "" : prev));
+          setStatus("success", "전용옵션을 삭제했습니다.");
+        } catch (e: any) {
+          setStatus("error", `전용옵션 삭제 실패: ${String(e?.message || e)}`);
+        } finally {
+          setSaving(false);
+        }
       }
-
-      const delItems = await supabase
-        .from("option_items")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("group_id", groupId);
-      if (delItems.error) throw delItems.error;
-
-      const delGroup = await supabase
-        .from("option_groups")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("id", groupId);
-      if (delGroup.error) throw delGroup.error;
-
-      setDraft((prev) => {
-        const nextPrices = { ...prev.optionPriceByItem };
-        itemIds.forEach((id) => delete nextPrices[id]);
-        return {
-          ...prev,
-          optionGroupIds: prev.optionGroupIds.filter((id) => id !== groupId),
-          optionPriceByItem: nextPrices,
-        };
-      });
-
-      await refresh();
-      setSelectedExclusiveGroupId((prev) => (prev === groupId ? "" : prev));
-      setStatus("success", "전용옵션을 삭제했습니다.");
-    } catch (e: any) {
-      setStatus("error", `전용옵션 삭제 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   const createExclusiveGroupInMenu = async () => {
@@ -1297,6 +1331,46 @@ function AdminMenuPageInner() {
           height: 1px;
           background: var(--line);
           margin: 10px 0;
+        }
+        .confirmOverlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.45);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 60;
+          padding: 16px;
+        }
+        .confirmCard {
+          width: 100%;
+          max-width: 440px;
+          border-radius: 14px;
+          border: 1px solid var(--line);
+          background: #fff;
+          box-shadow: 0 16px 44px rgba(15, 23, 42, 0.2);
+          padding: 16px;
+          display: grid;
+          gap: 10px;
+        }
+        .confirmTitle {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 950;
+        }
+        .confirmDesc {
+          margin: 0;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 800;
+          line-height: 1.45;
+        }
+        .confirmActions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-top: 4px;
         }
         @media (max-width: 980px) {
           .grid {
@@ -1904,6 +1978,27 @@ function AdminMenuPageInner() {
           </div>
         </section>
       )}
+      {confirmState.open ? (
+        <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="menu-confirm-title">
+          <div className="confirmCard">
+            <h3 id="menu-confirm-title" className="confirmTitle">{confirmState.title}</h3>
+            <p className="confirmDesc">{confirmState.description}</p>
+            <div className="confirmActions">
+              <button className="btn" type="button" onClick={closeConfirm} disabled={saving || copying}>
+                취소
+              </button>
+              <button
+                className="btn btnPrimary"
+                type="button"
+                onClick={() => void confirmState.action?.()}
+                disabled={saving || copying}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
