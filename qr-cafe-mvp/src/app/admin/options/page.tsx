@@ -72,6 +72,7 @@ function AdminOptionsPageInner() {
     required: false,
     min: "0",
     max: "1",
+    sortOrder: "",
     scope: "common" as "common" | "exclusive",
     linkedMenuId: "",
   });
@@ -280,7 +281,7 @@ function AdminOptionsPageInner() {
 
   useEffect(() => {
     if (!selectedGroup) {
-      setGroupDraft({ name: "", required: false, min: "0", max: "1", scope: "common", linkedMenuId: "" });
+      setGroupDraft({ name: "", required: false, min: "0", max: "1", sortOrder: "", scope: "common", linkedMenuId: "" });
       setShowCreateItemForm(false);
       setNewItemDraft({ name: "", price: "" });
       return;
@@ -290,6 +291,7 @@ function AdminOptionsPageInner() {
       required: Boolean(selectedGroup.required),
       min: String(selectedGroup.min ?? 0),
       max: String(selectedGroup.max ?? 1),
+      sortOrder: selectedGroup.sort_order == null ? "" : String(selectedGroup.sort_order),
       scope: selectedGroup.scope === "exclusive" ? "exclusive" : "common",
       linkedMenuId: selectedGroup.linked_menu_id || "",
     });
@@ -1429,11 +1431,13 @@ function AdminOptionsPageInner() {
                       onClick={() => {
                         const min = groupDraft.required ? 1 : 0;
                         const max = Math.max(toInt(groupDraft.max, selectedGroup.max), 0);
+                        const sortOrder = Math.max(toInt(groupDraft.sortOrder, selectedGroup.sort_order ?? 1), 1);
                         updateGroup({
                           name: groupDraft.name.trim() || selectedGroup.name,
                           required: groupDraft.required,
                           min,
                           max,
+                          sort_order: sortOrder,
                           scope: groupDraft.scope,
                           linked_menu_id: groupDraft.scope === "exclusive" ? groupDraft.linkedMenuId || null : null,
                         });
