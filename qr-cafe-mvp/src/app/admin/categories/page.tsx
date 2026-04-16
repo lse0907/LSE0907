@@ -369,6 +369,8 @@ function CategoriesPageInner() {
         .categoryMetaRight{display:inline-flex;gap:8px;align-items:center;white-space:nowrap}
         .categoryActionRow{display:inline-flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
         .categoryOrderEdge{display:inline-flex;justify-content:flex-end}
+        .listHeaderBlock{display:grid;gap:0}
+        .listGuideText{margin:0}
         .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
@@ -406,15 +408,24 @@ function CategoriesPageInner() {
             max-height:45vh;
           }
           .categoryRow{
-            grid-template-columns:1fr;
-            align-items:flex-start;
+            grid-template-columns:minmax(0,1fr) auto;
+            align-items:center;
+          }
+          .categoryMainRow{
+            grid-column:1;
+            flex-wrap:nowrap;
+            min-width:0;
+          }
+          .categoryMetaRight{
+            flex:0 0 auto;
           }
           .categoryActionRow{
             width:100%;
-            justify-content:flex-start;
+            grid-column:1 / -1;
+            justify-content:flex-end;
           }
           .categoryOrderEdge{
-            width:100%;
+            grid-column:2;
             justify-content:flex-end;
           }
         }
@@ -479,11 +490,13 @@ function CategoriesPageInner() {
       </section>
 
       <section className="card">
-        <div className="row headerRow">
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>카테고리 목록</h2>
-          <button className="btn" onClick={saveCategoryOrder} disabled={actionBusy || loading || !orderDirty}>순서 저장</button>
+        <div className="listHeaderBlock">
+          <div className="row headerRow">
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>카테고리 목록</h2>
+            <button className="btn" onClick={saveCategoryOrder} disabled={actionBusy || loading || !orderDirty}>순서 저장</button>
+          </div>
+          <p className="muted listGuideText">카테고리 순서는 목록의 ↑/↓ 이동 후 저장하세요.</p>
         </div>
-        <p className="muted">카테고리 순서는 목록의 ↑/↓ 이동 후 저장하세요.</p>
         {loading ? <p className="muted">불러오는 중...</p> : cats.length === 0 ? <p className="muted">등록된 카테고리가 없습니다.</p> : (
           <div className="categoryListScroll">
             <div style={{ display: "grid", gap: 8 }}>
