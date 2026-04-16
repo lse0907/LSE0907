@@ -122,6 +122,7 @@ function AdminMenuPageInner() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageFileName, setImageFileName] = useState("");
   const [msg, setMsg] = useState("");
+  const [msgTone, setMsgTone] = useState<"neutral" | "success" | "error">("neutral");
   const [showExclusiveCreateForm, setShowExclusiveCreateForm] = useState(false);
   const [commonGroupToAdd, setCommonGroupToAdd] = useState("");
   const [newExclusiveGroup, setNewExclusiveGroup] = useState({
@@ -139,6 +140,14 @@ function AdminMenuPageInner() {
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
+  const setStatus = (tone: "neutral" | "success" | "error", text: string) => {
+    setMsgTone(tone);
+    setMsg(text);
+  };
+  const clearStatus = () => {
+    setMsgTone("neutral");
+    setMsg("");
+  };
 
   useEffect(() => {
     const queryStore = (sp.get("store") || "").trim();
@@ -240,6 +249,7 @@ function AdminMenuPageInner() {
       console.error("[admin/menu] refresh error:", e?.message || e);
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", `메뉴 데이터 로드 실패: ${String(e?.message || e)}`);
     } finally {
       setLoading(false);
     }
@@ -267,21 +277,21 @@ function AdminMenuPageInner() {
   }, [storeId, copySourceStoreId]);
 
   const onCopyMenus = async () => {
-    if (!storeId) return setMsg("대상 매장을 먼저 선택해주세요.");
-    if (!copySourceStoreId) return setMsg("원본 매장을 선택해주세요.");
+    if (!storeId) return setStatus("error", "대상 매장을 먼저 선택해주세요.");
+    if (!copySourceStoreId) return setStatus("error", "원본 매장을 선택해주세요.");
     if (!confirm("선택한 매장의 메뉴를 현재 매장으로 복사할까요?")) return;
     try {
       setCopying(true);
-      setMsg("");
+      clearStatus();
       const { error } = await supabase.rpc("admin_copy_menus_v1", {
         p_source_store_id: copySourceStoreId,
         p_target_store_id: storeId,
       });
       if (error) throw error;
       await refresh();
-      setMsg("메뉴 복사가 완료되었습니다.");
+      setStatus("success", "메뉴 복사가 완료되었습니다.");
     } catch (e: any) {
-      setMsg(`메뉴 복사 실패: ${String(e?.message || e)}`);
+      setStatus("error", `메뉴 복사 실패: ${String(e?.message || e)}`);
     } finally {
       setCopying(false);
     }
@@ -333,7 +343,7 @@ function AdminMenuPageInner() {
     setSelectedId("");
     setDraft(emptyDraft);
     setImageFileName("");
-    setMsg("");
+    clearStatus();
     setShowExclusiveCreateForm(false);
   };
 
@@ -346,23 +356,27 @@ function AdminMenuPageInner() {
     if (!name) {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "메뉴명을 입력해주세요.");
       return;
     }
 
     if (!id) {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "메뉴 ID를 입력해주세요.");
       return;
     }
 
     if (price < 0) {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "기본 가격은 0 이상의 숫자로 입력해주세요.");
       return;
     }
 
     setSaving(true);
     setBadge("idle");
+    clearStatus();
 
     try {
       if (!hasLinkedMenuColumn) {
@@ -374,7 +388,7 @@ function AdminMenuPageInner() {
         if (hasExclusiveSelection) {
           setBadge("error");
           setTimeout(() => setBadge("idle"), 1600);
-          setMsg("DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+          setStatus("error", "DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
           return;
         }
       }
@@ -447,10 +461,12 @@ function AdminMenuPageInner() {
       setSelectedId(id);
       setBadge("saved");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("success", "메뉴를 저장했습니다.");
     } catch (e: any) {
       console.error("[admin/menu] save error:", e?.message || e);
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", `메뉴 저장 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -471,10 +487,12 @@ function AdminMenuPageInner() {
       setDraft(emptyDraft);
       setBadge("saved");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("success", "메뉴를 삭제했습니다.");
     } catch (e: any) {
       console.error("[admin/menu] delete error:", e?.message || e);
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", `메뉴 삭제 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -501,12 +519,12 @@ function AdminMenuPageInner() {
 
     const nextName = exclusiveEdit.name.trim();
     if (!nextName) {
-      setMsg("전용옵션 그룹명을 입력해주세요.");
+      setStatus("error", "전용옵션 그룹명을 입력해주세요.");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const nextMax = Math.max(toInt(exclusiveEdit.max, selectedExclusiveGroup.max || 1), 1);
       const { error } = await supabase
@@ -517,9 +535,9 @@ function AdminMenuPageInner() {
       if (error) throw error;
 
       await refresh();
-      setMsg("전용옵션 그룹을 수정했습니다.");
+      setStatus("success", "전용옵션 그룹을 수정했습니다.");
     } catch (e: any) {
-      setMsg(`옵션수정 실패: ${String(e?.message || e)}`);
+      setStatus("error", `옵션수정 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -530,12 +548,12 @@ function AdminMenuPageInner() {
 
     const name = newSelectedExclusiveItem.name.trim();
     if (!name) {
-      setMsg("추가할 옵션 항목명을 입력해주세요.");
+      setStatus("error", "추가할 옵션 항목명을 입력해주세요.");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const row = {
         id: `item_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`,
@@ -550,9 +568,9 @@ function AdminMenuPageInner() {
 
       setNewSelectedExclusiveItem({ name: "", price: "" });
       await refresh();
-      setMsg("옵션 항목을 추가했습니다.");
+      setStatus("success", "옵션 항목을 추가했습니다.");
     } catch (e: any) {
-      setMsg(`옵션 항목 추가 실패: ${String(e?.message || e)}`);
+      setStatus("error", `옵션 항목 추가 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -563,7 +581,7 @@ function AdminMenuPageInner() {
     if (!confirm("옵션 항목을 삭제할까요?")) return;
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const delPrice = await supabase
         .from("menu_option_prices")
@@ -587,9 +605,9 @@ function AdminMenuPageInner() {
       });
 
       await refresh();
-      setMsg("옵션 항목을 삭제했습니다.");
+      setStatus("success", "옵션 항목을 삭제했습니다.");
     } catch (e: any) {
-      setMsg(`옵션 항목 삭제 실패: ${String(e?.message || e)}`);
+      setStatus("error", `옵션 항목 삭제 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -599,7 +617,7 @@ function AdminMenuPageInner() {
     if (!storeId) return;
     const menuId = draft.id.trim();
     if (!menuId) {
-      setMsg("메뉴를 먼저 저장한 뒤 단가를 수정해주세요.");
+      setStatus("error", "메뉴를 먼저 저장한 뒤 단가를 수정해주세요.");
       return;
     }
 
@@ -607,12 +625,12 @@ function AdminMenuPageInner() {
       (itemsByGroup.get(group.id) || []).map((item) => item.id)
     );
     if (commonItemIds.length === 0) {
-      setMsg("저장할 공통옵션 항목이 없습니다.");
+      setStatus("neutral", "저장할 공통옵션 항목이 없습니다.");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const rows = commonItemIds.map((optionItemId) => ({
         store_id: storeId,
@@ -627,9 +645,9 @@ function AdminMenuPageInner() {
       if (error) throw error;
 
       await refresh();
-      setMsg("공통옵션 단가를 수정했습니다.");
+      setStatus("success", "공통옵션 단가를 수정했습니다.");
     } catch (e: any) {
-      setMsg(`공통옵션 단가 수정 실패: ${String(e?.message || e)}`);
+      setStatus("error", `공통옵션 단가 수정 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -639,18 +657,18 @@ function AdminMenuPageInner() {
     if (!storeId || !selectedExclusiveGroup) return;
     const menuId = draft.id.trim();
     if (!menuId) {
-      setMsg("메뉴를 먼저 저장한 뒤 단가를 저장해주세요.");
+      setStatus("error", "메뉴를 먼저 저장한 뒤 단가를 저장해주세요.");
       return;
     }
 
     const itemIds = (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => item.id);
     if (itemIds.length === 0) {
-      setMsg("저장할 옵션 항목이 없습니다.");
+      setStatus("neutral", "저장할 옵션 항목이 없습니다.");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const rows = itemIds.map((optionItemId) => ({
         store_id: storeId,
@@ -665,9 +683,9 @@ function AdminMenuPageInner() {
       if (error) throw error;
 
       await refresh();
-      setMsg("옵션 단가를 저장했습니다.");
+      setStatus("success", "옵션 단가를 저장했습니다.");
     } catch (e: any) {
-      setMsg(`옵션 단가 저장 실패: ${String(e?.message || e)}`);
+      setStatus("error", `옵션 단가 저장 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -678,7 +696,7 @@ function AdminMenuPageInner() {
     if (!confirm(`등록된 전용옵션 그룹을 삭제할까요?\n연결된 옵션 항목도 함께 삭제됩니다.`)) return;
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const groupItems = itemsByGroup.get(groupId) || [];
       const itemIds = groupItems.map((it) => it.id);
@@ -719,9 +737,9 @@ function AdminMenuPageInner() {
 
       await refresh();
       setSelectedExclusiveGroupId((prev) => (prev === groupId ? "" : prev));
-      setMsg("전용옵션을 삭제했습니다.");
+      setStatus("success", "전용옵션을 삭제했습니다.");
     } catch (e: any) {
-      setMsg(`전용옵션 삭제 실패: ${String(e?.message || e)}`);
+      setStatus("error", `전용옵션 삭제 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -731,12 +749,12 @@ function AdminMenuPageInner() {
     if (!storeId) return;
     const menuId = draft.id.trim();
     if (!menuId) {
-      setMsg("전용옵션을 만들기 전에 메뉴명을 입력해 메뉴 ID를 먼저 만들어주세요.");
+      setStatus("error", "전용옵션을 만들기 전에 메뉴명을 입력해 메뉴 ID를 먼저 만들어주세요.");
       return;
     }
     const groupName = newExclusiveGroup.name.trim();
     if (!groupName) {
-      setMsg("전용옵션 그룹명을 입력해주세요.");
+      setStatus("error", "전용옵션 그룹명을 입력해주세요.");
       return;
     }
 
@@ -744,12 +762,12 @@ function AdminMenuPageInner() {
       .map((x) => ({ name: x.name.trim(), price: toInt(x.price, 0) }))
       .filter((x) => Boolean(x.name));
     if (cleanedItems.length === 0) {
-      setMsg("전용옵션 항목을 1개 이상 입력해주세요.");
+      setStatus("error", "전용옵션 항목을 1개 이상 입력해주세요.");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const groupId = `group_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
       const min = 0;
@@ -797,9 +815,9 @@ function AdminMenuPageInner() {
       setShowExclusiveItemInputs(false);
       setShowExclusiveCreateForm(false);
       await refresh();
-      setMsg("전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
+      setStatus("success", "전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
     } catch (e: any) {
-      setMsg(`전용옵션 생성 실패: ${String(e?.message || e)}`);
+      setStatus("error", `전용옵션 생성 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -872,12 +890,12 @@ function AdminMenuPageInner() {
   const onUploadMenuImage = async (file: File | null) => {
     if (!file) return;
     if (!draft.id.trim()) {
-      setMsg("이미지를 올리려면 메뉴 ID를 먼저 입력해주세요.");
+      setStatus("error", "이미지를 올리려면 메뉴 ID를 먼저 입력해주세요.");
       return;
     }
 
     setUploadingImage(true);
-    setMsg("");
+    clearStatus();
     try {
       setImageFileName(file.name || "");
       const ext = getFileExt(file.name) || "png";
@@ -889,7 +907,7 @@ function AdminMenuPageInner() {
       const url = data.publicUrl || "";
       if (url) setDraft((prev) => ({ ...prev, image: url }));
     } catch (e: any) {
-      setMsg(`메뉴 이미지 업로드 실패: ${String(e?.message || e)}`);
+      setStatus("error", `메뉴 이미지 업로드 실패: ${String(e?.message || e)}`);
     } finally {
       setUploadingImage(false);
     }
@@ -1346,7 +1364,13 @@ function AdminMenuPageInner() {
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
           {msg ? (
-            <p className="sub" style={{ marginTop: 6, color: "#b91c1c" }}>
+            <p
+              className="sub"
+              style={{
+                marginTop: 6,
+                color: msgTone === "success" ? "#065f46" : msgTone === "error" ? "#b91c1c" : "#374151",
+              }}
+            >
               {msg}
             </p>
           ) : null}
