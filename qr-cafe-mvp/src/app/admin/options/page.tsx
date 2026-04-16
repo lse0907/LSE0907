@@ -1102,18 +1102,37 @@ function AdminOptionsPageInner() {
           margin-left: 2px;
         }
         .orderBtn {
-          border: 1px solid var(--line);
-          background: #fff;
-          border-radius: 8px;
-          width: 26px;
-          height: 24px;
-          font-weight: 900;
+          border: 1px solid #dbe2ea;
+          background: linear-gradient(180deg, #ffffff, #f8fafc);
+          border-radius: 9px;
+          width: 28px;
+          height: 26px;
           cursor: pointer;
-          line-height: 1;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+          transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+        }
+        .orderBtn:hover:not(:disabled) {
+          border-color: #cbd5e1;
+          background: #f1f5f9;
+        }
+        .orderBtn:active:not(:disabled) {
+          transform: translateY(1px);
         }
         .orderBtn:disabled {
-          opacity: 0.5;
+          opacity: 0.45;
           cursor: not-allowed;
+        }
+        .orderBtn svg {
+          width: 14px;
+          height: 14px;
+          stroke: #334155;
+          stroke-width: 2.2;
+          fill: none;
+          stroke-linecap: round;
+          stroke-linejoin: round;
         }
 
         .itemCard {
@@ -1321,7 +1340,9 @@ function AdminOptionsPageInner() {
                             disabled={actionBusy || loading || idx === 0 || !hasSortOrderColumn}
                             aria-label={`${g.name} 위로 이동`}
                           >
-                            ↑
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M6 14l6-6 6 6" />
+                            </svg>
                           </button>
                           <button
                             className="orderBtn"
@@ -1334,7 +1355,9 @@ function AdminOptionsPageInner() {
                             disabled={actionBusy || loading || idx === scopedGroups.length - 1 || !hasSortOrderColumn}
                             aria-label={`${g.name} 아래로 이동`}
                           >
-                            ↓
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M6 10l6 6 6-6" />
+                            </svg>
                           </button>
                         </span>
                       ) : null}
