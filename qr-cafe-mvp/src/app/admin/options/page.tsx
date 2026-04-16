@@ -1240,26 +1240,6 @@ function AdminOptionsPageInner() {
               {msg}
             </div>
           ) : null}
-          {!loading && groups.length === 0 && items.length === 0 ? (
-            <>
-              <div className="copyRow">
-                <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
-                  <option value="">원본 매장 선택</option>
-                  {myStores.map((s) => (
-                    <option key={s.store_id} value={s.store_id}>
-                      {s.store_name || s.store_id} ({s.store_id})
-                    </option>
-                  ))}
-                </select>
-                <button className="btn copyBtn" type="button" onClick={onCopyOptions} disabled={actionBusy || loading || !copySourceStoreId}>
-                  {copying ? "복사 중..." : "다른 매장 옵션 복사"}
-                </button>
-              </div>
-              <p className="sub" style={{ marginTop: 6 }}>
-                최초 등록 시에만 복사 기능이 활성화됩니다.
-              </p>
-            </>
-          ) : null}
           <div className="scopeRow">
             {[
               { key: "common", label: "공통옵션" },
@@ -1278,6 +1258,27 @@ function AdminOptionsPageInner() {
         </div>
 
       </header>
+
+      {!loading && groups.length === 0 && items.length === 0 ? (
+        <section className="card">
+          <div className="copyRow">
+            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn copyBtn" type="button" onClick={onCopyOptions} disabled={actionBusy || loading || !copySourceStoreId}>
+              {copying ? "복사 중..." : "다른 매장 옵션 복사"}
+            </button>
+          </div>
+          <p className="sub" style={{ marginTop: 6 }}>
+            최초 등록 시에만 복사 기능이 활성화됩니다.
+          </p>
+        </section>
+      ) : null}
 
       {!storeId ? (
         <section className="card">
