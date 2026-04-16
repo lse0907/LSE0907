@@ -92,6 +92,7 @@ function AdminOptionsPageInner() {
   });
   const [editingItemId, setEditingItemId] = useState("");
   const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
+  const [orderDirty, setOrderDirty] = useState(false);
 
   const toErrMsg = (e: unknown) => {
     if (e instanceof Error) return e.message;
@@ -123,10 +124,11 @@ function AdminOptionsPageInner() {
       if (authErr) throw authErr;
       if (!authData?.user) {
         // 비로그인이라면 화면에서 안내만 (미들웨어에서 막는 게 더 좋음)
-        setGroups([]);
-        setItems([]);
-        setSelectedGroupId("");
-        return;
+      setGroups([]);
+      setItems([]);
+      setSelectedGroupId("");
+      setOrderDirty(false);
+      return;
       }
 
       let nextGroups: OptionGroup[] = [];
@@ -188,6 +190,7 @@ function AdminOptionsPageInner() {
       setGroups(nextGroups);
       setItems(nextItems);
       setMenus(nextMenus);
+      setOrderDirty(false);
 
       // 선택 그룹 자동 세팅
       setSelectedGroupId((prev) => {
@@ -299,9 +302,24 @@ function AdminOptionsPageInner() {
     [items, selectedGroupId]
   );
   const scopedGroups = useMemo(
-    () => groups.filter((g) => (g.scope || "common") === activeScope),
+    () =>
+      groups
+        .filter((g) => (g.scope || "common") === activeScope)
+        .sort((a, b) => {
+          const ao = Number(a.sort_order ?? Number.MAX_SAFE_INTEGER);
+          const bo = Number(b.sort_order ?? Number.MAX_SAFE_INTEGER);
+          if (ao !== bo) return ao - bo;
+          return a.id.localeCompare(b.id);
+        }),
     [groups, activeScope]
   );
+  const itemCountByGroupId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const it of items) {
+      m.set(it.group_id, (m.get(it.group_id) || 0) + 1);
+    }
+    return m;
+  }, [items]);
 
   useEffect(() => {
     setSelectedGroupId((prev) => {
@@ -489,6 +507,53 @@ function AdminOptionsPageInner() {
       }
     );
     return;
+  };
+
+  const moveCommonGroup = (groupId: string, dir: -1 | 1) => {
+    const common = scopedGroups.filter((g) => (g.scope || "common") === "common");
+    const idx = common.findIndex((g) => g.id === groupId);
+    if (idx < 0) return;
+    const nextIdx = idx + dir;
+    if (nextIdx < 0 || nextIdx >= common.length) return;
+
+    const ids = common.map((g) => g.id);
+    [ids[idx], ids[nextIdx]] = [ids[nextIdx], ids[idx]];
+
+    setGroups((prev) => {
+      const orderMap = new Map(ids.map((id, i) => [id, i + 1]));
+      return prev.map((g) => ((g.scope || "common") === "common" && orderMap.has(g.id) ? { ...g, sort_order: orderMap.get(g.id)! } : g));
+    });
+    setOrderDirty(true);
+  };
+
+  const saveCommonOrder = async () => {
+    if (!storeId || actionBusy) return;
+    const common = scopedGroups.filter((g) => (g.scope || "common") === "common");
+    try {
+      setSaving(true);
+      setBadge("idle");
+      for (let i = 0; i < common.length; i += 1) {
+        const g = common[i];
+        const { error } = await supabase
+          .from("option_groups")
+          .update({ sort_order: i + 1 })
+          .eq("store_id", storeId)
+          .eq("id", g.id);
+        if (error) throw error;
+      }
+      await refresh();
+      markSaved();
+      setMsgTone("success");
+      setMsg("옵션 그룹 순서를 저장했습니다.");
+      setOrderDirty(false);
+    } catch (e: unknown) {
+      console.error("[admin/options] saveCommonOrder:", toErrMsg(e));
+      markError();
+      setMsgTone("error");
+      setMsg(`그룹 순서 저장 실패: ${toErrMsg(e)}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ===== 아이템 CRUD =====
@@ -932,7 +997,7 @@ function AdminOptionsPageInner() {
         }
         .groupTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1.6fr) auto minmax(88px, 110px) minmax(88px, 110px);
+          grid-template-columns: minmax(0, 1.6fr) auto minmax(88px, 110px);
           gap: 10px;
           align-items: end;
         }
@@ -1031,6 +1096,25 @@ function AdminOptionsPageInner() {
           padding: 8px 10px;
           border-radius: 10px;
         }
+        .orderActionRow {
+          display: inline-flex;
+          gap: 4px;
+          margin-left: 2px;
+        }
+        .orderBtn {
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 8px;
+          width: 26px;
+          height: 24px;
+          font-weight: 900;
+          cursor: pointer;
+          line-height: 1;
+        }
+        .orderBtn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
 
         .itemCard {
           border: 1px solid var(--line);
@@ -1125,19 +1209,21 @@ function AdminOptionsPageInner() {
               {msg}
             </div>
           ) : null}
-          <div className="copyRow">
-            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
-              <option value="">원본 매장 선택</option>
-              {myStores.map((s) => (
-                <option key={s.store_id} value={s.store_id}>
-                  {s.store_name || s.store_id} ({s.store_id})
-                </option>
-              ))}
-            </select>
-            <button className="btn copyBtn" type="button" onClick={onCopyOptions} disabled={actionBusy || loading || !copySourceStoreId}>
-              {copying ? "복사 중..." : "다른 매장 옵션 복사"}
-            </button>
-          </div>
+          {groups.length === 0 && items.length === 0 ? (
+            <div className="copyRow">
+              <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+                <option value="">원본 매장 선택</option>
+                {myStores.map((s) => (
+                  <option key={s.store_id} value={s.store_id}>
+                    {s.store_name || s.store_id} ({s.store_id})
+                  </option>
+                ))}
+              </select>
+              <button className="btn copyBtn" type="button" onClick={onCopyOptions} disabled={actionBusy || loading || !copySourceStoreId}>
+                {copying ? "복사 중..." : "다른 매장 옵션 복사"}
+              </button>
+            </div>
+          ) : null}
           <div className="scopeRow">
             {[
               { key: "common", label: "공통옵션" },
@@ -1187,18 +1273,28 @@ function AdminOptionsPageInner() {
             ) : null}
 
             {activeScope === "common" ? (
-              <div className="btnRow">
-                <button className="btn btnPrimary" onClick={addGroup} disabled={actionBusy || loading}>
-                  + 새 그룹
-                </button>
-                <button className="btn" onClick={refresh} disabled={actionBusy || loading}>
-                  새로고침
-                </button>
-              </div>
+              <>
+                <div className="btnRow">
+                  <button className="btn btnPrimary" onClick={addGroup} disabled={actionBusy || loading}>
+                    + 새 그룹
+                  </button>
+                  <button className="btn" onClick={refresh} disabled={actionBusy || loading}>
+                    새로고침
+                  </button>
+                  <button className="btn" onClick={saveCommonOrder} disabled={actionBusy || loading || !orderDirty || !hasSortOrderColumn}>
+                    순서 저장
+                  </button>
+                </div>
+                {!hasSortOrderColumn ? (
+                  <div className="muted" style={{ marginTop: 6 }}>
+                    DB에 sort_order 컬럼이 없어 순서 이동/저장이 비활성화되었습니다. SQL 적용 후 사용해주세요.
+                  </div>
+                ) : null}
+              </>
             ) : null}
 
             <div className="list groupList">
-              {scopedGroups.map((g) => (
+              {scopedGroups.map((g, idx) => (
                 <button
                   key={g.id}
                   className={`rowBtn ${g.id === selectedGroupId ? "rowBtnOn" : ""}`}
@@ -1207,11 +1303,41 @@ function AdminOptionsPageInner() {
                   <div className="rowMain">
                     <div className="name">{g.name}</div>
                     <div className="rowMeta">
-                      <span className="pill">우선순위 {g.sort_order ?? "-"}</span>
+                      <span className="pill">항목 {itemCountByGroupId.get(g.id) || 0}개</span>
                       <span className={`statusBadge ${g.required ? "statusRequired" : "statusOptional"}`}>
                         {g.required ? "필수" : "선택"}
                       </span>
                       <span className="muted">{g.min}~{g.max}개</span>
+                      {activeScope === "common" ? (
+                        <span className="orderActionRow">
+                          <button
+                            className="orderBtn"
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveCommonGroup(g.id, -1);
+                            }}
+                            disabled={actionBusy || loading || idx === 0 || !hasSortOrderColumn}
+                            aria-label={`${g.name} 위로 이동`}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            className="orderBtn"
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveCommonGroup(g.id, 1);
+                            }}
+                            disabled={actionBusy || loading || idx === scopedGroups.length - 1 || !hasSortOrderColumn}
+                            aria-label={`${g.name} 아래로 이동`}
+                          >
+                            ↓
+                          </button>
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   {activeScope === "exclusive" ? (
@@ -1289,17 +1415,6 @@ function AdminOptionsPageInner() {
                       disabled={actionBusy || loading || isExclusiveSelected}
                     />
                   </div>
-                  <div className="field" style={{ marginTop: 0 }}>
-                    <div className="label">우선순위</div>
-                    <input
-                      className="input maxInput"
-                      inputMode="numeric"
-                      value={groupDraft.sortOrder}
-                      onChange={(e) => setGroupDraft((prev) => ({ ...prev, sortOrder: e.target.value }))}
-                      disabled={actionBusy || loading || isExclusiveSelected || !hasSortOrderColumn}
-                      placeholder={hasSortOrderColumn ? "숫자" : "DB 컬럼 필요"}
-                    />
-                  </div>
                 </div>
 
                 <div className="idInlineRow">
@@ -1336,12 +1451,6 @@ function AdminOptionsPageInner() {
                     그룹 삭제
                   </button>
                 </div>
-
-                {!hasSortOrderColumn ? (
-                  <div className="muted" style={{ marginTop: 8 }}>
-                    DB에 sort_order 컬럼이 없어 우선순위 저장이 비활성화되었습니다. 2차 SQL을 먼저 실행해주세요.
-                  </div>
-                ) : null}
 
                 <div className="itemCollapsedHint">
                   <div className="muted">옵션 항목은 최소 1개 이상 등록해주세요.</div>
