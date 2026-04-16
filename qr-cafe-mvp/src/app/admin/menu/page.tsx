@@ -147,6 +147,10 @@ function AdminMenuPageInner() {
   const [myStores, setMyStores] = useState<MyStore[]>([]);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategoryId, setFilterCategoryId] = useState("");
+  const [soldOutOnly, setSoldOutOnly] = useState(false);
+  const [orderDirty, setOrderDirty] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState>({
     open: false,
     title: "",
@@ -262,6 +266,7 @@ function AdminMenuPageInner() {
       setOptionItems((itemRes.data || []) as OptionItem[]);
       setOptionPrices((priceRes.data || []) as MenuOptionPrice[]);
       setCategories((categoryRes.data || []) as MenuCategory[]);
+      setOrderDirty(false);
 
       setSelectedId((prev) => {
         if (prev && (menuRes.data || []).some((x) => x.id === prev)) return prev;
@@ -366,6 +371,15 @@ function AdminMenuPageInner() {
     });
     return list;
   }, [items]);
+  const filteredItems = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+    return sortedItems.filter((m) => {
+      if (soldOutOnly && !m.is_sold_out) return false;
+      if (filterCategoryId && String(m.category_id || "") !== filterCategoryId) return false;
+      if (keyword && !String(m.name || "").toLowerCase().includes(keyword)) return false;
+      return true;
+    });
+  }, [sortedItems, soldOutOnly, filterCategoryId, searchQuery]);
 
   const onNew = () => {
     setSelectedId("");
@@ -560,6 +574,49 @@ function AdminMenuPageInner() {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
       setStatus("error", `메뉴 삭제 실패: ${String(e?.message || e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const moveMenuItem = (menuId: string, dir: -1 | 1) => {
+    const idx = sortedItems.findIndex((m) => m.id === menuId);
+    if (idx < 0) return;
+    const nextIdx = idx + dir;
+    if (nextIdx < 0 || nextIdx >= sortedItems.length) return;
+
+    const ids = sortedItems.map((m) => m.id);
+    [ids[idx], ids[nextIdx]] = [ids[nextIdx], ids[idx]];
+
+    setItems((prev) => {
+      const orderMap = new Map(ids.map((id, i) => [id, i + 1]));
+      return prev.map((m) => (orderMap.has(m.id) ? { ...m, sort_order: orderMap.get(m.id)! } : m));
+    });
+    setOrderDirty(true);
+  };
+
+  const saveMenuOrder = async () => {
+    if (!storeId || !orderDirty) return;
+    try {
+      setSaving(true);
+      setBadge("idle");
+      clearStatus();
+      for (let i = 0; i < sortedItems.length; i += 1) {
+        const row = sortedItems[i];
+        const { error } = await supabase
+          .from("menu_items")
+          .update({ sort_order: i + 1 })
+          .eq("store_id", storeId)
+          .eq("id", row.id);
+        if (error) throw error;
+      }
+      await refresh();
+      setStatus("success", "메뉴 노출 순서를 저장했습니다.");
+      setOrderDirty(false);
+    } catch (e: any) {
+      setStatus("error", `메뉴 순서 저장 실패: ${String(e?.message || e)}`);
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
     } finally {
       setSaving(false);
     }
@@ -1162,6 +1219,13 @@ function AdminMenuPageInner() {
           opacity: 0.5;
           cursor: not-allowed;
         }
+        .filterRow {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 150px auto;
+          gap: 8px;
+          margin-top: 10px;
+          align-items: center;
+        }
         .list {
           display: grid;
           gap: 10px;
@@ -1179,6 +1243,40 @@ function AdminMenuPageInner() {
         }
         .rowBtnOn {
           border: 2px solid var(--brand);
+        }
+        .menuRowHeader {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+        .orderActionRow {
+          display: inline-flex;
+          gap: 4px;
+        }
+        .orderBtn {
+          border: 1px solid #dbe2ea;
+          background: linear-gradient(180deg, #fff, #f8fafc);
+          border-radius: 9px;
+          width: 26px;
+          height: 24px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        .orderBtn:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+        .orderBtn svg {
+          width: 13px;
+          height: 13px;
+          stroke: #334155;
+          stroke-width: 2.2;
+          fill: none;
+          stroke-linecap: round;
+          stroke-linejoin: round;
         }
         .name {
           font-weight: 900;
@@ -1438,6 +1536,9 @@ function AdminMenuPageInner() {
           .inlineSelectRow {
             grid-template-columns: 1fr;
           }
+          .filterRow {
+            grid-template-columns: 1fr;
+          }
           .twoColRow {
             grid-template-columns: minmax(0, 1fr) auto;
           }
@@ -1562,10 +1663,45 @@ function AdminMenuPageInner() {
               <button className="btn" onClick={refresh} disabled={saving || loading}>
                 새로고침
               </button>
+              <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
+                순서 저장
+              </button>
             </div>
+            <div className="filterRow">
+              <input
+                className="input"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="메뉴명 검색"
+                disabled={saving || loading}
+              />
+              <select
+                className="input"
+                value={filterCategoryId}
+                onChange={(e) => setFilterCategoryId(e.target.value)}
+                disabled={saving || loading}
+              >
+                <option value="">전체 카테고리</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+              <label className="optionRow" style={{ justifyContent: "flex-end" }}>
+                <input
+                  type="checkbox"
+                  checked={soldOutOnly}
+                  onChange={(e) => setSoldOutOnly(e.target.checked)}
+                  disabled={saving || loading}
+                />
+                품절만
+              </label>
+            </div>
+            <p className="muted" style={{ marginTop: 8 }}>
+              목록에서 ↑/↓로 순서를 바꾼 뒤 <b>순서 저장</b>을 눌러주세요.
+            </p>
 
             <div className="list">
-              {sortedItems.map((m) => {
+              {filteredItems.map((m) => {
                 const groupIds = Array.isArray(m.option_group_ids) ? m.option_group_ids : [];
                 const commonCount = groupIds.filter((gid) => {
                   const group = groups.find((g) => g.id === gid);
@@ -1575,25 +1711,68 @@ function AdminMenuPageInner() {
                   const group = groups.find((g) => g.id === gid);
                   return (group?.scope || "common") === "exclusive";
                 }).length;
+                const currentIdx = sortedItems.findIndex((x) => x.id === m.id);
                 return (
-                  <button
+                  <div
                     key={m.id}
                     className={`rowBtn ${m.id === selectedId ? "rowBtnOn" : ""}`}
                     onClick={() => setSelectedId(m.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedId(m.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                   >
-                    <div className="name">
-                      {m.name}
-                      {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
+                    <div className="menuRowHeader">
+                      <div className="name">
+                        {m.name}
+                        {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
+                      </div>
+                      <span className="orderActionRow">
+                        <button
+                          className="orderBtn"
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            moveMenuItem(m.id, -1);
+                          }}
+                          disabled={saving || loading || currentIdx === 0}
+                          aria-label={`${m.name} 위로 이동`}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 14l6-6 6 6" />
+                          </svg>
+                        </button>
+                        <button
+                          className="orderBtn"
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            moveMenuItem(m.id, 1);
+                          }}
+                          disabled={saving || loading || currentIdx === sortedItems.length - 1}
+                          aria-label={`${m.name} 아래로 이동`}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 10l6 6 6-6" />
+                          </svg>
+                        </button>
+                      </span>
                     </div>
                     <div className="muted">
                       {Number(m.price || 0).toLocaleString()}원 · 공통옵션 {commonCount}개 · 전용옵션 {exclusiveCount}개
                     </div>
-                  </button>
+                  </div>
                 );
               })}
-              {!loading && items.length === 0 ? (
+              {!loading && filteredItems.length === 0 ? (
                 <div className="muted" style={{ marginTop: 10 }}>
-                  아직 메뉴가 없습니다. “+ 새 메뉴”로 시작하세요.
+                  조건에 맞는 메뉴가 없습니다.
                 </div>
               ) : null}
             </div>
