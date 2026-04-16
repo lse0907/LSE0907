@@ -93,6 +93,10 @@ function toInt(v: string, fallback: number) {
   return Math.max(0, Math.round(n));
 }
 
+function isWholeNumberString(v: string) {
+  return /^\d+$/.test(v.trim());
+}
+
 function getFileExt(name: string) {
   const trimmed = name.trim();
   if (!trimmed.includes(".")) return "";
@@ -375,7 +379,9 @@ function AdminMenuPageInner() {
     if (!storeId) return;
     const name = draft.name.trim();
     const id = draft.id.trim();
-    const price = toInt(draft.price, -1);
+    const priceText = draft.price.trim();
+    const sortOrderText = draft.sortOrder.trim();
+    const price = toInt(priceText, -1);
 
     if (!name) {
       setBadge("error");
@@ -390,11 +396,48 @@ function AdminMenuPageInner() {
       setStatus("error", "메뉴 ID를 입력해주세요.");
       return;
     }
+    if (!/^[a-z0-9-]{1,40}$/.test(id)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "메뉴 ID는 영문 소문자/숫자/-만 사용해 40자 이내로 입력해주세요.");
+      return;
+    }
+    if (!selectedId && items.some((x) => x.id === id)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "이미 사용 중인 메뉴 ID입니다. 다른 ID를 입력해주세요.");
+      return;
+    }
+    if (selectedId && selectedId !== id) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "기존 메뉴의 ID는 변경할 수 없습니다.");
+      return;
+    }
+
+    if (!priceText || !isWholeNumberString(priceText)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "기본 가격은 숫자만 입력해주세요. (예: 4500)");
+      return;
+    }
 
     if (price < 0) {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
       setStatus("error", "기본 가격은 0 이상의 숫자로 입력해주세요.");
+      return;
+    }
+    if (sortOrderText && !isWholeNumberString(sortOrderText)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "노출 순서는 숫자만 입력해주세요. (예: 10)");
+      return;
+    }
+    if (draft.categoryId && !categories.some((cat) => cat.id === draft.categoryId)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "선택한 카테고리가 유효하지 않습니다. 다시 선택해주세요.");
       return;
     }
 
@@ -657,6 +700,14 @@ function AdminMenuPageInner() {
       setStatus("neutral", "저장할 공통옵션 항목이 없습니다.");
       return;
     }
+    const invalidCommonItem = commonItemIds.find((optionItemId) => {
+      const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
+      return !isWholeNumberString(raw);
+    });
+    if (invalidCommonItem) {
+      setStatus("error", "공통옵션 단가는 숫자만 입력해주세요. (예: 500)");
+      return;
+    }
 
     setSaving(true);
     clearStatus();
@@ -693,6 +744,14 @@ function AdminMenuPageInner() {
     const itemIds = (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => item.id);
     if (itemIds.length === 0) {
       setStatus("neutral", "저장할 옵션 항목이 없습니다.");
+      return;
+    }
+    const invalidItem = itemIds.find((optionItemId) => {
+      const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
+      return !isWholeNumberString(raw);
+    });
+    if (invalidItem) {
+      setStatus("error", "옵션 단가는 숫자만 입력해주세요. (예: 500)");
       return;
     }
 
