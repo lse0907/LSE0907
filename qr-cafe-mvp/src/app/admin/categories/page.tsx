@@ -27,12 +27,6 @@ function uid(prefix = "cat") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
 }
 
-function toInt(v: string, fallback: number) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(0, Math.round(n));
-}
-
 function CategoriesPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -42,7 +36,6 @@ function CategoriesPageInner() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
-  const [sortOrder, setSortOrder] = useState("");
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"error" | "success" | "neutral">("neutral");
   const [myStores, setMyStores] = useState<MyStore[]>([]);
@@ -51,7 +44,7 @@ function CategoriesPageInner() {
 
   const [editId, setEditId] = useState("");
   const [editName, setEditName] = useState("");
-  const [editSortOrder, setEditSortOrder] = useState("");
+  const [orderDirty, setOrderDirty] = useState(false);
   const actionBusy = saving || copying;
 
   useEffect(() => {
@@ -83,6 +76,7 @@ function CategoriesPageInner() {
       setCats([]);
     } else {
       setCats((Array.isArray(cData) ? cData : []) as MenuCategory[]);
+      setOrderDirty(false);
     }
 
     if (mErr) {
@@ -109,7 +103,9 @@ function CategoriesPageInner() {
       if (authErr || !authData?.user) return;
       const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
       if (memRes.error) return;
-      const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
+      const ids = (memRes.data || [])
+        .map((x: { store_id: string | null }) => String(x.store_id || ""))
+        .filter(Boolean);
       if (!ids.length) {
         if (mounted) setMyStores([]);
         return;
@@ -168,6 +164,16 @@ function CategoriesPageInner() {
     }
     return map;
   }, [menus]);
+  const sortedCats = useMemo(
+    () =>
+      [...cats].sort((a, b) => {
+        const ao = Number(a.sort_order ?? Number.MAX_SAFE_INTEGER);
+        const bo = Number(b.sort_order ?? Number.MAX_SAFE_INTEGER);
+        if (ao !== bo) return ao - bo;
+        return a.id.localeCompare(b.id);
+      }),
+    [cats]
+  );
 
   const onCreate = async () => {
     if (actionBusy) return;
@@ -179,7 +185,7 @@ function CategoriesPageInner() {
       id: uid(),
       store_id: storeId,
       name: name.trim(),
-      sort_order: sortOrder.trim() ? toInt(sortOrder, 0) : null,
+      sort_order: sortedCats.length + 1,
       is_active: true,
     };
     const { error } = await supabase.from("menu_categories").insert([row]);
@@ -189,7 +195,6 @@ function CategoriesPageInner() {
     }
     else {
       setName("");
-      setSortOrder("");
       await refresh();
       setMsgTone("success");
       setMsg("카테고리를 생성했습니다.");
@@ -200,14 +205,12 @@ function CategoriesPageInner() {
   const startEdit = (cat: MenuCategory) => {
     setEditId(cat.id);
     setEditName(cat.name);
-    setEditSortOrder(cat.sort_order == null ? "" : String(cat.sort_order));
     setMsg("");
   };
 
   const cancelEdit = () => {
     setEditId("");
     setEditName("");
-    setEditSortOrder("");
   };
 
   const onSaveEdit = async (cat: MenuCategory) => {
@@ -224,7 +227,6 @@ function CategoriesPageInner() {
       .from("menu_categories")
       .update({
         name: editName.trim(),
-        sort_order: editSortOrder.trim() ? toInt(editSortOrder, 0) : null,
       })
       .eq("id", cat.id)
       .eq("store_id", storeId);
@@ -241,6 +243,49 @@ function CategoriesPageInner() {
     setMsgTone("success");
     setMsg("카테고리를 수정했습니다.");
     setSaving(false);
+  };
+
+  const moveCategory = (catId: string, dir: -1 | 1) => {
+    const idx = sortedCats.findIndex((c) => c.id === catId);
+    if (idx < 0) return;
+    const nextIdx = idx + dir;
+    if (nextIdx < 0 || nextIdx >= sortedCats.length) return;
+
+    const ids = sortedCats.map((c) => c.id);
+    [ids[idx], ids[nextIdx]] = [ids[nextIdx], ids[idx]];
+
+    setCats((prev) => {
+      const orderMap = new Map(ids.map((id, i) => [id, i + 1]));
+      return prev.map((c) => (orderMap.has(c.id) ? { ...c, sort_order: orderMap.get(c.id)! } : c));
+    });
+    setOrderDirty(true);
+  };
+
+  const saveCategoryOrder = async () => {
+    if (!storeId || actionBusy || !orderDirty) return;
+    try {
+      setSaving(true);
+      setMsg("");
+      setMsgTone("neutral");
+      for (let i = 0; i < sortedCats.length; i += 1) {
+        const cat = sortedCats[i];
+        const { error } = await supabase
+          .from("menu_categories")
+          .update({ sort_order: i + 1 })
+          .eq("store_id", storeId)
+          .eq("id", cat.id);
+        if (error) throw error;
+      }
+      await refresh();
+      setMsgTone("success");
+      setMsg("카테고리 순서를 저장했습니다.");
+      setOrderDirty(false);
+    } catch (e: unknown) {
+      setMsgTone("error");
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const onDisable = async (cat: MenuCategory) => {
@@ -311,6 +356,19 @@ function CategoriesPageInner() {
         .copyBtnShort{display:none}
         .btn{border:1px solid #d1d5db;background:#fff;color:#111827;-webkit-text-fill-color:currentColor;padding:10px 12px;border-radius:10px;font-weight:900;font-size:14px;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer}
         .btnPrimary{background:#111827;color:#fff;border-color:#111827}
+        .btnSmall{padding:7px 10px;font-size:12px;border-radius:9px;font-weight:800}
+        .btnEdit{border-color:#d1d5db;color:#334155;background:#fff}
+        .btnDisable{border-color:#fcd34d;color:#92400e;background:#fffbeb}
+        .btnDelete{border-color:#fecaca;color:#b91c1c;background:#fff1f2}
+        .orderActionRow{display:inline-flex;gap:4px}
+        .orderBtn{border:1px solid #dbe2ea;background:linear-gradient(180deg,#fff,#f8fafc);border-radius:9px;width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+        .orderBtn:disabled{opacity:.45;cursor:not-allowed}
+        .orderBtn svg{width:13px;height:13px;stroke:#334155;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+        .categoryRow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;justify-content:space-between}
+        .categoryMainRow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;min-width:0}
+        .categoryMetaRight{display:inline-flex;gap:8px;align-items:center;white-space:nowrap}
+        .categoryActionRow{display:inline-flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+        .categoryOrderEdge{display:inline-flex;justify-content:flex-end}
         .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
@@ -347,6 +405,18 @@ function CategoriesPageInner() {
           .categoryListScroll{
             max-height:45vh;
           }
+          .categoryRow{
+            grid-template-columns:1fr;
+            align-items:flex-start;
+          }
+          .categoryActionRow{
+            width:100%;
+            justify-content:flex-start;
+          }
+          .categoryOrderEdge{
+            width:100%;
+            justify-content:flex-end;
+          }
         }
         @media (min-width: 641px) and (max-width: 1024px) {
           .categoryListScroll{
@@ -368,30 +438,33 @@ function CategoriesPageInner() {
         현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
 
-      <section className="card">
-        <div className="copyRow">
-          <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
-            <option value="">원본 매장 선택</option>
-            {myStores.map((s) => (
-              <option key={s.store_id} value={s.store_id}>
-                {s.store_name || s.store_id} ({s.store_id})
-              </option>
-            ))}
-          </select>
-          <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !copySourceStoreId}>
-            {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
-          </button>
-        </div>
-      </section>
+      {!loading && cats.length === 0 ? (
+        <section className="card">
+          <div className="copyRow">
+            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !copySourceStoreId}>
+              {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
+            </button>
+          </div>
+          <p className="subText" style={{ marginTop: 6 }}>
+            최초 등록 시에만 복사 기능이 활성화됩니다.
+          </p>
+        </section>
+      ) : null}
 
       <section className="card">
         <div className="row createRow">
           <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="input" inputMode="numeric" style={{ width: 120 }} placeholder="순서" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} />
           <button className="btn btnPrimary" onClick={onCreate} disabled={actionBusy || loading || !name.trim()}>생성</button>
         </div>
         <p className="muted">삭제 정책: 재할당 강제(삭제 시 첫 번째 활성 카테고리로 메뉴 이동)</p>
-        <p className="muted">생성 후에도 카테고리명/순서는 수정 가능합니다.</p>
         {msg ? (
           <div
             style={{
@@ -405,14 +478,19 @@ function CategoriesPageInner() {
       </section>
 
       <section className="card">
+        <div className="row headerRow">
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>카테고리 목록</h2>
+          <button className="btn" onClick={saveCategoryOrder} disabled={actionBusy || loading || !orderDirty}>순서 저장</button>
+        </div>
+        <p className="muted">카테고리 순서는 목록의 ↑/↓ 이동 후 저장하세요.</p>
         {loading ? <p className="muted">불러오는 중...</p> : cats.length === 0 ? <p className="muted">등록된 카테고리가 없습니다.</p> : (
           <div className="categoryListScroll">
             <div style={{ display: "grid", gap: 8 }}>
-            {cats.map((cat) => {
+            {sortedCats.map((cat, idx) => {
               const isEditing = editId === cat.id;
               return (
                 <div key={cat.id} className="row" style={{ justifyContent: "space-between", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
-                  <div style={{ display: "grid", gap: 6 }}>
+                  <div style={{ display: "grid", gap: 6, width: "100%" }}>
                     {isEditing ? (
                       <>
                         <input
@@ -422,38 +500,56 @@ function CategoriesPageInner() {
                           onChange={(e) => setEditName(e.target.value)}
                           disabled={actionBusy || loading}
                         />
-                        <input
-                          className="input"
-                          inputMode="numeric"
-                          style={{ width: 120 }}
-                          placeholder="순서"
-                          value={editSortOrder}
-                          onChange={(e) => setEditSortOrder(e.target.value)}
-                          disabled={actionBusy || loading}
-                        />
                       </>
                     ) : (
-                      <>
-                        <div className="name">{cat.name} {cat.is_active === false ? "(비활성)" : ""}</div>
-                        <div className="muted">순서 {cat.sort_order ?? "-"} · 메뉴 {countByCategory.get(cat.id) || 0}개</div>
-                      </>
+                      <div className="categoryRow">
+                        <div className="categoryMainRow">
+                          <div className="name">{cat.name} {cat.is_active === false ? "(비활성)" : ""}</div>
+                          <div className="categoryMetaRight">
+                            <div className="muted">메뉴 {countByCategory.get(cat.id) || 0}개</div>
+                          </div>
+                        </div>
+                        <div className="categoryActionRow">
+                          <button className="btn btnSmall btnEdit" onClick={() => startEdit(cat)} disabled={actionBusy || loading}>수정</button>
+                          <button className="btn btnSmall btnDisable" onClick={() => onDisable(cat)} disabled={actionBusy || loading || cat.is_active === false}>비활성화</button>
+                          <button className="btn btnSmall btnDelete" onClick={() => onDeleteWithReassign(cat)} disabled={actionBusy || loading}>삭제(재할당)</button>
+                        </div>
+                        <div className="categoryOrderEdge">
+                          <span className="orderActionRow">
+                            <button
+                              className="orderBtn"
+                              type="button"
+                              onClick={() => moveCategory(cat.id, -1)}
+                              disabled={actionBusy || loading || idx === 0}
+                              aria-label={`${cat.name} 위로 이동`}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M6 14l6-6 6 6" />
+                              </svg>
+                            </button>
+                            <button
+                              className="orderBtn"
+                              type="button"
+                              onClick={() => moveCategory(cat.id, 1)}
+                              disabled={actionBusy || loading || idx === sortedCats.length - 1}
+                              aria-label={`${cat.name} 아래로 이동`}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M6 10l6 6 6-6" />
+                              </svg>
+                            </button>
+                          </span>
+                        </div>
+                      </div>
                     )}
                   </div>
 
-                  <div className="row">
-                    {isEditing ? (
-                      <>
-                        <button className="btn btnPrimary" onClick={() => onSaveEdit(cat)} disabled={actionBusy || loading || !editName.trim()}>저장</button>
-                        <button className="btn" onClick={cancelEdit} disabled={actionBusy || loading}>취소</button>
-                      </>
-                    ) : (
-                      <>
-                        <button className="btn" onClick={() => startEdit(cat)} disabled={actionBusy || loading}>수정</button>
-                        <button className="btn" onClick={() => onDisable(cat)} disabled={actionBusy || loading || cat.is_active === false}>비활성화</button>
-                        <button className="btn" onClick={() => onDeleteWithReassign(cat)} disabled={actionBusy || loading}>삭제(재할당)</button>
-                      </>
-                    )}
-                  </div>
+                  {isEditing ? (
+                    <div className="row">
+                      <button className="btn btnPrimary btnSmall" onClick={() => onSaveEdit(cat)} disabled={actionBusy || loading || !editName.trim()}>저장</button>
+                      <button className="btn btnSmall" onClick={cancelEdit} disabled={actionBusy || loading}>취소</button>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
