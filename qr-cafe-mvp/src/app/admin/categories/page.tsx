@@ -368,21 +368,26 @@ function CategoriesPageInner() {
         현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
 
-      <section className="card">
-        <div className="copyRow">
-          <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
-            <option value="">원본 매장 선택</option>
-            {myStores.map((s) => (
-              <option key={s.store_id} value={s.store_id}>
-                {s.store_name || s.store_id} ({s.store_id})
-              </option>
-            ))}
-          </select>
-          <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !copySourceStoreId}>
-            {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
-          </button>
-        </div>
-      </section>
+      {!loading && cats.length === 0 ? (
+        <section className="card">
+          <div className="copyRow">
+            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !copySourceStoreId}>
+              {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
+            </button>
+          </div>
+          <p className="subText" style={{ marginTop: 6 }}>
+            최초 등록 시에만 복사 기능이 활성화됩니다.
+          </p>
+        </section>
+      ) : null}
 
       <section className="card">
         <div className="row createRow">
