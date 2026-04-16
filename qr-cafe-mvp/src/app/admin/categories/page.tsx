@@ -474,6 +474,7 @@ function CategoriesPageInner() {
         <div className="row createRow">
           <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
           <button className="btn btnPrimary" onClick={onCreate} disabled={actionBusy || loading || !name.trim()}>생성</button>
+          <button className="btn" onClick={saveCategoryOrder} disabled={actionBusy || loading || !orderDirty}>순서 저장</button>
         </div>
         <p className="muted">삭제 정책: 재할당 강제(삭제 시 첫 번째 활성 카테고리로 메뉴 이동)</p>
         {msg ? (
