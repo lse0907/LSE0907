@@ -56,6 +56,12 @@ type MyStore = {
   store_id: string;
   store_name: string | null;
 };
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  description: string;
+  action: null | (() => void | Promise<void>);
+};
 
 type MenuDraft = {
   id: string;
@@ -85,6 +91,10 @@ function toInt(v: string, fallback: number) {
   const n = Number(v);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(0, Math.round(n));
+}
+
+function isWholeNumberString(v: string) {
+  return /^\d+$/.test(v.trim());
 }
 
 function getFileExt(name: string) {
@@ -122,6 +132,7 @@ function AdminMenuPageInner() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageFileName, setImageFileName] = useState("");
   const [msg, setMsg] = useState("");
+  const [msgTone, setMsgTone] = useState<"neutral" | "success" | "error">("neutral");
   const [showExclusiveCreateForm, setShowExclusiveCreateForm] = useState(false);
   const [commonGroupToAdd, setCommonGroupToAdd] = useState("");
   const [newExclusiveGroup, setNewExclusiveGroup] = useState({
@@ -136,9 +147,33 @@ function AdminMenuPageInner() {
   const [myStores, setMyStores] = useState<MyStore[]>([]);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategoryId, setFilterCategoryId] = useState("");
+  const [soldOutOnly, setSoldOutOnly] = useState(false);
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [confirmState, setConfirmState] = useState<ConfirmState>({
+    open: false,
+    title: "",
+    description: "",
+    action: null,
+  });
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
+  const setStatus = (tone: "neutral" | "success" | "error", text: string) => {
+    setMsgTone(tone);
+    setMsg(text);
+  };
+  const clearStatus = () => {
+    setMsgTone("neutral");
+    setMsg("");
+  };
+  const openConfirm = (title: string, description: string, action: () => void | Promise<void>) => {
+    setConfirmState({ open: true, title, description, action });
+  };
+  const closeConfirm = () => {
+    setConfirmState({ open: false, title: "", description: "", action: null });
+  };
 
   useEffect(() => {
     const queryStore = (sp.get("store") || "").trim();
@@ -231,6 +266,7 @@ function AdminMenuPageInner() {
       setOptionItems((itemRes.data || []) as OptionItem[]);
       setOptionPrices((priceRes.data || []) as MenuOptionPrice[]);
       setCategories((categoryRes.data || []) as MenuCategory[]);
+      setOrderDirty(false);
 
       setSelectedId((prev) => {
         if (prev && (menuRes.data || []).some((x) => x.id === prev)) return prev;
@@ -240,6 +276,7 @@ function AdminMenuPageInner() {
       console.error("[admin/menu] refresh error:", e?.message || e);
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", `메뉴 데이터 로드 실패: ${String(e?.message || e)}`);
     } finally {
       setLoading(false);
     }
@@ -267,24 +304,30 @@ function AdminMenuPageInner() {
   }, [storeId, copySourceStoreId]);
 
   const onCopyMenus = async () => {
-    if (!storeId) return setMsg("대상 매장을 먼저 선택해주세요.");
-    if (!copySourceStoreId) return setMsg("원본 매장을 선택해주세요.");
-    if (!confirm("선택한 매장의 메뉴를 현재 매장으로 복사할까요?")) return;
-    try {
-      setCopying(true);
-      setMsg("");
-      const { error } = await supabase.rpc("admin_copy_menus_v1", {
-        p_source_store_id: copySourceStoreId,
-        p_target_store_id: storeId,
-      });
-      if (error) throw error;
-      await refresh();
-      setMsg("메뉴 복사가 완료되었습니다.");
-    } catch (e: any) {
-      setMsg(`메뉴 복사 실패: ${String(e?.message || e)}`);
-    } finally {
-      setCopying(false);
-    }
+    if (!storeId) return setStatus("error", "대상 매장을 먼저 선택해주세요.");
+    if (!copySourceStoreId) return setStatus("error", "원본 매장을 선택해주세요.");
+    openConfirm(
+      "메뉴 복사 확인",
+      "선택한 매장의 메뉴를 현재 매장으로 복사할까요?",
+      async () => {
+        closeConfirm();
+        try {
+          setCopying(true);
+          clearStatus();
+          const { error } = await supabase.rpc("admin_copy_menus_v1", {
+            p_source_store_id: copySourceStoreId,
+            p_target_store_id: storeId,
+          });
+          if (error) throw error;
+          await refresh();
+          setStatus("success", "메뉴 복사가 완료되었습니다.");
+        } catch (e: any) {
+          setStatus("error", `메뉴 복사 실패: ${String(e?.message || e)}`);
+        } finally {
+          setCopying(false);
+        }
+      }
+    );
   };
 
   useEffect(() => {
@@ -328,12 +371,21 @@ function AdminMenuPageInner() {
     });
     return list;
   }, [items]);
+  const filteredItems = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+    return sortedItems.filter((m) => {
+      if (soldOutOnly && !m.is_sold_out) return false;
+      if (filterCategoryId && String(m.category_id || "") !== filterCategoryId) return false;
+      if (keyword && !String(m.name || "").toLowerCase().includes(keyword)) return false;
+      return true;
+    });
+  }, [sortedItems, soldOutOnly, filterCategoryId, searchQuery]);
 
   const onNew = () => {
     setSelectedId("");
     setDraft(emptyDraft);
     setImageFileName("");
-    setMsg("");
+    clearStatus();
     setShowExclusiveCreateForm(false);
   };
 
@@ -341,28 +393,71 @@ function AdminMenuPageInner() {
     if (!storeId) return;
     const name = draft.name.trim();
     const id = draft.id.trim();
-    const price = toInt(draft.price, -1);
+    const priceText = draft.price.trim();
+    const sortOrderText = draft.sortOrder.trim();
+    const price = toInt(priceText, -1);
 
     if (!name) {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "메뉴명을 입력해주세요.");
       return;
     }
 
     if (!id) {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "메뉴 ID를 입력해주세요.");
+      return;
+    }
+    if (!/^[a-z0-9-]{1,40}$/.test(id)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "메뉴 ID는 영문 소문자/숫자/-만 사용해 40자 이내로 입력해주세요.");
+      return;
+    }
+    if (!selectedId && items.some((x) => x.id === id)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "이미 사용 중인 메뉴 ID입니다. 다른 ID를 입력해주세요.");
+      return;
+    }
+    if (selectedId && selectedId !== id) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "기존 메뉴의 ID는 변경할 수 없습니다.");
+      return;
+    }
+
+    if (!priceText || !isWholeNumberString(priceText)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "기본 가격은 숫자만 입력해주세요. (예: 4500)");
       return;
     }
 
     if (price < 0) {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "기본 가격은 0 이상의 숫자로 입력해주세요.");
+      return;
+    }
+    if (sortOrderText && !isWholeNumberString(sortOrderText)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "노출 순서는 숫자만 입력해주세요. (예: 10)");
+      return;
+    }
+    if (draft.categoryId && !categories.some((cat) => cat.id === draft.categoryId)) {
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", "선택한 카테고리가 유효하지 않습니다. 다시 선택해주세요.");
       return;
     }
 
     setSaving(true);
     setBadge("idle");
+    clearStatus();
 
     try {
       if (!hasLinkedMenuColumn) {
@@ -374,7 +469,7 @@ function AdminMenuPageInner() {
         if (hasExclusiveSelection) {
           setBadge("error");
           setTimeout(() => setBadge("idle"), 1600);
-          setMsg("DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+          setStatus("error", "DB에 linked_menu_id 컬럼이 없어 전용옵션 저장이 불가합니다. SQL 마이그레이션을 먼저 실행해 주세요.");
           return;
         }
       }
@@ -447,10 +542,12 @@ function AdminMenuPageInner() {
       setSelectedId(id);
       setBadge("saved");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("success", "메뉴를 저장했습니다.");
     } catch (e: any) {
       console.error("[admin/menu] save error:", e?.message || e);
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", `메뉴 저장 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -471,8 +568,53 @@ function AdminMenuPageInner() {
       setDraft(emptyDraft);
       setBadge("saved");
       setTimeout(() => setBadge("idle"), 1600);
+      setStatus("success", "메뉴를 삭제했습니다.");
     } catch (e: any) {
       console.error("[admin/menu] delete error:", e?.message || e);
+      setBadge("error");
+      setTimeout(() => setBadge("idle"), 1600);
+      setStatus("error", `메뉴 삭제 실패: ${String(e?.message || e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const moveMenuItem = (menuId: string, dir: -1 | 1) => {
+    const idx = sortedItems.findIndex((m) => m.id === menuId);
+    if (idx < 0) return;
+    const nextIdx = idx + dir;
+    if (nextIdx < 0 || nextIdx >= sortedItems.length) return;
+
+    const ids = sortedItems.map((m) => m.id);
+    [ids[idx], ids[nextIdx]] = [ids[nextIdx], ids[idx]];
+
+    setItems((prev) => {
+      const orderMap = new Map(ids.map((id, i) => [id, i + 1]));
+      return prev.map((m) => (orderMap.has(m.id) ? { ...m, sort_order: orderMap.get(m.id)! } : m));
+    });
+    setOrderDirty(true);
+  };
+
+  const saveMenuOrder = async () => {
+    if (!storeId || !orderDirty) return;
+    try {
+      setSaving(true);
+      setBadge("idle");
+      clearStatus();
+      for (let i = 0; i < sortedItems.length; i += 1) {
+        const row = sortedItems[i];
+        const { error } = await supabase
+          .from("menu_items")
+          .update({ sort_order: i + 1 })
+          .eq("store_id", storeId)
+          .eq("id", row.id);
+        if (error) throw error;
+      }
+      await refresh();
+      setStatus("success", "메뉴 노출 순서를 저장했습니다.");
+      setOrderDirty(false);
+    } catch (e: any) {
+      setStatus("error", `메뉴 순서 저장 실패: ${String(e?.message || e)}`);
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
     } finally {
@@ -501,12 +643,12 @@ function AdminMenuPageInner() {
 
     const nextName = exclusiveEdit.name.trim();
     if (!nextName) {
-      setMsg("전용옵션 그룹명을 입력해주세요.");
+      setStatus("error", "전용옵션 그룹명을 입력해주세요.");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const nextMax = Math.max(toInt(exclusiveEdit.max, selectedExclusiveGroup.max || 1), 1);
       const { error } = await supabase
@@ -517,9 +659,9 @@ function AdminMenuPageInner() {
       if (error) throw error;
 
       await refresh();
-      setMsg("전용옵션 그룹을 수정했습니다.");
+      setStatus("success", "전용옵션 그룹을 수정했습니다.");
     } catch (e: any) {
-      setMsg(`옵션수정 실패: ${String(e?.message || e)}`);
+      setStatus("error", `옵션수정 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -530,12 +672,12 @@ function AdminMenuPageInner() {
 
     const name = newSelectedExclusiveItem.name.trim();
     if (!name) {
-      setMsg("추가할 옵션 항목명을 입력해주세요.");
+      setStatus("error", "추가할 옵션 항목명을 입력해주세요.");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const row = {
         id: `item_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`,
@@ -550,9 +692,9 @@ function AdminMenuPageInner() {
 
       setNewSelectedExclusiveItem({ name: "", price: "" });
       await refresh();
-      setMsg("옵션 항목을 추가했습니다.");
+      setStatus("success", "옵션 항목을 추가했습니다.");
     } catch (e: any) {
-      setMsg(`옵션 항목 추가 실패: ${String(e?.message || e)}`);
+      setStatus("error", `옵션 항목 추가 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -560,46 +702,51 @@ function AdminMenuPageInner() {
 
   const deleteExclusiveItemInMenu = async (itemId: string) => {
     if (!storeId || !draft.id.trim()) return;
-    if (!confirm("옵션 항목을 삭제할까요?")) return;
+    openConfirm(
+      "옵션 항목 삭제",
+      "선택한 옵션 항목을 삭제할까요?",
+      async () => {
+        closeConfirm();
+        setSaving(true);
+        clearStatus();
+        try {
+          const delPrice = await supabase
+            .from("menu_option_prices")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("menu_id", draft.id.trim())
+            .eq("option_item_id", itemId);
+          if (delPrice.error) throw delPrice.error;
 
-    setSaving(true);
-    setMsg("");
-    try {
-      const delPrice = await supabase
-        .from("menu_option_prices")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("menu_id", draft.id.trim())
-        .eq("option_item_id", itemId);
-      if (delPrice.error) throw delPrice.error;
+          const delItem = await supabase
+            .from("option_items")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("id", itemId);
+          if (delItem.error) throw delItem.error;
 
-      const delItem = await supabase
-        .from("option_items")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("id", itemId);
-      if (delItem.error) throw delItem.error;
+          setDraft((prev) => {
+            const nextPrices = { ...prev.optionPriceByItem };
+            delete nextPrices[itemId];
+            return { ...prev, optionPriceByItem: nextPrices };
+          });
 
-      setDraft((prev) => {
-        const nextPrices = { ...prev.optionPriceByItem };
-        delete nextPrices[itemId];
-        return { ...prev, optionPriceByItem: nextPrices };
-      });
-
-      await refresh();
-      setMsg("옵션 항목을 삭제했습니다.");
-    } catch (e: any) {
-      setMsg(`옵션 항목 삭제 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
+          await refresh();
+          setStatus("success", "옵션 항목을 삭제했습니다.");
+        } catch (e: any) {
+          setStatus("error", `옵션 항목 삭제 실패: ${String(e?.message || e)}`);
+        } finally {
+          setSaving(false);
+        }
+      }
+    );
   };
 
   const saveCommonPricesInMenu = async () => {
     if (!storeId) return;
     const menuId = draft.id.trim();
     if (!menuId) {
-      setMsg("메뉴를 먼저 저장한 뒤 단가를 수정해주세요.");
+      setStatus("error", "메뉴를 먼저 저장한 뒤 단가를 수정해주세요.");
       return;
     }
 
@@ -607,12 +754,20 @@ function AdminMenuPageInner() {
       (itemsByGroup.get(group.id) || []).map((item) => item.id)
     );
     if (commonItemIds.length === 0) {
-      setMsg("저장할 공통옵션 항목이 없습니다.");
+      setStatus("neutral", "저장할 공통옵션 항목이 없습니다.");
+      return;
+    }
+    const invalidCommonItem = commonItemIds.find((optionItemId) => {
+      const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
+      return !isWholeNumberString(raw);
+    });
+    if (invalidCommonItem) {
+      setStatus("error", "공통옵션 단가는 숫자만 입력해주세요. (예: 500)");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const rows = commonItemIds.map((optionItemId) => ({
         store_id: storeId,
@@ -627,9 +782,9 @@ function AdminMenuPageInner() {
       if (error) throw error;
 
       await refresh();
-      setMsg("공통옵션 단가를 수정했습니다.");
+      setStatus("success", "공통옵션 단가를 수정했습니다.");
     } catch (e: any) {
-      setMsg(`공통옵션 단가 수정 실패: ${String(e?.message || e)}`);
+      setStatus("error", `공통옵션 단가 수정 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -639,18 +794,26 @@ function AdminMenuPageInner() {
     if (!storeId || !selectedExclusiveGroup) return;
     const menuId = draft.id.trim();
     if (!menuId) {
-      setMsg("메뉴를 먼저 저장한 뒤 단가를 저장해주세요.");
+      setStatus("error", "메뉴를 먼저 저장한 뒤 단가를 저장해주세요.");
       return;
     }
 
     const itemIds = (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => item.id);
     if (itemIds.length === 0) {
-      setMsg("저장할 옵션 항목이 없습니다.");
+      setStatus("neutral", "저장할 옵션 항목이 없습니다.");
+      return;
+    }
+    const invalidItem = itemIds.find((optionItemId) => {
+      const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
+      return !isWholeNumberString(raw);
+    });
+    if (invalidItem) {
+      setStatus("error", "옵션 단가는 숫자만 입력해주세요. (예: 500)");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const rows = itemIds.map((optionItemId) => ({
         store_id: storeId,
@@ -665,9 +828,9 @@ function AdminMenuPageInner() {
       if (error) throw error;
 
       await refresh();
-      setMsg("옵션 단가를 저장했습니다.");
+      setStatus("success", "옵션 단가를 저장했습니다.");
     } catch (e: any) {
-      setMsg(`옵션 단가 저장 실패: ${String(e?.message || e)}`);
+      setStatus("error", `옵션 단가 저장 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -675,68 +838,73 @@ function AdminMenuPageInner() {
 
   const deleteExclusiveGroupInMenu = async (groupId: string) => {
     if (!storeId) return;
-    if (!confirm(`등록된 전용옵션 그룹을 삭제할까요?\n연결된 옵션 항목도 함께 삭제됩니다.`)) return;
+    openConfirm(
+      "전용옵션 그룹 삭제",
+      "등록된 전용옵션 그룹과 연결된 옵션 항목을 함께 삭제할까요?",
+      async () => {
+        closeConfirm();
+        setSaving(true);
+        clearStatus();
+        try {
+          const groupItems = itemsByGroup.get(groupId) || [];
+          const itemIds = groupItems.map((it) => it.id);
 
-    setSaving(true);
-    setMsg("");
-    try {
-      const groupItems = itemsByGroup.get(groupId) || [];
-      const itemIds = groupItems.map((it) => it.id);
+          if (itemIds.length > 0) {
+            const delPrices = await supabase
+              .from("menu_option_prices")
+              .delete()
+              .eq("store_id", storeId)
+              .eq("menu_id", draft.id.trim())
+              .in("option_item_id", itemIds);
+            if (delPrices.error) throw delPrices.error;
+          }
 
-      if (itemIds.length > 0) {
-        const delPrices = await supabase
-          .from("menu_option_prices")
-          .delete()
-          .eq("store_id", storeId)
-          .eq("menu_id", draft.id.trim())
-          .in("option_item_id", itemIds);
-        if (delPrices.error) throw delPrices.error;
+          const delItems = await supabase
+            .from("option_items")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("group_id", groupId);
+          if (delItems.error) throw delItems.error;
+
+          const delGroup = await supabase
+            .from("option_groups")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("id", groupId);
+          if (delGroup.error) throw delGroup.error;
+
+          setDraft((prev) => {
+            const nextPrices = { ...prev.optionPriceByItem };
+            itemIds.forEach((id) => delete nextPrices[id]);
+            return {
+              ...prev,
+              optionGroupIds: prev.optionGroupIds.filter((id) => id !== groupId),
+              optionPriceByItem: nextPrices,
+            };
+          });
+
+          await refresh();
+          setSelectedExclusiveGroupId((prev) => (prev === groupId ? "" : prev));
+          setStatus("success", "전용옵션을 삭제했습니다.");
+        } catch (e: any) {
+          setStatus("error", `전용옵션 삭제 실패: ${String(e?.message || e)}`);
+        } finally {
+          setSaving(false);
+        }
       }
-
-      const delItems = await supabase
-        .from("option_items")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("group_id", groupId);
-      if (delItems.error) throw delItems.error;
-
-      const delGroup = await supabase
-        .from("option_groups")
-        .delete()
-        .eq("store_id", storeId)
-        .eq("id", groupId);
-      if (delGroup.error) throw delGroup.error;
-
-      setDraft((prev) => {
-        const nextPrices = { ...prev.optionPriceByItem };
-        itemIds.forEach((id) => delete nextPrices[id]);
-        return {
-          ...prev,
-          optionGroupIds: prev.optionGroupIds.filter((id) => id !== groupId),
-          optionPriceByItem: nextPrices,
-        };
-      });
-
-      await refresh();
-      setSelectedExclusiveGroupId((prev) => (prev === groupId ? "" : prev));
-      setMsg("전용옵션을 삭제했습니다.");
-    } catch (e: any) {
-      setMsg(`전용옵션 삭제 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   const createExclusiveGroupInMenu = async () => {
     if (!storeId) return;
     const menuId = draft.id.trim();
     if (!menuId) {
-      setMsg("전용옵션을 만들기 전에 메뉴명을 입력해 메뉴 ID를 먼저 만들어주세요.");
+      setStatus("error", "전용옵션을 만들기 전에 메뉴명을 입력해 메뉴 ID를 먼저 만들어주세요.");
       return;
     }
     const groupName = newExclusiveGroup.name.trim();
     if (!groupName) {
-      setMsg("전용옵션 그룹명을 입력해주세요.");
+      setStatus("error", "전용옵션 그룹명을 입력해주세요.");
       return;
     }
 
@@ -744,12 +912,12 @@ function AdminMenuPageInner() {
       .map((x) => ({ name: x.name.trim(), price: toInt(x.price, 0) }))
       .filter((x) => Boolean(x.name));
     if (cleanedItems.length === 0) {
-      setMsg("전용옵션 항목을 1개 이상 입력해주세요.");
+      setStatus("error", "전용옵션 항목을 1개 이상 입력해주세요.");
       return;
     }
 
     setSaving(true);
-    setMsg("");
+    clearStatus();
     try {
       const groupId = `group_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
       const min = 0;
@@ -797,9 +965,9 @@ function AdminMenuPageInner() {
       setShowExclusiveItemInputs(false);
       setShowExclusiveCreateForm(false);
       await refresh();
-      setMsg("전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
+      setStatus("success", "전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
     } catch (e: any) {
-      setMsg(`전용옵션 생성 실패: ${String(e?.message || e)}`);
+      setStatus("error", `전용옵션 생성 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -872,12 +1040,12 @@ function AdminMenuPageInner() {
   const onUploadMenuImage = async (file: File | null) => {
     if (!file) return;
     if (!draft.id.trim()) {
-      setMsg("이미지를 올리려면 메뉴 ID를 먼저 입력해주세요.");
+      setStatus("error", "이미지를 올리려면 메뉴 ID를 먼저 입력해주세요.");
       return;
     }
 
     setUploadingImage(true);
-    setMsg("");
+    clearStatus();
     try {
       setImageFileName(file.name || "");
       const ext = getFileExt(file.name) || "png";
@@ -889,7 +1057,7 @@ function AdminMenuPageInner() {
       const url = data.publicUrl || "";
       if (url) setDraft((prev) => ({ ...prev, image: url }));
     } catch (e: any) {
-      setMsg(`메뉴 이미지 업로드 실패: ${String(e?.message || e)}`);
+      setStatus("error", `메뉴 이미지 업로드 실패: ${String(e?.message || e)}`);
     } finally {
       setUploadingImage(false);
     }
@@ -1051,6 +1219,13 @@ function AdminMenuPageInner() {
           opacity: 0.5;
           cursor: not-allowed;
         }
+        .filterRow {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 150px auto;
+          gap: 8px;
+          margin-top: 10px;
+          align-items: center;
+        }
         .list {
           display: grid;
           gap: 10px;
@@ -1068,6 +1243,40 @@ function AdminMenuPageInner() {
         }
         .rowBtnOn {
           border: 2px solid var(--brand);
+        }
+        .menuRowHeader {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+        .orderActionRow {
+          display: inline-flex;
+          gap: 4px;
+        }
+        .orderBtn {
+          border: 1px solid #dbe2ea;
+          background: linear-gradient(180deg, #fff, #f8fafc);
+          border-radius: 9px;
+          width: 26px;
+          height: 24px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        .orderBtn:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+        .orderBtn svg {
+          width: 13px;
+          height: 13px;
+          stroke: #334155;
+          stroke-width: 2.2;
+          fill: none;
+          stroke-linecap: round;
+          stroke-linejoin: round;
         }
         .name {
           font-weight: 900;
@@ -1280,11 +1489,54 @@ function AdminMenuPageInner() {
           background: var(--line);
           margin: 10px 0;
         }
+        .confirmOverlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.45);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 60;
+          padding: 16px;
+        }
+        .confirmCard {
+          width: 100%;
+          max-width: 440px;
+          border-radius: 14px;
+          border: 1px solid var(--line);
+          background: #fff;
+          box-shadow: 0 16px 44px rgba(15, 23, 42, 0.2);
+          padding: 16px;
+          display: grid;
+          gap: 10px;
+        }
+        .confirmTitle {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 950;
+        }
+        .confirmDesc {
+          margin: 0;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 800;
+          line-height: 1.45;
+        }
+        .confirmActions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-top: 4px;
+        }
         @media (max-width: 980px) {
           .grid {
             grid-template-columns: 1fr;
           }
           .inlineSelectRow {
+            grid-template-columns: 1fr;
+          }
+          .filterRow {
             grid-template-columns: 1fr;
           }
           .twoColRow {
@@ -1346,7 +1598,13 @@ function AdminMenuPageInner() {
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
           {msg ? (
-            <p className="sub" style={{ marginTop: 6, color: "#b91c1c" }}>
+            <p
+              className="sub"
+              style={{
+                marginTop: 6,
+                color: msgTone === "success" ? "#065f46" : msgTone === "error" ? "#b91c1c" : "#374151",
+              }}
+            >
               {msg}
             </p>
           ) : null}
@@ -1405,10 +1663,45 @@ function AdminMenuPageInner() {
               <button className="btn" onClick={refresh} disabled={saving || loading}>
                 새로고침
               </button>
+              <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
+                순서 저장
+              </button>
             </div>
+            <div className="filterRow">
+              <input
+                className="input"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="메뉴명 검색"
+                disabled={saving || loading}
+              />
+              <select
+                className="input"
+                value={filterCategoryId}
+                onChange={(e) => setFilterCategoryId(e.target.value)}
+                disabled={saving || loading}
+              >
+                <option value="">전체 카테고리</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+              <label className="optionRow" style={{ justifyContent: "flex-end" }}>
+                <input
+                  type="checkbox"
+                  checked={soldOutOnly}
+                  onChange={(e) => setSoldOutOnly(e.target.checked)}
+                  disabled={saving || loading}
+                />
+                품절만
+              </label>
+            </div>
+            <p className="muted" style={{ marginTop: 8 }}>
+              목록에서 ↑/↓로 순서를 바꾼 뒤 <b>순서 저장</b>을 눌러주세요.
+            </p>
 
             <div className="list">
-              {sortedItems.map((m) => {
+              {filteredItems.map((m) => {
                 const groupIds = Array.isArray(m.option_group_ids) ? m.option_group_ids : [];
                 const commonCount = groupIds.filter((gid) => {
                   const group = groups.find((g) => g.id === gid);
@@ -1418,25 +1711,68 @@ function AdminMenuPageInner() {
                   const group = groups.find((g) => g.id === gid);
                   return (group?.scope || "common") === "exclusive";
                 }).length;
+                const currentIdx = sortedItems.findIndex((x) => x.id === m.id);
                 return (
-                  <button
+                  <div
                     key={m.id}
                     className={`rowBtn ${m.id === selectedId ? "rowBtnOn" : ""}`}
                     onClick={() => setSelectedId(m.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedId(m.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                   >
-                    <div className="name">
-                      {m.name}
-                      {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
+                    <div className="menuRowHeader">
+                      <div className="name">
+                        {m.name}
+                        {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
+                      </div>
+                      <span className="orderActionRow">
+                        <button
+                          className="orderBtn"
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            moveMenuItem(m.id, -1);
+                          }}
+                          disabled={saving || loading || currentIdx === 0}
+                          aria-label={`${m.name} 위로 이동`}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 14l6-6 6 6" />
+                          </svg>
+                        </button>
+                        <button
+                          className="orderBtn"
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            moveMenuItem(m.id, 1);
+                          }}
+                          disabled={saving || loading || currentIdx === sortedItems.length - 1}
+                          aria-label={`${m.name} 아래로 이동`}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 10l6 6 6-6" />
+                          </svg>
+                        </button>
+                      </span>
                     </div>
                     <div className="muted">
                       {Number(m.price || 0).toLocaleString()}원 · 공통옵션 {commonCount}개 · 전용옵션 {exclusiveCount}개
                     </div>
-                  </button>
+                  </div>
                 );
               })}
-              {!loading && items.length === 0 ? (
+              {!loading && filteredItems.length === 0 ? (
                 <div className="muted" style={{ marginTop: 10 }}>
-                  아직 메뉴가 없습니다. “+ 새 메뉴”로 시작하세요.
+                  조건에 맞는 메뉴가 없습니다.
                 </div>
               ) : null}
             </div>
@@ -1880,6 +2216,27 @@ function AdminMenuPageInner() {
           </div>
         </section>
       )}
+      {confirmState.open ? (
+        <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="menu-confirm-title">
+          <div className="confirmCard">
+            <h3 id="menu-confirm-title" className="confirmTitle">{confirmState.title}</h3>
+            <p className="confirmDesc">{confirmState.description}</p>
+            <div className="confirmActions">
+              <button className="btn" type="button" onClick={closeConfirm} disabled={saving || copying}>
+                취소
+              </button>
+              <button
+                className="btn btnPrimary"
+                type="button"
+                onClick={() => void confirmState.action?.()}
+                disabled={saving || copying}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
