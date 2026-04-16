@@ -41,6 +41,7 @@ type OptionGroup = {
   required: boolean;
   min: number;
   max: number;
+  sortOrder: number;
 };
 
 type OptionItem = {
@@ -171,16 +172,27 @@ function MenuPageInner() {
   const fetchOptionsFromDb = async () => {
     setOptionsLoading(true);
 
-    const [
-      { data: gData, error: gErr },
-      { data: iData, error: iErr },
-      { data: pData, error: pErr },
-    ] = await Promise.all([
-      supabase
+    const gRes = await supabase
+      .from("option_groups")
+      .select("id,name,required,min,max,sort_order,store_id,created_at")
+      .eq("store_id", storeId)
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
+
+    let gData: any[] | null = (gRes.data as any[] | null) ?? null;
+    let gErr: any = gRes.error;
+
+    if (gErr && gErr.code === "42703" && String(gErr.message || "").includes("sort_order")) {
+      const fallback = await supabase
         .from("option_groups")
         .select("id,name,required,min,max,store_id,created_at")
         .eq("store_id", storeId)
-        .order("created_at", { ascending: true }),
+        .order("created_at", { ascending: true });
+      gData = (fallback.data as any[] | null) ?? null;
+      gErr = fallback.error;
+    }
+
+    const [{ data: iData, error: iErr }, { data: pData, error: pErr }] = await Promise.all([
       supabase
         .from("option_items")
         .select("id,group_id,name,price_delta,store_id,created_at")
@@ -203,6 +215,7 @@ function MenuPageInner() {
         required: !!g.required,
         min: Math.max(0, toInt(g.min, 0)),
         max: Math.max(0, toInt(g.max, 1)),
+        sortOrder: Math.max(1, toInt((g as any).sort_order, 1)),
       }))
       .filter((g) => g.id && g.name);
 
@@ -1617,6 +1630,9 @@ function MenuPageInner() {
                   const wa = ga?.required ? 0 : 1;
                   const wb = gb?.required ? 0 : 1;
                   if (wa !== wb) return wa - wb;
+                  const sa = Number(ga?.sortOrder ?? Number.MAX_SAFE_INTEGER);
+                  const sb = Number(gb?.sortOrder ?? Number.MAX_SAFE_INTEGER);
+                  if (sa !== sb) return sa - sb;
                   return 0;
                 })
                 .map((gid: string) => {
