@@ -1187,7 +1187,7 @@ function AdminOptionsPageInner() {
             align-items: end;
           }
           .idInlineRow {
-            grid-template-columns: auto minmax(0, 1fr);
+            grid-template-columns: auto minmax(0, 1fr) auto;
           }
           .name {
             font-size: 14px;
@@ -1327,6 +1327,9 @@ function AdminOptionsPageInner() {
                     DB에 sort_order 컬럼이 없어 순서 이동/저장이 비활성화되었습니다. SQL 적용 후 사용해주세요.
                   </div>
                 ) : null}
+                <div className="muted" style={{ marginTop: 2 }}>
+                  공통옵션 그룹 순서는 목록의 ↑/↓ 이동 후 “순서 저장” 버튼으로 반영됩니다.
+                </div>
               </>
             ) : null}
 
@@ -1408,7 +1411,7 @@ function AdminOptionsPageInner() {
               </p>
             ) : (
               <>
-                <div className="field" style={{ marginTop: 0 }}>
+                <div className="field" style={{ marginTop: 0, marginBottom: 10 }}>
                   <div className="muted" style={{ marginTop: 2 }}>
                     {isExclusiveSelected ? (
                       <>

@@ -103,7 +103,9 @@ function CategoriesPageInner() {
       if (authErr || !authData?.user) return;
       const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
       if (memRes.error) return;
-      const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
+      const ids = (memRes.data || [])
+        .map((x: { store_id: string | null }) => String(x.store_id || ""))
+        .filter(Boolean);
       if (!ids.length) {
         if (mounted) setMyStores([]);
         return;
@@ -362,8 +364,11 @@ function CategoriesPageInner() {
         .orderBtn{border:1px solid #dbe2ea;background:linear-gradient(180deg,#fff,#f8fafc);border-radius:9px;width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
         .orderBtn:disabled{opacity:.45;cursor:not-allowed}
         .orderBtn svg{width:13px;height:13px;stroke:#334155;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
-        .categoryMainRow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+        .categoryRow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;justify-content:space-between}
+        .categoryMainRow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;min-width:0}
         .categoryMetaRight{display:inline-flex;gap:8px;align-items:center;white-space:nowrap}
+        .categoryActionRow{display:inline-flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+        .categoryOrderEdge{display:inline-flex;justify-content:flex-end}
         .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
@@ -399,6 +404,18 @@ function CategoriesPageInner() {
           }
           .categoryListScroll{
             max-height:45vh;
+          }
+          .categoryRow{
+            grid-template-columns:1fr;
+            align-items:flex-start;
+          }
+          .categoryActionRow{
+            width:100%;
+            justify-content:flex-start;
+          }
+          .categoryOrderEdge{
+            width:100%;
+            justify-content:flex-end;
           }
         }
         @media (min-width: 641px) and (max-width: 1024px) {
@@ -449,7 +466,6 @@ function CategoriesPageInner() {
           <button className="btn" onClick={saveCategoryOrder} disabled={actionBusy || loading || !orderDirty}>순서 저장</button>
         </div>
         <p className="muted">삭제 정책: 재할당 강제(삭제 시 첫 번째 활성 카테고리로 메뉴 이동)</p>
-        <p className="muted">카테고리 순서는 목록의 ↑/↓ 이동 후 저장하세요.</p>
         {msg ? (
           <div
             style={{
@@ -463,6 +479,11 @@ function CategoriesPageInner() {
       </section>
 
       <section className="card">
+        <div className="row headerRow">
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>카테고리 목록</h2>
+          <button className="btn" onClick={saveCategoryOrder} disabled={actionBusy || loading || !orderDirty}>순서 저장</button>
+        </div>
+        <p className="muted">카테고리 순서는 목록의 ↑/↓ 이동 후 저장하세요.</p>
         {loading ? <p className="muted">불러오는 중...</p> : cats.length === 0 ? <p className="muted">등록된 카테고리가 없습니다.</p> : (
           <div className="categoryListScroll">
             <div style={{ display: "grid", gap: 8 }}>
@@ -470,7 +491,7 @@ function CategoriesPageInner() {
               const isEditing = editId === cat.id;
               return (
                 <div key={cat.id} className="row" style={{ justifyContent: "space-between", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
-                  <div style={{ display: "grid", gap: 6 }}>
+                  <div style={{ display: "grid", gap: 6, width: "100%" }}>
                     {isEditing ? (
                       <>
                         <input
@@ -482,10 +503,19 @@ function CategoriesPageInner() {
                         />
                       </>
                     ) : (
-                      <div className="categoryMainRow">
-                        <div className="name">{cat.name} {cat.is_active === false ? "(비활성)" : ""}</div>
-                        <div className="categoryMetaRight">
-                          <div className="muted">메뉴 {countByCategory.get(cat.id) || 0}개</div>
+                      <div className="categoryRow">
+                        <div className="categoryMainRow">
+                          <div className="name">{cat.name} {cat.is_active === false ? "(비활성)" : ""}</div>
+                          <div className="categoryMetaRight">
+                            <div className="muted">메뉴 {countByCategory.get(cat.id) || 0}개</div>
+                          </div>
+                        </div>
+                        <div className="categoryActionRow">
+                          <button className="btn btnSmall btnEdit" onClick={() => startEdit(cat)} disabled={actionBusy || loading}>수정</button>
+                          <button className="btn btnSmall btnDisable" onClick={() => onDisable(cat)} disabled={actionBusy || loading || cat.is_active === false}>비활성화</button>
+                          <button className="btn btnSmall btnDelete" onClick={() => onDeleteWithReassign(cat)} disabled={actionBusy || loading}>삭제(재할당)</button>
+                        </div>
+                        <div className="categoryOrderEdge">
                           <span className="orderActionRow">
                             <button
                               className="orderBtn"
@@ -515,20 +545,12 @@ function CategoriesPageInner() {
                     )}
                   </div>
 
-                  <div className="row">
-                    {isEditing ? (
-                      <>
-                        <button className="btn btnPrimary btnSmall" onClick={() => onSaveEdit(cat)} disabled={actionBusy || loading || !editName.trim()}>저장</button>
-                        <button className="btn btnSmall" onClick={cancelEdit} disabled={actionBusy || loading}>취소</button>
-                      </>
-                    ) : (
-                      <>
-                        <button className="btn btnSmall btnEdit" onClick={() => startEdit(cat)} disabled={actionBusy || loading}>수정</button>
-                        <button className="btn btnSmall btnDisable" onClick={() => onDisable(cat)} disabled={actionBusy || loading || cat.is_active === false}>비활성화</button>
-                        <button className="btn btnSmall btnDelete" onClick={() => onDeleteWithReassign(cat)} disabled={actionBusy || loading}>삭제(재할당)</button>
-                      </>
-                    )}
-                  </div>
+                  {isEditing ? (
+                    <div className="row">
+                      <button className="btn btnPrimary btnSmall" onClick={() => onSaveEdit(cat)} disabled={actionBusy || loading || !editName.trim()}>저장</button>
+                      <button className="btn btnSmall" onClick={cancelEdit} disabled={actionBusy || loading}>취소</button>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
