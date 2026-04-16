@@ -10,6 +10,7 @@ export type OptionGroup = {
   required: boolean;
   min: number;
   max: number;
+  sortOrder?: number;
 };
 
 export type OptionItem = {
@@ -41,11 +42,28 @@ function toInt(v: any, fallback = 0) {
 export async function fetchOptionsFromDb(storeId: string): Promise<OptionData> {
   if (!storeId) return DEFAULT_OPTIONS;
 
-  const { data: groups, error: gErr } = await supabase
+  let groups: any[] | null = null;
+  let gErr: any = null;
+
+  const gRes = await supabase
     .from("option_groups")
-    .select("id, name, required, min, max")
+    .select("id, name, required, min, max, sort_order")
     .eq("store_id", storeId)
+    .order("sort_order", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
+
+  if (gRes.error && gRes.error.code === "42703" && String(gRes.error.message || "").includes("sort_order")) {
+    const fallback = await supabase
+      .from("option_groups")
+      .select("id, name, required, min, max")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: true });
+    groups = fallback.data as any[] | null;
+    gErr = fallback.error;
+  } else {
+    groups = gRes.data as any[] | null;
+    gErr = gRes.error;
+  }
 
   if (gErr) {
     console.error("[fetchOptionsFromDb] option_groups error:", gErr);
@@ -76,6 +94,7 @@ function mapGroup(x: any): OptionGroup {
     required: !!x.required,
     min: toInt(x.min, 0),
     max: Math.max(toInt(x.max, 1), toInt(x.min, 0)),
+    sortOrder: toInt(x.sort_order, 0),
   };
 }
 
