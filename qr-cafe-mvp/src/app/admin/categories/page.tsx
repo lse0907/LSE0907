@@ -413,6 +413,7 @@ function CategoriesPageInner() {
           }
           .categoryMainRow{
             grid-column:1;
+            grid-row:1;
             flex-wrap:nowrap;
             min-width:0;
           }
@@ -422,10 +423,12 @@ function CategoriesPageInner() {
           .categoryActionRow{
             width:100%;
             grid-column:1 / -1;
+            grid-row:2;
             justify-content:flex-end;
           }
           .categoryOrderEdge{
             grid-column:2;
+            grid-row:1;
             justify-content:flex-end;
           }
         }
