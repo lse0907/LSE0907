@@ -1012,7 +1012,7 @@ function AdminOptionsPageInner() {
         }
         .idInlineRow {
           display: grid;
-          grid-template-columns: auto minmax(0, 1fr);
+          grid-template-columns: auto minmax(0, 1fr) auto;
           gap: 8px;
           align-items: center;
           margin-top: 8px;
@@ -1024,6 +1024,15 @@ function AdminOptionsPageInner() {
           font-size: 12px;
           line-height: 1.35;
           word-break: break-all;
+        }
+        .requiredInline {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
+          font-weight: 800;
+          color: #334155;
+          font-size: 12px;
         }
         .itemCollapsedHint {
           margin-top: 8px;
@@ -1176,6 +1185,9 @@ function AdminOptionsPageInner() {
           .groupTopRow {
             grid-template-columns: 1fr minmax(86px, 110px);
             align-items: end;
+          }
+          .idInlineRow {
+            grid-template-columns: auto minmax(0, 1fr);
           }
           .name {
             font-size: 14px;
@@ -1413,21 +1425,6 @@ function AdminOptionsPageInner() {
                       disabled={actionBusy || loading || isExclusiveSelected}
                     />
                   </div>
-
-                  <div className="field" style={{ marginTop: 0 }}>
-                    <div className="label">필수 여부</div>
-                    <label style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 900 }}>
-                      <input
-                        type="checkbox"
-                        checked={groupDraft.required}
-                        onChange={(e) =>
-                          setGroupDraft((prev) => ({ ...prev, required: e.target.checked, min: e.target.checked ? "1" : "0" }))
-                        }
-                        disabled={actionBusy || loading || isExclusiveSelected}
-                      />
-                      필수
-                    </label>
-                  </div>
                   <div className="field" style={{ marginTop: 0 }}>
                     <div className="label">최대 선택</div>
                     <input
@@ -1445,6 +1442,17 @@ function AdminOptionsPageInner() {
                   <div className="idValue idFull" title={selectedGroup.id}>
                     {selectedGroup.id}
                   </div>
+                  <label className="requiredInline">
+                    <input
+                      type="checkbox"
+                      checked={groupDraft.required}
+                      onChange={(e) =>
+                        setGroupDraft((prev) => ({ ...prev, required: e.target.checked, min: e.target.checked ? "1" : "0" }))
+                      }
+                      disabled={actionBusy || loading || isExclusiveSelected}
+                    />
+                    필수 여부
+                  </label>
                 </div>
 
                 <div className="btnRow">
@@ -1475,14 +1483,12 @@ function AdminOptionsPageInner() {
                   </button>
                 </div>
 
-                <div className="itemCollapsedHint">
-                  <div className="muted">옵션 항목은 최소 1개 이상 등록해주세요.</div>
-                </div>
                 {!isExclusiveSelected ? (
                   <div className="btnRow" style={{ marginTop: 12 }}>
                     <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={actionBusy || loading}>
                       + 옵션 추가
                     </button>
+                    <div className="muted">옵션 항목은 최소 1개 이상 등록해주세요.</div>
                   </div>
                 ) : null}
 
