@@ -70,22 +70,9 @@ type MenuDraft = {
   image: string;
   isSoldOut: boolean;
   optionGroupIds: string[];
-  sortOrder: string;
   categoryId: string;
   optionPriceByItem: Record<string, string>;
 };
-
-function slugify(input: string) {
-  const base = (input || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9\-]/g, "")
-    .replace(/\-+/g, "-")
-    .replace(/^\-+|\-+$/g, "");
-  if (!base) return "";
-  return base.slice(0, 40);
-}
 
 function toInt(v: string, fallback: number) {
   const n = Number(v);
@@ -110,10 +97,32 @@ const emptyDraft: MenuDraft = {
   image: "",
   isSoldOut: false,
   optionGroupIds: [],
-  sortOrder: "",
   categoryId: "",
   optionPriceByItem: {},
 };
+
+function sanitizeIdPart(input: string) {
+  const v = String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return v || "store";
+}
+
+function buildNextMenuId(storeId: string, items: MenuItem[]) {
+  const prefix = `${sanitizeIdPart(storeId)}-menu-`;
+  const re = new RegExp(`^${prefix}(\\d+)$`);
+  let maxSeq = 0;
+  for (const row of items) {
+    const m = String(row.id || "").match(re);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (Number.isFinite(n)) maxSeq = Math.max(maxSeq, n);
+  }
+  return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
+}
 
 function AdminMenuPageInner() {
   const router = useRouter();
@@ -350,7 +359,6 @@ function AdminMenuPageInner() {
       image: found.image || "",
       isSoldOut: Boolean(found.is_sold_out),
       optionGroupIds: Array.isArray(found.option_group_ids) ? found.option_group_ids : [],
-      sortOrder: found.sort_order != null ? String(found.sort_order) : "",
       categoryId: String(found.category_id || ""),
       optionPriceByItem: optionPrices
         .filter((row) => row.menu_id === found.id)
@@ -383,7 +391,7 @@ function AdminMenuPageInner() {
 
   const onNew = () => {
     setSelectedId("");
-    setDraft(emptyDraft);
+    setDraft({ ...emptyDraft, id: buildNextMenuId(storeId, items) });
     setImageFileName("");
     clearStatus();
     setShowExclusiveCreateForm(false);
@@ -394,7 +402,6 @@ function AdminMenuPageInner() {
     const name = draft.name.trim();
     const id = draft.id.trim();
     const priceText = draft.price.trim();
-    const sortOrderText = draft.sortOrder.trim();
     const price = toInt(priceText, -1);
 
     if (!name) {
@@ -442,12 +449,6 @@ function AdminMenuPageInner() {
       setStatus("error", "기본 가격은 0 이상의 숫자로 입력해주세요.");
       return;
     }
-    if (sortOrderText && !isWholeNumberString(sortOrderText)) {
-      setBadge("error");
-      setTimeout(() => setBadge("idle"), 1600);
-      setStatus("error", "노출 순서는 숫자만 입력해주세요. (예: 10)");
-      return;
-    }
     if (draft.categoryId && !categories.some((cat) => cat.id === draft.categoryId)) {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
@@ -489,7 +490,6 @@ function AdminMenuPageInner() {
         image: draft.image.trim(),
         is_sold_out: draft.isSoldOut,
         option_group_ids: filteredGroups,
-        sort_order: draft.sortOrder ? toInt(draft.sortOrder, 0) : null,
         category_id: draft.categoryId || null,
       };
 
@@ -502,7 +502,7 @@ function AdminMenuPageInner() {
           .eq("store_id", storeId);
         if (upd.error) throw upd.error;
       } else {
-        const ins = await supabase.from("menu_items").insert([payload]);
+        const ins = await supabase.from("menu_items").insert([{ ...payload, sort_order: sortedItems.length + 1 }]);
         if (ins.error) throw ins.error;
       }
 
@@ -1231,6 +1231,13 @@ function AdminMenuPageInner() {
           gap: 10px;
           margin-top: 12px;
         }
+        .listScroll {
+          max-height: 56vh;
+          overflow-y: auto;
+          padding-right: 4px;
+        }
+        .listScroll::-webkit-scrollbar { width: 8px; }
+        .listScroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
         .rowBtn {
           text-align: left;
           border: 1px solid var(--line);
@@ -1299,6 +1306,15 @@ function AdminMenuPageInner() {
           display: grid;
           gap: 6px;
           margin-top: 10px;
+        }
+        .detailTopRow {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 160px auto;
+          gap: 10px;
+          align-items: end;
+        }
+        .soldOutField {
+          justify-self: end;
         }
         .label {
           font-size: 12px;
@@ -1423,18 +1439,13 @@ function AdminMenuPageInner() {
           min-width: 88px;
           max-width: 96px;
         }
-        .sortOrderInput {
-          width: 34%;
-          min-width: 90px;
-          max-width: 130px;
-        }
         .menuIdInput {
           min-width: 0;
           max-width: 220px;
         }
-        .sortIdRow {
+        .metaRow {
           display: grid;
-          grid-template-columns: 120px minmax(0, 1fr);
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
           gap: 10px;
           align-items: start;
         }
@@ -1539,6 +1550,9 @@ function AdminMenuPageInner() {
           .filterRow {
             grid-template-columns: 1fr;
           }
+          .listScroll {
+            max-height: 45vh;
+          }
           .twoColRow {
             grid-template-columns: minmax(0, 1fr) auto;
           }
@@ -1549,12 +1563,15 @@ function AdminMenuPageInner() {
             width: 100%;
             min-width: 88px;
           }
-          .sortOrderInput {
-            width: 100%;
-            min-width: 0;
+          .detailTopRow {
+            grid-template-columns: minmax(0, 1fr) 140px;
           }
-          .sortIdRow {
-            grid-template-columns: 110px minmax(0, 1fr);
+          .soldOutField {
+            grid-column: 1 / -1;
+            justify-self: start;
+          }
+          .metaRow {
+            grid-template-columns: 1fr;
           }
           .groupTopRow {
             grid-template-columns: minmax(0, 1fr) auto;
@@ -1700,7 +1717,8 @@ function AdminMenuPageInner() {
               목록에서 ↑/↓로 순서를 바꾼 뒤 <b>순서 저장</b>을 눌러주세요.
             </p>
 
-            <div className="list">
+            <div className="listScroll">
+              <div className="list">
               {filteredItems.map((m) => {
                 const groupIds = Array.isArray(m.option_group_ids) ? m.option_group_ids : [];
                 const commonCount = groupIds.filter((gid) => {
@@ -1770,11 +1788,12 @@ function AdminMenuPageInner() {
                   </div>
                 );
               })}
-              {!loading && filteredItems.length === 0 ? (
-                <div className="muted" style={{ marginTop: 10 }}>
-                  조건에 맞는 메뉴가 없습니다.
-                </div>
-              ) : null}
+                {!loading && filteredItems.length === 0 ? (
+                  <div className="muted" style={{ marginTop: 10 }}>
+                    조건에 맞는 메뉴가 없습니다.
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -1782,26 +1801,18 @@ function AdminMenuPageInner() {
             <div className="card">
               <h2 className="cardTitle">메뉴 상세</h2>
 
-            <div className="field">
-              <div className="label">메뉴명</div>
-              <input
-                className="input"
-                value={draft.name}
-                onChange={(e) => {
-                  const nextName = e.target.value;
-                  setDraft((prev) => ({
-                    ...prev,
-                    name: nextName,
-                    id: prev.id || slugify(nextName),
-                  }));
-                }}
-                placeholder="예: 아메리카노"
-                disabled={saving || loading}
-              />
-            </div>
-
-            <div className="twoColRow">
-              <div className="field">
+            <div className="detailTopRow">
+              <div className="field" style={{ marginTop: 0 }}>
+                <div className="label">메뉴명</div>
+                <input
+                  className="input"
+                  value={draft.name}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="예: 아메리카노"
+                  disabled={saving || loading}
+                />
+              </div>
+              <div className="field" style={{ marginTop: 0 }}>
                 <div className="label">기본 가격</div>
                 <input
                   className="input"
@@ -1812,8 +1823,7 @@ function AdminMenuPageInner() {
                   disabled={saving || loading}
                 />
               </div>
-
-              <div className="field" style={{ minWidth: 92 }}>
+              <div className="field soldOutField" style={{ marginTop: 0 }}>
                 <div className="label">품절</div>
                 <label className="optionRow" style={{ minHeight: 42 }}>
                   <input
@@ -1851,19 +1861,7 @@ function AdminMenuPageInner() {
               </div>
             </div>
 
-            <div className="sortIdRow">
-              <div className="field">
-                <div className="label">노출 순서</div>
-                <input
-                  className="input sortOrderInput"
-                  inputMode="numeric"
-                  value={draft.sortOrder}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, sortOrder: e.target.value }))}
-                  placeholder="예: 10"
-                  disabled={saving || loading}
-                />
-              </div>
-
+            <div className="metaRow">
               <div className="field">
                 <div className="label">카테고리</div>
                 <select
@@ -1885,10 +1883,10 @@ function AdminMenuPageInner() {
                   className="input"
                   value={draft.id}
                   onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
-                  placeholder="예: americano"
+                  placeholder="예: testximen-menu-0001"
                   disabled={saving || loading || isEditing}
                 />
-                <div className="hint">등록 된 메뉴는 ID변경 불가</div>
+                <div className="hint">저장 전에는 ID를 수정할 수 있으며, 저장 후에는 변경할 수 없습니다.</div>
               </div>
             </div>
 
