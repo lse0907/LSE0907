@@ -52,6 +52,11 @@ type MenuOptionPrice = {
   option_item_id: string;
   price_delta: number;
 };
+type MenuOptionItemExclusion = {
+  store_id: string;
+  menu_id: string;
+  option_item_id: string;
+};
 type MyStore = {
   store_id: string;
   store_name: string | null;
@@ -72,6 +77,7 @@ type MenuDraft = {
   optionGroupIds: string[];
   categoryId: string;
   optionPriceByItem: Record<string, string>;
+  excludedCommonItemIds: string[];
 };
 
 function toInt(v: string, fallback: number) {
@@ -99,6 +105,7 @@ const emptyDraft: MenuDraft = {
   optionGroupIds: [],
   categoryId: "",
   optionPriceByItem: {},
+  excludedCommonItemIds: [],
 };
 
 function sanitizeIdPart(input: string) {
@@ -139,8 +146,10 @@ function AdminMenuPageInner() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [optionItems, setOptionItems] = useState<OptionItem[]>([]);
   const [optionPrices, setOptionPrices] = useState<MenuOptionPrice[]>([]);
+  const [optionExclusions, setOptionExclusions] = useState<MenuOptionItemExclusion[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
+  const [hasExclusionTable, setHasExclusionTable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [badge, setBadge] = useState<"idle" | "saved" | "error">("idle");
@@ -276,11 +285,26 @@ function AdminMenuPageInner() {
         .eq("store_id", storeId);
 
       if (priceRes.error) throw priceRes.error;
+      const exclusionRes = await supabase
+        .from("menu_option_item_exclusions")
+        .select("store_id,menu_id,option_item_id")
+        .eq("store_id", storeId);
+
+      let exclusionRows: MenuOptionItemExclusion[] = [];
+      if (exclusionRes.error) {
+        const missingTable = exclusionRes.error.code === "42P01";
+        if (!missingTable) throw exclusionRes.error;
+        setHasExclusionTable(false);
+      } else {
+        setHasExclusionTable(true);
+        exclusionRows = (exclusionRes.data || []) as MenuOptionItemExclusion[];
+      }
 
       setItems((menuRes.data || []) as MenuItem[]);
       setGroups(groupData);
       setOptionItems((itemRes.data || []) as OptionItem[]);
       setOptionPrices((priceRes.data || []) as MenuOptionPrice[]);
+      setOptionExclusions(exclusionRows);
       setCategories((categoryRes.data || []) as MenuCategory[]);
       setOrderDirty(false);
 
@@ -373,8 +397,11 @@ function AdminMenuPageInner() {
           acc[row.option_item_id] = String(row.price_delta ?? 0);
           return acc;
         }, {}),
+      excludedCommonItemIds: optionExclusions
+        .filter((row) => row.menu_id === found.id)
+        .map((row) => row.option_item_id),
     });
-  }, [items, selectedId, optionPrices]);
+  }, [items, selectedId, optionPrices, optionExclusions]);
 
   const sortedItems = useMemo(() => {
     const list = [...items];
@@ -636,12 +663,15 @@ function AdminMenuPageInner() {
       if (!has) return { ...prev, optionGroupIds: next };
 
       const nextPrices = { ...prev.optionPriceByItem };
+      const nextExcluded = [...prev.excludedCommonItemIds];
       optionItems
         .filter((it) => it.group_id === id)
         .forEach((it) => {
           delete nextPrices[it.id];
+          const exIdx = nextExcluded.indexOf(it.id);
+          if (exIdx >= 0) nextExcluded.splice(exIdx, 1);
         });
-      return { ...prev, optionGroupIds: next, optionPriceByItem: nextPrices };
+      return { ...prev, optionGroupIds: next, optionPriceByItem: nextPrices, excludedCommonItemIds: nextExcluded };
     });
   };
 
@@ -772,6 +802,11 @@ function AdminMenuPageInner() {
       setStatus("error", "공통옵션 단가는 숫자만 입력해주세요. (예: 500)");
       return;
     }
+    const selectedExcluded = draft.excludedCommonItemIds.filter((id) => commonItemIds.includes(id));
+    if (!hasExclusionTable && selectedExcluded.length > 0) {
+      setStatus("error", "옵션 제외 기능을 쓰려면 DB SQL 적용이 먼저 필요합니다. (menu_option_item_exclusions)");
+      return;
+    }
 
     setSaving(true);
     clearStatus();
@@ -788,10 +823,30 @@ function AdminMenuPageInner() {
         .upsert(rows, { onConflict: "store_id,menu_id,option_item_id" });
       if (error) throw error;
 
+      if (hasExclusionTable) {
+        const delRes = await supabase
+          .from("menu_option_item_exclusions")
+          .delete()
+          .eq("store_id", storeId)
+          .eq("menu_id", menuId)
+          .in("option_item_id", commonItemIds);
+        if (delRes.error) throw delRes.error;
+
+        if (selectedExcluded.length > 0) {
+          const insertRows = selectedExcluded.map((optionItemId) => ({
+            store_id: storeId,
+            menu_id: menuId,
+            option_item_id: optionItemId,
+          }));
+          const insRes = await supabase.from("menu_option_item_exclusions").insert(insertRows);
+          if (insRes.error) throw insRes.error;
+        }
+      }
+
       await refresh();
-      setStatus("success", "공통옵션 단가를 수정했습니다.");
+      setStatus("success", "공통옵션 단가/제외 항목을 저장했습니다.");
     } catch (e: any) {
-      setStatus("error", `공통옵션 단가 수정 실패: ${String(e?.message || e)}`);
+      setStatus("error", `공통옵션 저장 실패: ${String(e?.message || e)}`);
     } finally {
       setSaving(false);
     }
@@ -1033,6 +1088,18 @@ function AdminMenuPageInner() {
   const getOptionPrice = (item: OptionItem) => {
     if (draft.optionPriceByItem[item.id] != null) return draft.optionPriceByItem[item.id];
     return String(item.price_delta ?? 0);
+  };
+  const isExcludedCommonItem = (itemId: string) => draft.excludedCommonItemIds.includes(itemId);
+  const toggleExcludeCommonItem = (itemId: string) => {
+    setDraft((prev) => {
+      const has = prev.excludedCommonItemIds.includes(itemId);
+      return {
+        ...prev,
+        excludedCommonItemIds: has
+          ? prev.excludedCommonItemIds.filter((id) => id !== itemId)
+          : [...prev.excludedCommonItemIds, itemId],
+      };
+    });
   };
 
   const addCommonGroup = () => {
@@ -1993,22 +2060,33 @@ function AdminMenuPageInner() {
                               groupOptions.map((item) => (
                                 <div key={item.id} className="groupOptionItem">
                                   <span className="optionItemText">{item.name}</span>
-                                  <input
-                                    className="input"
-                                    style={{ maxWidth: 140 }}
-                                    inputMode="numeric"
-                                    value={getOptionPrice(item)}
-                                    onChange={(e) =>
-                                      setDraft((prev) => ({
-                                        ...prev,
-                                        optionPriceByItem: {
-                                          ...prev.optionPriceByItem,
-                                          [item.id]: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    disabled={saving || loading}
-                                  />
+                                  <span className="optionRow" style={{ gap: 6, justifyContent: "flex-end" }}>
+                                    <label className="optionRow optionItemText" style={{ gap: 4 }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isExcludedCommonItem(item.id)}
+                                        onChange={() => toggleExcludeCommonItem(item.id)}
+                                        disabled={saving || loading || !hasExclusionTable}
+                                      />
+                                      제외
+                                    </label>
+                                    <input
+                                      className="input"
+                                      style={{ maxWidth: 120 }}
+                                      inputMode="numeric"
+                                      value={getOptionPrice(item)}
+                                      onChange={(e) =>
+                                        setDraft((prev) => ({
+                                          ...prev,
+                                          optionPriceByItem: {
+                                            ...prev.optionPriceByItem,
+                                            [item.id]: e.target.value,
+                                          },
+                                        }))
+                                      }
+                                      disabled={saving || loading}
+                                    />
+                                  </span>
                                 </div>
                               ))
                             )}
@@ -2021,6 +2099,11 @@ function AdminMenuPageInner() {
                         옵션수정 저장
                       </button>
                     </div>
+                    {!hasExclusionTable ? (
+                      <div className="hint">제외 기능은 DB SQL 적용 후 활성화됩니다.</div>
+                    ) : (
+                      <div className="hint">체크한 항목은 이 메뉴에서만 숨김 처리됩니다.</div>
+                    )}
                   </>
                 )}
                 </div>
