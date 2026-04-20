@@ -1394,12 +1394,15 @@ function AdminMenuPageInner() {
         }
         .idSoldOutRow {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-columns: minmax(0, 1fr);
           gap: 10px;
-          align-items: end;
+          align-items: start;
         }
-        .soldOutField {
-          justify-self: end;
+        .menuIdLabelRow {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
         }
         .soldOutInline {
           display: inline-flex;
@@ -1461,12 +1464,14 @@ function AdminMenuPageInner() {
           align-items: center;
           gap: 10px;
           min-width: 0;
+          flex: 1 1 auto;
         }
         .optionItemControlRow {
           display: inline-flex;
           align-items: center;
           justify-content: flex-end;
           gap: 8px;
+          flex: 0 0 auto;
         }
         .optionExcludeLabel {
           font-size: 13px;
@@ -1476,6 +1481,10 @@ function AdminMenuPageInner() {
         .optionItemText {
           font-size: 13px;
           font-weight: 700;
+          white-space: normal;
+          word-break: keep-all;
+          overflow-wrap: anywhere;
+          line-height: 1.35;
         }
         .policyBadge {
           display: inline-flex;
@@ -1698,21 +1707,7 @@ function AdminMenuPageInner() {
             grid-template-columns: minmax(0, 1fr) 140px;
           }
           .idSoldOutRow {
-            grid-template-columns: minmax(0, 1fr) auto;
-          }
-          .soldOutField {
-            justify-self: end;
-          }
-          .groupOptionValueRow {
-            flex-wrap: wrap;
-            align-items: flex-start;
-          }
-          .optionItemLeft {
-            width: 100%;
-          }
-          .optionItemControlRow {
-            width: 100%;
-            justify-content: flex-end;
+            grid-template-columns: minmax(0, 1fr);
           }
           .metaRow {
             grid-template-columns: 1fr;
@@ -1971,7 +1966,18 @@ function AdminMenuPageInner() {
 
             <div className="idSoldOutRow">
               <div className="field menuIdInput" style={{ marginTop: 0 }}>
-                <div className="label">메뉴 ID</div>
+                <div className="menuIdLabelRow">
+                  <div className="label">메뉴 ID</div>
+                  <label className="soldOutInline">
+                    <span className="label">품절</span>
+                    <input
+                      type="checkbox"
+                      checked={draft.isSoldOut}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, isSoldOut: e.target.checked }))}
+                      disabled={saving || loading}
+                    />
+                  </label>
+                </div>
                 <input
                   className="input"
                   value={draft.id}
@@ -1980,17 +1986,6 @@ function AdminMenuPageInner() {
                   disabled={saving || loading || isEditing}
                 />
                 <div className="hint">ID는 저장 후에는 변경할 수 없습니다.</div>
-              </div>
-              <div className="soldOutField">
-                <label className="soldOutInline">
-                  <span className="label">품절</span>
-                  <input
-                    type="checkbox"
-                    checked={draft.isSoldOut}
-                    onChange={(e) => setDraft((prev) => ({ ...prev, isSoldOut: e.target.checked }))}
-                    disabled={saving || loading}
-                  />
-                </label>
               </div>
             </div>
 
