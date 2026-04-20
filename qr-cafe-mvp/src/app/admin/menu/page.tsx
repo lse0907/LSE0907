@@ -1943,9 +1943,9 @@ function AdminMenuPageInner() {
                 />
                 <div className="hint">저장 전에는 ID를 수정할 수 있으며, 저장 후에는 변경할 수 없습니다.</div>
               </div>
-              <div className="field soldOutField" style={{ marginTop: 0 }}>
+              <div className="field soldOutField" style={{ marginTop: 0, gap: 2 }}>
                 <div className="label">품절</div>
-                <label className="optionRow" style={{ minHeight: 42 }}>
+                <label className="optionRow" style={{ minHeight: 42, gap: 2 }}>
                   <input
                     type="checkbox"
                     checked={draft.isSoldOut}
