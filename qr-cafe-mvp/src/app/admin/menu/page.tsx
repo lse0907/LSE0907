@@ -1400,12 +1400,13 @@ function AdminMenuPageInner() {
         }
         .soldOutField {
           justify-self: end;
-          gap: 2px;
         }
-        .soldOutToggle {
-          gap: 2px;
-          min-height: 0;
-          line-height: 1;
+        .soldOutInline {
+          display: inline-flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 6px;
+          min-height: 40px;
         }
         .soldOutOnlyLabel {
           font-size: 12px;
@@ -1454,6 +1455,12 @@ function AdminMenuPageInner() {
         }
         .groupOptionValueRow {
           align-items: center;
+        }
+        .optionItemLeft {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
         }
         .optionItemControlRow {
           display: inline-flex;
@@ -1699,6 +1706,9 @@ function AdminMenuPageInner() {
           .groupOptionValueRow {
             flex-wrap: wrap;
             align-items: flex-start;
+          }
+          .optionItemLeft {
+            width: 100%;
           }
           .optionItemControlRow {
             width: 100%;
@@ -1971,9 +1981,9 @@ function AdminMenuPageInner() {
                 />
                 <div className="hint">저장 전에는 ID를 수정할 수 있으며, 저장 후에는 변경할 수 없습니다.</div>
               </div>
-              <div className="field soldOutField" style={{ marginTop: 0 }}>
-                <div className="label">품절</div>
-                <label className="optionRow soldOutToggle">
+              <div className="soldOutField">
+                <label className="soldOutInline">
+                  <span className="label">품절</span>
                   <input
                     type="checkbox"
                     checked={draft.isSoldOut}
@@ -2087,7 +2097,18 @@ function AdminMenuPageInner() {
                             ) : (
                               groupOptions.map((item) => (
                                 <div key={item.id} className="groupOptionItem groupOptionValueRow">
-                                  <span className="optionItemText">{item.name}</span>
+                                  <span className="optionItemLeft">
+                                    <label className="optionRow optionExcludeLabel" style={{ gap: 4 }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isExcludedCommonItem(item.id)}
+                                        onChange={() => toggleExcludeCommonItem(item.id)}
+                                        disabled={saving || loading || !hasExclusionTable}
+                                      />
+                                      제외
+                                    </label>
+                                    <span className="optionItemText">{item.name}</span>
+                                  </span>
                                   <span className="optionItemControlRow">
                                     <input
                                       className="input"
@@ -2105,15 +2126,6 @@ function AdminMenuPageInner() {
                                       }
                                       disabled={saving || loading}
                                     />
-                                    <label className="optionRow optionExcludeLabel" style={{ gap: 4 }}>
-                                      <input
-                                        type="checkbox"
-                                        checked={isExcludedCommonItem(item.id)}
-                                        onChange={() => toggleExcludeCommonItem(item.id)}
-                                        disabled={saving || loading || !hasExclusionTable}
-                                      />
-                                      제외
-                                    </label>
                                   </span>
                                 </div>
                               ))
