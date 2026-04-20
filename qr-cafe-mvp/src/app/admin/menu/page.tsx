@@ -1268,8 +1268,8 @@ function AdminMenuPageInner() {
         .btn {
           border: 1px solid var(--line);
           background: #fff;
-          padding: 10px 14px;
-          border-radius: 12px;
+          padding: 8px 12px;
+          border-radius: 10px;
           cursor: pointer;
           font-weight: 950;
           font-size: 14px;
@@ -1411,6 +1411,10 @@ function AdminMenuPageInner() {
           gap: 6px;
           min-height: 40px;
         }
+        .soldOutLabel {
+          color: #b91c1c;
+          font-weight: 900;
+        }
         .soldOutOnlyLabel {
           font-size: 12px;
           font-weight: 700;
@@ -1421,8 +1425,8 @@ function AdminMenuPageInner() {
           font-weight: 900;
         }
         .input {
-          padding: 10px 12px;
-          border-radius: 12px;
+          padding: 8px 10px;
+          border-radius: 10px;
           border: 1px solid var(--line);
           background: #fff;
           font-weight: 800;
@@ -1437,10 +1441,10 @@ function AdminMenuPageInner() {
         .optionConnectCard {
           border: 1px solid var(--line);
           border-radius: 12px;
-          padding: 12px;
+          padding: 10px;
           background: #fcfcfd;
           display: grid;
-          gap: 10px;
+          gap: 8px;
         }
         .groupOptionDetail {
           border: 1px dashed var(--line);
@@ -1496,6 +1500,11 @@ function AdminMenuPageInner() {
           font-size: 11px;
           font-weight: 900;
           background: #f8fafc;
+        }
+        .policyBadgeRequired {
+          border-color: #fecaca;
+          color: #b91c1c;
+          background: #fff1f2;
         }
         .exclusiveItemCard {
           border: 1px dashed var(--line);
@@ -1581,7 +1590,7 @@ function AdminMenuPageInner() {
         }
         .menuIdInput {
           min-width: 0;
-          max-width: 220px;
+          max-width: none;
         }
         .metaRow {
           display: grid;
@@ -1922,7 +1931,7 @@ function AdminMenuPageInner() {
                       </span>
                     </div>
                     <div className="muted">
-                      {Number(m.price || 0).toLocaleString()}원 · 공통옵션 {commonCount}개 · 전용옵션 {exclusiveCount}개
+                      {Number(m.price || 0).toLocaleString()}원 · 공통 {commonCount}개 · 전용 {exclusiveCount}개
                     </div>
                   </div>
                 );
@@ -1969,7 +1978,7 @@ function AdminMenuPageInner() {
                 <div className="menuIdLabelRow">
                   <div className="label">메뉴 ID</div>
                   <label className="soldOutInline">
-                    <span className="label">품절</span>
+                    <span className="label soldOutLabel">품절</span>
                     <input
                       type="checkbox"
                       checked={draft.isSoldOut}
@@ -2081,7 +2090,7 @@ function AdminMenuPageInner() {
                             <div className="groupOptionItem">
                               <div className="name" style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                                 <span>{group.name}</span>
-                                <span className="policyBadge">{getGroupPolicyText(group)}</span>
+                                <span className={`policyBadge ${group.required ? "policyBadgeRequired" : ""}`.trim()}>{getGroupPolicyText(group)}</span>
                               </div>
                               <button className="btn btnDanger btnMini" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
                                 연결해제
