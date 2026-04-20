@@ -1979,7 +1979,7 @@ function AdminMenuPageInner() {
                   placeholder="예: testximen-menu-0001"
                   disabled={saving || loading || isEditing}
                 />
-                <div className="hint">저장 전에는 ID를 수정할 수 있으며, 저장 후에는 변경할 수 없습니다.</div>
+                <div className="hint">ID는 저장 후에는 변경할 수 없습니다.</div>
               </div>
               <div className="soldOutField">
                 <label className="soldOutInline">
@@ -2098,15 +2098,6 @@ function AdminMenuPageInner() {
                               groupOptions.map((item) => (
                                 <div key={item.id} className="groupOptionItem groupOptionValueRow">
                                   <span className="optionItemLeft">
-                                    <label className="optionRow optionExcludeLabel" style={{ gap: 4 }}>
-                                      <input
-                                        type="checkbox"
-                                        checked={isExcludedCommonItem(item.id)}
-                                        onChange={() => toggleExcludeCommonItem(item.id)}
-                                        disabled={saving || loading || !hasExclusionTable}
-                                      />
-                                      제외
-                                    </label>
                                     <span className="optionItemText">{item.name}</span>
                                   </span>
                                   <span className="optionItemControlRow">
@@ -2126,6 +2117,15 @@ function AdminMenuPageInner() {
                                       }
                                       disabled={saving || loading}
                                     />
+                                    <label className="optionRow optionExcludeLabel" style={{ gap: 4 }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isExcludedCommonItem(item.id)}
+                                        onChange={() => toggleExcludeCommonItem(item.id)}
+                                        disabled={saving || loading || !hasExclusionTable}
+                                      />
+                                      제외
+                                    </label>
                                   </span>
                                 </div>
                               ))
