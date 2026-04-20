@@ -124,6 +124,13 @@ function buildNextMenuId(storeId: string, items: MenuItem[]) {
   return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
 }
 
+function getGroupPolicyText(group: OptionGroup) {
+  const min = Math.max(Number(group.min ?? 0), 0);
+  const max = Math.max(Number(group.max ?? 1), 1);
+  if (group.required) return `필수 ${min}~${max}`;
+  return `선택 ${min}~${max}`;
+}
+
 function AdminMenuPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -1215,6 +1222,11 @@ function AdminMenuPageInner() {
           color: #b91c1c;
           background: #fff;
         }
+        .btnMini {
+          padding: 6px 9px;
+          font-size: 12px;
+          border-radius: 9px;
+        }
         .btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
@@ -1309,12 +1321,22 @@ function AdminMenuPageInner() {
         }
         .detailTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 160px auto;
+          grid-template-columns: minmax(0, 1fr) 160px;
+          gap: 10px;
+          align-items: end;
+        }
+        .idSoldOutRow {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
           gap: 10px;
           align-items: end;
         }
         .soldOutField {
           justify-self: end;
+        }
+        .soldOutOnlyLabel {
+          font-size: 12px;
+          font-weight: 700;
         }
         .label {
           font-size: 12px;
@@ -1356,6 +1378,21 @@ function AdminMenuPageInner() {
           align-items: center;
           justify-content: space-between;
           gap: 10px;
+        }
+        .optionItemText {
+          font-size: 13px;
+          font-weight: 700;
+        }
+        .policyBadge {
+          display: inline-flex;
+          align-items: center;
+          padding: 2px 8px;
+          border-radius: 999px;
+          border: 1px solid #dbe2ea;
+          color: #334155;
+          font-size: 11px;
+          font-weight: 900;
+          background: #f8fafc;
         }
         .exclusiveItemCard {
           border: 1px dashed var(--line);
@@ -1566,8 +1603,10 @@ function AdminMenuPageInner() {
           .detailTopRow {
             grid-template-columns: minmax(0, 1fr) 140px;
           }
+          .idSoldOutRow {
+            grid-template-columns: 1fr;
+          }
           .soldOutField {
-            grid-column: 1 / -1;
             justify-self: start;
           }
           .metaRow {
@@ -1703,7 +1742,7 @@ function AdminMenuPageInner() {
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
-              <label className="optionRow" style={{ justifyContent: "flex-end" }}>
+              <label className="optionRow soldOutOnlyLabel" style={{ justifyContent: "flex-end" }}>
                 <input
                   type="checkbox"
                   checked={soldOutOnly}
@@ -1823,6 +1862,20 @@ function AdminMenuPageInner() {
                   disabled={saving || loading}
                 />
               </div>
+            </div>
+
+            <div className="idSoldOutRow">
+              <div className="field menuIdInput" style={{ marginTop: 0 }}>
+                <div className="label">메뉴 ID</div>
+                <input
+                  className="input"
+                  value={draft.id}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
+                  placeholder="예: testximen-menu-0001"
+                  disabled={saving || loading || isEditing}
+                />
+                <div className="hint">저장 전에는 ID를 수정할 수 있으며, 저장 후에는 변경할 수 없습니다.</div>
+              </div>
               <div className="field soldOutField" style={{ marginTop: 0 }}>
                 <div className="label">품절</div>
                 <label className="optionRow" style={{ minHeight: 42 }}>
@@ -1832,9 +1885,23 @@ function AdminMenuPageInner() {
                     onChange={(e) => setDraft((prev) => ({ ...prev, isSoldOut: e.target.checked }))}
                     disabled={saving || loading}
                   />
-                  품절 처리
                 </label>
               </div>
+            </div>
+
+            <div className="field">
+              <div className="label">카테고리</div>
+              <select
+                className="input"
+                value={draft.categoryId}
+                onChange={(e) => setDraft((prev) => ({ ...prev, categoryId: e.target.value }))}
+                disabled={saving || loading}
+              >
+                <option value="">미분류</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
             </div>
 
             <div className="field">
@@ -1858,35 +1925,6 @@ function AdminMenuPageInner() {
                   </label>
                   <input className="input fileNameInput" value={imageFileName} readOnly placeholder="선택된 파일명" />
                 </div>
-              </div>
-            </div>
-
-            <div className="metaRow">
-              <div className="field">
-                <div className="label">카테고리</div>
-                <select
-                  className="input"
-                  value={draft.categoryId}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, categoryId: e.target.value }))}
-                  disabled={saving || loading}
-                >
-                  <option value="">미분류</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="field menuIdInput">
-                <div className="label">메뉴 ID</div>
-                <input
-                  className="input"
-                  value={draft.id}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
-                  placeholder="예: testximen-menu-0001"
-                  disabled={saving || loading || isEditing}
-                />
-                <div className="hint">저장 전에는 ID를 수정할 수 있으며, 저장 후에는 변경할 수 없습니다.</div>
               </div>
             </div>
 
@@ -1922,7 +1960,7 @@ function AdminMenuPageInner() {
                     <option value="">추가할 공통옵션 그룹 선택</option>
                     {unselectedCommonGroups.map((g) => (
                       <option key={g.id} value={g.id}>
-                        {g.name}
+                        {g.name} · {getGroupPolicyText(g)}
                       </option>
                     ))}
                   </select>
@@ -1941,8 +1979,11 @@ function AdminMenuPageInner() {
                         return (
                           <div className="groupOptionDetail" key={group.id}>
                             <div className="groupOptionItem">
-                              <div className="name">{group.name}</div>
-                              <button className="btn btnDanger" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
+                              <div className="name" style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                                <span>{group.name}</span>
+                                <span className="policyBadge">{getGroupPolicyText(group)}</span>
+                              </div>
+                              <button className="btn btnDanger btnMini" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
                                 연결해제
                               </button>
                             </div>
@@ -1951,7 +1992,7 @@ function AdminMenuPageInner() {
                             ) : (
                               groupOptions.map((item) => (
                                 <div key={item.id} className="groupOptionItem">
-                                  <span>{item.name}</span>
+                                  <span className="optionItemText">{item.name}</span>
                                   <input
                                     className="input"
                                     style={{ maxWidth: 140 }}
@@ -1977,7 +2018,7 @@ function AdminMenuPageInner() {
                     </div>
                     <div className="btnRow" style={{ marginTop: 6 }}>
                       <button className="btn" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading}>
-                        단가 수정
+                        옵션수정 저장
                       </button>
                     </div>
                   </>
