@@ -1452,6 +1452,20 @@ function AdminMenuPageInner() {
           justify-content: space-between;
           gap: 10px;
         }
+        .groupOptionValueRow {
+          align-items: center;
+        }
+        .optionItemControlRow {
+          display: inline-flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+        .optionExcludeLabel {
+          font-size: 13px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
         .optionItemText {
           font-size: 13px;
           font-weight: 700;
@@ -1677,10 +1691,18 @@ function AdminMenuPageInner() {
             grid-template-columns: minmax(0, 1fr) 140px;
           }
           .idSoldOutRow {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr) auto;
           }
           .soldOutField {
-            justify-self: start;
+            justify-self: end;
+          }
+          .groupOptionValueRow {
+            flex-wrap: wrap;
+            align-items: flex-start;
+          }
+          .optionItemControlRow {
+            width: 100%;
+            justify-content: flex-end;
           }
           .metaRow {
             grid-template-columns: 1fr;
@@ -2064,18 +2086,9 @@ function AdminMenuPageInner() {
                               <div className="muted">옵션 항목이 없습니다.</div>
                             ) : (
                               groupOptions.map((item) => (
-                                <div key={item.id} className="groupOptionItem">
+                                <div key={item.id} className="groupOptionItem groupOptionValueRow">
                                   <span className="optionItemText">{item.name}</span>
-                                  <span className="optionRow" style={{ gap: 6, justifyContent: "flex-end" }}>
-                                    <label className="optionRow optionItemText" style={{ gap: 4 }}>
-                                      <input
-                                        type="checkbox"
-                                        checked={isExcludedCommonItem(item.id)}
-                                        onChange={() => toggleExcludeCommonItem(item.id)}
-                                        disabled={saving || loading || !hasExclusionTable}
-                                      />
-                                      제외
-                                    </label>
+                                  <span className="optionItemControlRow">
                                     <input
                                       className="input"
                                       style={{ maxWidth: 120 }}
@@ -2092,6 +2105,15 @@ function AdminMenuPageInner() {
                                       }
                                       disabled={saving || loading}
                                     />
+                                    <label className="optionRow optionExcludeLabel" style={{ gap: 4 }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isExcludedCommonItem(item.id)}
+                                        onChange={() => toggleExcludeCommonItem(item.id)}
+                                        disabled={saving || loading || !hasExclusionTable}
+                                      />
+                                      제외
+                                    </label>
                                   </span>
                                 </div>
                               ))
