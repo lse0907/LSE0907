@@ -168,7 +168,7 @@ function AdminMenuPageInner() {
   const [imageFileName, setImageFileName] = useState("");
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"neutral" | "success" | "error">("neutral");
-  const [exclusiveMode, setExclusiveMode] = useState<"manage" | "create">("manage");
+  const [exclusiveEditorMode, setExclusiveEditorMode] = useState<"none" | "edit" | "create">("none");
   const [optionTab, setOptionTab] = useState<"common" | "exclusive">("common");
   const [commonDirty, setCommonDirty] = useState(false);
   const [exclusiveDirty, setExclusiveDirty] = useState(false);
@@ -450,7 +450,7 @@ function AdminMenuPageInner() {
     setDraft({ ...emptyDraft, id: buildNextMenuId(storeId, items) });
     setImageFileName("");
     clearStatus();
-    setExclusiveMode("manage");
+    setExclusiveEditorMode("none");
     setShowExclusiveItemInputs(false);
     setOptionTab("common");
     setCommonDirty(false);
@@ -740,6 +740,26 @@ function AdminMenuPageInner() {
     setPendingOptionTab(null);
   };
 
+  const openExclusiveEdit = (groupId: string) => {
+    setSelectedExclusiveGroupId(groupId);
+    setExclusiveEditorMode("edit");
+    setExclusiveDirty(false);
+  };
+
+  const openExclusiveCreate = () => {
+    setExclusiveEditorMode("create");
+    setExclusiveDirty(false);
+    setNewExclusiveGroup({ name: "", max: "1" });
+    setNewExclusiveItems([{ name: "", price: "" }]);
+    setShowExclusiveItemInputs(true);
+  };
+
+  const closeExclusiveEditor = () => {
+    setExclusiveEditorMode("none");
+    setExclusiveDirty(false);
+    setNewSelectedExclusiveItem({ name: "", price: "" });
+  };
+
   const updateSelectedExclusiveGroupInMenu = async () => {
     if (!storeId || !selectedExclusiveGroup) return;
 
@@ -763,6 +783,7 @@ function AdminMenuPageInner() {
       await refresh();
       setStatus("success", "전용옵션 그룹을 수정했습니다.");
       setExclusiveDirty(false);
+      setExclusiveEditorMode("none");
     } catch (e: any) {
       setStatus("error", `옵션수정 실패: ${String(e?.message || e)}`);
     } finally {
@@ -797,6 +818,7 @@ function AdminMenuPageInner() {
       await refresh();
       setStatus("success", "옵션 항목을 추가했습니다.");
       setExclusiveDirty(false);
+      setExclusiveEditorMode("none");
     } catch (e: any) {
       setStatus("error", `옵션 항목 추가 실패: ${String(e?.message || e)}`);
     } finally {
@@ -838,6 +860,7 @@ function AdminMenuPageInner() {
           await refresh();
           setStatus("success", "옵션 항목을 삭제했습니다.");
           setExclusiveDirty(false);
+          setExclusiveEditorMode("none");
         } catch (e: any) {
           setStatus("error", `옵션 항목 삭제 실패: ${String(e?.message || e)}`);
         } finally {
@@ -963,6 +986,7 @@ function AdminMenuPageInner() {
       await refresh();
       setStatus("success", "옵션 단가를 저장했습니다.");
       setExclusiveDirty(false);
+      setExclusiveEditorMode("none");
       return true;
     } catch (e: any) {
       setStatus("error", `옵션 단가 저장 실패: ${String(e?.message || e)}`);
@@ -1023,6 +1047,7 @@ function AdminMenuPageInner() {
           setSelectedExclusiveGroupId((prev) => (prev === groupId ? "" : prev));
           setStatus("success", "전용옵션을 삭제했습니다.");
           setExclusiveDirty(false);
+          setExclusiveEditorMode("none");
         } catch (e: any) {
           setStatus("error", `전용옵션 삭제 실패: ${String(e?.message || e)}`);
         } finally {
@@ -1100,7 +1125,7 @@ function AdminMenuPageInner() {
       setNewExclusiveGroup({ name: "", max: "1" });
       setNewExclusiveItems([]);
       setShowExclusiveItemInputs(false);
-      setExclusiveMode("manage");
+      setExclusiveEditorMode("none");
       await refresh();
       setStatus("success", "전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
       setExclusiveDirty(false);
@@ -1756,6 +1781,37 @@ function AdminMenuPageInner() {
           padding: 12px;
           background: #fff;
         }
+        .exclusiveWorkspace {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        .exclusiveGroupCard {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px;
+          display: grid;
+          gap: 8px;
+        }
+        .exclusiveGroupCardTop {
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+        .exclusiveGroupMeta {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .exclusiveCardActions {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+        }
         .fullWidthBtn {
           width: 100%;
           justify-content: center;
@@ -1857,6 +1913,12 @@ function AdminMenuPageInner() {
           .previewPlaceholder {
             width: 80px;
             height: 80px;
+          }
+        }
+        @media (min-width: 900px) {
+          .exclusiveWorkspace {
+            grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.1fr);
+            align-items: start;
           }
         }
       `}</style>
@@ -2303,102 +2365,86 @@ function AdminMenuPageInner() {
               <div className="field">
                 <div className="label">전용옵션 (현재 메뉴 전용)</div>
                 <div className="optionConnectCard">
-                  <div className="modeSwitchRow">
-                    <button
-                      type="button"
-                      className={`modeSwitchBtn ${exclusiveMode === "manage" ? "modeSwitchBtnOn" : ""}`}
-                      onClick={() => {
-                        setExclusiveMode("manage");
-                        setShowExclusiveItemInputs(false);
-                      }}
-                      disabled={saving || loading}
-                    >
-                      그룹/항목 관리
-                    </button>
-                    <button
-                      type="button"
-                      className={`modeSwitchBtn ${exclusiveMode === "create" ? "modeSwitchBtnOn" : ""}`}
-                      onClick={() => setExclusiveMode("create")}
-                      disabled={saving || loading}
-                    >
-                      신규 그룹 생성
-                    </button>
-                  </div>
-
-                  {exclusiveMode === "manage" ? (
-                    <>
-                      <div className="formGuide">그룹을 선택해서 이름/최대 수량/항목 단가를 수정하세요.</div>
+                  <div className="formGuide">그룹 카드에서 수정/삭제를 선택하거나 새 그룹을 추가하세요.</div>
+                  <div className="exclusiveWorkspace">
+                    <div className="optionGrid" style={{ marginTop: 0 }}>
                       {exclusiveGroups.length === 0 ? <div className="muted">아직 전용옵션이 없습니다.</div> : null}
-
-                      <div className="optionGrid" style={{ marginTop: 6 }}>
-                        {exclusiveGroups.map((g) => (
-                          <button
-                            key={g.id}
-                            type="button"
-                            className={`rowBtn ${g.id === selectedExclusiveGroupId ? "rowBtnOn" : ""}`}
-                            onClick={() => setSelectedExclusiveGroupId(g.id)}
-                            disabled={saving || loading}
-                          >
-                            <div className="name">{g.name}</div>
-                            <div className="muted">최대 {Math.max(Number(g.max ?? 1), 1)}개 선택</div>
-                          </button>
-                        ))}
-                      </div>
-
-                      {selectedExclusiveGroup ? (
-                        <div className="groupOptionDetail" style={{ marginTop: 8 }}>
-                          <div className="groupTopRow">
-                            <div className="field" style={{ marginTop: 0 }}>
-                              <div className="label">전용옵션 그룹</div>
-                              <input
-                                className="input"
-                                value={exclusiveEdit.name}
-                                onChange={(e) => {
-                                  setExclusiveDirty(true);
-                                  setExclusiveEdit((p) => ({ ...p, name: e.target.value }));
-                                }}
-                                disabled={saving || loading}
-                              />
+                      {exclusiveGroups.map((g) => (
+                        <div key={g.id} className="exclusiveGroupCard">
+                          <div className="exclusiveGroupCardTop">
+                            <div className="exclusiveGroupMeta">
+                              <span className="name">{g.name}</span>
+                              <span className={`policyBadge ${g.required ? "policyBadgeRequired" : ""}`.trim()}>{getGroupPolicyText(g)}</span>
                             </div>
-                            <div className="field maxSelectField" style={{ marginTop: 0 }}>
-                              <div className="label">최대 선택 수량</div>
-                              <input
-                                className="input maxSelectInput"
-                                inputMode="numeric"
-                                value={exclusiveEdit.max}
-                                onChange={(e) => {
-                                  setExclusiveDirty(true);
-                                  setExclusiveEdit((p) => ({ ...p, max: e.target.value }));
-                                }}
-                                disabled={saving || loading}
-                              />
+                            <div className="exclusiveCardActions">
+                              <button className="btn btnMini" type="button" onClick={() => openExclusiveEdit(g.id)} disabled={saving || loading}>
+                                그룹 수정
+                              </button>
+                              <button className="btn btnDanger btnMini" type="button" onClick={() => deleteExclusiveGroupInMenu(g.id)} disabled={saving || loading}>
+                                그룹 삭제
+                              </button>
                             </div>
                           </div>
+                        </div>
+                      ))}
+                      <button className="btn" type="button" onClick={openExclusiveCreate} disabled={saving || loading}>
+                        신규 그룹 추가 +
+                      </button>
+                    </div>
 
-                          <div className="btnRow" style={{ marginTop: 8 }}>
-                            <button className="btn btnPrimary" type="button" onClick={updateSelectedExclusiveGroupInMenu} disabled={saving || loading}>
-                              그룹 수정
-                            </button>
-                            <button className="btn btnDanger" type="button" onClick={() => deleteExclusiveGroupInMenu(selectedExclusiveGroup.id)} disabled={saving || loading}>
-                              그룹 삭제
-                            </button>
-                          </div>
+                    {exclusiveEditorMode !== "none" ? (
+                      <div className="groupOptionDetail" style={{ marginTop: 0 }}>
+                        {exclusiveEditorMode === "edit" && selectedExclusiveGroup ? (
+                          <>
+                            <div className="groupTopRow">
+                              <div className="field" style={{ marginTop: 0 }}>
+                                <div className="label">전용옵션 그룹</div>
+                                <input
+                                  className="input"
+                                  value={exclusiveEdit.name}
+                                  onChange={(e) => {
+                                    setExclusiveDirty(true);
+                                    setExclusiveEdit((p) => ({ ...p, name: e.target.value }));
+                                  }}
+                                  disabled={saving || loading}
+                                />
+                              </div>
+                              <div className="field maxSelectField" style={{ marginTop: 0 }}>
+                                <div className="label">최대 선택 수량</div>
+                                <input
+                                  className="input maxSelectInput"
+                                  inputMode="numeric"
+                                  value={exclusiveEdit.max}
+                                  onChange={(e) => {
+                                    setExclusiveDirty(true);
+                                    setExclusiveEdit((p) => ({ ...p, max: e.target.value }));
+                                  }}
+                                  disabled={saving || loading}
+                                />
+                              </div>
+                            </div>
+                            <div className="btnRow" style={{ marginTop: 8 }}>
+                              <button className="btn btnPrimary" type="button" onClick={updateSelectedExclusiveGroupInMenu} disabled={saving || loading}>
+                                그룹 수정
+                              </button>
+                              <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
+                                취소
+                              </button>
+                            </div>
 
-                          <div className="label" style={{ marginTop: 6 }}>옵션 항목</div>
-                          <div className="hint">단가를 수정한 뒤에는 아래의 단가 수정 버튼을 눌러주세요.</div>
-                          {(itemsByGroup.get(selectedExclusiveGroup.id) || []).length === 0 ? (
-                            <div className="muted">옵션 항목이 없습니다.</div>
-                          ) : (
-                            (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => (
-                              <div key={item.id} className="exclusiveItemCard">
-                                <div className="exclusiveItemTop">
-                                  <span className="exclusiveItemName">{item.name}</span>
-                                  <input
-                                    className="input"
-                                    inputMode="numeric"
-                                    value={getOptionPrice(item)}
-                                    onChange={(e) =>
-                                      {
+                            <div className="label" style={{ marginTop: 6 }}>옵션 항목</div>
+                            {(itemsByGroup.get(selectedExclusiveGroup.id) || []).length === 0 ? (
+                              <div className="muted">옵션 항목이 없습니다.</div>
+                            ) : (
+                              (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => (
+                                <div key={item.id} className="exclusiveItemCard">
+                                  <div className="exclusiveItemTop">
+                                    <span className="exclusiveItemName">{item.name}</span>
+                                    <input
+                                      className="input"
+                                      inputMode="numeric"
+                                      value={getOptionPrice(item)}
+                                      onChange={(e) => {
                                         setExclusiveDirty(true);
                                         setDraft((prev) => ({
                                           ...prev,
@@ -2407,159 +2453,158 @@ function AdminMenuPageInner() {
                                             [item.id]: e.target.value,
                                           },
                                         }));
-                                      }
-                                    }
+                                      }}
+                                      placeholder="단가 입력"
+                                      disabled={saving || loading}
+                                    />
+                                  </div>
+                                  <button
+                                    className="btn btnDanger itemDeleteBtn"
+                                    type="button"
+                                    onClick={() => deleteExclusiveItemInMenu(item.id)}
+                                    disabled={saving || loading}
+                                  >
+                                    항목 삭제
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                            <div className="btnRow" style={{ marginTop: 6 }}>
+                              <button className="btn" type="button" onClick={saveSelectedExclusivePricesInMenu} disabled={saving || loading}>
+                                단가 수정
+                              </button>
+                            </div>
+                            <div className="label" style={{ marginTop: 8 }}>옵션 항목 추가</div>
+                            <div className="optionRow" style={{ marginTop: 4 }}>
+                              <input
+                                className="input"
+                                value={newSelectedExclusiveItem.name}
+                                onChange={(e) => {
+                                  setExclusiveDirty(true);
+                                  setNewSelectedExclusiveItem((p) => ({ ...p, name: e.target.value }));
+                                }}
+                                placeholder="옵션 항목명"
+                                disabled={saving || loading}
+                              />
+                              <input
+                                className="input"
+                                style={{ maxWidth: 120 }}
+                                inputMode="numeric"
+                                value={newSelectedExclusiveItem.price}
+                                onChange={(e) => {
+                                  setExclusiveDirty(true);
+                                  setNewSelectedExclusiveItem((p) => ({ ...p, price: e.target.value }));
+                                }}
+                                placeholder="단가 입력"
+                                disabled={saving || loading}
+                              />
+                            </div>
+                            <div className="btnRow" style={{ marginTop: 6 }}>
+                              <button className="btn fullWidthBtn" type="button" onClick={addItemToSelectedExclusiveGroupInMenu} disabled={saving || loading}>
+                                항목추가
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="hint">메뉴의 전용 옵션 생성 및 연결</div>
+                            <div className="groupTopRow">
+                              <div className="field" style={{ marginTop: 0 }}>
+                                <div className="label">전용옵션 그룹</div>
+                                <input
+                                  className="input"
+                                  value={newExclusiveGroup.name}
+                                  onChange={(e) => {
+                                    setExclusiveDirty(true);
+                                    setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }));
+                                  }}
+                                  placeholder="전용옵션 그룹명 (예: 당도)"
+                                  disabled={saving || loading}
+                                />
+                              </div>
+                              <div className="field maxSelectField" style={{ marginTop: 0 }}>
+                                <div className="label">최대 선택 수량</div>
+                                <input
+                                  className="input maxSelectInput"
+                                  inputMode="numeric"
+                                  value={newExclusiveGroup.max}
+                                  onChange={(e) => {
+                                    setExclusiveDirty(true);
+                                    setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }));
+                                  }}
+                                  placeholder="최대 선택 수량"
+                                  disabled={saving || loading}
+                                />
+                              </div>
+                            </div>
+                            {showExclusiveItemInputs ? (
+                              newExclusiveItems.map((row, idx) => (
+                                <div className="optionRow" key={`new-item-${idx}`}>
+                                  <input
+                                    className="input"
+                                    value={row.name}
+                                    onChange={(e) => {
+                                      setExclusiveDirty(true);
+                                      setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, name: e.target.value } : v)));
+                                    }}
+                                    placeholder={`옵션 항목 ${idx + 1}`}
+                                    disabled={saving || loading}
+                                  />
+                                  <input
+                                    className="input"
+                                    style={{ maxWidth: 120 }}
+                                    inputMode="numeric"
+                                    value={row.price}
+                                    onChange={(e) => {
+                                      setExclusiveDirty(true);
+                                      setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, price: e.target.value } : v)));
+                                    }}
                                     placeholder="단가 입력"
                                     disabled={saving || loading}
                                   />
+                                  {newExclusiveItems.length > 1 ? (
+                                    <button
+                                      className="btn"
+                                      type="button"
+                                      onClick={() => {
+                                        setExclusiveDirty(true);
+                                        setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx));
+                                      }}
+                                      disabled={saving || loading}
+                                    >
+                                      제거
+                                    </button>
+                                  ) : null}
                                 </div>
-                                <button
-                                  className="btn btnDanger itemDeleteBtn"
-                                  type="button"
-                                  onClick={() => deleteExclusiveItemInMenu(item.id)}
-                                  disabled={saving || loading}
-                                >
-                                  항목 삭제
-                                </button>
-                              </div>
-                            ))
-                          )}
-
-                          <div className="btnRow" style={{ marginTop: 6 }}>
-                            <button className="btn" type="button" onClick={saveSelectedExclusivePricesInMenu} disabled={saving || loading}>
-                              단가 수정
-                            </button>
-                          </div>
-
-                          <div className="label" style={{ marginTop: 8 }}>옵션 항목 추가</div>
-                          <div className="optionRow" style={{ marginTop: 4 }}>
-                            <input
-                              className="input"
-                              value={newSelectedExclusiveItem.name}
-                              onChange={(e) => {
-                                setExclusiveDirty(true);
-                                setNewSelectedExclusiveItem((p) => ({ ...p, name: e.target.value }));
-                              }}
-                              placeholder="옵션 항목명"
-                              disabled={saving || loading}
-                            />
-                            <input
-                              className="input"
-                              style={{ maxWidth: 120 }}
-                              inputMode="numeric"
-                              value={newSelectedExclusiveItem.price}
-                              onChange={(e) => {
-                                setExclusiveDirty(true);
-                                setNewSelectedExclusiveItem((p) => ({ ...p, price: e.target.value }));
-                              }}
-                              placeholder="단가 입력"
-                              disabled={saving || loading}
-                            />
-                          </div>
-                          <div className="btnRow" style={{ marginTop: 6 }}>
-                            <button className="btn fullWidthBtn" type="button" onClick={addItemToSelectedExclusiveGroupInMenu} disabled={saving || loading}>
-                              항목추가
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <div className="createBox">
-                      <div className="hint">메뉴의 전용 옵션 생성 및 연결</div>
-                      <div className="groupTopRow">
-                        <div className="field" style={{ marginTop: 0 }}>
-                          <div className="label">전용옵션 그룹</div>
-                          <input
-                            className="input"
-                            value={newExclusiveGroup.name}
-                            onChange={(e) => {
-                              setExclusiveDirty(true);
-                              setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }));
-                            }}
-                            placeholder="전용옵션 그룹명 (예: 당도)"
-                            disabled={saving || loading}
-                          />
-                        </div>
-                        <div className="field maxSelectField" style={{ marginTop: 0 }}>
-                          <div className="label">최대 선택 수량</div>
-                          <input
-                            className="input maxSelectInput"
-                            inputMode="numeric"
-                            value={newExclusiveGroup.max}
-                            onChange={(e) => {
-                              setExclusiveDirty(true);
-                              setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }));
-                            }}
-                            placeholder="최대 선택 수량"
-                            disabled={saving || loading}
-                          />
-                        </div>
-                      </div>
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={() => {
-                          setExclusiveDirty(true);
-                          setShowExclusiveItemInputs(true);
-                          setNewExclusiveItems((prev) => [...prev, { name: "", price: "" }]);
-                        }}
-                        disabled={saving || loading}
-                      >
-                        옵션항목 추가
-                      </button>
-                      {showExclusiveItemInputs ? (
-                        newExclusiveItems.map((row, idx) => (
-                          <div className="optionRow" key={`new-item-${idx}`}>
-                            <input
-                              className="input"
-                              value={row.name}
-                              onChange={(e) =>
-                                {
-                                  setExclusiveDirty(true);
-                                  setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, name: e.target.value } : v)));
-                                }
-                              }
-                              placeholder={`옵션 항목 ${idx + 1}`}
-                              disabled={saving || loading}
-                            />
-                            <input
-                              className="input"
-                              style={{ maxWidth: 120 }}
-                              inputMode="numeric"
-                              value={row.price}
-                              onChange={(e) =>
-                                {
-                                  setExclusiveDirty(true);
-                                  setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, price: e.target.value } : v)));
-                                }
-                              }
-                              placeholder="단가 입력"
-                              disabled={saving || loading}
-                            />
-                            {newExclusiveItems.length > 1 ? (
+                              ))
+                            ) : null}
+                            <div className="btnRow" style={{ marginTop: 6 }}>
                               <button
                                 className="btn"
                                 type="button"
                                 onClick={() => {
                                   setExclusiveDirty(true);
-                                  setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx));
+                                  setShowExclusiveItemInputs(true);
+                                  setNewExclusiveItems((prev) => [...prev, { name: "", price: "" }]);
                                 }}
                                 disabled={saving || loading}
                               >
-                                제거
+                                옵션항목 추가
                               </button>
-                            ) : null}
-                          </div>
-                        ))
-                      ) : null}
-                      <div className="btnRow" style={{ marginTop: 6, width: "100%" }}>
-                        <button className="btn btnPrimary fullWidthBtn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
-                          전용옵션 생성
-                        </button>
+                            </div>
+                            <div className="btnRow" style={{ marginTop: 6, width: "100%" }}>
+                              <button className="btn btnPrimary fullWidthBtn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
+                                전용옵션 생성
+                              </button>
+                              <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
+                                취소
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ) : null}
