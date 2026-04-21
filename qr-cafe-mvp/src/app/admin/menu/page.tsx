@@ -1388,7 +1388,7 @@ function AdminMenuPageInner() {
         }
         .detailTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 160px;
+          grid-template-columns: minmax(0, 1fr) 120px 140px;
           gap: 10px;
           align-items: end;
         }
@@ -1414,6 +1414,7 @@ function AdminMenuPageInner() {
         .soldOutLabel {
           color: #b91c1c;
           font-weight: 900;
+          font-size: 12px;
         }
         .soldOutOnlyLabel {
           font-size: 12px;
@@ -1546,7 +1547,7 @@ function AdminMenuPageInner() {
         }
         .imageUploadRow {
           display: grid;
-          grid-template-columns: 96px 1fr;
+          grid-template-columns: 80px 1fr;
           gap: 10px;
           align-items: center;
         }
@@ -1559,8 +1560,8 @@ function AdminMenuPageInner() {
         }
         .previewThumb {
           margin-top: 0;
-          width: 96px;
-          height: 96px;
+          width: 80px;
+          height: 80px;
           border-radius: 10px;
           border: 1px solid var(--line);
           object-fit: cover;
@@ -1571,8 +1572,8 @@ function AdminMenuPageInner() {
           justify-content: center;
         }
         .previewPlaceholder {
-          width: 96px;
-          height: 96px;
+          width: 80px;
+          height: 80px;
           border-radius: 10px;
           border: 1px dashed var(--line);
           display: flex;
@@ -1706,14 +1707,14 @@ function AdminMenuPageInner() {
             grid-template-columns: minmax(0, 1fr) auto;
           }
           .imageUploadRow {
-            grid-template-columns: 96px 1fr;
+            grid-template-columns: 80px 1fr;
           }
           .maxSelectInput {
             width: 100%;
             min-width: 88px;
           }
           .detailTopRow {
-            grid-template-columns: minmax(0, 1fr) 140px;
+            grid-template-columns: minmax(0, 1fr) 112px 120px;
           }
           .idSoldOutRow {
             grid-template-columns: minmax(0, 1fr);
@@ -1736,8 +1737,8 @@ function AdminMenuPageInner() {
           }
           .previewThumb,
           .previewPlaceholder {
-            width: 96px;
-            height: 96px;
+            width: 80px;
+            height: 80px;
           }
         }
       `}</style>
@@ -1971,6 +1972,20 @@ function AdminMenuPageInner() {
                   disabled={saving || loading}
                 />
               </div>
+              <div className="field" style={{ marginTop: 0 }}>
+                <div className="label">카테고리</div>
+                <select
+                  className="input"
+                  value={draft.categoryId}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, categoryId: e.target.value }))}
+                  disabled={saving || loading}
+                >
+                  <option value="">미분류</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="idSoldOutRow">
@@ -1978,7 +1993,7 @@ function AdminMenuPageInner() {
                 <div className="menuIdLabelRow">
                   <div className="label">메뉴 ID</div>
                   <label className="soldOutInline">
-                    <span className="label soldOutLabel">품절</span>
+                    <span className="soldOutLabel">품절</span>
                     <input
                       type="checkbox"
                       checked={draft.isSoldOut}
