@@ -169,6 +169,10 @@ function AdminMenuPageInner() {
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"neutral" | "success" | "error">("neutral");
   const [exclusiveMode, setExclusiveMode] = useState<"manage" | "create">("manage");
+  const [optionTab, setOptionTab] = useState<"common" | "exclusive">("common");
+  const [commonDirty, setCommonDirty] = useState(false);
+  const [exclusiveDirty, setExclusiveDirty] = useState(false);
+  const [pendingOptionTab, setPendingOptionTab] = useState<"common" | "exclusive" | null>(null);
   const [commonGroupToAdd, setCommonGroupToAdd] = useState("");
   const [newExclusiveGroup, setNewExclusiveGroup] = useState({
     name: "",
@@ -388,6 +392,10 @@ function AdminMenuPageInner() {
   useEffect(() => {
     if (!selectedId) {
       setDraft(emptyDraft);
+      setCommonDirty(false);
+      setExclusiveDirty(false);
+      setPendingOptionTab(null);
+      setOptionTab("common");
       return;
     }
     const found = items.find((x) => x.id === selectedId);
@@ -411,6 +419,10 @@ function AdminMenuPageInner() {
         .filter((row) => row.menu_id === found.id)
         .map((row) => row.option_item_id),
     });
+    setCommonDirty(false);
+    setExclusiveDirty(false);
+    setPendingOptionTab(null);
+    setOptionTab("common");
   }, [items, selectedId, optionPrices, optionExclusions]);
 
   const sortedItems = useMemo(() => {
@@ -440,6 +452,10 @@ function AdminMenuPageInner() {
     clearStatus();
     setExclusiveMode("manage");
     setShowExclusiveItemInputs(false);
+    setOptionTab("common");
+    setCommonDirty(false);
+    setExclusiveDirty(false);
+    setPendingOptionTab(null);
   };
 
   const onSave = async () => {
@@ -668,6 +684,7 @@ function AdminMenuPageInner() {
   };
 
   const toggleGroup = (id: string) => {
+    setCommonDirty(true);
     setDraft((prev) => {
       const has = prev.optionGroupIds.includes(id);
       const next = has ? prev.optionGroupIds.filter((g) => g !== id) : [...prev.optionGroupIds, id];
@@ -684,6 +701,43 @@ function AdminMenuPageInner() {
         });
       return { ...prev, optionGroupIds: next, optionPriceByItem: nextPrices, excludedCommonItemIds: nextExcluded };
     });
+  };
+
+  const requestOptionTabChange = (next: "common" | "exclusive") => {
+    if (next === optionTab) return;
+    const currentDirty = optionTab === "common" ? commonDirty : exclusiveDirty;
+    if (!currentDirty) {
+      setOptionTab(next);
+      return;
+    }
+    setPendingOptionTab(next);
+  };
+
+  const closeOptionTabConfirm = () => {
+    setPendingOptionTab(null);
+  };
+
+  const discardAndMoveOptionTab = () => {
+    if (!pendingOptionTab) return;
+    if (optionTab === "common") setCommonDirty(false);
+    if (optionTab === "exclusive") setExclusiveDirty(false);
+    setOptionTab(pendingOptionTab);
+    setPendingOptionTab(null);
+  };
+
+  const saveAndMoveOptionTab = async () => {
+    if (!pendingOptionTab) return;
+    if (optionTab === "common") {
+      const ok = await saveCommonPricesInMenu();
+      if (!ok) return;
+      setOptionTab(pendingOptionTab);
+      setPendingOptionTab(null);
+      return;
+    }
+    const ok = await saveSelectedExclusivePricesInMenu();
+    if (!ok) return;
+    setOptionTab(pendingOptionTab);
+    setPendingOptionTab(null);
   };
 
   const updateSelectedExclusiveGroupInMenu = async () => {
@@ -708,6 +762,7 @@ function AdminMenuPageInner() {
 
       await refresh();
       setStatus("success", "전용옵션 그룹을 수정했습니다.");
+      setExclusiveDirty(false);
     } catch (e: any) {
       setStatus("error", `옵션수정 실패: ${String(e?.message || e)}`);
     } finally {
@@ -741,6 +796,7 @@ function AdminMenuPageInner() {
       setNewSelectedExclusiveItem({ name: "", price: "" });
       await refresh();
       setStatus("success", "옵션 항목을 추가했습니다.");
+      setExclusiveDirty(false);
     } catch (e: any) {
       setStatus("error", `옵션 항목 추가 실패: ${String(e?.message || e)}`);
     } finally {
@@ -781,6 +837,7 @@ function AdminMenuPageInner() {
 
           await refresh();
           setStatus("success", "옵션 항목을 삭제했습니다.");
+          setExclusiveDirty(false);
         } catch (e: any) {
           setStatus("error", `옵션 항목 삭제 실패: ${String(e?.message || e)}`);
         } finally {
@@ -791,11 +848,11 @@ function AdminMenuPageInner() {
   };
 
   const saveCommonPricesInMenu = async () => {
-    if (!storeId) return;
+    if (!storeId) return false;
     const menuId = draft.id.trim();
     if (!menuId) {
       setStatus("error", "메뉴를 먼저 저장한 뒤 단가를 수정해주세요.");
-      return;
+      return false;
     }
 
     const commonItemIds = selectedCommonGroups.flatMap((group) =>
@@ -803,7 +860,7 @@ function AdminMenuPageInner() {
     );
     if (commonItemIds.length === 0) {
       setStatus("neutral", "저장할 공통옵션 항목이 없습니다.");
-      return;
+      return false;
     }
     const invalidCommonItem = commonItemIds.find((optionItemId) => {
       const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
@@ -811,12 +868,12 @@ function AdminMenuPageInner() {
     });
     if (invalidCommonItem) {
       setStatus("error", "공통옵션 단가는 숫자만 입력해주세요. (예: 500)");
-      return;
+      return false;
     }
     const selectedExcluded = draft.excludedCommonItemIds.filter((id) => commonItemIds.includes(id));
     if (!hasExclusionTable && selectedExcluded.length > 0) {
       setStatus("error", "옵션 제외 기능을 쓰려면 DB SQL 적용이 먼저 필요합니다. (menu_option_item_exclusions)");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -856,25 +913,28 @@ function AdminMenuPageInner() {
 
       await refresh();
       setStatus("success", "공통옵션 단가/제외 항목을 저장했습니다.");
+      setCommonDirty(false);
+      return true;
     } catch (e: any) {
       setStatus("error", `공통옵션 저장 실패: ${String(e?.message || e)}`);
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const saveSelectedExclusivePricesInMenu = async () => {
-    if (!storeId || !selectedExclusiveGroup) return;
+    if (!storeId || !selectedExclusiveGroup) return false;
     const menuId = draft.id.trim();
     if (!menuId) {
       setStatus("error", "메뉴를 먼저 저장한 뒤 단가를 저장해주세요.");
-      return;
+      return false;
     }
 
     const itemIds = (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => item.id);
     if (itemIds.length === 0) {
       setStatus("neutral", "저장할 옵션 항목이 없습니다.");
-      return;
+      return false;
     }
     const invalidItem = itemIds.find((optionItemId) => {
       const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
@@ -882,7 +942,7 @@ function AdminMenuPageInner() {
     });
     if (invalidItem) {
       setStatus("error", "옵션 단가는 숫자만 입력해주세요. (예: 500)");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -902,8 +962,11 @@ function AdminMenuPageInner() {
 
       await refresh();
       setStatus("success", "옵션 단가를 저장했습니다.");
+      setExclusiveDirty(false);
+      return true;
     } catch (e: any) {
       setStatus("error", `옵션 단가 저장 실패: ${String(e?.message || e)}`);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -959,6 +1022,7 @@ function AdminMenuPageInner() {
           await refresh();
           setSelectedExclusiveGroupId((prev) => (prev === groupId ? "" : prev));
           setStatus("success", "전용옵션을 삭제했습니다.");
+          setExclusiveDirty(false);
         } catch (e: any) {
           setStatus("error", `전용옵션 삭제 실패: ${String(e?.message || e)}`);
         } finally {
@@ -1039,6 +1103,7 @@ function AdminMenuPageInner() {
       setExclusiveMode("manage");
       await refresh();
       setStatus("success", "전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
+      setExclusiveDirty(false);
     } catch (e: any) {
       setStatus("error", `전용옵션 생성 실패: ${String(e?.message || e)}`);
     } finally {
@@ -1114,6 +1179,7 @@ function AdminMenuPageInner() {
 
   const addCommonGroup = () => {
     if (!commonGroupToAdd) return;
+    setCommonDirty(true);
     setDraft((prev) => {
       if (prev.optionGroupIds.includes(commonGroupToAdd)) return prev;
       return { ...prev, optionGroupIds: [...prev.optionGroupIds, commonGroupToAdd] };
@@ -1419,7 +1485,6 @@ function AdminMenuPageInner() {
           align-items: center;
           justify-content: flex-end;
           gap: 6px;
-          min-height: 40px;
         }
         .soldOutLabel {
           color: #b91c1c;
@@ -2067,21 +2132,6 @@ function AdminMenuPageInner() {
             </div>
 
             <div className="field">
-              <div className="label">카테고리</div>
-              <select
-                className="input"
-                value={draft.categoryId}
-                onChange={(e) => setDraft((prev) => ({ ...prev, categoryId: e.target.value }))}
-                disabled={saving || loading}
-              >
-                <option value="">미분류</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
               <div className="label">메뉴 이미지</div>
               <div className="imageUploadRow" style={{ marginTop: 4 }}>
                 {draft.image ? (
@@ -2124,7 +2174,26 @@ function AdminMenuPageInner() {
             <div className="field" style={{ marginTop: 0 }}>
               <h3 className="sectionTitle">옵션 연결</h3>
             </div>
+            <div className="modeSwitchRow" style={{ marginTop: 6 }}>
+              <button
+                type="button"
+                className={`modeSwitchBtn ${optionTab === "common" ? "modeSwitchBtnOn" : ""}`}
+                onClick={() => requestOptionTabChange("common")}
+                disabled={saving || loading}
+              >
+                공통옵션
+              </button>
+              <button
+                type="button"
+                className={`modeSwitchBtn ${optionTab === "exclusive" ? "modeSwitchBtnOn" : ""}`}
+                onClick={() => requestOptionTabChange("exclusive")}
+                disabled={saving || loading}
+              >
+                전용옵션
+              </button>
+            </div>
 
+            {optionTab === "common" ? (
               <div className="field">
                 <div className="label">공통옵션</div>
                 <div className="optionConnectCard">
@@ -2181,13 +2250,16 @@ function AdminMenuPageInner() {
                                       inputMode="numeric"
                                       value={getOptionPrice(item)}
                                       onChange={(e) =>
-                                        setDraft((prev) => ({
-                                          ...prev,
-                                          optionPriceByItem: {
-                                            ...prev.optionPriceByItem,
-                                            [item.id]: e.target.value,
-                                          },
-                                        }))
+                                        {
+                                          setCommonDirty(true);
+                                          setDraft((prev) => ({
+                                            ...prev,
+                                            optionPriceByItem: {
+                                              ...prev.optionPriceByItem,
+                                              [item.id]: e.target.value,
+                                            },
+                                          }));
+                                        }
                                       }
                                       disabled={saving || loading}
                                     />
@@ -2195,7 +2267,10 @@ function AdminMenuPageInner() {
                                       <input
                                         type="checkbox"
                                         checked={isExcludedCommonItem(item.id)}
-                                        onChange={() => toggleExcludeCommonItem(item.id)}
+                                        onChange={() => {
+                                          setCommonDirty(true);
+                                          toggleExcludeCommonItem(item.id);
+                                        }}
                                         disabled={saving || loading || !hasExclusionTable}
                                       />
                                       제외
@@ -2222,7 +2297,9 @@ function AdminMenuPageInner() {
                 )}
                 </div>
               </div>
+            ) : null}
 
+            {optionTab === "exclusive" ? (
               <div className="field">
                 <div className="label">전용옵션 (현재 메뉴 전용)</div>
                 <div className="optionConnectCard">
@@ -2276,7 +2353,10 @@ function AdminMenuPageInner() {
                               <input
                                 className="input"
                                 value={exclusiveEdit.name}
-                                onChange={(e) => setExclusiveEdit((p) => ({ ...p, name: e.target.value }))}
+                                onChange={(e) => {
+                                  setExclusiveDirty(true);
+                                  setExclusiveEdit((p) => ({ ...p, name: e.target.value }));
+                                }}
                                 disabled={saving || loading}
                               />
                             </div>
@@ -2286,7 +2366,10 @@ function AdminMenuPageInner() {
                                 className="input maxSelectInput"
                                 inputMode="numeric"
                                 value={exclusiveEdit.max}
-                                onChange={(e) => setExclusiveEdit((p) => ({ ...p, max: e.target.value }))}
+                                onChange={(e) => {
+                                  setExclusiveDirty(true);
+                                  setExclusiveEdit((p) => ({ ...p, max: e.target.value }));
+                                }}
                                 disabled={saving || loading}
                               />
                             </div>
@@ -2315,13 +2398,16 @@ function AdminMenuPageInner() {
                                     inputMode="numeric"
                                     value={getOptionPrice(item)}
                                     onChange={(e) =>
-                                      setDraft((prev) => ({
-                                        ...prev,
-                                        optionPriceByItem: {
-                                          ...prev.optionPriceByItem,
-                                          [item.id]: e.target.value,
-                                        },
-                                      }))
+                                      {
+                                        setExclusiveDirty(true);
+                                        setDraft((prev) => ({
+                                          ...prev,
+                                          optionPriceByItem: {
+                                            ...prev.optionPriceByItem,
+                                            [item.id]: e.target.value,
+                                          },
+                                        }));
+                                      }
                                     }
                                     placeholder="단가 입력"
                                     disabled={saving || loading}
@@ -2350,7 +2436,10 @@ function AdminMenuPageInner() {
                             <input
                               className="input"
                               value={newSelectedExclusiveItem.name}
-                              onChange={(e) => setNewSelectedExclusiveItem((p) => ({ ...p, name: e.target.value }))}
+                              onChange={(e) => {
+                                setExclusiveDirty(true);
+                                setNewSelectedExclusiveItem((p) => ({ ...p, name: e.target.value }));
+                              }}
                               placeholder="옵션 항목명"
                               disabled={saving || loading}
                             />
@@ -2359,7 +2448,10 @@ function AdminMenuPageInner() {
                               style={{ maxWidth: 120 }}
                               inputMode="numeric"
                               value={newSelectedExclusiveItem.price}
-                              onChange={(e) => setNewSelectedExclusiveItem((p) => ({ ...p, price: e.target.value }))}
+                              onChange={(e) => {
+                                setExclusiveDirty(true);
+                                setNewSelectedExclusiveItem((p) => ({ ...p, price: e.target.value }));
+                              }}
                               placeholder="단가 입력"
                               disabled={saving || loading}
                             />
@@ -2381,7 +2473,10 @@ function AdminMenuPageInner() {
                           <input
                             className="input"
                             value={newExclusiveGroup.name}
-                            onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }))}
+                            onChange={(e) => {
+                              setExclusiveDirty(true);
+                              setNewExclusiveGroup((p) => ({ ...p, name: e.target.value }));
+                            }}
                             placeholder="전용옵션 그룹명 (예: 당도)"
                             disabled={saving || loading}
                           />
@@ -2392,7 +2487,10 @@ function AdminMenuPageInner() {
                             className="input maxSelectInput"
                             inputMode="numeric"
                             value={newExclusiveGroup.max}
-                            onChange={(e) => setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }))}
+                            onChange={(e) => {
+                              setExclusiveDirty(true);
+                              setNewExclusiveGroup((p) => ({ ...p, max: e.target.value }));
+                            }}
                             placeholder="최대 선택 수량"
                             disabled={saving || loading}
                           />
@@ -2402,6 +2500,7 @@ function AdminMenuPageInner() {
                         className="btn"
                         type="button"
                         onClick={() => {
+                          setExclusiveDirty(true);
                           setShowExclusiveItemInputs(true);
                           setNewExclusiveItems((prev) => [...prev, { name: "", price: "" }]);
                         }}
@@ -2416,7 +2515,10 @@ function AdminMenuPageInner() {
                               className="input"
                               value={row.name}
                               onChange={(e) =>
-                                setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, name: e.target.value } : v)))
+                                {
+                                  setExclusiveDirty(true);
+                                  setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, name: e.target.value } : v)));
+                                }
                               }
                               placeholder={`옵션 항목 ${idx + 1}`}
                               disabled={saving || loading}
@@ -2427,7 +2529,10 @@ function AdminMenuPageInner() {
                               inputMode="numeric"
                               value={row.price}
                               onChange={(e) =>
-                                setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, price: e.target.value } : v)))
+                                {
+                                  setExclusiveDirty(true);
+                                  setNewExclusiveItems((prev) => prev.map((v, i) => (i === idx ? { ...v, price: e.target.value } : v)));
+                                }
                               }
                               placeholder="단가 입력"
                               disabled={saving || loading}
@@ -2436,7 +2541,10 @@ function AdminMenuPageInner() {
                               <button
                                 className="btn"
                                 type="button"
-                                onClick={() => setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx))}
+                                onClick={() => {
+                                  setExclusiveDirty(true);
+                                  setNewExclusiveItems((prev) => prev.filter((_, i) => i !== idx));
+                                }}
                                 disabled={saving || loading}
                               >
                                 제거
@@ -2454,12 +2562,32 @@ function AdminMenuPageInner() {
                   )}
                 </div>
               </div>
+            ) : null}
 
             </div>
 
           </div>
         </section>
       )}
+      {pendingOptionTab ? (
+        <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="option-tab-confirm-title">
+          <div className="confirmCard">
+            <h3 id="option-tab-confirm-title" className="confirmTitle">저장되지 않은 변경사항</h3>
+            <p className="confirmDesc">저장하지 않고 이동하면 변경 내용이 사라질 수 있습니다.</p>
+            <div className="confirmActions">
+              <button className="btn" type="button" onClick={closeOptionTabConfirm} disabled={saving || loading}>
+                취소
+              </button>
+              <button className="btn" type="button" onClick={discardAndMoveOptionTab} disabled={saving || loading}>
+                그대로 이동
+              </button>
+              <button className="btn btnPrimary" type="button" onClick={() => void saveAndMoveOptionTab()} disabled={saving || loading}>
+                저장 후 이동
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {confirmState.open ? (
         <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="menu-confirm-title">
           <div className="confirmCard">
