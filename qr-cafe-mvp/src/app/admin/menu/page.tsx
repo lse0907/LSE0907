@@ -2048,6 +2048,21 @@ function AdminMenuPageInner() {
             </div>
 
             <div className="field">
+              <div className="label">카테고리</div>
+              <select
+                className="input"
+                value={draft.categoryId}
+                onChange={(e) => setDraft((prev) => ({ ...prev, categoryId: e.target.value }))}
+                disabled={saving || loading}
+              >
+                <option value="">미분류</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
               <div className="label">메뉴 이미지</div>
               <div className="imageUploadRow" style={{ marginTop: 4 }}>
                 {draft.image ? (
