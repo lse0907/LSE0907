@@ -1419,7 +1419,6 @@ function AdminMenuPageInner() {
           align-items: center;
           justify-content: flex-end;
           gap: 6px;
-          min-height: 40px;
         }
         .soldOutLabel {
           color: #b91c1c;
@@ -2064,21 +2063,6 @@ function AdminMenuPageInner() {
                 />
                 <div className="hint">ID는 저장 후에는 변경할 수 없습니다.</div>
               </div>
-            </div>
-
-            <div className="field">
-              <div className="label">카테고리</div>
-              <select
-                className="input"
-                value={draft.categoryId}
-                onChange={(e) => setDraft((prev) => ({ ...prev, categoryId: e.target.value }))}
-                disabled={saving || loading}
-              >
-                <option value="">미분류</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
             </div>
 
             <div className="field">
