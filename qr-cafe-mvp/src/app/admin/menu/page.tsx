@@ -96,6 +96,16 @@ function getFileExt(name: string) {
   return trimmed.split(".").pop() || "";
 }
 
+function summarizeFileName(name: string, maxLen = 24) {
+  const raw = String(name || "").trim();
+  if (!raw) return "";
+  if (raw.length <= maxLen) return raw;
+  const ext = getFileExt(raw);
+  const suffix = ext ? `.${ext}` : "";
+  const keep = Math.max(maxLen - suffix.length - 1, 8);
+  return `${raw.slice(0, keep)}…${suffix}`;
+}
+
 const emptyDraft: MenuDraft = {
   id: "",
   name: "",
@@ -1555,8 +1565,29 @@ function AdminMenuPageInner() {
           display: grid;
           gap: 8px;
         }
+        .uploadControl {
+          width: 220px;
+          max-width: 100%;
+        }
+        .imageUploadBtn {
+          justify-self: start;
+        }
         .fileNameInput {
           width: 100%;
+        }
+        .fileNameBadge {
+          display: inline-flex;
+          align-items: center;
+          color: var(--muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-weight: 800;
+        }
+        .formGuide {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
         }
         .previewThumb {
           margin-top: 0;
@@ -1708,6 +1739,9 @@ function AdminMenuPageInner() {
           }
           .imageUploadRow {
             grid-template-columns: 80px 1fr;
+          }
+          .uploadControl {
+            width: 100%;
           }
           .maxSelectInput {
             width: 100%;
@@ -2037,7 +2071,7 @@ function AdminMenuPageInner() {
                   <div className="previewPlaceholder">미리보기</div>
                 )}
                 <div className="imageActionCol">
-                  <label className="btn">
+                  <label className="btn uploadControl imageUploadBtn">
                     {uploadingImage ? "업로드 중..." : "이미지 업로드"}
                     <input
                       type="file"
@@ -2047,7 +2081,9 @@ function AdminMenuPageInner() {
                       disabled={saving || loading || uploadingImage}
                     />
                   </label>
-                  <input className="input fileNameInput" value={imageFileName} readOnly placeholder="선택된 파일명" />
+                  <div className="input fileNameBadge uploadControl" title={imageFileName || "선택된 파일명"}>
+                    {imageFileName ? summarizeFileName(imageFileName, 24) : "선택된 파일명"}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2171,6 +2207,7 @@ function AdminMenuPageInner() {
               <div className="field">
                 <div className="label">전용옵션 (현재 메뉴 전용)</div>
                 <div className="optionConnectCard">
+                <div className="formGuide">1) 그룹을 선택해 수정하거나, 2) 신규 그룹을 만들어 연결하세요.</div>
                 {exclusiveGroups.length === 0 ? <div className="muted">아직 전용옵션이 없습니다.</div> : null}
 
                 <div className="optionGrid" style={{ marginTop: 6 }}>
@@ -2292,7 +2329,8 @@ function AdminMenuPageInner() {
                   </div>
                 ) : null}
 
-                <div className="field" style={{ marginTop: 16 }}>
+                <div className="field" style={{ marginTop: 12 }}>
+                  <div className="formGuide">신규 그룹 생성</div>
                   <button
                     className="btn fullWidthBtn"
                     type="button"
