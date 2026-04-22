@@ -683,6 +683,7 @@ function AdminOptionsPageInner() {
     <main className="wrap">
       <style jsx global>{`
         :root {
+          color-scheme: light;
           --bg: #f6f7f9;
           --card: #ffffff;
           --text: #111827;
@@ -803,6 +804,8 @@ function AdminOptionsPageInner() {
         .btn {
           border: 1px solid var(--line);
           background: var(--card);
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           padding: 10px 14px;
           border-radius: 12px;
           cursor: pointer;
@@ -922,6 +925,8 @@ function AdminOptionsPageInner() {
         .scopeBtn {
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           padding: 10px 14px;
           border-radius: 12px;
           font-weight: 950;
@@ -991,6 +996,8 @@ function AdminOptionsPageInner() {
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           font-weight: 800;
           font-size: 14px;
           width: 100%;
