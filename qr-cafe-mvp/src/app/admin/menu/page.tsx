@@ -1301,6 +1301,9 @@ function AdminMenuPageInner() {
           background: var(--bg);
           color: var(--text);
         }
+      `}</style>
+
+      <style jsx>{`
         .wrap {
           max-width: 1100px;
           margin: 0 auto;
