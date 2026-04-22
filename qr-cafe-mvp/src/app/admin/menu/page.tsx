@@ -1371,6 +1371,7 @@ function AdminMenuPageInner() {
           padding: 6px 9px;
           font-size: 12px;
           border-radius: 9px;
+          white-space: nowrap;
         }
         .btn:disabled {
           opacity: 0.5;
@@ -2433,7 +2434,7 @@ function AdminMenuPageInner() {
                                   />
                                   <input
                                     className="input"
-                                    style={{ maxWidth: 120 }}
+                                    style={{ maxWidth: 96 }}
                                     inputMode="numeric"
                                     value={item.price}
                                     onChange={(e) => {
@@ -2511,7 +2512,7 @@ function AdminMenuPageInner() {
                                   />
                                   <input
                                     className="input"
-                                    style={{ maxWidth: 120 }}
+                                    style={{ maxWidth: 96 }}
                                     inputMode="numeric"
                                     value={row.price}
                                     onChange={(e) => {
