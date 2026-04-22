@@ -1931,6 +1931,12 @@ function AdminMenuPageInner() {
             height: 80px;
           }
         }
+        @media (min-width: 900px) {
+          .exclusiveWorkspace {
+            grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.1fr);
+            align-items: start;
+          }
+        }
       `}</style>
 
       <header className="topbar">
@@ -2251,6 +2257,24 @@ function AdminMenuPageInner() {
             </div>
             {optionPanelOpen ? (
               <>
+            <div className="modeSwitchRow" style={{ marginTop: 6 }}>
+              <button
+                type="button"
+                className={`modeSwitchBtn ${optionTab === "common" ? "modeSwitchBtnOn" : ""}`}
+                onClick={() => requestOptionTabChange("common")}
+                disabled={saving || loading}
+              >
+                공통옵션
+              </button>
+              <button
+                type="button"
+                className={`modeSwitchBtn ${optionTab === "exclusive" ? "modeSwitchBtnOn" : ""}`}
+                onClick={() => requestOptionTabChange("exclusive")}
+                disabled={saving || loading}
+              >
+                전용옵션
+              </button>
+            </div>
             <div className="modeSwitchRow" style={{ marginTop: 6 }}>
               <button
                 type="button"
