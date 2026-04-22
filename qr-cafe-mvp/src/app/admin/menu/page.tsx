@@ -1862,42 +1862,6 @@ function AdminMenuPageInner() {
           gap: 6px;
           align-items: center;
         }
-        .exclusiveWorkspace {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          width: 100%;
-        }
-        .exclusiveWorkspace > * {
-          min-width: 0;
-          width: 100%;
-        }
-        .exclusiveGroupCard {
-          border: 1px solid var(--line);
-          border-radius: 12px;
-          background: #fff;
-          padding: 10px;
-          display: grid;
-          gap: 8px;
-        }
-        .exclusiveGroupCardTop {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-          align-items: flex-start;
-          flex-wrap: wrap;
-        }
-        .exclusiveGroupMeta {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          flex-wrap: wrap;
-        }
-        .exclusiveCardActions {
-          display: inline-flex;
-          gap: 6px;
-          align-items: center;
-        }
         .fullWidthBtn {
           width: 100%;
           justify-content: center;
@@ -1946,6 +1910,48 @@ function AdminMenuPageInner() {
           gap: 8px;
           flex-wrap: wrap;
           margin-top: 4px;
+        }
+        @media (prefers-color-scheme: dark) {
+          .optionSectionBox,
+          .optionConnectCard,
+          .groupOptionDetail,
+          .exclusiveGroupCard,
+          .confirmCard {
+            background: #111827;
+            border-color: #334155;
+            color: #e5e7eb;
+          }
+          .modeSwitchBtn,
+          .input,
+          .btn:not(.btnPrimary),
+          .previewPlaceholder {
+            background: #0f172a;
+            border-color: #334155;
+            color: #e5e7eb;
+          }
+          .modeSwitchBtnOn {
+            background: #1e293b;
+            border-color: #64748b;
+            color: #e2e8f0;
+          }
+          .label,
+          .hint,
+          .muted,
+          .formGuide,
+          .optionItemText,
+          .confirmDesc {
+            color: #cbd5e1;
+          }
+          .optionExcludeLabel,
+          .soldOutOnlyLabel {
+            color: #e2e8f0;
+          }
+          .optionExcludeLabel input[type="checkbox"] {
+            accent-color: #93c5fd;
+          }
+          .confirmOverlay {
+            background: rgba(2, 6, 23, 0.68);
+          }
         }
         @media (max-width: 980px) {
           .grid {
