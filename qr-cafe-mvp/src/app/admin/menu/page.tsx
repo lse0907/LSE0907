@@ -1892,6 +1892,12 @@ function AdminMenuPageInner() {
             height: 80px;
           }
         }
+        @media (min-width: 900px) {
+          .exclusiveWorkspace {
+            grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.1fr);
+            align-items: start;
+          }
+        }
       `}</style>
 
       <header className="topbar">
