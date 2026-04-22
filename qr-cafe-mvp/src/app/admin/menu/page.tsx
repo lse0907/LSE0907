@@ -2414,34 +2414,33 @@ function AdminMenuPageInner() {
                               <div className="muted">옵션 항목이 없습니다.</div>
                             ) : (
                               exclusiveEditItems.map((item, idx) => (
-                                <div key={item.id || `edit-row-${idx}`} className="exclusiveItemCard">
-                                  <div className="exclusiveItemTop">
-                                    <input
-                                      className="input"
-                                      value={item.name}
-                                      onChange={(e) => {
-                                        const v = e.target.value;
-                                        setExclusiveDirty(true);
-                                        setExclusiveEditItems((prev) => prev.map((row, i) => (i === idx ? { ...row, name: v } : row)));
-                                      }}
-                                      placeholder="옵션 항목명"
-                                      disabled={saving || loading}
-                                    />
-                                    <input
-                                      className="input"
-                                      inputMode="numeric"
-                                      value={item.price}
-                                      onChange={(e) => {
-                                        setExclusiveDirty(true);
-                                        const v = e.target.value;
-                                        setExclusiveEditItems((prev) => prev.map((row, i) => (i === idx ? { ...row, price: v } : row)));
-                                      }}
-                                      placeholder="단가 입력"
-                                      disabled={saving || loading}
-                                    />
-                                  </div>
+                                <div key={item.id || `edit-row-${idx}`} className="optionRow">
+                                  <input
+                                    className="input"
+                                    value={item.name}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setExclusiveDirty(true);
+                                      setExclusiveEditItems((prev) => prev.map((row, i) => (i === idx ? { ...row, name: v } : row)));
+                                    }}
+                                    placeholder="옵션 항목명"
+                                    disabled={saving || loading}
+                                  />
+                                  <input
+                                    className="input"
+                                    style={{ maxWidth: 120 }}
+                                    inputMode="numeric"
+                                    value={item.price}
+                                    onChange={(e) => {
+                                      setExclusiveDirty(true);
+                                      const v = e.target.value;
+                                      setExclusiveEditItems((prev) => prev.map((row, i) => (i === idx ? { ...row, price: v } : row)));
+                                    }}
+                                    placeholder="단가 입력"
+                                    disabled={saving || loading}
+                                  />
                                   <button
-                                    className="btn btnDanger itemDeleteBtn"
+                                    className="btn btnDanger btnMini"
                                     type="button"
                                     onClick={() => {
                                       setExclusiveDirty(true);
