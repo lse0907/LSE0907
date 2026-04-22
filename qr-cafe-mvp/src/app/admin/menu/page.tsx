@@ -1276,6 +1276,27 @@ function AdminMenuPageInner() {
           --neutral-text: #374151;
           --radius: 16px;
         }
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --bg: #0b1220;
+            --card: #111827;
+            --text: #e5e7eb;
+            --muted: #94a3b8;
+            --line: #334155;
+            --brand: #cbd5e1;
+            --brand-soft: #1e293b;
+            --accent: #60a5fa;
+            --surface: #0f172a;
+            --surface-soft: #111827;
+            --surface-muted: #1f2937;
+            --overlay: rgba(2, 6, 23, 0.72);
+            --danger-line: #7f1d1d;
+            --danger-text: #fda4af;
+            --danger-bg: #3f0f1b;
+            --success-text: #86efac;
+            --neutral-text: #cbd5e1;
+          }
+        }
         body {
           background: var(--bg);
           color: var(--text);
@@ -1895,6 +1916,48 @@ function AdminMenuPageInner() {
           flex-wrap: wrap;
           margin-top: 4px;
         }
+        @media (prefers-color-scheme: dark) {
+          .optionSectionBox,
+          .optionConnectCard,
+          .groupOptionDetail,
+          .exclusiveGroupCard,
+          .confirmCard {
+            background: #111827;
+            border-color: #334155;
+            color: #e5e7eb;
+          }
+          .modeSwitchBtn,
+          .input,
+          .btn:not(.btnPrimary),
+          .previewPlaceholder {
+            background: #0f172a;
+            border-color: #334155;
+            color: #e5e7eb;
+          }
+          .modeSwitchBtnOn {
+            background: #1e293b;
+            border-color: #64748b;
+            color: #e2e8f0;
+          }
+          .label,
+          .hint,
+          .muted,
+          .formGuide,
+          .optionItemText,
+          .confirmDesc {
+            color: #cbd5e1;
+          }
+          .optionExcludeLabel,
+          .soldOutOnlyLabel {
+            color: #e2e8f0;
+          }
+          .optionExcludeLabel input[type="checkbox"] {
+            accent-color: #93c5fd;
+          }
+          .confirmOverlay {
+            background: rgba(2, 6, 23, 0.68);
+          }
+        }
         @media (max-width: 980px) {
           .grid {
             grid-template-columns: 1fr;
@@ -1947,6 +2010,12 @@ function AdminMenuPageInner() {
           .previewPlaceholder {
             width: 80px;
             height: 80px;
+          }
+        }
+        @media (min-width: 900px) {
+          .exclusiveWorkspace {
+            grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.1fr);
+            align-items: start;
           }
         }
       `}</style>
