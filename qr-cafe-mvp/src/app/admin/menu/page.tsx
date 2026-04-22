@@ -173,6 +173,8 @@ function AdminMenuPageInner() {
   const [commonDirty, setCommonDirty] = useState(false);
   const [exclusiveDirty, setExclusiveDirty] = useState(false);
   const [pendingOptionTab, setPendingOptionTab] = useState<"common" | "exclusive" | null>(null);
+  const [optionPanelOpen, setOptionPanelOpen] = useState(true);
+  const [pendingOptionPanelClose, setPendingOptionPanelClose] = useState(false);
   const [commonGroupToAdd, setCommonGroupToAdd] = useState("");
   const [newExclusiveGroup, setNewExclusiveGroup] = useState({
     name: "",
@@ -715,6 +717,37 @@ function AdminMenuPageInner() {
 
   const closeOptionTabConfirm = () => {
     setPendingOptionTab(null);
+  };
+
+  const toggleOptionPanel = () => {
+    if (!optionPanelOpen) {
+      setOptionPanelOpen(true);
+      return;
+    }
+    if (commonDirty || exclusiveDirty) {
+      setPendingOptionPanelClose(true);
+      return;
+    }
+    setOptionPanelOpen(false);
+  };
+
+  const closeOptionPanelConfirm = () => setPendingOptionPanelClose(false);
+  const discardAndCloseOptionPanel = () => {
+    setCommonDirty(false);
+    setExclusiveDirty(false);
+    setPendingOptionPanelClose(false);
+    setOptionPanelOpen(false);
+  };
+  const saveAndCloseOptionPanel = async () => {
+    if (optionTab === "common") {
+      const ok = await saveCommonPricesInMenu();
+      if (!ok) return;
+      setCommonDirty(false);
+    } else if (exclusiveDirty) {
+      await saveExclusiveEditor();
+    }
+    setPendingOptionPanelClose(false);
+    setOptionPanelOpen(false);
   };
 
   const discardAndMoveOptionTab = () => {
@@ -2216,8 +2249,31 @@ function AdminMenuPageInner() {
           </div>
 
           <div className="card optionSectionBox">
-            <div className="field" style={{ marginTop: 0 }}>
+            <div className="field" style={{ marginTop: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <h3 className="sectionTitle">옵션 연결</h3>
+              <button className="btn btnMini" type="button" onClick={toggleOptionPanel} disabled={saving || loading}>
+                {optionPanelOpen ? "접기" : "펼치기"}
+              </button>
+            </div>
+            {optionPanelOpen ? (
+              <>
+            <div className="modeSwitchRow" style={{ marginTop: 6 }}>
+              <button
+                type="button"
+                className={`modeSwitchBtn ${optionTab === "common" ? "modeSwitchBtnOn" : ""}`}
+                onClick={() => requestOptionTabChange("common")}
+                disabled={saving || loading}
+              >
+                공통옵션
+              </button>
+              <button
+                type="button"
+                className={`modeSwitchBtn ${optionTab === "exclusive" ? "modeSwitchBtnOn" : ""}`}
+                onClick={() => requestOptionTabChange("exclusive")}
+                disabled={saving || loading}
+              >
+                전용옵션
+              </button>
             </div>
             <div className="modeSwitchRow" style={{ marginTop: 6 }}>
               <button
@@ -2568,6 +2624,8 @@ function AdminMenuPageInner() {
                 </div>
               </div>
             ) : null}
+              </>
+            ) : null}
 
             </div>
 
@@ -2588,6 +2646,25 @@ function AdminMenuPageInner() {
               </button>
               <button className="btn btnPrimary" type="button" onClick={() => void saveAndMoveOptionTab()} disabled={saving || loading}>
                 저장 후 이동
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {pendingOptionPanelClose ? (
+        <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="option-panel-close-title">
+          <div className="confirmCard">
+            <h3 id="option-panel-close-title" className="confirmTitle">저장되지 않은 변경사항</h3>
+            <p className="confirmDesc">저장하지 않고 닫으면 변경 내용이 사라질 수 있습니다.</p>
+            <div className="confirmActions">
+              <button className="btn" type="button" onClick={closeOptionPanelConfirm} disabled={saving || loading}>
+                취소
+              </button>
+              <button className="btn" type="button" onClick={discardAndCloseOptionPanel} disabled={saving || loading}>
+                그대로 닫기
+              </button>
+              <button className="btn btnPrimary" type="button" onClick={() => void saveAndCloseOptionPanel()} disabled={saving || loading}>
+                저장 후 닫기
               </button>
             </div>
           </div>
