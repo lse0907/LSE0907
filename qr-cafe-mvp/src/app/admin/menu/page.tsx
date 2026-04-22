@@ -861,9 +861,11 @@ function AdminMenuPageInner() {
         menu_id: menuId,
         option_item_id: optionItemId,
         price_delta: toInt(
-          cleanedRows.find((row) => row.id === optionItemId)?.price
-            ?? existingItems.find((it) => it.id === optionItemId)?.price_delta
-            ?? 0,
+          String(
+            cleanedRows.find((row) => row.id === optionItemId)?.price
+              ?? existingItems.find((it) => it.id === optionItemId)?.price_delta
+              ?? 0
+          ),
           0
         ),
       }));
@@ -1135,19 +1137,21 @@ function AdminMenuPageInner() {
       setExclusiveEditItems([]);
       return;
     }
-    const rows = (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => ({
+    const rows = optionItems
+      .filter((item) => item.group_id === selectedExclusiveGroup.id)
+      .map((item) => ({
       id: item.id,
       name: item.name || "",
       price: draft.optionPriceByItem[item.id] != null
         ? String(draft.optionPriceByItem[item.id] ?? "0")
         : String(item.price_delta ?? 0),
-    }));
+      }));
     setExclusiveEdit({
       name: selectedExclusiveGroup.name || "",
       max: String(Math.max(Number(selectedExclusiveGroup.max ?? 1), 1)),
     });
     setExclusiveEditItems(rows);
-  }, [selectedExclusiveGroup, itemsByGroup, draft.optionPriceByItem]);
+  }, [selectedExclusiveGroup, optionItems, draft.optionPriceByItem]);
 
   const itemsByGroup = useMemo(() => {
     const map = new Map<string, OptionItem[]>();
