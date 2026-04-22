@@ -1256,6 +1256,7 @@ function AdminMenuPageInner() {
     <main className="wrap">
       <style jsx global>{`
         :root {
+          color-scheme: light;
           --bg: #f6f7f9;
           --card: #ffffff;
           --text: #111827;
@@ -1413,6 +1414,8 @@ function AdminMenuPageInner() {
         .btn {
           border: 1px solid var(--line);
           background: var(--surface);
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           padding: 8px 12px;
           border-radius: 10px;
           cursor: pointer;
@@ -1575,6 +1578,8 @@ function AdminMenuPageInner() {
           border-radius: 10px;
           border: 1px solid var(--line);
           background: var(--surface);
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           font-weight: 800;
           font-size: 14px;
           width: 100%;
