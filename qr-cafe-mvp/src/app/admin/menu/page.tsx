@@ -1862,6 +1862,42 @@ function AdminMenuPageInner() {
           gap: 6px;
           align-items: center;
         }
+        .exclusiveWorkspace {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          width: 100%;
+        }
+        .exclusiveWorkspace > * {
+          min-width: 0;
+          width: 100%;
+        }
+        .exclusiveGroupCard {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px;
+          display: grid;
+          gap: 8px;
+        }
+        .exclusiveGroupCardTop {
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+        .exclusiveGroupMeta {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .exclusiveCardActions {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+        }
         .fullWidthBtn {
           width: 100%;
           justify-content: center;
@@ -1963,6 +1999,12 @@ function AdminMenuPageInner() {
           .previewPlaceholder {
             width: 80px;
             height: 80px;
+          }
+        }
+        @media (min-width: 900px) {
+          .exclusiveWorkspace {
+            grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.1fr);
+            align-items: start;
           }
         }
       `}</style>
