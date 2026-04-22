@@ -1185,69 +1185,6 @@ function AdminOptionsPageInner() {
           box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
         }
 
-        @media (prefers-color-scheme: dark) {
-          .msgBox,
-          .scopeBtn,
-          .sectionToggle,
-          .input,
-          .rowBtn,
-          .savedItemRow,
-          .itemCard,
-          .modalCard,
-          .btn:not(.btnPrimary) {
-            background: #0f172a;
-            border-color: #334155;
-            color: #e5e7eb;
-          }
-          .card {
-            background: #111827;
-            border-color: #334155;
-            color: #e5e7eb;
-          }
-          .scopeBtnOn,
-          .btnPrimary {
-            background: #1f2937;
-            border-color: #64748b;
-            color: #f8fafc;
-          }
-          .label,
-          .muted,
-          .itemPrice,
-          .requiredInline,
-          .sub {
-            color: #cbd5e1;
-          }
-          .pill,
-          .statusOptional,
-          .idValue,
-          .itemCollapsedHint {
-            background: #1e293b;
-            color: #e5e7eb;
-            border-color: #334155;
-          }
-          .msgBoxSuccess {
-            background: #052e16;
-            border-color: #166534;
-            color: #86efac;
-          }
-          .msgBoxError,
-          .statusRequired {
-            background: #3f0f1b;
-            border-color: #7f1d1d;
-            color: #fda4af;
-          }
-          .btnDanger {
-            border-color: #7f1d1d;
-            color: #fda4af;
-          }
-          .requiredInline input[type="checkbox"] {
-            accent-color: #93c5fd;
-          }
-          .modalOverlay {
-            background: rgba(2, 6, 23, 0.68);
-          }
-        }
-
         @media (max-width: 980px) {
           .grid {
             grid-template-columns: 1fr;
