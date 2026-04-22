@@ -182,7 +182,7 @@ function AdminMenuPageInner() {
   const [showExclusiveItemInputs, setShowExclusiveItemInputs] = useState(false);
   const [selectedExclusiveGroupId, setSelectedExclusiveGroupId] = useState("");
   const [exclusiveEdit, setExclusiveEdit] = useState({ name: "", max: "1" });
-  const [newSelectedExclusiveItem, setNewSelectedExclusiveItem] = useState({ name: "", price: "" });
+  const [exclusiveEditItems, setExclusiveEditItems] = useState<Array<{ id: string; name: string; price: string }>>([]);
   const [myStores, setMyStores] = useState<MyStore[]>([]);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
@@ -734,8 +734,10 @@ function AdminMenuPageInner() {
       setPendingOptionTab(null);
       return;
     }
-    const ok = await saveSelectedExclusivePricesInMenu();
-    if (!ok) return;
+    if (exclusiveEditorMode !== "none") {
+      await saveExclusiveEditor();
+      if (exclusiveDirty) return;
+    }
     setOptionTab(pendingOptionTab);
     setPendingOptionTab(null);
   };
@@ -757,15 +759,42 @@ function AdminMenuPageInner() {
   const closeExclusiveEditor = () => {
     setExclusiveEditorMode("none");
     setExclusiveDirty(false);
-    setNewSelectedExclusiveItem({ name: "", price: "" });
   };
 
-  const updateSelectedExclusiveGroupInMenu = async () => {
-    if (!storeId || !selectedExclusiveGroup) return;
+  const addExclusiveEditRow = () => {
+    setExclusiveDirty(true);
+    setExclusiveEditItems((prev) => [...prev, { id: `tmp_${Date.now()}_${prev.length}`, name: "", price: "" }]);
+  };
 
+  const saveExclusiveEditor = async () => {
+    if (!storeId) return;
+    const menuId = draft.id.trim();
+    if (!menuId) {
+      setStatus("error", "메뉴를 먼저 저장한 뒤 전용옵션을 수정해주세요.");
+      return;
+    }
+
+    if (exclusiveEditorMode === "create") {
+      await createExclusiveGroupInMenu();
+      return;
+    }
+
+    if (!selectedExclusiveGroup) return;
     const nextName = exclusiveEdit.name.trim();
     if (!nextName) {
       setStatus("error", "전용옵션 그룹명을 입력해주세요.");
+      return;
+    }
+    const cleanedRows = exclusiveEditItems
+      .map((row) => ({ ...row, name: String(row.name || "").trim(), price: String(row.price || "").trim() }))
+      .filter((row) => row.name);
+    if (cleanedRows.length === 0) {
+      setStatus("error", "옵션 항목을 1개 이상 입력해주세요.");
+      return;
+    }
+    const invalid = cleanedRows.find((row) => !isWholeNumberString(row.price || "0"));
+    if (invalid) {
+      setStatus("error", "옵션 단가는 숫자만 입력해주세요. (예: 500)");
       return;
     }
 
@@ -773,102 +802,91 @@ function AdminMenuPageInner() {
     clearStatus();
     try {
       const nextMax = Math.max(toInt(exclusiveEdit.max, selectedExclusiveGroup.max || 1), 1);
-      const { error } = await supabase
+      const groupRes = await supabase
         .from("option_groups")
         .update({ name: nextName, max: nextMax })
         .eq("store_id", storeId)
         .eq("id", selectedExclusiveGroup.id);
-      if (error) throw error;
+      if (groupRes.error) throw groupRes.error;
 
-      await refresh();
-      setStatus("success", "전용옵션 그룹을 수정했습니다.");
-      setExclusiveDirty(false);
-      setExclusiveEditorMode("none");
-    } catch (e: any) {
-      setStatus("error", `옵션수정 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
-  };
+      const existingItems = itemsByGroup.get(selectedExclusiveGroup.id) || [];
+      const existingIdSet = new Set(existingItems.map((it) => it.id));
+      const keepIds = new Set<string>();
 
-  const addItemToSelectedExclusiveGroupInMenu = async () => {
-    if (!storeId || !selectedExclusiveGroup) return;
-
-    const name = newSelectedExclusiveItem.name.trim();
-    if (!name) {
-      setStatus("error", "추가할 옵션 항목명을 입력해주세요.");
-      return;
-    }
-
-    setSaving(true);
-    clearStatus();
-    try {
-      const row = {
-        id: `item_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`,
-        store_id: storeId,
-        group_id: selectedExclusiveGroup.id,
-        name,
-        price_delta: toInt(newSelectedExclusiveItem.price, 0),
-      };
-
-      const { error } = await supabase.from("option_items").insert([row]);
-      if (error) throw error;
-
-      setNewSelectedExclusiveItem({ name: "", price: "" });
-      await refresh();
-      setStatus("success", "옵션 항목을 추가했습니다.");
-      setExclusiveDirty(false);
-      setExclusiveEditorMode("none");
-    } catch (e: any) {
-      setStatus("error", `옵션 항목 추가 실패: ${String(e?.message || e)}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteExclusiveItemInMenu = async (itemId: string) => {
-    if (!storeId || !draft.id.trim()) return;
-    openConfirm(
-      "옵션 항목 삭제",
-      "선택한 옵션 항목을 삭제할까요?",
-      async () => {
-        closeConfirm();
-        setSaving(true);
-        clearStatus();
-        try {
-          const delPrice = await supabase
-            .from("menu_option_prices")
-            .delete()
-            .eq("store_id", storeId)
-            .eq("menu_id", draft.id.trim())
-            .eq("option_item_id", itemId);
-          if (delPrice.error) throw delPrice.error;
-
-          const delItem = await supabase
+      for (const row of cleanedRows) {
+        const price = toInt(row.price, 0);
+        if (row.id && existingIdSet.has(row.id)) {
+          keepIds.add(row.id);
+          const upItem = await supabase
             .from("option_items")
-            .delete()
+            .update({ name: row.name, price_delta: price })
             .eq("store_id", storeId)
-            .eq("id", itemId);
-          if (delItem.error) throw delItem.error;
-
-          setDraft((prev) => {
-            const nextPrices = { ...prev.optionPriceByItem };
-            delete nextPrices[itemId];
-            return { ...prev, optionPriceByItem: nextPrices };
-          });
-
-          await refresh();
-          setStatus("success", "옵션 항목을 삭제했습니다.");
-          setExclusiveDirty(false);
-          setExclusiveEditorMode("none");
-        } catch (e: any) {
-          setStatus("error", `옵션 항목 삭제 실패: ${String(e?.message || e)}`);
-        } finally {
-          setSaving(false);
+            .eq("id", row.id);
+          if (upItem.error) throw upItem.error;
+          continue;
         }
+
+        const newId = `item_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
+        const ins = await supabase.from("option_items").insert([{
+          id: newId,
+          store_id: storeId,
+          group_id: selectedExclusiveGroup.id,
+          name: row.name,
+          price_delta: price,
+        }]);
+        if (ins.error) throw ins.error;
+        keepIds.add(newId);
       }
-    );
+
+      const deleteIds = existingItems.map((it) => it.id).filter((id) => !keepIds.has(id));
+      if (deleteIds.length > 0) {
+        const delPrices = await supabase
+          .from("menu_option_prices")
+          .delete()
+          .eq("store_id", storeId)
+          .eq("menu_id", menuId)
+          .in("option_item_id", deleteIds);
+        if (delPrices.error) throw delPrices.error;
+
+        const delItems = await supabase
+          .from("option_items")
+          .delete()
+          .eq("store_id", storeId)
+          .in("id", deleteIds);
+        if (delItems.error) throw delItems.error;
+      }
+
+      const priceRows = Array.from(keepIds).map((optionItemId) => ({
+        store_id: storeId,
+        menu_id: menuId,
+        option_item_id: optionItemId,
+        price_delta: toInt(
+          String(
+            cleanedRows.find((row) => row.id === optionItemId)?.price
+              ?? existingItems.find((it) => it.id === optionItemId)?.price_delta
+              ?? 0
+          ),
+          0
+        ),
+      }));
+      if (priceRows.length > 0) {
+        const upPrice = await supabase
+          .from("menu_option_prices")
+          .upsert(priceRows, { onConflict: "store_id,menu_id,option_item_id" });
+        if (upPrice.error) throw upPrice.error;
+      }
+
+      await refresh();
+      setStatus("success", "전용옵션을 저장했습니다.");
+      setExclusiveDirty(false);
+      setExclusiveEditorMode("none");
+    } catch (e: any) {
+      setStatus("error", `전용옵션 저장 실패: ${String(e?.message || e)}`);
+    } finally {
+      setSaving(false);
+    }
   };
+
 
   const saveCommonPricesInMenu = async () => {
     if (!storeId) return false;
@@ -940,56 +958,6 @@ function AdminMenuPageInner() {
       return true;
     } catch (e: any) {
       setStatus("error", `공통옵션 저장 실패: ${String(e?.message || e)}`);
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveSelectedExclusivePricesInMenu = async () => {
-    if (!storeId || !selectedExclusiveGroup) return false;
-    const menuId = draft.id.trim();
-    if (!menuId) {
-      setStatus("error", "메뉴를 먼저 저장한 뒤 단가를 저장해주세요.");
-      return false;
-    }
-
-    const itemIds = (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => item.id);
-    if (itemIds.length === 0) {
-      setStatus("neutral", "저장할 옵션 항목이 없습니다.");
-      return false;
-    }
-    const invalidItem = itemIds.find((optionItemId) => {
-      const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
-      return !isWholeNumberString(raw);
-    });
-    if (invalidItem) {
-      setStatus("error", "옵션 단가는 숫자만 입력해주세요. (예: 500)");
-      return false;
-    }
-
-    setSaving(true);
-    clearStatus();
-    try {
-      const rows = itemIds.map((optionItemId) => ({
-        store_id: storeId,
-        menu_id: menuId,
-        option_item_id: optionItemId,
-        price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
-      }));
-
-      const { error } = await supabase
-        .from("menu_option_prices")
-        .upsert(rows, { onConflict: "store_id,menu_id,option_item_id" });
-      if (error) throw error;
-
-      await refresh();
-      setStatus("success", "옵션 단가를 저장했습니다.");
-      setExclusiveDirty(false);
-      setExclusiveEditorMode("none");
-      return true;
-    } catch (e: any) {
-      setStatus("error", `옵션 단가 저장 실패: ${String(e?.message || e)}`);
       return false;
     } finally {
       setSaving(false);
@@ -1166,15 +1134,24 @@ function AdminMenuPageInner() {
   useEffect(() => {
     if (!selectedExclusiveGroup) {
       setExclusiveEdit({ name: "", max: "1" });
-      setNewSelectedExclusiveItem({ name: "", price: "" });
+      setExclusiveEditItems([]);
       return;
     }
+    const rows = optionItems
+      .filter((item) => item.group_id === selectedExclusiveGroup.id)
+      .map((item) => ({
+      id: item.id,
+      name: item.name || "",
+      price: draft.optionPriceByItem[item.id] != null
+        ? String(draft.optionPriceByItem[item.id] ?? "0")
+        : String(item.price_delta ?? 0),
+      }));
     setExclusiveEdit({
       name: selectedExclusiveGroup.name || "",
       max: String(Math.max(Number(selectedExclusiveGroup.max ?? 1), 1)),
     });
-    setNewSelectedExclusiveItem({ name: "", price: "" });
-  }, [selectedExclusiveGroup]);
+    setExclusiveEditItems(rows);
+  }, [selectedExclusiveGroup, optionItems, draft.optionPriceByItem]);
 
   const itemsByGroup = useMemo(() => {
     const map = new Map<string, OptionItem[]>();
@@ -2424,8 +2401,8 @@ function AdminMenuPageInner() {
                               </div>
                             </div>
                             <div className="btnRow" style={{ marginTop: 8 }}>
-                              <button className="btn btnPrimary" type="button" onClick={updateSelectedExclusiveGroupInMenu} disabled={saving || loading}>
-                                그룹 수정
+                              <button className="btn btnPrimary" type="button" onClick={saveExclusiveEditor} disabled={saving || loading}>
+                                저장
                               </button>
                               <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
                                 취소
@@ -2433,26 +2410,31 @@ function AdminMenuPageInner() {
                             </div>
 
                             <div className="label" style={{ marginTop: 6 }}>옵션 항목</div>
-                            {(itemsByGroup.get(selectedExclusiveGroup.id) || []).length === 0 ? (
+                            {exclusiveEditItems.length === 0 ? (
                               <div className="muted">옵션 항목이 없습니다.</div>
                             ) : (
-                              (itemsByGroup.get(selectedExclusiveGroup.id) || []).map((item) => (
-                                <div key={item.id} className="exclusiveItemCard">
+                              exclusiveEditItems.map((item, idx) => (
+                                <div key={item.id || `edit-row-${idx}`} className="exclusiveItemCard">
                                   <div className="exclusiveItemTop">
-                                    <span className="exclusiveItemName">{item.name}</span>
+                                    <input
+                                      className="input"
+                                      value={item.name}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        setExclusiveDirty(true);
+                                        setExclusiveEditItems((prev) => prev.map((row, i) => (i === idx ? { ...row, name: v } : row)));
+                                      }}
+                                      placeholder="옵션 항목명"
+                                      disabled={saving || loading}
+                                    />
                                     <input
                                       className="input"
                                       inputMode="numeric"
-                                      value={getOptionPrice(item)}
+                                      value={item.price}
                                       onChange={(e) => {
                                         setExclusiveDirty(true);
-                                        setDraft((prev) => ({
-                                          ...prev,
-                                          optionPriceByItem: {
-                                            ...prev.optionPriceByItem,
-                                            [item.id]: e.target.value,
-                                          },
-                                        }));
+                                        const v = e.target.value;
+                                        setExclusiveEditItems((prev) => prev.map((row, i) => (i === idx ? { ...row, price: v } : row)));
                                       }}
                                       placeholder="단가 입력"
                                       disabled={saving || loading}
@@ -2461,47 +2443,20 @@ function AdminMenuPageInner() {
                                   <button
                                     className="btn btnDanger itemDeleteBtn"
                                     type="button"
-                                    onClick={() => deleteExclusiveItemInMenu(item.id)}
+                                    onClick={() => {
+                                      setExclusiveDirty(true);
+                                      setExclusiveEditItems((prev) => prev.filter((_, i) => i !== idx));
+                                    }}
                                     disabled={saving || loading}
                                   >
-                                    항목 삭제
+                                    삭제
                                   </button>
                                 </div>
                               ))
                             )}
                             <div className="btnRow" style={{ marginTop: 6 }}>
-                              <button className="btn" type="button" onClick={saveSelectedExclusivePricesInMenu} disabled={saving || loading}>
-                                단가 수정
-                              </button>
-                            </div>
-                            <div className="label" style={{ marginTop: 8 }}>옵션 항목 추가</div>
-                            <div className="optionRow" style={{ marginTop: 4 }}>
-                              <input
-                                className="input"
-                                value={newSelectedExclusiveItem.name}
-                                onChange={(e) => {
-                                  setExclusiveDirty(true);
-                                  setNewSelectedExclusiveItem((p) => ({ ...p, name: e.target.value }));
-                                }}
-                                placeholder="옵션 항목명"
-                                disabled={saving || loading}
-                              />
-                              <input
-                                className="input"
-                                style={{ maxWidth: 120 }}
-                                inputMode="numeric"
-                                value={newSelectedExclusiveItem.price}
-                                onChange={(e) => {
-                                  setExclusiveDirty(true);
-                                  setNewSelectedExclusiveItem((p) => ({ ...p, price: e.target.value }));
-                                }}
-                                placeholder="단가 입력"
-                                disabled={saving || loading}
-                              />
-                            </div>
-                            <div className="btnRow" style={{ marginTop: 6 }}>
-                              <button className="btn fullWidthBtn" type="button" onClick={addItemToSelectedExclusiveGroupInMenu} disabled={saving || loading}>
-                                항목추가
+                              <button className="btn" type="button" onClick={addExclusiveEditRow} disabled={saving || loading}>
+                                옵션항목 추가
                               </button>
                             </div>
                           </>
@@ -2564,7 +2519,7 @@ function AdminMenuPageInner() {
                                   />
                                   {newExclusiveItems.length > 1 ? (
                                     <button
-                                      className="btn"
+                                      className="btn btnDanger btnMini"
                                       type="button"
                                       onClick={() => {
                                         setExclusiveDirty(true);
@@ -2572,7 +2527,7 @@ function AdminMenuPageInner() {
                                       }}
                                       disabled={saving || loading}
                                     >
-                                      제거
+                                      삭제
                                     </button>
                                   ) : null}
                                 </div>
