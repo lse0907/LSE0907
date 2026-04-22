@@ -1759,9 +1759,14 @@ function AdminMenuPageInner() {
           background: #fff;
         }
         .exclusiveWorkspace {
-          display: grid;
+          display: flex;
+          flex-direction: column;
           gap: 10px;
-          grid-template-columns: 1fr;
+          width: 100%;
+        }
+        .exclusiveWorkspace > * {
+          min-width: 0;
+          width: 100%;
         }
         .exclusiveGroupCard {
           border: 1px solid var(--line);
