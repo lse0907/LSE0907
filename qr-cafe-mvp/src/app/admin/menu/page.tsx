@@ -201,6 +201,10 @@ function AdminMenuPageInner() {
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
+  const optionTabs: Array<{ key: "common" | "exclusive"; label: string }> = [
+    { key: "common", label: "공통옵션" },
+    { key: "exclusive", label: "전용옵션" },
+  ];
   const setStatus = (tone: "neutral" | "success" | "error", text: string) => {
     setMsgTone(tone);
     setMsg(text);
@@ -1260,7 +1264,37 @@ function AdminMenuPageInner() {
           --brand: #0f172a;
           --brand-soft: #e2e8f0;
           --accent: #2563eb;
+          --surface: #ffffff;
+          --surface-soft: #fafafa;
+          --surface-muted: #f8fafc;
+          --overlay: rgba(15, 23, 42, 0.45);
+          --danger-line: #fecaca;
+          --danger-text: #b91c1c;
+          --danger-bg: #fff1f2;
+          --success-text: #166534;
+          --neutral-text: #374151;
           --radius: 16px;
+        }
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --bg: #0b1220;
+            --card: #111827;
+            --text: #e5e7eb;
+            --muted: #94a3b8;
+            --line: #334155;
+            --brand: #cbd5e1;
+            --brand-soft: #1e293b;
+            --accent: #60a5fa;
+            --surface: #0f172a;
+            --surface-soft: #111827;
+            --surface-muted: #1f2937;
+            --overlay: rgba(2, 6, 23, 0.72);
+            --danger-line: #7f1d1d;
+            --danger-text: #fda4af;
+            --danger-bg: #3f0f1b;
+            --success-text: #86efac;
+            --neutral-text: #cbd5e1;
+          }
         }
         body {
           background: var(--bg);
@@ -1344,8 +1378,8 @@ function AdminMenuPageInner() {
           color: #15803d;
         }
         .badgeError {
-          border-color: #fecaca;
-          color: #991b1b;
+          border-color: var(--danger-line);
+          color: var(--danger-text);
         }
         .btnRow {
           display: flex;
@@ -1378,7 +1412,7 @@ function AdminMenuPageInner() {
         }
         .btn {
           border: 1px solid var(--line);
-          background: #fff;
+          background: var(--surface);
           padding: 8px 12px;
           border-radius: 10px;
           cursor: pointer;
@@ -1392,13 +1426,13 @@ function AdminMenuPageInner() {
         }
         .btnPrimary {
           background: var(--brand);
-          color: #fff;
+          color: var(--bg);
           border-color: var(--brand);
         }
         .btnDanger {
-          border-color: #fecaca;
-          color: #b91c1c;
-          background: #fff;
+          border-color: var(--danger-line);
+          color: var(--danger-text);
+          background: var(--surface);
         }
         .btnMini {
           padding: 6px 9px;
@@ -1428,11 +1462,11 @@ function AdminMenuPageInner() {
           padding-right: 4px;
         }
         .listScroll::-webkit-scrollbar { width: 8px; }
-        .listScroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
+        .listScroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
         .rowBtn {
           text-align: left;
           border: 1px solid var(--line);
-          background: #fff;
+          background: var(--surface);
           border-radius: 14px;
           padding: 12px;
           cursor: pointer;
@@ -1453,8 +1487,8 @@ function AdminMenuPageInner() {
           gap: 4px;
         }
         .orderBtn {
-          border: 1px solid #dbe2ea;
-          background: linear-gradient(180deg, #fff, #f8fafc);
+          border: 1px solid var(--line);
+          background: linear-gradient(180deg, var(--surface), var(--surface-muted));
           border-radius: 9px;
           width: 26px;
           height: 24px;
@@ -1470,7 +1504,7 @@ function AdminMenuPageInner() {
         .orderBtn svg {
           width: 13px;
           height: 13px;
-          stroke: #334155;
+          stroke: var(--muted);
           stroke-width: 2.2;
           fill: none;
           stroke-linecap: round;
@@ -1486,9 +1520,9 @@ function AdminMenuPageInner() {
           justify-content: center;
           padding: 2px 8px;
           border-radius: 999px;
-          border: 1px solid #fecaca;
-          background: #fff1f2;
-          color: #b91c1c;
+          border: 1px solid var(--danger-line);
+          background: var(--danger-bg);
+          color: var(--danger-text);
           font-size: 11px;
           font-weight: 900;
           margin-left: 6px;
@@ -1523,7 +1557,7 @@ function AdminMenuPageInner() {
           gap: 6px;
         }
         .soldOutLabel {
-          color: #b91c1c;
+          color: var(--danger-text);
           font-weight: 900;
           font-size: 12px;
         }
@@ -1540,7 +1574,7 @@ function AdminMenuPageInner() {
           padding: 8px 10px;
           border-radius: 10px;
           border: 1px solid var(--line);
-          background: #fff;
+          background: var(--surface);
           font-weight: 800;
           font-size: 14px;
           width: 100%;
@@ -1554,7 +1588,7 @@ function AdminMenuPageInner() {
           border: 1px solid var(--line);
           border-radius: 12px;
           padding: 10px;
-          background: #fcfcfd;
+          background: var(--surface-soft);
           display: grid;
           gap: 8px;
         }
@@ -1562,7 +1596,7 @@ function AdminMenuPageInner() {
           border: 1px dashed var(--line);
           border-radius: 10px;
           padding: 10px;
-          background: #fff;
+          background: var(--surface);
           display: grid;
           gap: 6px;
         }
@@ -1607,22 +1641,22 @@ function AdminMenuPageInner() {
           align-items: center;
           padding: 2px 8px;
           border-radius: 999px;
-          border: 1px solid #dbe2ea;
-          color: #334155;
+          border: 1px solid var(--line);
+          color: var(--muted);
           font-size: 11px;
           font-weight: 900;
-          background: #f8fafc;
+          background: var(--surface-muted);
         }
         .policyBadgeRequired {
-          border-color: #fecaca;
-          color: #b91c1c;
-          background: #fff1f2;
+          border-color: var(--danger-line);
+          color: var(--danger-text);
+          background: var(--danger-bg);
         }
         .exclusiveItemCard {
           border: 1px dashed var(--line);
           border-radius: 10px;
           padding: 10px;
-          background: #fff;
+          background: var(--surface);
           display: grid;
           gap: 8px;
         }
@@ -1699,14 +1733,14 @@ function AdminMenuPageInner() {
           padding: 6px 10px;
           border-radius: 999px;
           border: 1px solid var(--line);
-          background: #fff;
+          background: var(--surface);
           font-size: 12px;
           font-weight: 900;
           cursor: pointer;
         }
         .modeSwitchBtnOn {
           border-color: var(--brand);
-          background: #eef2ff;
+          background: var(--brand-soft);
           color: var(--brand);
         }
         .previewThumb {
@@ -1716,7 +1750,7 @@ function AdminMenuPageInner() {
           border-radius: 10px;
           border: 1px solid var(--line);
           object-fit: cover;
-          background: #f9fafb;
+          background: var(--surface-muted);
         }
         .previewWrap {
           display: flex;
@@ -1733,7 +1767,7 @@ function AdminMenuPageInner() {
           color: var(--muted);
           font-size: 11px;
           font-weight: 800;
-          background: #fff;
+          background: var(--surface);
         }
         .maxSelectInput {
           width: 100%;
@@ -1783,14 +1817,14 @@ function AdminMenuPageInner() {
           padding: 10px;
           display: grid;
           gap: 8px;
-          background: #fafafa;
+          background: var(--surface-soft);
         }
         .optionSectionBox {
           margin-top: 14px;
           border: 1px solid var(--line);
           border-radius: 14px;
           padding: 12px;
-          background: #fff;
+          background: var(--surface);
         }
         .exclusiveWorkspace {
           display: flex;
@@ -1805,7 +1839,7 @@ function AdminMenuPageInner() {
         .exclusiveGroupCard {
           border: 1px solid var(--line);
           border-radius: 12px;
-          background: #fff;
+          background: var(--surface);
           padding: 10px;
           display: grid;
           gap: 8px;
@@ -1840,7 +1874,7 @@ function AdminMenuPageInner() {
         .confirmOverlay {
           position: fixed;
           inset: 0;
-          background: rgba(15, 23, 42, 0.45);
+          background: var(--overlay);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1852,7 +1886,7 @@ function AdminMenuPageInner() {
           max-width: 440px;
           border-radius: 14px;
           border: 1px solid var(--line);
-          background: #fff;
+          background: var(--surface);
           box-shadow: 0 16px 44px rgba(15, 23, 42, 0.2);
           padding: 16px;
           display: grid;
@@ -1958,7 +1992,7 @@ function AdminMenuPageInner() {
               className="sub"
               style={{
                 marginTop: 6,
-                color: msgTone === "success" ? "#065f46" : msgTone === "error" ? "#b91c1c" : "#374151",
+                color: msgTone === "success" ? "var(--success-text)" : msgTone === "error" ? "var(--danger-text)" : "var(--neutral-text)",
               }}
             >
               {msg}
@@ -2246,28 +2280,25 @@ function AdminMenuPageInner() {
             <div className="field" style={{ marginTop: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <h3 className="sectionTitle">옵션 연결</h3>
               <button className="btn btnMini" type="button" onClick={toggleOptionPanel} disabled={saving || loading}>
-                {optionPanelOpen ? "접기" : "펼치기"}
+                {optionPanelOpen ? "옵션연결 -" : "옵션연결 +"}
               </button>
             </div>
             {optionPanelOpen ? (
               <>
-            <div className="modeSwitchRow" style={{ marginTop: 6 }}>
-              <button
-                type="button"
-                className={`modeSwitchBtn ${optionTab === "common" ? "modeSwitchBtnOn" : ""}`}
-                onClick={() => requestOptionTabChange("common")}
-                disabled={saving || loading}
-              >
-                공통옵션
-              </button>
-              <button
-                type="button"
-                className={`modeSwitchBtn ${optionTab === "exclusive" ? "modeSwitchBtnOn" : ""}`}
-                onClick={() => requestOptionTabChange("exclusive")}
-                disabled={saving || loading}
-              >
-                전용옵션
-              </button>
+            <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
+              {optionTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={optionTab === tab.key}
+                  className={`modeSwitchBtn ${optionTab === tab.key ? "modeSwitchBtnOn" : ""}`}
+                  onClick={() => requestOptionTabChange(tab.key)}
+                  disabled={saving || loading}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
             {optionTab === "common" ? (
