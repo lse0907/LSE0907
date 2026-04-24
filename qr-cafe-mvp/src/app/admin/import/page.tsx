@@ -158,15 +158,15 @@ function AdminImportPageInner() {
   const onDownloadTemplates = () => {
     const categoriesCsv = [
       "category_name,sort_order,is_active,note",
-      "커피,1,Y,기본 카테고리",
-      "논커피,2,Y,",
-      "디저트,3,Y,",
+      "커피,1,Y,[🔴필수] 헤더(첫 줄 영문 키)는 수정하지 마세요.",
+      "논커피,2,Y,[🟡주의] is_active 값은 Y 또는 N만 입력하세요.",
+      "디저트,3,Y,[🟢예시] category_name=커피, sort_order=1",
     ].join("\r\n");
     const menusCsv = [
       "menu_name,price,category_name,is_sold_out,description,note",
-      "아메리카노,4500,커피,N,기본 원두,",
-      "카페라떼,5200,커피,N,,",
-      "쿠키,3200,디저트,N,,",
+      "아메리카노,4500,커피,N,기본 원두,[🔴필수] category_name은 categories.csv 값과 동일해야 합니다.",
+      "카페라떼,5200,커피,N,,[🟡주의] price는 숫자만 입력하세요. (예: 4500)",
+      "쿠키,3200,디저트,N,,[🟢예시] is_sold_out은 Y 또는 N",
     ].join("\r\n");
     downloadTemplate("categories_template.csv", categoriesCsv);
     downloadTemplate("menus_template.csv", menusCsv);
