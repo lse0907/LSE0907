@@ -145,7 +145,8 @@ function AdminImportPageInner() {
   };
 
   const downloadTemplate = (name: string, content: string) => {
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const bom = "\uFEFF";
+    const blob = new Blob([bom, content], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -160,13 +161,13 @@ function AdminImportPageInner() {
       "커피,1,Y,기본 카테고리",
       "논커피,2,Y,",
       "디저트,3,Y,",
-    ].join("\n");
+    ].join("\r\n");
     const menusCsv = [
       "menu_name,price,category_name,is_sold_out,description,note",
       "아메리카노,4500,커피,N,기본 원두,",
       "카페라떼,5200,커피,N,,",
       "쿠키,3200,디저트,N,,",
-    ].join("\n");
+    ].join("\r\n");
     downloadTemplate("categories_template.csv", categoriesCsv);
     downloadTemplate("menus_template.csv", menusCsv);
   };
@@ -563,6 +564,8 @@ function AdminImportPageInner() {
           점주 템플릿(카테고리/메뉴 기본정보)을 업로드합니다.
           <br />
           이미지/옵션연결/전용옵션은 이 단계에서 제외됩니다.
+          <br />
+          템플릿 파일은 엑셀 한글 깨짐 방지를 위해 UTF-8(BOM) 형식으로 다운로드됩니다.
         </p>
         <div className="row">
           <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
@@ -579,6 +582,13 @@ function AdminImportPageInner() {
 
       <section className="card">
         <h2 style={{ margin: 0, fontSize: 18 }}>1) 업로드 파일 선택</h2>
+        <p className="muted" style={{ margin: 0 }}>
+          컬럼 헤더는 반드시 템플릿의 영문 키를 그대로 유지해 주세요.
+          <br />
+          category_name(카테고리명), sort_order(정렬순서), is_active(Y/N)
+          <br />
+          menu_name(메뉴명), price(가격), category_name(카테고리명), is_sold_out(Y/N)
+        </p>
         <div className="row">
           <label className="muted" style={{ minWidth: 96 }}>매장 ID</label>
           <input
@@ -674,4 +684,3 @@ export default function AdminImportPage() {
     </Suspense>
   );
 }
-
