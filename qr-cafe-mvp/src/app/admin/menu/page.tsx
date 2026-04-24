@@ -1276,27 +1276,6 @@ function AdminMenuPageInner() {
           --neutral-text: #374151;
           --radius: 16px;
         }
-        @media (prefers-color-scheme: dark) {
-          :root {
-            --bg: #0b1220;
-            --card: #111827;
-            --text: #e5e7eb;
-            --muted: #94a3b8;
-            --line: #334155;
-            --brand: #cbd5e1;
-            --brand-soft: #1e293b;
-            --accent: #60a5fa;
-            --surface: #0f172a;
-            --surface-soft: #111827;
-            --surface-muted: #1f2937;
-            --overlay: rgba(2, 6, 23, 0.72);
-            --danger-line: #7f1d1d;
-            --danger-text: #fda4af;
-            --danger-bg: #3f0f1b;
-            --success-text: #86efac;
-            --neutral-text: #cbd5e1;
-          }
-        }
         body {
           background: var(--bg);
           color: var(--text);
@@ -1390,6 +1369,14 @@ function AdminMenuPageInner() {
           gap: 8px;
           flex-wrap: wrap;
           margin-top: 12px;
+        }
+        .optionActionRow {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-top: 10px;
+          width: 100%;
+          justify-content: flex-end;
         }
         .headerActionRow {
           display: flex;
@@ -1870,10 +1857,6 @@ function AdminMenuPageInner() {
           gap: 6px;
           align-items: center;
         }
-        .fullWidthBtn {
-          width: 100%;
-          justify-content: center;
-        }
         .divider {
           height: 1px;
           background: var(--line);
@@ -1918,48 +1901,6 @@ function AdminMenuPageInner() {
           gap: 8px;
           flex-wrap: wrap;
           margin-top: 4px;
-        }
-        @media (prefers-color-scheme: dark) {
-          .optionSectionBox,
-          .optionConnectCard,
-          .groupOptionDetail,
-          .exclusiveGroupCard,
-          .confirmCard {
-            background: #111827;
-            border-color: #334155;
-            color: #e5e7eb;
-          }
-          .modeSwitchBtn,
-          .input,
-          .btn:not(.btnPrimary),
-          .previewPlaceholder {
-            background: #0f172a;
-            border-color: #334155;
-            color: #e5e7eb;
-          }
-          .modeSwitchBtnOn {
-            background: #1e293b;
-            border-color: #64748b;
-            color: #e2e8f0;
-          }
-          .label,
-          .hint,
-          .muted,
-          .formGuide,
-          .optionItemText,
-          .confirmDesc {
-            color: #cbd5e1;
-          }
-          .optionExcludeLabel,
-          .soldOutOnlyLabel {
-            color: #e2e8f0;
-          }
-          .optionExcludeLabel input[type="checkbox"] {
-            accent-color: #93c5fd;
-          }
-          .confirmOverlay {
-            background: rgba(2, 6, 23, 0.68);
-          }
         }
         @media (max-width: 980px) {
           .grid {
@@ -2447,8 +2388,8 @@ function AdminMenuPageInner() {
                         );
                       })}
                     </div>
-                    <div className="btnRow" style={{ marginTop: 6 }}>
-                      <button className="btn" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading}>
+                    <div className="optionActionRow">
+                      <button className="btn btnPrimary" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading}>
                         옵션수정 저장
                       </button>
                     </div>
@@ -2525,15 +2466,6 @@ function AdminMenuPageInner() {
                                 />
                               </div>
                             </div>
-                            <div className="btnRow" style={{ marginTop: 8 }}>
-                              <button className="btn btnPrimary" type="button" onClick={saveExclusiveEditor} disabled={saving || loading}>
-                                저장
-                              </button>
-                              <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
-                                취소
-                              </button>
-                            </div>
-
                             <div className="label" style={{ marginTop: 6 }}>옵션 항목</div>
                             {exclusiveEditItems.length === 0 ? (
                               <div className="muted">옵션 항목이 없습니다.</div>
@@ -2581,6 +2513,14 @@ function AdminMenuPageInner() {
                             <div className="btnRow" style={{ marginTop: 6 }}>
                               <button className="btn" type="button" onClick={addExclusiveEditRow} disabled={saving || loading}>
                                 옵션항목 추가
+                              </button>
+                            </div>
+                            <div className="optionActionRow">
+                              <button className="btn btnPrimary" type="button" onClick={saveExclusiveEditor} disabled={saving || loading}>
+                                저장
+                              </button>
+                              <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
+                                취소
                               </button>
                             </div>
                           </>
@@ -2671,8 +2611,8 @@ function AdminMenuPageInner() {
                                 옵션항목 추가
                               </button>
                             </div>
-                            <div className="btnRow" style={{ marginTop: 6, width: "100%" }}>
-                              <button className="btn btnPrimary fullWidthBtn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
+                            <div className="optionActionRow">
+                              <button className="btn btnPrimary" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
                                 전용옵션 생성
                               </button>
                               <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
