@@ -1370,6 +1370,14 @@ function AdminMenuPageInner() {
           flex-wrap: wrap;
           margin-top: 12px;
         }
+        .optionActionRow {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-top: 10px;
+          width: 100%;
+          justify-content: flex-end;
+        }
         .headerActionRow {
           display: flex;
           gap: 8px;
@@ -1848,10 +1856,6 @@ function AdminMenuPageInner() {
           display: inline-flex;
           gap: 6px;
           align-items: center;
-        }
-        .fullWidthBtn {
-          width: 100%;
-          justify-content: center;
         }
         .divider {
           height: 1px;
@@ -2384,8 +2388,8 @@ function AdminMenuPageInner() {
                         );
                       })}
                     </div>
-                    <div className="btnRow" style={{ marginTop: 6 }}>
-                      <button className="btn" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading}>
+                    <div className="optionActionRow">
+                      <button className="btn btnPrimary" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading}>
                         옵션수정 저장
                       </button>
                     </div>
@@ -2462,15 +2466,6 @@ function AdminMenuPageInner() {
                                 />
                               </div>
                             </div>
-                            <div className="btnRow" style={{ marginTop: 8 }}>
-                              <button className="btn btnPrimary" type="button" onClick={saveExclusiveEditor} disabled={saving || loading}>
-                                저장
-                              </button>
-                              <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
-                                취소
-                              </button>
-                            </div>
-
                             <div className="label" style={{ marginTop: 6 }}>옵션 항목</div>
                             {exclusiveEditItems.length === 0 ? (
                               <div className="muted">옵션 항목이 없습니다.</div>
@@ -2518,6 +2513,14 @@ function AdminMenuPageInner() {
                             <div className="btnRow" style={{ marginTop: 6 }}>
                               <button className="btn" type="button" onClick={addExclusiveEditRow} disabled={saving || loading}>
                                 옵션항목 추가
+                              </button>
+                            </div>
+                            <div className="optionActionRow">
+                              <button className="btn btnPrimary" type="button" onClick={saveExclusiveEditor} disabled={saving || loading}>
+                                저장
+                              </button>
+                              <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
+                                취소
                               </button>
                             </div>
                           </>
@@ -2608,8 +2611,8 @@ function AdminMenuPageInner() {
                                 옵션항목 추가
                               </button>
                             </div>
-                            <div className="btnRow" style={{ marginTop: 6, width: "100%" }}>
-                              <button className="btn btnPrimary fullWidthBtn" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
+                            <div className="optionActionRow">
+                              <button className="btn btnPrimary" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
                                 전용옵션 생성
                               </button>
                               <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
