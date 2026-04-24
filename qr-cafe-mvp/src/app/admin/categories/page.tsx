@@ -39,6 +39,7 @@ function CategoriesPageInner() {
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"error" | "success" | "neutral">("neutral");
   const [myStores, setMyStores] = useState<MyStore[]>([]);
+  const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
 
@@ -106,11 +107,14 @@ function CategoriesPageInner() {
       const ids = (memRes.data || [])
         .map((x: { store_id: string | null }) => String(x.store_id || ""))
         .filter(Boolean);
-      if (!ids.length) {
+      const uniqueIds = Array.from(new Set(ids));
+      if (!mounted) return;
+      setMemberStoreCount(uniqueIds.length);
+      if (!uniqueIds.length) {
         if (mounted) setMyStores([]);
         return;
       }
-      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", ids).order("store_name");
+      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", uniqueIds).order("store_name");
       if (storeRes.error) return;
       if (!mounted) return;
       const list = ((storeRes.data || []) as MyStore[]).filter((s) => s.store_id !== storeId);
@@ -121,6 +125,11 @@ function CategoriesPageInner() {
       mounted = false;
     };
   }, [storeId, copySourceStoreId]);
+
+  const isInitialCategorySetup = !loading && cats.length === 0;
+  const showCategoryBulkRegister = isInitialCategorySetup && memberStoreCount === 1;
+  const showCategoryCopy = isInitialCategorySetup && (memberStoreCount ?? 0) > 1;
+  const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
   const onCopyCategories = async () => {
     if (actionBusy) return;
@@ -452,7 +461,20 @@ function CategoriesPageInner() {
         현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
 
-      {!loading && cats.length === 0 ? (
+      {showCategoryBulkRegister ? (
+        <section className="card">
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <a className="btn btnPrimary" href={importHref}>
+              카테고리 한 번에 등록하기
+            </a>
+          </div>
+          <p className="subText" style={{ marginTop: 6 }}>
+            양식을 내려받아 작성 후, 업로드하면 빠르게 등록할 수 있습니다.
+          </p>
+        </section>
+      ) : null}
+
+      {showCategoryCopy ? (
         <section className="card">
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
