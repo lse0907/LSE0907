@@ -2018,14 +2018,23 @@ function AdminMenuPageInner() {
 
       {showMenuBulkRegister ? (
         <section className="card">
+          <h2 className="cardTitle" style={{ margin: 0 }}>메뉴 등록 방법</h2>
+          <p className="sub" style={{ marginTop: 6 }}>
+            메뉴를 항목별로 직접 등록할 수 있습니다.
+          </p>
           <div className="btnRow">
-            <a className="btn btnPrimary" href={importHref}>
-              메뉴 한 번에 등록하기
+            <button className="btn btnPrimary" type="button" onClick={onNew} disabled={saving || loading}>
+              메뉴 항목별 등록
+            </button>
+          </div>
+          <p className="sub" style={{ marginTop: 10 }}>
+            양식 파일로 업로드하여 여러 항목을 한 번에 등록합니다.
+          </p>
+          <div className="btnRow">
+            <a className="btn" href={importHref}>
+              메뉴 일괄 등록
             </a>
           </div>
-          <p className="sub" style={{ marginTop: 6 }}>
-            양식을 내려받아 작성 후, 업로드하면 빠르게 등록할 수 있습니다.
-          </p>
         </section>
       ) : null}
 
