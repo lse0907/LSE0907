@@ -186,6 +186,7 @@ function AdminMenuPageInner() {
   const [exclusiveEdit, setExclusiveEdit] = useState({ name: "", max: "1" });
   const [exclusiveEditItems, setExclusiveEditItems] = useState<Array<{ id: string; name: string; price: string }>>([]);
   const [myStores, setMyStores] = useState<MyStore[]>([]);
+  const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -351,8 +352,14 @@ function AdminMenuPageInner() {
       const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
       if (memRes.error) return;
       const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
-      if (!ids.length) return;
-      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", ids).order("store_name");
+      const uniqueIds = Array.from(new Set(ids));
+      if (!mounted) return;
+      setMemberStoreCount(uniqueIds.length);
+      if (!uniqueIds.length) {
+        setMyStores([]);
+        return;
+      }
+      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", uniqueIds).order("store_name");
       if (storeRes.error || !mounted) return;
       const list = ((storeRes.data || []) as MyStore[]).filter((s) => s.store_id !== storeId);
       setMyStores(list);
@@ -362,6 +369,11 @@ function AdminMenuPageInner() {
       mounted = false;
     };
   }, [storeId, copySourceStoreId]);
+
+  const isInitialMenuSetup = !loading && items.length === 0;
+  const showMenuBulkRegister = isInitialMenuSetup && memberStoreCount === 1;
+  const showMenuCopy = isInitialMenuSetup && (memberStoreCount ?? 0) > 1;
+  const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
   const onCopyMenus = async () => {
     if (!storeId) return setStatus("error", "대상 매장을 먼저 선택해주세요.");
@@ -2004,7 +2016,29 @@ function AdminMenuPageInner() {
         ) : null}
       </header>
 
-      {!loading && items.length === 0 ? (
+      {showMenuBulkRegister ? (
+        <section className="card">
+          <h2 className="cardTitle" style={{ margin: 0 }}>메뉴 등록 방법</h2>
+          <p className="sub" style={{ marginTop: 6 }}>
+            메뉴를 항목별로 직접 등록할 수 있습니다.
+          </p>
+          <div className="btnRow">
+            <button className="btn btnPrimary" type="button" onClick={onNew} disabled={saving || loading}>
+              메뉴 항목별 등록
+            </button>
+          </div>
+          <p className="sub" style={{ marginTop: 10 }}>
+            양식 파일로 업로드하여 여러 항목을 한 번에 등록합니다.
+          </p>
+          <div className="btnRow">
+            <a className="btn" href={importHref}>
+              메뉴 일괄 등록
+            </a>
+          </div>
+        </section>
+      ) : null}
+
+      {showMenuCopy ? (
         <section className="card">
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
