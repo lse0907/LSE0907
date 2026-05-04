@@ -482,22 +482,23 @@ function CategoriesPageInner() {
 
       {showCategoryCopy ? (
         <section className="card">
-          <div className="copyRow">
-            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
-              <option value="">원본 매장 선택</option>
-              {myStores.map((s) => (
-                <option key={s.store_id} value={s.store_id}>
-                  {s.store_name || s.store_id} ({s.store_id})
-                </option>
-              ))}
-            </select>
-            <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !copySourceStoreId}>
-              {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
-            </button>
-          </div>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>카테고리 등록 방법</h2>
           <p className="subText" style={{ marginTop: 6 }}>
-            최초 등록 시에만 복사 기능이 활성화됩니다.
+            카테고리를 항목별로 직접 등록할 수 있습니다.
           </p>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <a className="btn btnPrimary" href="#category-create-section">
+              카테고리 항목별 등록
+            </a>
+          </div>
+          <p className="subText" style={{ marginTop: 10 }}>
+            양식 파일로 업로드하여 여러 항목을 한 번에 등록합니다.
+          </p>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <a className="btn" href={importHref}>
+              카테고리·메뉴 일괄 등록
+            </a>
+          </div>
         </section>
       ) : null}
 
