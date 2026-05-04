@@ -354,7 +354,6 @@ function AdminMenuPageInner() {
       const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
       const uniqueIds = Array.from(new Set(ids));
       if (!mounted) return;
-      setMemberStoreCount(uniqueIds.length);
       if (!uniqueIds.length) {
         setMyStores([]);
         return;
@@ -371,8 +370,8 @@ function AdminMenuPageInner() {
   }, [storeId, copySourceStoreId]);
 
   const isInitialMenuSetup = !loading && items.length === 0;
-  const showMenuBulkRegister = isInitialMenuSetup && memberStoreCount === 1;
-  const showMenuCopy = isInitialMenuSetup && (memberStoreCount ?? 0) > 1;
+  const showMenuAssist = isInitialMenuSetup;
+  const hasCopySource = myStores.length > 0;
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
   const onCopyMenus = async () => {
@@ -2016,7 +2015,7 @@ function AdminMenuPageInner() {
         ) : null}
       </header>
 
-      {showMenuCopy ? (
+      {showMenuAssist ? (
         <section className="card">
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
@@ -2027,13 +2026,16 @@ function AdminMenuPageInner() {
                 </option>
               ))}
             </select>
-            <button className="btn copyBtn" onClick={onCopyMenus} disabled={copying || loading || !copySourceStoreId}>
+            <button className="btn copyBtn" onClick={onCopyMenus} disabled={copying || loading || !hasCopySource || !copySourceStoreId}>
               {copying ? "복사 중..." : "다른 매장 메뉴 복사"}
             </button>
           </div>
           <p className="sub" style={{ marginTop: 6 }}>
-            최초 등록 시에만 복사 기능이 활성화됩니다.
+            다른 매장의 메뉴를 현재 매장으로 복사합니다.
           </p>
+          {!hasCopySource ? (
+            <p className="sub" style={{ marginTop: 2, color: "#b45309" }}>복사 가능한 원본 매장이 없습니다.</p>
+          ) : null}
         </section>
       ) : null}
 
@@ -2651,7 +2653,7 @@ function AdminMenuPageInner() {
         </section>
       )}
 
-      {showMenuBulkRegister ? (
+      {showMenuAssist ? (
         <section className="card">
           <h2 className="cardTitle" style={{ margin: 0 }}>일괄 등록(보조)</h2>
           <p className="sub" style={{ marginTop: 8 }}>
