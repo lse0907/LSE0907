@@ -461,7 +461,26 @@ function CategoriesPageInner() {
         현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
 
-      {showCategoryBulkRegister ? (
+      <section className="card">
+        <div className="row createRow">
+          <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
+          <button className="btn btnPrimary" onClick={onCreate} disabled={actionBusy || loading || !name.trim()}>생성</button>
+        </div>
+        <p className="muted">카테고리 항목을 개별 입력하여 등록합니다.</p>
+        <p className="muted">삭제 정책: 재할당 강제(삭제 시 첫 번째 활성 카테고리로 메뉴 이동)</p>
+        {msg ? (
+          <div
+            style={{
+              color: msgTone === "success" ? "#065f46" : msgTone === "error" ? "#b91c1c" : "#374151",
+              fontWeight: 900,
+            }}
+          >
+            {msg}
+          </div>
+        ) : null}
+      </section>
+
+      {showCategoryCopy ? (
         <section className="card">
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>카테고리 등록 방법</h2>
           <p className="subText" style={{ marginTop: 6 }}>
@@ -480,45 +499,6 @@ function CategoriesPageInner() {
               카테고리·메뉴 일괄 등록
             </a>
           </div>
-        </section>
-      ) : null}
-
-      <section id="category-create-section" className="card">
-        <div className="row createRow">
-          <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
-          <button className="btn btnPrimary" onClick={onCreate} disabled={actionBusy || loading || !name.trim()}>생성</button>
-        </div>
-        <p className="muted">삭제 정책: 재할당 강제(삭제 시 첫 번째 활성 카테고리로 메뉴 이동)</p>
-        {msg ? (
-          <div
-            style={{
-              color: msgTone === "success" ? "#065f46" : msgTone === "error" ? "#b91c1c" : "#374151",
-              fontWeight: 900,
-            }}
-          >
-            {msg}
-          </div>
-        ) : null}
-      </section>
-
-      {showCategoryCopy ? (
-        <section className="card">
-          <div className="copyRow">
-            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
-              <option value="">원본 매장 선택</option>
-              {myStores.map((s) => (
-                <option key={s.store_id} value={s.store_id}>
-                  {s.store_name || s.store_id} ({s.store_id})
-                </option>
-              ))}
-            </select>
-            <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !copySourceStoreId}>
-              {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
-            </button>
-          </div>
-          <p className="subText" style={{ marginTop: 6 }}>
-            최초 등록 시에만 복사 기능이 활성화됩니다.
-          </p>
         </section>
       ) : null}
 
@@ -604,6 +584,20 @@ function CategoriesPageInner() {
           </div>
         )}
       </section>
+
+      {showCategoryBulkRegister ? (
+        <section className="card">
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>일괄 등록(보조)</h2>
+          <p className="subText" style={{ marginTop: 8 }}>
+            양식 파일로 업로드하여 카테고리/메뉴 항목을 일괄 등록합니다.
+          </p>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <a className="btn" href={importHref}>
+              카테고리·메뉴 일괄 등록
+            </a>
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }
