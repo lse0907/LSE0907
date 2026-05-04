@@ -351,8 +351,13 @@ function AdminMenuPageInner() {
       const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
       if (memRes.error) return;
       const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
-      if (!ids.length) return;
-      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", ids).order("store_name");
+      const uniqueIds = Array.from(new Set(ids));
+      if (!mounted) return;
+      if (!uniqueIds.length) {
+        setMyStores([]);
+        return;
+      }
+      const storeRes = await supabase.from("stores").select("store_id,store_name").in("store_id", uniqueIds).order("store_name");
       if (storeRes.error || !mounted) return;
       const list = ((storeRes.data || []) as MyStore[]).filter((s) => s.store_id !== storeId);
       setMyStores(list);
@@ -362,6 +367,11 @@ function AdminMenuPageInner() {
       mounted = false;
     };
   }, [storeId, copySourceStoreId]);
+
+  const isInitialMenuSetup = !loading && items.length === 0;
+  const showMenuAssist = isInitialMenuSetup;
+  const hasCopySource = myStores.length > 0;
+  const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
   const onCopyMenus = async () => {
     if (!storeId) return setStatus("error", "대상 매장을 먼저 선택해주세요.");
@@ -2004,7 +2014,7 @@ function AdminMenuPageInner() {
         ) : null}
       </header>
 
-      {!loading && items.length === 0 ? (
+      {showMenuAssist ? (
         <section className="card">
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
@@ -2015,13 +2025,16 @@ function AdminMenuPageInner() {
                 </option>
               ))}
             </select>
-            <button className="btn copyBtn" onClick={onCopyMenus} disabled={copying || loading || !copySourceStoreId}>
+            <button className="btn copyBtn" onClick={onCopyMenus} disabled={copying || loading || !hasCopySource || !copySourceStoreId}>
               {copying ? "복사 중..." : "다른 매장 메뉴 복사"}
             </button>
           </div>
           <p className="sub" style={{ marginTop: 6 }}>
-            최초 등록 시에만 복사 기능이 활성화됩니다.
+            다른 매장의 메뉴를 현재 매장으로 복사합니다.
           </p>
+          {!hasCopySource ? (
+            <p className="sub" style={{ marginTop: 2, color: "#b45309" }}>복사 가능한 원본 매장이 없습니다.</p>
+          ) : null}
         </section>
       ) : null}
 
@@ -2083,6 +2096,9 @@ function AdminMenuPageInner() {
                 품절만
               </label>
             </div>
+            <p className="muted" style={{ marginTop: 8 }}>
+              메뉴 항목을 개별 입력하여 등록합니다.
+            </p>
             <p className="muted" style={{ marginTop: 8 }}>
               목록에서 ↑/↓로 순서를 바꾼 뒤 <b>순서 저장</b>을 눌러주세요.
             </p>
@@ -2635,6 +2651,23 @@ function AdminMenuPageInner() {
           </div>
         </section>
       )}
+
+      {showMenuAssist ? (
+        <section className="card">
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <div>
+              <h2 className="cardTitle" style={{ margin: 0 }}>일괄 등록(선택)</h2>
+              <p className="sub" style={{ marginTop: 2 }}>
+                양식 파일로 업로드하여 메뉴/카테고리 항목을 일괄 등록합니다.
+              </p>
+            </div>
+            <a className="btn" href={importHref}>
+              메뉴·카테고리 일괄 등록
+            </a>
+          </div>
+          <p className="sub" style={{ marginTop: 4 }}>일괄 등록 기능은 최초 등록 시에만 활성화됩니다.</p>
+        </section>
+      ) : null}
       {pendingOptionTab ? (
         <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="option-tab-confirm-title">
           <div className="confirmCard">
