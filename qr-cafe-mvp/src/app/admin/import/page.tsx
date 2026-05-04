@@ -155,20 +155,23 @@ function AdminImportPageInner() {
     URL.revokeObjectURL(url);
   };
 
-  const onDownloadTemplates = () => {
+  const onDownloadCategoryTemplate = () => {
     const categoriesCsv = [
       "category_name,sort_order,is_active,note",
       "커피,1,Y,[🔴필수] 헤더(첫 줄 영문 키)는 수정하지 마세요.",
       "논커피,2,Y,[🟡주의] is_active 값은 Y 또는 N만 입력하세요.",
       "디저트,3,Y,[🟢예시] category_name=커피, sort_order=1",
     ].join("\r\n");
+    downloadTemplate("categories_template.csv", categoriesCsv);
+  };
+
+  const onDownloadMenuTemplate = () => {
     const menusCsv = [
       "menu_name,price,category_name,is_sold_out,description,note",
       "아메리카노,4500,커피,N,기본 원두,[🔴필수] category_name은 categories.csv 값과 동일해야 합니다.",
       "카페라떼,5200,커피,N,,[🟡주의] price는 숫자만 입력하세요. (예: 4500)",
       "쿠키,3200,디저트,N,,[🟢예시] is_sold_out은 Y 또는 N",
     ].join("\r\n");
-    downloadTemplate("categories_template.csv", categoriesCsv);
     downloadTemplate("menus_template.csv", menusCsv);
   };
 
@@ -559,7 +562,7 @@ function AdminImportPageInner() {
       `}</style>
 
       <header className="card">
-        <h1 className="title">초기 데이터 업로드 (CSV)</h1>
+        <h1 className="title">일괄 데이터 업로드 (CSV)</h1>
         <p className="muted">
           점주 템플릿(카테고리/메뉴 기본정보)을 업로드합니다.
           <br />
@@ -574,9 +577,8 @@ function AdminImportPageInner() {
           <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
             메뉴관리
           </a>
-          <button className="btn" onClick={onDownloadTemplates} type="button">
-            템플릿 다운로드
-          </button>
+          <button className="btn" onClick={onDownloadCategoryTemplate} type="button">카테고리 템플릿</button>
+          <button className="btn" onClick={onDownloadMenuTemplate} type="button">메뉴 템플릿</button>
         </div>
       </header>
 
@@ -588,6 +590,8 @@ function AdminImportPageInner() {
           category_name(카테고리명), sort_order(정렬순서), is_active(Y/N)
           <br />
           menu_name(메뉴명), price(가격), category_name(카테고리명), is_sold_out(Y/N)
+          <br />
+          검증/반영을 위해 categories.csv와 menus.csv 두 파일이 모두 필요합니다.
         </p>
         <div className="row">
           <label className="muted" style={{ minWidth: 96 }}>매장 ID</label>

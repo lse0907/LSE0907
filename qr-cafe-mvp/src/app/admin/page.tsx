@@ -461,7 +461,7 @@ function AdminPageInner() {
               메뉴관리
             </button>
             <button className="subBtn" onClick={() => go("/admin/import")}>
-              초기 데이터 업로드(CSV)
+              일괄 데이터 업로드(선택)
             </button>
           </div>
         ) : null}

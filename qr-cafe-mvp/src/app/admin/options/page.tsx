@@ -301,6 +301,7 @@ function AdminOptionsPageInner() {
     () => items.filter((it) => it.group_id === selectedGroupId),
     [items, selectedGroupId]
   );
+  const hasCopySource = myStores.length > 0;
   const scopedGroups = useMemo(
     () =>
       groups
@@ -1277,13 +1278,18 @@ function AdminOptionsPageInner() {
                 </option>
               ))}
             </select>
-            <button className="btn copyBtn" type="button" onClick={onCopyOptions} disabled={actionBusy || loading || !copySourceStoreId}>
+            <button className="btn copyBtn" type="button" onClick={onCopyOptions} disabled={actionBusy || loading || !hasCopySource || !copySourceStoreId}>
               {copying ? "복사 중..." : "다른 매장 옵션 복사"}
             </button>
           </div>
           <p className="sub" style={{ marginTop: 6 }}>
-            최초 등록 시에만 복사 기능이 활성화됩니다.
+            다른 매장의 옵션을 현재 매장으로 복사합니다.
           </p>
+          {!hasCopySource ? (
+            <p className="sub" style={{ marginTop: 2, color: "#b45309" }}>복사 가능한 원본 매장이 없습니다.</p>
+          ) : (
+            <p className="sub" style={{ marginTop: 2 }}>매장을 추가 생성한 경우 복사 기능을 사용할 수 있습니다.</p>
+          )}
         </section>
       ) : null}
 

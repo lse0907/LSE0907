@@ -460,6 +460,30 @@ function CategoriesPageInner() {
         현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
 
+      {showCategoryAssist ? (
+        <section className="card">
+          <div className="copyRow">
+            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !hasCopySource || !copySourceStoreId}>
+              {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
+            </button>
+          </div>
+          <p className="subText" style={{ marginTop: 6 }}>
+            다른 매장의 카테고리를 현재 매장으로 복사합니다.
+          </p>
+          {!hasCopySource ? (
+            <p className="subText" style={{ marginTop: 2, color: "#b45309" }}>복사 가능한 원본 매장이 없습니다.</p>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="card">
         <div className="row createRow">
           <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
@@ -588,15 +612,18 @@ function CategoriesPageInner() {
 
       {showCategoryAssist ? (
         <section className="card">
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>일괄 등록(보조)</h2>
-          <p className="subText" style={{ marginTop: 8 }}>
-            양식 파일로 업로드하여 카테고리/메뉴 항목을 일괄 등록합니다.
-          </p>
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>일괄 등록(선택)</h2>
+              <p className="subText" style={{ marginTop: 2 }}>
+                양식 파일로 업로드하여 카테고리/메뉴 항목을 일괄 등록합니다.
+              </p>
+            </div>
             <a className="btn" href={importHref}>
               카테고리·메뉴 일괄 등록
             </a>
           </div>
+          <p className="subText" style={{ marginTop: 4 }}>일괄 등록 기능은 최초 등록 시에만 활성화됩니다.</p>
         </section>
       ) : null}
     </main>
