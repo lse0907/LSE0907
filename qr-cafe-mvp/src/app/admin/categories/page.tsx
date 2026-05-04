@@ -39,6 +39,7 @@ function CategoriesPageInner() {
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"error" | "success" | "neutral">("neutral");
   const [myStores, setMyStores] = useState<MyStore[]>([]);
+  const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
 

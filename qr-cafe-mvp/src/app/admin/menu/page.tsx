@@ -186,6 +186,7 @@ function AdminMenuPageInner() {
   const [exclusiveEdit, setExclusiveEdit] = useState({ name: "", max: "1" });
   const [exclusiveEditItems, setExclusiveEditItems] = useState<Array<{ id: string; name: string; price: string }>>([]);
   const [myStores, setMyStores] = useState<MyStore[]>([]);
+  const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
