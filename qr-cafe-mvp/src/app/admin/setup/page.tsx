@@ -39,6 +39,12 @@ function computeCompletedSteps(counts: SetupCounts) {
   return done;
 }
 
+function progressStepLabel(step: 1 | 2 | 3) {
+  if (step === 1) return "카테고리 설정";
+  if (step === 2) return "옵션 설정";
+  return "메뉴 설정";
+}
+
 function AdminSetupPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -217,6 +223,7 @@ function AdminSetupPageInner() {
         <section className="card">
           <h2>진행 단계</h2>
           <p className="muted">진행률: {completedSteps}/3</p>
+          <p className="muted">현재 단계: {progressStepLabel(progressStep)}</p>
           <div className="progressWrap" aria-hidden>
             <div className="progressFill" style={{ width: `${(completedSteps / 3) * 100}%` }} />
           </div>
