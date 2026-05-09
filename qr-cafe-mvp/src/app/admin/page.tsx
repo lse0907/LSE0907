@@ -362,9 +362,6 @@ function AdminPageInner() {
         </div>
 
         <div className="topActions">
-          <button className="btn" onClick={goSetup} disabled={!selectedStoreId}>
-            초기 설정
-          </button>
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
             고객화면
           </button>
