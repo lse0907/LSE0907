@@ -9,6 +9,7 @@ import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app
 type StoreRow = {
   store_id: string;
   store_name: string | null;
+  setup_completed?: boolean | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -114,7 +115,7 @@ function AdminPageInner() {
     }
 
     const [storeRes, billingRes, paymentRes] = await Promise.all([
-      supabase.from("stores").select("store_id, store_name, created_at, updated_at").in("store_id", ids),
+      supabase.from("stores").select("store_id, store_name, setup_completed, created_at, updated_at").in("store_id", ids),
       supabase.from("store_billing").select("store_id, base_plan_status, paid_until").in("store_id", ids),
       supabase.from("billing_payments").select("store_id, paid_at, status").in("store_id", ids).eq("status", "paid").order("paid_at", { ascending: false }),
     ]);
@@ -202,6 +203,29 @@ function AdminPageInner() {
     }
   };
 
+  const promoteLegacyConfiguredStore = async (storeId: string) => {
+    const [catRes, menuRes, groupRes, itemRes] = await Promise.all([
+      supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("option_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+    ]);
+    if (catRes.error || menuRes.error || groupRes.error || itemRes.error) return false;
+    const hasSetupData = [catRes.count, menuRes.count, groupRes.count, itemRes.count].some((c) => Number(c || 0) > 0);
+    if (!hasSetupData) return false;
+    const { error } = await supabase
+      .from("stores")
+      .update({
+        setup_completed: true,
+        setup_last_step: 4,
+        setup_completed_at: new Date().toISOString(),
+      })
+      .eq("store_id", storeId);
+    if (error) return false;
+    setStores((prev) => prev.map((s) => (s.store_id === storeId ? { ...s, setup_completed: true } : s)));
+    return true;
+  };
+
   useEffect(() => {
     (async () => {
       setBooting(true);
@@ -265,6 +289,19 @@ function AdminPageInner() {
     fetchStatsSummaryForStore(selectedStoreId);
   }, [selectedStoreId]);
 
+  useEffect(() => {
+    if (booting) return;
+    if (!selectedStoreId) return;
+    const store = stores.find((s) => s.store_id === selectedStoreId);
+    if (!store) return;
+    if (store.setup_completed !== false) return;
+    (async () => {
+      const promoted = await promoteLegacyConfiguredStore(selectedStoreId);
+      if (promoted) return;
+      router.replace(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
+    })();
+  }, [booting, selectedStoreId, stores, router]);
+
   const go = (path: string) => {
     if (!selectedStoreId) {
       setMsg("먼저 매장을 선택하거나 생성해주세요.");
@@ -283,6 +320,13 @@ function AdminPageInner() {
 
   const goCreate = () => {
     router.push("/admin/store/create");
+  };
+  const goSetup = () => {
+    if (!selectedStoreId) {
+      setMsg("먼저 매장을 선택하거나 생성해주세요.");
+      return;
+    }
+    router.push(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
   };
 
   if (booting) {
@@ -308,6 +352,9 @@ function AdminPageInner() {
         </div>
 
         <div className="topActions">
+          <button className="btn" onClick={goSetup} disabled={!selectedStoreId}>
+            초기 설정
+          </button>
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
             고객화면
           </button>
