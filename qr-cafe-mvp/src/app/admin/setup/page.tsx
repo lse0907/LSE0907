@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { clearCurrentStoreId, getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 
 type SetupStep = 0 | 1 | 2 | 3 | 4;
 
@@ -115,6 +115,37 @@ function AdminSetupPageInner() {
     router.push(`/admin?store=${encodeURIComponent(storeId)}`);
   };
 
+  const onSkipForNow = async () => {
+    if (!storeId) return router.push("/admin");
+    const { data: authData } = await supabase.auth.getUser();
+    const uid = authData?.user?.id || "";
+    if (!uid) return router.push(`/admin?store=${encodeURIComponent(storeId)}`);
+
+    const memRes = await supabase.from("store_members").select("store_id").eq("user_id", uid);
+    if (memRes.error) return router.push(`/admin?store=${encodeURIComponent(storeId)}`);
+    const ids = (memRes.data || []).map((x: { store_id?: string | null }) => String(x.store_id || "")).filter(Boolean);
+    if (!ids.length) return router.push(`/admin?store=${encodeURIComponent(storeId)}`);
+
+    const storesRes = await supabase
+      .from("stores")
+      .select("store_id,setup_completed")
+      .in("store_id", ids)
+      .eq("setup_completed", true)
+      .order("store_id", { ascending: true });
+    if (storesRes.error) return router.push(`/admin?store=${encodeURIComponent(storeId)}`);
+
+    const completedIds = (storesRes.data || [])
+      .map((x: { store_id?: string | null }) => String(x.store_id || ""))
+      .filter(Boolean);
+    const fallbackStoreId = completedIds.find((id) => id !== storeId) || completedIds[0] || "";
+    if (!fallbackStoreId) {
+      clearCurrentStoreId();
+      return router.push("/admin");
+    }
+    setCurrentStoreId(fallbackStoreId);
+    return router.push(`/admin?store=${encodeURIComponent(fallbackStoreId)}`);
+  };
+
   return (
     <main className="wrap">
       <h1>초기 설정</h1>
@@ -145,7 +176,7 @@ function AdminSetupPageInner() {
           </ul>
 
           <div className="actions">
-            <button disabled={saving} onClick={() => router.push(`/admin?store=${encodeURIComponent(storeId)}`)}>
+            <button disabled={saving} onClick={onSkipForNow}>
               나중에 하기
             </button>
             <button disabled={saving} onClick={onComplete}>
