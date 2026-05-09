@@ -25,6 +25,12 @@ const stepOrder: Array<{ step: SetupStep; title: string; desc: string; href?: st
   { step: 3, title: "메뉴 설정", desc: "메뉴를 등록하고 카테고리/옵션을 연결하세요.", href: "/admin/menu" },
 ];
 
+function computeProgressStep(counts: SetupCounts): 1 | 2 | 3 {
+  if (counts.categories < 1) return 1;
+  if (counts.menus < 1) return 2;
+  return 3;
+}
+
 function AdminSetupPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -159,6 +165,8 @@ function AdminSetupPageInner() {
     router.push(`/admin?store=${encodeURIComponent(storeId)}`);
   };
 
+  const progressStep = computeProgressStep(counts);
+
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
     const { data: authData } = await supabase.auth.getUser();
@@ -199,17 +207,17 @@ function AdminSetupPageInner() {
       {!loading ? (
         <section className="card">
           <h2>진행 단계</h2>
-          <p className="muted">진행률: {lastStep >= 4 ? "3/3" : `${Math.max(lastStep, 1)}/3`}</p>
+          <p className="muted">진행률: {progressStep}/3</p>
           <div className="progressWrap" aria-hidden>
-            <div className="progressFill" style={{ width: `${((lastStep >= 4 ? 3 : Math.max(lastStep, 1)) / 3) * 100}%` }} />
+            <div className="progressFill" style={{ width: `${(progressStep / 3) * 100}%` }} />
           </div>
           <p className="muted">
             현재 등록 수 · 카테고리 {counts.categories}개 · 옵션그룹 {counts.options}개 · 메뉴 {counts.menus}개
           </p>
           <ul>
             {stepOrder.map((row) => {
-              const done = lastStep > row.step || lastStep === 4;
-              const current = lastStep === row.step;
+              const done = row.step === 1 ? counts.categories > 0 : row.step === 2 ? counts.menus > 0 : counts.menus > 0;
+              const current = !done && row.step === progressStep;
               return (
                 <li key={row.step} className="stepItem">
                   <div>
