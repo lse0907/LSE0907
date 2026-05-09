@@ -56,7 +56,7 @@ function AdminPageInner() {
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
   const [billingByStore, setBillingByStore] = useState<Record<string, StoreBillingSummary>>({});
   const [hideSetupBannerForCurrentSelection, setHideSetupBannerForCurrentSelection] = useState(false);
-  const [selectedStoreCounts, setSelectedStoreCounts] = useState<{ categories: number; menus: number } | null>(null);
+  const [selectedStoreCounts, setSelectedStoreCounts] = useState<{ categories: number; options: number; menus: number } | null>(null);
 
   const selectedStore = useMemo(() => {
     if (!selectedStoreId) return null;
@@ -334,7 +334,9 @@ function AdminPageInner() {
   const selectedStoreIncomplete = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed === false);
   const selectedStoreNeedsSetupByData = selectedStoreCounts != null && (selectedStoreCounts.categories < 1 || selectedStoreCounts.menus < 1);
   const selectedStoreShouldShowSetup = selectedStoreIncomplete || selectedStoreNeedsSetupByData;
-  const selectedStoreSetupStep = stores.find((s) => s.store_id === selectedStoreId)?.setup_last_step || 0;
+  const selectedStoreCompletedSteps = selectedStoreCounts
+    ? (selectedStoreCounts.categories > 0 ? 1 : 0) + (selectedStoreCounts.options > 0 ? 1 : 0) + (selectedStoreCounts.menus > 0 ? 1 : 0)
+    : 0;
   const showSetupBanner = selectedStoreShouldShowSetup && !hideSetupBannerForCurrentSelection;
   const dismissSetupBanner = () => {
     setHideSetupBannerForCurrentSelection(true);
@@ -344,13 +346,15 @@ function AdminPageInner() {
     if (!selectedStoreId) return;
     let mounted = true;
     (async () => {
-      const [catRes, menuRes] = await Promise.all([
+      const [catRes, optRes, menuRes] = await Promise.all([
         supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", selectedStoreId),
+        supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", selectedStoreId),
         supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", selectedStoreId),
       ]);
-      if (!mounted || catRes.error || menuRes.error) return;
+      if (!mounted || catRes.error || optRes.error || menuRes.error) return;
       setSelectedStoreCounts({
         categories: Number(catRes.count || 0),
+        options: Number(optRes.count || 0),
         menus: Number(menuRes.count || 0),
       });
     })();
@@ -400,8 +404,8 @@ function AdminPageInner() {
           <div>
             <strong>이 매장은 초기 설정이 완료되지 않았습니다.</strong>
             <div className="muted">메뉴/옵션/카테고리 설정을 계속 진행해 주세요.</div>
-            {selectedStoreSetupStep > 0 ? (
-              <div className="muted">현재 진행 단계: {Math.min(Math.max(selectedStoreSetupStep, 1), 3)}/3</div>
+            {selectedStoreCounts ? (
+              <div className="muted">현재 진행 단계: {selectedStoreCompletedSteps}/3</div>
             ) : null}
           </div>
           <div className="setupBannerActions">
