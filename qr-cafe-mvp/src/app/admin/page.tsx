@@ -203,6 +203,29 @@ function AdminPageInner() {
     }
   };
 
+  const promoteLegacyConfiguredStore = async (storeId: string) => {
+    const [catRes, menuRes, groupRes, itemRes] = await Promise.all([
+      supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("option_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+    ]);
+    if (catRes.error || menuRes.error || groupRes.error || itemRes.error) return false;
+    const hasSetupData = [catRes.count, menuRes.count, groupRes.count, itemRes.count].some((c) => Number(c || 0) > 0);
+    if (!hasSetupData) return false;
+    const { error } = await supabase
+      .from("stores")
+      .update({
+        setup_completed: true,
+        setup_last_step: 4,
+        setup_completed_at: new Date().toISOString(),
+      })
+      .eq("store_id", storeId);
+    if (error) return false;
+    setStores((prev) => prev.map((s) => (s.store_id === storeId ? { ...s, setup_completed: true } : s)));
+    return true;
+  };
+
   useEffect(() => {
     (async () => {
       setBooting(true);
@@ -271,9 +294,12 @@ function AdminPageInner() {
     if (!selectedStoreId) return;
     const store = stores.find((s) => s.store_id === selectedStoreId);
     if (!store) return;
-    if (store.setup_completed === false) {
+    if (store.setup_completed !== false) return;
+    (async () => {
+      const promoted = await promoteLegacyConfiguredStore(selectedStoreId);
+      if (promoted) return;
       router.replace(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
-    }
+    })();
   }, [booting, selectedStoreId, stores, router]);
 
   const go = (path: string) => {
