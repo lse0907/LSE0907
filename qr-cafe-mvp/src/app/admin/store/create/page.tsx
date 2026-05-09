@@ -211,7 +211,7 @@ export default function AdminStoreCreatePage() {
       });
 
       setCurrentStoreId(id);
-      router.push(`/admin?store=${encodeURIComponent(id)}`);
+      router.push(`/admin/setup?store=${encodeURIComponent(id)}`);
     } catch (e: any) {
       console.error("[admin/store/create] create error:", e?.message || e);
       setMsg(`매장 생성 실패: ${String(e?.message || e)}`);
