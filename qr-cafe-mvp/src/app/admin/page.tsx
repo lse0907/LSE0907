@@ -9,6 +9,7 @@ import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app
 type StoreRow = {
   store_id: string;
   store_name: string | null;
+  setup_completed?: boolean | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -114,7 +115,7 @@ function AdminPageInner() {
     }
 
     const [storeRes, billingRes, paymentRes] = await Promise.all([
-      supabase.from("stores").select("store_id, store_name, created_at, updated_at").in("store_id", ids),
+      supabase.from("stores").select("store_id, store_name, setup_completed, created_at, updated_at").in("store_id", ids),
       supabase.from("store_billing").select("store_id, base_plan_status, paid_until").in("store_id", ids),
       supabase.from("billing_payments").select("store_id, paid_at, status").in("store_id", ids).eq("status", "paid").order("paid_at", { ascending: false }),
     ]);
@@ -265,6 +266,16 @@ function AdminPageInner() {
     fetchStatsSummaryForStore(selectedStoreId);
   }, [selectedStoreId]);
 
+  useEffect(() => {
+    if (booting) return;
+    if (!selectedStoreId) return;
+    const store = stores.find((s) => s.store_id === selectedStoreId);
+    if (!store) return;
+    if (store.setup_completed === false) {
+      router.replace(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
+    }
+  }, [booting, selectedStoreId, stores, router]);
+
   const go = (path: string) => {
     if (!selectedStoreId) {
       setMsg("먼저 매장을 선택하거나 생성해주세요.");
@@ -283,6 +294,13 @@ function AdminPageInner() {
 
   const goCreate = () => {
     router.push("/admin/store/create");
+  };
+  const goSetup = () => {
+    if (!selectedStoreId) {
+      setMsg("먼저 매장을 선택하거나 생성해주세요.");
+      return;
+    }
+    router.push(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
   };
 
   if (booting) {
@@ -308,6 +326,9 @@ function AdminPageInner() {
         </div>
 
         <div className="topActions">
+          <button className="btn" onClick={goSetup} disabled={!selectedStoreId}>
+            초기 설정
+          </button>
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
             고객화면
           </button>
