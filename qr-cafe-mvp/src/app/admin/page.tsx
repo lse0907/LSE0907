@@ -10,6 +10,7 @@ type StoreRow = {
   store_id: string;
   store_name: string | null;
   setup_completed?: boolean | null;
+  setup_last_step?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -116,7 +117,7 @@ function AdminPageInner() {
     }
 
     const [storeRes, billingRes, paymentRes] = await Promise.all([
-      supabase.from("stores").select("store_id, store_name, setup_completed, created_at, updated_at").in("store_id", ids),
+      supabase.from("stores").select("store_id, store_name, setup_completed, setup_last_step, created_at, updated_at").in("store_id", ids),
       supabase.from("store_billing").select("store_id, base_plan_status, paid_until").in("store_id", ids),
       supabase.from("billing_payments").select("store_id, paid_at, status").in("store_id", ids).eq("status", "paid").order("paid_at", { ascending: false }),
     ]);
@@ -331,6 +332,7 @@ function AdminPageInner() {
     router.push(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
   };
   const selectedStoreIncomplete = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed === false);
+  const selectedStoreSetupStep = stores.find((s) => s.store_id === selectedStoreId)?.setup_last_step || 0;
   const showSetupBanner = selectedStoreIncomplete && !setupBannerDismissedByStore[selectedStoreId || ""];
   const dismissSetupBanner = () => {
     if (!selectedStoreId) return;
@@ -380,6 +382,9 @@ function AdminPageInner() {
           <div>
             <strong>이 매장은 초기 설정이 완료되지 않았습니다.</strong>
             <div className="muted">메뉴/옵션/카테고리 설정을 계속 진행해 주세요.</div>
+            {selectedStoreSetupStep > 0 ? (
+              <div className="muted">현재 진행 단계: {Math.min(Math.max(selectedStoreSetupStep, 1), 3)}/3</div>
+            ) : null}
           </div>
           <div className="setupBannerActions">
             <button className="btn btnPrimary btnSmall" onClick={goSetup}>
