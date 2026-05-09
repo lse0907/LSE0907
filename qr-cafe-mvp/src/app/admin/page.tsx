@@ -9,6 +9,8 @@ import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app
 type StoreRow = {
   store_id: string;
   store_name: string | null;
+  setup_completed?: boolean | null;
+  setup_last_step?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -53,6 +55,7 @@ function AdminPageInner() {
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
   const [billingByStore, setBillingByStore] = useState<Record<string, StoreBillingSummary>>({});
+  const [setupBannerDismissedByStore, setSetupBannerDismissedByStore] = useState<Record<string, boolean>>({});
 
   const selectedStore = useMemo(() => {
     if (!selectedStoreId) return null;
@@ -114,7 +117,7 @@ function AdminPageInner() {
     }
 
     const [storeRes, billingRes, paymentRes] = await Promise.all([
-      supabase.from("stores").select("store_id, store_name, created_at, updated_at").in("store_id", ids),
+      supabase.from("stores").select("store_id, store_name, setup_completed, setup_last_step, created_at, updated_at").in("store_id", ids),
       supabase.from("store_billing").select("store_id, base_plan_status, paid_until").in("store_id", ids),
       supabase.from("billing_payments").select("store_id, paid_at, status").in("store_id", ids).eq("status", "paid").order("paid_at", { ascending: false }),
     ]);
@@ -202,6 +205,29 @@ function AdminPageInner() {
     }
   };
 
+  const promoteLegacyConfiguredStore = async (storeId: string) => {
+    const [catRes, menuRes, groupRes, itemRes] = await Promise.all([
+      supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("option_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+    ]);
+    if (catRes.error || menuRes.error || groupRes.error || itemRes.error) return false;
+    const hasSetupData = [catRes.count, menuRes.count, groupRes.count, itemRes.count].some((c) => Number(c || 0) > 0);
+    if (!hasSetupData) return false;
+    const { error } = await supabase
+      .from("stores")
+      .update({
+        setup_completed: true,
+        setup_last_step: 4,
+        setup_completed_at: new Date().toISOString(),
+      })
+      .eq("store_id", storeId);
+    if (error) return false;
+    setStores((prev) => prev.map((s) => (s.store_id === storeId ? { ...s, setup_completed: true } : s)));
+    return true;
+  };
+
   useEffect(() => {
     (async () => {
       setBooting(true);
@@ -265,6 +291,20 @@ function AdminPageInner() {
     fetchStatsSummaryForStore(selectedStoreId);
   }, [selectedStoreId]);
 
+  useEffect(() => {
+    if (!selectedStoreId) return;
+    const key = `setup_banner_dismissed_${selectedStoreId}`;
+    const dismissed = sessionStorage.getItem(key) === "1";
+    setSetupBannerDismissedByStore((prev) => ({ ...prev, [selectedStoreId]: dismissed }));
+  }, [selectedStoreId]);
+
+  useEffect(() => {
+    if (!selectedStoreId) return;
+    const store = stores.find((s) => s.store_id === selectedStoreId);
+    if (!store || store.setup_completed !== false) return;
+    promoteLegacyConfiguredStore(selectedStoreId);
+  }, [selectedStoreId, stores]);
+
   const go = (path: string) => {
     if (!selectedStoreId) {
       setMsg("먼저 매장을 선택하거나 생성해주세요.");
@@ -283,6 +323,22 @@ function AdminPageInner() {
 
   const goCreate = () => {
     router.push("/admin/store/create");
+  };
+  const goSetup = () => {
+    if (!selectedStoreId) {
+      setMsg("먼저 매장을 선택하거나 생성해주세요.");
+      return;
+    }
+    router.push(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
+  };
+  const selectedStoreIncomplete = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed === false);
+  const selectedStoreSetupStep = stores.find((s) => s.store_id === selectedStoreId)?.setup_last_step || 0;
+  const showSetupBanner = selectedStoreIncomplete && !setupBannerDismissedByStore[selectedStoreId || ""];
+  const dismissSetupBanner = () => {
+    if (!selectedStoreId) return;
+    const key = `setup_banner_dismissed_${selectedStoreId}`;
+    sessionStorage.setItem(key, "1");
+    setSetupBannerDismissedByStore((prev) => ({ ...prev, [selectedStoreId]: true }));
   };
 
   if (booting) {
@@ -321,6 +377,25 @@ function AdminPageInner() {
       </header>
 
       {msg ? <div className="alert">{msg}</div> : null}
+      {showSetupBanner ? (
+        <div className="setupBanner" role="status" aria-live="polite">
+          <div>
+            <strong>이 매장은 초기 설정이 완료되지 않았습니다.</strong>
+            <div className="muted">메뉴/옵션/카테고리 설정을 계속 진행해 주세요.</div>
+            {selectedStoreSetupStep > 0 ? (
+              <div className="muted">현재 진행 단계: {Math.min(Math.max(selectedStoreSetupStep, 1), 3)}/3</div>
+            ) : null}
+          </div>
+          <div className="setupBannerActions">
+            <button className="btn btnPrimary btnSmall" onClick={goSetup}>
+              초기 설정 계속하기
+            </button>
+            <button className="btn btnSmall" onClick={dismissSetupBanner}>
+              나중에 하기
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="adminLayout">
         <section className="card listCard">
@@ -371,7 +446,12 @@ function AdminPageInner() {
                       </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                         {on ? <div className="pill pillOn">선택됨</div> : null}
-                        {on ? (
+                        {on && selectedStoreIncomplete ? (
+                          <button className="btn btnPrimary btnSmall" onClick={goSetup}>
+                            초기설정
+                          </button>
+                        ) : null}
+                        {on && !selectedStoreIncomplete ? (
                           <button className="btn btnPrimary btnSmall" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
                             구독결제
                           </button>
@@ -612,6 +692,22 @@ body {
   padding:10px 12px;
   font-weight:900;
 }
+.setupBanner{
+  margin-top:10px;
+  border:1px solid #fde68a;
+  background:#fffbeb;
+  color:#92400e;
+  border-radius:14px;
+  padding:12px;
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+}
+.setupBannerActions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
 .emptyBox{
   margin-top:12px;
   display:grid;
@@ -823,6 +919,10 @@ body {
   }
   .storeList{
     max-height: min(42vh, 360px);
+  }
+  .setupBanner{
+    display:grid;
+    gap:10px;
   }
 }
 `;
