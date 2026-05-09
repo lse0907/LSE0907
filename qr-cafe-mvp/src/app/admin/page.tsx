@@ -55,7 +55,8 @@ function AdminPageInner() {
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
   const [billingByStore, setBillingByStore] = useState<Record<string, StoreBillingSummary>>({});
-  const [setupBannerDismissedByStore, setSetupBannerDismissedByStore] = useState<Record<string, boolean>>({});
+  const [hideSetupBannerForCurrentSelection, setHideSetupBannerForCurrentSelection] = useState(false);
+  const [selectedStoreCounts, setSelectedStoreCounts] = useState<{ categories: number; menus: number } | null>(null);
 
   const selectedStore = useMemo(() => {
     if (!selectedStoreId) return null;
@@ -206,15 +207,14 @@ function AdminPageInner() {
   };
 
   const promoteLegacyConfiguredStore = async (storeId: string) => {
-    const [catRes, menuRes, groupRes, itemRes] = await Promise.all([
+    const [catRes, menuRes] = await Promise.all([
       supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", storeId),
       supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
-      supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", storeId),
-      supabase.from("option_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
     ]);
-    if (catRes.error || menuRes.error || groupRes.error || itemRes.error) return false;
-    const hasSetupData = [catRes.count, menuRes.count, groupRes.count, itemRes.count].some((c) => Number(c || 0) > 0);
-    if (!hasSetupData) return false;
+    if (catRes.error || menuRes.error) return false;
+    const categories = Number(catRes.count || 0);
+    const menus = Number(menuRes.count || 0);
+    if (categories < 1 || menus < 1) return false;
     const { error } = await supabase
       .from("stores")
       .update({
@@ -286,6 +286,8 @@ function AdminPageInner() {
   useEffect(() => {
     if (!selectedStoreId) {
       setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
+      setHideSetupBannerForCurrentSelection(false);
+      setSelectedStoreCounts(null);
       return;
     }
     fetchStatsSummaryForStore(selectedStoreId);
@@ -293,9 +295,7 @@ function AdminPageInner() {
 
   useEffect(() => {
     if (!selectedStoreId) return;
-    const key = `setup_banner_dismissed_${selectedStoreId}`;
-    const dismissed = sessionStorage.getItem(key) === "1";
-    setSetupBannerDismissedByStore((prev) => ({ ...prev, [selectedStoreId]: dismissed }));
+    setHideSetupBannerForCurrentSelection(false);
   }, [selectedStoreId]);
 
   useEffect(() => {
@@ -332,14 +332,32 @@ function AdminPageInner() {
     router.push(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
   };
   const selectedStoreIncomplete = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed === false);
+  const selectedStoreNeedsSetupByData = selectedStoreCounts != null && (selectedStoreCounts.categories < 1 || selectedStoreCounts.menus < 1);
+  const selectedStoreShouldShowSetup = selectedStoreIncomplete || selectedStoreNeedsSetupByData;
   const selectedStoreSetupStep = stores.find((s) => s.store_id === selectedStoreId)?.setup_last_step || 0;
-  const showSetupBanner = selectedStoreIncomplete && !setupBannerDismissedByStore[selectedStoreId || ""];
+  const showSetupBanner = selectedStoreShouldShowSetup && !hideSetupBannerForCurrentSelection;
   const dismissSetupBanner = () => {
-    if (!selectedStoreId) return;
-    const key = `setup_banner_dismissed_${selectedStoreId}`;
-    sessionStorage.setItem(key, "1");
-    setSetupBannerDismissedByStore((prev) => ({ ...prev, [selectedStoreId]: true }));
+    setHideSetupBannerForCurrentSelection(true);
   };
+
+  useEffect(() => {
+    if (!selectedStoreId) return;
+    let mounted = true;
+    (async () => {
+      const [catRes, menuRes] = await Promise.all([
+        supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", selectedStoreId),
+        supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", selectedStoreId),
+      ]);
+      if (!mounted || catRes.error || menuRes.error) return;
+      setSelectedStoreCounts({
+        categories: Number(catRes.count || 0),
+        menus: Number(menuRes.count || 0),
+      });
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [selectedStoreId]);
 
   if (booting) {
     return (
@@ -446,12 +464,12 @@ function AdminPageInner() {
                       </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                         {on ? <div className="pill pillOn">선택됨</div> : null}
-                        {on && selectedStoreIncomplete ? (
+                        {on && selectedStoreShouldShowSetup ? (
                           <button className="btn btnPrimary btnSmall" onClick={goSetup}>
                             초기설정
                           </button>
                         ) : null}
-                        {on && !selectedStoreIncomplete ? (
+                        {on && !selectedStoreShouldShowSetup ? (
                           <button className="btn btnPrimary btnSmall" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
                             구독결제
                           </button>
