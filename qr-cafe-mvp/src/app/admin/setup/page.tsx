@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -20,7 +20,7 @@ const stepOrder: Array<{ step: SetupStep; title: string; desc: string; href?: st
   { step: 3, title: "메뉴 설정", desc: "메뉴를 등록하고 카테고리/옵션을 연결하세요.", href: "/admin/menu" },
 ];
 
-export default function AdminSetupPage() {
+function AdminSetupPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const storeId = (sp.get("store") || getCurrentStoreId() || "").trim();
@@ -167,5 +167,13 @@ export default function AdminSetupPage() {
         .error { color: #b91c1c; margin-top: 8px; }
       `}</style>
     </main>
+  );
+}
+
+export default function AdminSetupPage() {
+  return (
+    <Suspense fallback={<main style={{ padding: 16 }}>로딩 중...</main>}>
+      <AdminSetupPageInner />
+    </Suspense>
   );
 }
