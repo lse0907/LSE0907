@@ -27,8 +27,16 @@ const stepOrder: Array<{ step: SetupStep; title: string; desc: string; href?: st
 
 function computeProgressStep(counts: SetupCounts): 1 | 2 | 3 {
   if (counts.categories < 1) return 1;
-  if (counts.menus < 1) return 2;
+  if (counts.options < 1) return 2;
   return 3;
+}
+
+function computeCompletedSteps(counts: SetupCounts) {
+  let done = 0;
+  if (counts.categories > 0) done += 1;
+  if (counts.options > 0) done += 1;
+  if (counts.menus > 0) done += 1;
+  return done;
 }
 
 function AdminSetupPageInner() {
@@ -166,6 +174,7 @@ function AdminSetupPageInner() {
   };
 
   const progressStep = computeProgressStep(counts);
+  const completedSteps = computeCompletedSteps(counts);
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
@@ -207,9 +216,9 @@ function AdminSetupPageInner() {
       {!loading ? (
         <section className="card">
           <h2>진행 단계</h2>
-          <p className="muted">진행률: {progressStep}/3</p>
+          <p className="muted">진행률: {completedSteps}/3</p>
           <div className="progressWrap" aria-hidden>
-            <div className="progressFill" style={{ width: `${(progressStep / 3) * 100}%` }} />
+            <div className="progressFill" style={{ width: `${(completedSteps / 3) * 100}%` }} />
           </div>
           <p className="muted">
             현재 등록 수 · 카테고리 {counts.categories}개 · 옵션그룹 {counts.options}개 · 메뉴 {counts.menus}개
