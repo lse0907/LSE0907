@@ -382,7 +382,7 @@ function CategoriesPageInner() {
         .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
-        .subText{margin:0;color:#6b7280;font-size:12px;font-weight:800;line-height:1.45}
+        .subText{margin:0;color:#6b7280;font-size:13px;font-weight:800;line-height:1.45}
         .categoryListScroll{
           max-height:56vh;
           overflow-y:auto;
