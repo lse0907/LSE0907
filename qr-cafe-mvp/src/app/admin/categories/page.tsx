@@ -503,30 +503,6 @@ function CategoriesPageInner() {
         ) : null}
       </section>
 
-      {showCategoryAssist ? (
-        <section className="card">
-          <div className="copyRow">
-            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
-              <option value="">원본 매장 선택</option>
-              {myStores.map((s) => (
-                <option key={s.store_id} value={s.store_id}>
-                  {s.store_name || s.store_id} ({s.store_id})
-                </option>
-              ))}
-            </select>
-            <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !hasCopySource || !copySourceStoreId}>
-              {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
-            </button>
-          </div>
-          <p className="subText" style={{ marginTop: 6 }}>
-            다른 매장의 카테고리를 현재 매장으로 복사합니다.
-          </p>
-          {!hasCopySource ? (
-            <p className="subText" style={{ marginTop: 2, color: "#b45309" }}>복사 가능한 원본 매장이 없습니다.</p>
-          ) : null}
-        </section>
-      ) : null}
-
       <section className="card">
         <div className="listHeaderBlock">
           <div className="row headerRow">
