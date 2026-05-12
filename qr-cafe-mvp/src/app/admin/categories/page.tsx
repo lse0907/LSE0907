@@ -358,7 +358,8 @@ function CategoriesPageInner() {
         .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
         .headerRow{justify-content:space-between}
         .topActionRow{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:nowrap}
-        .copyRow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:nowrap}
+        .copyCard{gap:0}
+        .copyRow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:nowrap;margin-top:8px}
         .copySelect{flex:1;min-width:0}
         .copyBtn{flex:0 0 auto;white-space:nowrap}
         .copyBtnShort{display:none}
@@ -462,7 +463,7 @@ function CategoriesPageInner() {
         현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
 
-      <section className="card">
+      <section className="card copyCard">
         <div className="copyRow">
           <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
             <option value="">원본 매장 선택</option>
