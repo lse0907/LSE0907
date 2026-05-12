@@ -246,12 +246,19 @@ function AdminSetupPageInner() {
           <h2>진행 단계</h2>
           <p className="muted">진행률: {completedSteps}/3</p>
           <p className="muted">상태: {isCompleted ? "최종 완료" : isReady ? "준비 완료(확정 대기)" : "진행 중"}</p>
-          <p className="muted">현재 방식: {setupMode === "manual" ? "직접 설정" : setupMode === "copy" ? "원본 복사" : "일괄 등록"}</p>
+          <p className="muted">현재 설정 방식: {setupMode === "manual" ? "직접 설정" : setupMode === "copy" ? "원본 복사" : "일괄 등록"}</p>
           <div className="modePicker">
             <button className={`modeBtn ${setupMode === "manual" ? "modeBtnOn" : ""}`} type="button" onClick={() => setSetupMode("manual")}>직접 설정</button>
             <button className={`modeBtn ${setupMode === "copy" ? "modeBtnOn" : ""}`} type="button" onClick={() => setSetupMode("copy")}>원본 복사</button>
             <button className={`modeBtn ${setupMode === "bulk" ? "modeBtnOn" : ""}`} type="button" onClick={() => setSetupMode("bulk")}>일괄 등록</button>
           </div>
+          <p className="muted" style={{ marginTop: -2 }}>
+            {setupMode === "manual"
+              ? "카테고리/옵션/메뉴를 직접 등록하는 방식입니다."
+              : setupMode === "copy"
+                ? "다른 매장의 설정을 복사해 빠르게 시작하는 방식입니다."
+                : "양식 파일 업로드로 데이터를 한 번에 등록하는 방식입니다."}
+          </p>
           <p className="muted">현재 단계: {progressStepLabel(progressStep)}</p>
           <div className="progressWrap" aria-hidden>
             <div className="progressFill" style={{ width: `${(completedSteps / 3) * 100}%` }} />

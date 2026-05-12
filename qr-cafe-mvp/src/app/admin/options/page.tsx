@@ -333,6 +333,8 @@ function AdminOptionsPageInner() {
 
   const isInitialOptionSetup = !loading && groups.length === 0;
   const showOptionAssist = isInitialOptionSetup;
+  const isCopyMode = setupMode === "copy";
+  const isBulkMode = setupMode === "bulk";
 
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
@@ -1279,7 +1281,12 @@ function AdminOptionsPageInner() {
 
       </header>
 
-      {showOptionAssist ? (
+      {isBulkMode ? (
+        <section className="card">
+          <p className="sub" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+        </section>
+      ) : null}
+      {showOptionAssist && isCopyMode ? (
         <section className="card">
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>

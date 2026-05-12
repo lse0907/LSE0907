@@ -129,6 +129,8 @@ function CategoriesPageInner() {
 
   const isInitialCategorySetup = !loading && cats.length === 0;
   const showCategoryAssist = isInitialCategorySetup;
+  const isCopyMode = setupMode === "copy";
+  const isBulkMode = setupMode === "bulk";
   const hasCopySource = myStores.length > 0;
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
@@ -469,7 +471,13 @@ function CategoriesPageInner() {
         <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
       </p>
 
-      {showCategoryAssist ? (
+      {isBulkMode ? (
+        <section className="card">
+          <p className="subText" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+        </section>
+      ) : null}
+
+      {showCategoryAssist && isCopyMode ? (
         <section className="card copyCard">
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
