@@ -382,7 +382,9 @@ function CategoriesPageInner() {
         .input{border:1px solid #d1d5db;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:800}
         .name{font-weight:900}
         .muted{color:#6b7280;font-size:12px;font-weight:800}
-        .subText{margin:0;color:#6b7280;font-size:13px;font-weight:800;line-height:1.45}
+        .subText{margin:0;color:#6b7280;font-size:13px;font-weight:800;line-height:1.4}
+        .copyHelpText{margin-top:6px}
+        .copyWarnText{margin-top:2px;color:#b45309}
         .categoryListScroll{
           max-height:56vh;
           overflow-y:auto;
@@ -474,11 +476,11 @@ function CategoriesPageInner() {
             {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
           </button>
         </div>
-        <p className="subText" style={{ marginTop: 6 }}>
+        <p className="subText copyHelpText">
           다른 매장의 카테고리를 현재 매장으로 복사합니다.
         </p>
         {!hasCopySource ? (
-          <p className="subText" style={{ marginTop: 2, color: "#b45309" }}>복사 가능한 원본 매장이 없습니다.</p>
+          <p className="subText copyWarnText">복사 가능한 원본 매장이 없습니다.</p>
         ) : null}
       </section>
 
