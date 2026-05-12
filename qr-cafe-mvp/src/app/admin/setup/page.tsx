@@ -54,6 +54,7 @@ function AdminSetupPageInner() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastStep, setLastStep] = useState<SetupStep>(0);
+  const [dbCompleted, setDbCompleted] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [counts, setCounts] = useState<SetupCounts>({ categories: 0, options: 0, menus: 0 });
@@ -92,6 +93,7 @@ function AdminSetupPageInner() {
       }
       setStoreName(String(row.store_name || ""));
       const step = Number(row.setup_last_step || 0);
+      setDbCompleted(!!row.setup_completed);
       if (row.setup_completed) {
         setLastStep(4);
       } else if (step >= 1 && step <= 3) {
@@ -158,6 +160,7 @@ function AdminSetupPageInner() {
       return;
     }
     setLastStep(step);
+    setDbCompleted(step >= 4);
     setSaving(false);
   };
 
@@ -189,7 +192,7 @@ function AdminSetupPageInner() {
   const progressStep = computeProgressStep(counts);
   const completedSteps = computeCompletedSteps(counts);
   const isReady = completedSteps === 3;
-  const isCompleted = lastStep >= 4;
+  const isCompleted = dbCompleted && isReady;
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
