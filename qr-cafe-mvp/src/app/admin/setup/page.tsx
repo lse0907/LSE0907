@@ -6,6 +6,7 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { clearCurrentStoreId, getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 
 type SetupStep = 0 | 1 | 2 | 3 | 4;
+type SetupMode = "manual" | "copy" | "bulk";
 
 type StoreSetupRow = {
   store_id: string;
@@ -58,14 +59,17 @@ function AdminSetupPageInner() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [counts, setCounts] = useState<SetupCounts>({ categories: 0, options: 0, menus: 0 });
+  const [setupMode, setSetupMode] = useState<SetupMode>("manual");
 
   useEffect(() => {
+    const mode = (sp.get("mode") || "").trim();
+    if (mode === "manual" || mode === "copy" || mode === "bulk") setSetupMode(mode as SetupMode);
     if (!storeId) {
       router.replace("/admin");
       return;
     }
     setCurrentStoreId(storeId);
-  }, [router, storeId]);
+  }, [router, sp, storeId]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -167,7 +171,8 @@ function AdminSetupPageInner() {
   const onGoStep = async (step: SetupStep, href?: string) => {
     await saveStep(step);
     if (!href) return;
-    router.push(`${href}?store=${encodeURIComponent(storeId)}`);
+    const qs = new URLSearchParams({ store: storeId, mode: setupMode });
+    router.push(`${href}?${qs.toString()}`);
   };
 
   const onComplete = async () => {
@@ -241,6 +246,12 @@ function AdminSetupPageInner() {
           <h2>진행 단계</h2>
           <p className="muted">진행률: {completedSteps}/3</p>
           <p className="muted">상태: {isCompleted ? "최종 완료" : isReady ? "준비 완료(확정 대기)" : "진행 중"}</p>
+          <p className="muted">현재 방식: {setupMode === "manual" ? "직접 설정" : setupMode === "copy" ? "원본 복사" : "일괄 등록"}</p>
+          <div className="modePicker">
+            <button className={`modeBtn ${setupMode === "manual" ? "modeBtnOn" : ""}`} type="button" onClick={() => setSetupMode("manual")}>직접 설정</button>
+            <button className={`modeBtn ${setupMode === "copy" ? "modeBtnOn" : ""}`} type="button" onClick={() => setSetupMode("copy")}>원본 복사</button>
+            <button className={`modeBtn ${setupMode === "bulk" ? "modeBtnOn" : ""}`} type="button" onClick={() => setSetupMode("bulk")}>일괄 등록</button>
+          </div>
           <p className="muted">현재 단계: {progressStepLabel(progressStep)}</p>
           <div className="progressWrap" aria-hidden>
             <div className="progressFill" style={{ width: `${(completedSteps / 3) * 100}%` }} />
@@ -273,7 +284,7 @@ function AdminSetupPageInner() {
               나중에 하기
             </button>
             <button disabled={saving || isCompleted} onClick={() => setConfirmOpen(true)}>
-              {isCompleted ? "초기 설정 완료됨" : "초기 설정 최종 완료"}
+              {isCompleted ? "초기 설정 완료됨" : "초기 설정 완료"}
             </button>
           </div>
           {msg ? <p className="error">{msg}</p> : null}
@@ -281,7 +292,7 @@ function AdminSetupPageInner() {
           {confirmOpen ? (
             <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="setup-confirm-title">
               <div className="confirmCard">
-                <h3 id="setup-confirm-title" style={{ margin: 0, fontSize: 18 }}>초기 설정 최종 완료</h3>
+                <h3 id="setup-confirm-title" style={{ margin: 0, fontSize: 18 }}>초기 설정 완료</h3>
                 <p className="muted" style={{ marginTop: 6 }}>
                   현재 등록 수: 카테고리 {counts.categories}개 · 옵션그룹 {counts.options}개 · 메뉴 {counts.menus}개
                 </p>
@@ -314,6 +325,9 @@ function AdminSetupPageInner() {
         .progressFill { height: 100%; background: #111827; border-radius: 999px; transition: width .2s ease; }
         button { padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; }
         .error { color: #b91c1c; margin-top: 8px; }
+        .modePicker { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0; }
+        .modeBtn { padding:6px 10px; border-radius:999px; border:1px solid #d1d5db; background:#fff; font-size:12px; font-weight:800; }
+        .modeBtnOn { background:#111827; border-color:#111827; color:#fff; }
         .warnBox {
           border: 1px solid #fecaca;
           background: #fef2f2;
