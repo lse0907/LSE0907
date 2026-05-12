@@ -735,7 +735,10 @@ function AdminOptionsPageInner() {
           color: var(--muted);
           font-size: 13px;
           font-weight: 800;
+          line-height: 1.4;
         }
+        .copyHelpText { margin-top: 6px; }
+        .copyWarnText { margin-top: 2px; color: #b45309; }
         .msgBox {
           border-radius: 12px;
           padding: 10px 12px;
@@ -1282,11 +1285,11 @@ function AdminOptionsPageInner() {
               {copying ? "복사 중..." : "다른 매장 옵션 복사"}
             </button>
           </div>
-          <p className="sub" style={{ marginTop: 6 }}>
+          <p className="sub copyHelpText">
             다른 매장의 옵션을 현재 매장으로 복사합니다.
           </p>
           {!hasCopySource ? (
-            <p className="sub" style={{ marginTop: 2, color: "#b45309" }}>복사 가능한 원본 매장이 없습니다.</p>
+            <p className="sub copyWarnText">복사 가능한 원본 매장이 없습니다.</p>
           ) : (
             <p className="sub" style={{ marginTop: 2 }}>매장을 추가 생성한 경우 복사 기능을 사용할 수 있습니다.</p>
           )}
