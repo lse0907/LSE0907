@@ -1330,6 +1330,8 @@ function AdminMenuPageInner() {
           font-weight: 800;
           line-height: 1.4;
         }
+        .copyHelpText { margin-top: 6px; }
+        .copyWarnText { margin-top: 2px; color: #b45309; }
         .card {
           background: var(--card);
           border: 1px solid var(--line);
@@ -2030,11 +2032,11 @@ function AdminMenuPageInner() {
               {copying ? "복사 중..." : "다른 매장 메뉴 복사"}
             </button>
           </div>
-          <p className="sub" style={{ marginTop: 6 }}>
+          <p className="sub copyHelpText">
             다른 매장의 메뉴를 현재 매장으로 복사합니다.
           </p>
           {!hasCopySource ? (
-            <p className="sub" style={{ marginTop: 2, color: "#b45309" }}>복사 가능한 원본 매장이 없습니다.</p>
+            <p className="sub copyWarnText">복사 가능한 원본 매장이 없습니다.</p>
           ) : null}
         </section>
       ) : null}
