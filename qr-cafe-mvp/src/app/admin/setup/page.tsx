@@ -54,6 +54,7 @@ function AdminSetupPageInner() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastStep, setLastStep] = useState<SetupStep>(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [counts, setCounts] = useState<SetupCounts>({ categories: 0, options: 0, menus: 0 });
 
@@ -181,11 +182,14 @@ function AdminSetupPageInner() {
       return;
     }
     await saveStep(4);
+    setConfirmOpen(false);
     router.push(`/admin?store=${encodeURIComponent(storeId)}`);
   };
 
   const progressStep = computeProgressStep(counts);
   const completedSteps = computeCompletedSteps(counts);
+  const isReady = completedSteps === 3;
+  const isCompleted = lastStep >= 4;
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
@@ -228,6 +232,7 @@ function AdminSetupPageInner() {
         <section className="card">
           <h2>진행 단계</h2>
           <p className="muted">진행률: {completedSteps}/3</p>
+          <p className="muted">상태: {isCompleted ? "최종 완료" : isReady ? "준비 완료(확정 대기)" : "진행 중"}</p>
           <p className="muted">현재 단계: {progressStepLabel(progressStep)}</p>
           <div className="progressWrap" aria-hidden>
             <div className="progressFill" style={{ width: `${(completedSteps / 3) * 100}%` }} />
@@ -259,11 +264,27 @@ function AdminSetupPageInner() {
             <button disabled={saving} onClick={onSkipForNow}>
               나중에 하기
             </button>
-            <button disabled={saving} onClick={onComplete}>
-              초기 설정 완료
+            <button disabled={saving || isCompleted} onClick={() => setConfirmOpen(true)}>
+              {isCompleted ? "초기 설정 완료됨" : "초기 설정 최종 완료"}
             </button>
           </div>
           {msg ? <p className="error">{msg}</p> : null}
+
+          {confirmOpen ? (
+            <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="setup-confirm-title">
+              <div className="confirmCard">
+                <h3 id="setup-confirm-title" style={{ margin: 0, fontSize: 18 }}>초기 설정 최종 완료</h3>
+                <p className="muted" style={{ marginTop: 6 }}>
+                  현재 등록 수: 카테고리 {counts.categories}개 · 옵션그룹 {counts.options}개 · 메뉴 {counts.menus}개
+                </p>
+                <p className="muted" style={{ marginTop: 4 }}>완료 후에도 카테고리/옵션/메뉴는 수정할 수 있습니다.</p>
+                <div className="actions" style={{ marginTop: 12 }}>
+                  <button disabled={saving} onClick={() => setConfirmOpen(false)}>취소</button>
+                  <button disabled={saving} onClick={onComplete}>최종 완료</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -278,6 +299,25 @@ function AdminSetupPageInner() {
         .progressFill { height: 100%; background: #111827; border-radius: 999px; transition: width .2s ease; }
         button { padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; }
         .error { color: #b91c1c; margin-top: 8px; }
+        .confirmOverlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(17, 24, 39, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+          z-index: 50;
+        }
+        .confirmCard {
+          width: 100%;
+          max-width: 460px;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 14px;
+          padding: 14px;
+          box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+        }
       `}</style>
     </main>
   );
