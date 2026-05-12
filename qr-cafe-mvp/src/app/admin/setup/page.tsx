@@ -6,6 +6,7 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { clearCurrentStoreId, getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 
 type SetupStep = 0 | 1 | 2 | 3 | 4;
+type SetupMode = "manual" | "copy" | "bulk";
 
 type StoreSetupRow = {
   store_id: string;
@@ -28,6 +29,7 @@ const stepOrder: Array<{ step: SetupStep; title: string; desc: string; href?: st
 function computeProgressStep(counts: SetupCounts): 1 | 2 | 3 {
   if (counts.categories < 1) return 1;
   if (counts.options < 1) return 2;
+  if (counts.menus < 1) return 3;
   return 3;
 }
 
@@ -53,16 +55,21 @@ function AdminSetupPageInner() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastStep, setLastStep] = useState<SetupStep>(0);
+  const [dbCompleted, setDbCompleted] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [counts, setCounts] = useState<SetupCounts>({ categories: 0, options: 0, menus: 0 });
+  const [setupMode, setSetupMode] = useState<SetupMode>("manual");
 
   useEffect(() => {
+    const mode = (sp.get("mode") || "").trim();
+    if (mode === "manual" || mode === "copy" || mode === "bulk") setSetupMode(mode as SetupMode);
     if (!storeId) {
       router.replace("/admin");
       return;
     }
     setCurrentStoreId(storeId);
-  }, [router, storeId]);
+  }, [router, sp, storeId]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -90,6 +97,7 @@ function AdminSetupPageInner() {
       }
       setStoreName(String(row.store_name || ""));
       const step = Number(row.setup_last_step || 0);
+      setDbCompleted(!!row.setup_completed);
       if (row.setup_completed) {
         setLastStep(4);
       } else if (step >= 1 && step <= 3) {
@@ -156,13 +164,15 @@ function AdminSetupPageInner() {
       return;
     }
     setLastStep(step);
+    setDbCompleted(step >= 4);
     setSaving(false);
   };
 
   const onGoStep = async (step: SetupStep, href?: string) => {
     await saveStep(step);
     if (!href) return;
-    router.push(`${href}?store=${encodeURIComponent(storeId)}`);
+    const qs = new URLSearchParams({ store: storeId, mode: setupMode });
+    router.push(`${href}?${qs.toString()}`);
   };
 
   const onComplete = async () => {
@@ -171,16 +181,28 @@ function AdminSetupPageInner() {
       setMsg("초기 설정 완료 전, 카테고리를 최소 1개 이상 등록해 주세요.");
       return;
     }
+    if (latest.options < 1) {
+      setMsg("초기 설정 완료 전, 옵션 그룹을 최소 1개 이상 등록해 주세요.");
+      return;
+    }
     if (latest.menus < 1) {
       setMsg("초기 설정 완료 전, 메뉴를 최소 1개 이상 등록해 주세요.");
       return;
     }
     await saveStep(4);
+    setConfirmOpen(false);
     router.push(`/admin?store=${encodeURIComponent(storeId)}`);
   };
 
   const progressStep = computeProgressStep(counts);
   const completedSteps = computeCompletedSteps(counts);
+  const isReady = completedSteps === 3;
+  const isCompleted = dbCompleted && isReady;
+  const missingRequirements: string[] = [];
+  if (counts.categories < 1) missingRequirements.push("카테고리 1개 이상 등록이 필요합니다.");
+  if (counts.options < 1) missingRequirements.push("옵션 그룹 1개 이상 등록이 필요합니다.");
+  if (counts.menus < 1) missingRequirements.push("메뉴 1개 이상 등록이 필요합니다.");
+  const canFinalize = missingRequirements.length === 0;
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
@@ -223,6 +245,13 @@ function AdminSetupPageInner() {
         <section className="card">
           <h2>진행 단계</h2>
           <p className="muted">진행률: {completedSteps}/3</p>
+          <p className="muted">상태: {isCompleted ? "최종 완료" : isReady ? "준비 완료(확정 대기)" : "진행 중"}</p>
+          <p className="muted">현재 방식: {setupMode === "manual" ? "직접 설정" : setupMode === "copy" ? "원본 복사" : "일괄 등록"}</p>
+          <div className="modePicker">
+            <button className={`modeBtn ${setupMode === "manual" ? "modeBtnOn" : ""}`} type="button" onClick={() => setSetupMode("manual")}>직접 설정</button>
+            <button className={`modeBtn ${setupMode === "copy" ? "modeBtnOn" : ""}`} type="button" onClick={() => setSetupMode("copy")}>원본 복사</button>
+            <button className={`modeBtn ${setupMode === "bulk" ? "modeBtnOn" : ""}`} type="button" onClick={() => setSetupMode("bulk")}>일괄 등록</button>
+          </div>
           <p className="muted">현재 단계: {progressStepLabel(progressStep)}</p>
           <div className="progressWrap" aria-hidden>
             <div className="progressFill" style={{ width: `${(completedSteps / 3) * 100}%` }} />
@@ -232,7 +261,7 @@ function AdminSetupPageInner() {
           </p>
           <ul>
             {stepOrder.map((row) => {
-              const done = row.step === 1 ? counts.categories > 0 : row.step === 2 ? counts.menus > 0 : counts.menus > 0;
+              const done = row.step === 1 ? counts.categories > 0 : row.step === 2 ? counts.options > 0 : counts.menus > 0;
               const current = !done && row.step === progressStep;
               return (
                 <li key={row.step} className="stepItem">
@@ -254,11 +283,34 @@ function AdminSetupPageInner() {
             <button disabled={saving} onClick={onSkipForNow}>
               나중에 하기
             </button>
-            <button disabled={saving} onClick={onComplete}>
-              초기 설정 완료
+            <button disabled={saving || isCompleted} onClick={() => setConfirmOpen(true)}>
+              {isCompleted ? "초기 설정 완료됨" : "초기 설정 완료"}
             </button>
           </div>
           {msg ? <p className="error">{msg}</p> : null}
+
+          {confirmOpen ? (
+            <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="setup-confirm-title">
+              <div className="confirmCard">
+                <h3 id="setup-confirm-title" style={{ margin: 0, fontSize: 18 }}>초기 설정 완료</h3>
+                <p className="muted" style={{ marginTop: 6 }}>
+                  현재 등록 수: 카테고리 {counts.categories}개 · 옵션그룹 {counts.options}개 · 메뉴 {counts.menus}개
+                </p>
+                <p className="muted" style={{ marginTop: 4 }}>완료 후에도 카테고리/옵션/메뉴는 수정할 수 있습니다.</p>
+                {missingRequirements.length > 0 ? (
+                  <div className="warnBox" role="alert" style={{ marginTop: 10 }}>
+                    {missingRequirements.map((text) => (
+                      <p key={text} style={{ margin: 0 }}>{text}</p>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="actions" style={{ marginTop: 12 }}>
+                  <button disabled={saving} onClick={() => setConfirmOpen(false)}>취소</button>
+                  <button className={!canFinalize ? "btnDisabledLike" : ""} disabled={saving || !canFinalize} onClick={onComplete}>최종 완료</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -273,6 +325,43 @@ function AdminSetupPageInner() {
         .progressFill { height: 100%; background: #111827; border-radius: 999px; transition: width .2s ease; }
         button { padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; }
         .error { color: #b91c1c; margin-top: 8px; }
+        .modePicker { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0; }
+        .modeBtn { padding:6px 10px; border-radius:999px; border:1px solid #d1d5db; background:#fff; font-size:12px; font-weight:800; }
+        .modeBtnOn { background:#111827; border-color:#111827; color:#fff; }
+        .warnBox {
+          border: 1px solid #fecaca;
+          background: #fef2f2;
+          color: #b91c1c;
+          border-radius: 10px;
+          padding: 10px;
+          display: grid;
+          gap: 4px;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .btnDisabledLike {
+          opacity: .5;
+          cursor: not-allowed;
+        }
+        .confirmOverlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(17, 24, 39, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+          z-index: 50;
+        }
+        .confirmCard {
+          width: 100%;
+          max-width: 460px;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 14px;
+          padding: 14px;
+          box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+        }
       `}</style>
     </main>
   );

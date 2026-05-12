@@ -30,6 +30,8 @@ function uid(prefix = "cat") {
 function CategoriesPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
+  const setupMode = (sp.get("mode") || "manual").trim();
+  const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
   const [storeId, setStoreIdState] = useState("");
   const [cats, setCats] = useState<MenuCategory[]>([]);
   const [menus, setMenus] = useState<MenuItem[]>([]);
@@ -462,28 +464,34 @@ function CategoriesPageInner() {
       <p className="subText">
         현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
+      <p className="subText">
+        현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
+        <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
+      </p>
 
-      <section className="card copyCard">
-        <div className="copyRow">
-          <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
-            <option value="">원본 매장 선택</option>
-            {myStores.map((s) => (
-              <option key={s.store_id} value={s.store_id}>
-                {s.store_name || s.store_id} ({s.store_id})
-              </option>
-            ))}
-          </select>
-          <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !hasCopySource || !copySourceStoreId}>
-            {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
-          </button>
-        </div>
-        <p className="subText copyHelpText">
-          다른 매장의 카테고리를 현재 매장으로 복사합니다.
-        </p>
-        {!hasCopySource ? (
-          <p className="subText copyWarnText">복사 가능한 원본 매장이 없습니다.</p>
-        ) : null}
-      </section>
+      {showCategoryAssist ? (
+        <section className="card copyCard">
+          <div className="copyRow">
+            <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
+              <option value="">원본 매장 선택</option>
+              {myStores.map((s) => (
+                <option key={s.store_id} value={s.store_id}>
+                  {s.store_name || s.store_id} ({s.store_id})
+                </option>
+              ))}
+            </select>
+            <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !hasCopySource || !copySourceStoreId}>
+              {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
+            </button>
+          </div>
+          <p className="subText copyHelpText">
+            다른 매장의 카테고리를 현재 매장으로 복사합니다.
+          </p>
+          {!hasCopySource ? (
+            <p className="subText copyWarnText">복사 가능한 원본 매장이 없습니다.</p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="card">
         <div className="row createRow">

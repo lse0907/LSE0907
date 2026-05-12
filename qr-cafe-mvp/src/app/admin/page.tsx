@@ -207,14 +207,16 @@ function AdminPageInner() {
   };
 
   const promoteLegacyConfiguredStore = async (storeId: string) => {
-    const [catRes, menuRes] = await Promise.all([
+    const [catRes, optRes, menuRes] = await Promise.all([
       supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", storeId),
+      supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", storeId),
       supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
     ]);
-    if (catRes.error || menuRes.error) return false;
+    if (catRes.error || optRes.error || menuRes.error) return false;
     const categories = Number(catRes.count || 0);
+    const options = Number(optRes.count || 0);
     const menus = Number(menuRes.count || 0);
-    if (categories < 1 || menus < 1) return false;
+    if (categories < 1 || options < 1 || menus < 1) return false;
     const { error } = await supabase
       .from("stores")
       .update({
@@ -332,7 +334,7 @@ function AdminPageInner() {
     router.push(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
   };
   const selectedStoreIncomplete = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed === false);
-  const selectedStoreNeedsSetupByData = selectedStoreCounts != null && (selectedStoreCounts.categories < 1 || selectedStoreCounts.menus < 1);
+  const selectedStoreNeedsSetupByData = selectedStoreCounts != null && (selectedStoreCounts.categories < 1 || selectedStoreCounts.options < 1 || selectedStoreCounts.menus < 1);
   const selectedStoreShouldShowSetup = selectedStoreIncomplete || selectedStoreNeedsSetupByData;
   const selectedStoreCompletedSteps = selectedStoreCounts
     ? (selectedStoreCounts.categories > 0 ? 1 : 0) + (selectedStoreCounts.options > 0 ? 1 : 0) + (selectedStoreCounts.menus > 0 ? 1 : 0)
