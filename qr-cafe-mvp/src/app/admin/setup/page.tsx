@@ -28,6 +28,7 @@ const stepOrder: Array<{ step: SetupStep; title: string; desc: string; href?: st
 function computeProgressStep(counts: SetupCounts): 1 | 2 | 3 {
   if (counts.categories < 1) return 1;
   if (counts.options < 1) return 2;
+  if (counts.menus < 1) return 3;
   return 3;
 }
 
@@ -171,6 +172,10 @@ function AdminSetupPageInner() {
       setMsg("초기 설정 완료 전, 카테고리를 최소 1개 이상 등록해 주세요.");
       return;
     }
+    if (latest.options < 1) {
+      setMsg("초기 설정 완료 전, 옵션 그룹을 최소 1개 이상 등록해 주세요.");
+      return;
+    }
     if (latest.menus < 1) {
       setMsg("초기 설정 완료 전, 메뉴를 최소 1개 이상 등록해 주세요.");
       return;
@@ -232,7 +237,7 @@ function AdminSetupPageInner() {
           </p>
           <ul>
             {stepOrder.map((row) => {
-              const done = row.step === 1 ? counts.categories > 0 : row.step === 2 ? counts.menus > 0 : counts.menus > 0;
+              const done = row.step === 1 ? counts.categories > 0 : row.step === 2 ? counts.options > 0 : counts.menus > 0;
               const current = !done && row.step === progressStep;
               return (
                 <li key={row.step} className="stepItem">
