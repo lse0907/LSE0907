@@ -329,6 +329,9 @@ function AdminOptionsPageInner() {
     });
   }, [scopedGroups]);
 
+  const isInitialOptionSetup = !loading && groups.length === 0;
+  const showOptionAssist = isInitialOptionSetup;
+
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
     return menus.filter((m) =>
@@ -1267,7 +1270,7 @@ function AdminOptionsPageInner() {
 
       </header>
 
-      {!loading && groups.length === 0 && items.length === 0 ? (
+      {showOptionAssist ? (
         <section className="card">
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
