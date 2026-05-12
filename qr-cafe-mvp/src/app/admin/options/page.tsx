@@ -54,6 +54,8 @@ function toInt(v: string, fallback: number) {
 
 function AdminOptionsPageInner() {
   const sp = useSearchParams();
+  const setupMode = (sp.get("mode") || "manual").trim();
+  const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
   const [storeId, setStoreId] = useState<string>("");
 
   const [groups, setGroups] = useState<OptionGroup[]>([]);
@@ -331,6 +333,8 @@ function AdminOptionsPageInner() {
 
   const isInitialOptionSetup = !loading && groups.length === 0;
   const showOptionAssist = isInitialOptionSetup;
+  const isCopyMode = setupMode === "copy";
+  const isBulkMode = setupMode === "bulk";
 
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
@@ -1249,6 +1253,10 @@ function AdminOptionsPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
+          <p className="sub" style={{ marginTop: 2 }}>
+            현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
+            <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
+          </p>
           {msg ? (
             <div className={`msgBox ${msgTone === "success" ? "msgBoxSuccess" : msgTone === "error" ? "msgBoxError" : ""}`}>
               {msg}
@@ -1273,7 +1281,12 @@ function AdminOptionsPageInner() {
 
       </header>
 
-      {showOptionAssist ? (
+      {isBulkMode ? (
+        <section className="card">
+          <p className="sub" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+        </section>
+      ) : null}
+      {showOptionAssist && isCopyMode ? (
         <section className="card">
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
