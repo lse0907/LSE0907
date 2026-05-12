@@ -193,6 +193,11 @@ function AdminSetupPageInner() {
   const completedSteps = computeCompletedSteps(counts);
   const isReady = completedSteps === 3;
   const isCompleted = dbCompleted && isReady;
+  const missingRequirements: string[] = [];
+  if (counts.categories < 1) missingRequirements.push("카테고리 1개 이상 등록이 필요합니다.");
+  if (counts.options < 1) missingRequirements.push("옵션 그룹 1개 이상 등록이 필요합니다.");
+  if (counts.menus < 1) missingRequirements.push("메뉴 1개 이상 등록이 필요합니다.");
+  const canFinalize = missingRequirements.length === 0;
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
@@ -281,9 +286,16 @@ function AdminSetupPageInner() {
                   현재 등록 수: 카테고리 {counts.categories}개 · 옵션그룹 {counts.options}개 · 메뉴 {counts.menus}개
                 </p>
                 <p className="muted" style={{ marginTop: 4 }}>완료 후에도 카테고리/옵션/메뉴는 수정할 수 있습니다.</p>
+                {missingRequirements.length > 0 ? (
+                  <div className="warnBox" role="alert" style={{ marginTop: 10 }}>
+                    {missingRequirements.map((text) => (
+                      <p key={text} style={{ margin: 0 }}>{text}</p>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="actions" style={{ marginTop: 12 }}>
                   <button disabled={saving} onClick={() => setConfirmOpen(false)}>취소</button>
-                  <button disabled={saving} onClick={onComplete}>최종 완료</button>
+                  <button className={!canFinalize ? "btnDisabledLike" : ""} disabled={saving || !canFinalize} onClick={onComplete}>최종 완료</button>
                 </div>
               </div>
             </div>
@@ -302,6 +314,21 @@ function AdminSetupPageInner() {
         .progressFill { height: 100%; background: #111827; border-radius: 999px; transition: width .2s ease; }
         button { padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; }
         .error { color: #b91c1c; margin-top: 8px; }
+        .warnBox {
+          border: 1px solid #fecaca;
+          background: #fef2f2;
+          color: #b91c1c;
+          border-radius: 10px;
+          padding: 10px;
+          display: grid;
+          gap: 4px;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .btnDisabledLike {
+          opacity: .5;
+          cursor: not-allowed;
+        }
         .confirmOverlay {
           position: fixed;
           inset: 0;
