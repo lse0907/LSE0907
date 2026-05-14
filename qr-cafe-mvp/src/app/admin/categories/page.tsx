@@ -474,6 +474,11 @@ function CategoriesPageInner() {
       {isBulkMode ? (
         <section className="card">
           <p className="subText" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+          <div className="row" style={{ marginTop: 10 }}>
+            <a className="btn btnPrimary" href={importHref}>
+              카테고리·메뉴 일괄 등록 시작
+            </a>
+          </div>
         </section>
       ) : null}
 
@@ -603,7 +608,7 @@ function CategoriesPageInner() {
         )}
       </section>
 
-      {showCategoryAssist ? (
+      {showCategoryAssist && !isBulkMode ? (
         <section className="card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div>
