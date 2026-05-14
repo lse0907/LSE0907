@@ -61,6 +61,7 @@ function AdminOptionsPageInner() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [items, setItems] = useState<OptionItem[]>([]);
   const [menus, setMenus] = useState<MenuSummary[]>([]);
+  const [categoryCount, setCategoryCount] = useState(0);
   const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
   const [hasSortOrderColumn, setHasSortOrderColumn] = useState(true);
   const [loading, setLoading] = useState<boolean>(true);
@@ -185,6 +186,11 @@ function AdminOptionsPageInner() {
         .order("created_at", { ascending: false });
 
       if (mRes.error) throw mRes.error;
+      const cRes = await supabase
+        .from("menu_categories")
+        .select("id", { count: "exact", head: true })
+        .eq("store_id", storeId);
+      if (cRes.error) throw cRes.error;
 
       const nextItems = (iRes.data || []) as OptionItem[];
       const nextMenus = (mRes.data || []) as MenuSummary[];
@@ -192,6 +198,7 @@ function AdminOptionsPageInner() {
       setGroups(nextGroups);
       setItems(nextItems);
       setMenus(nextMenus);
+      setCategoryCount(Number(cRes.count || 0));
       setOrderDirty(false);
 
       // 선택 그룹 자동 세팅
@@ -335,6 +342,7 @@ function AdminOptionsPageInner() {
   const showOptionAssist = isInitialOptionSetup;
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
+  const hasCategoryPrerequisite = categoryCount > 0 || groups.length > 0;
 
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
@@ -1284,6 +1292,25 @@ function AdminOptionsPageInner() {
       {isBulkMode ? (
         <section className="card">
           <p className="sub" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+        </section>
+      ) : null}
+      {isCopyMode ? (
+        <section className="card" style={{ borderColor: "#bfdbfe", background: "#eff6ff" }}>
+          <h2 className="cardTitle">원본 복사 안내</h2>
+          <p className="sub" style={{ marginTop: 6 }}>옵션은 원본 복사 기능을 지원하지 않습니다.</p>
+          <div className="btnRow" style={{ marginTop: 8 }}>
+            <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>설정 방식 변경</a>
+            <button className="btn btnPrimary" type="button" onClick={() => setActiveScope("common")}>직접 설정으로 계속</button>
+          </div>
+        </section>
+      ) : null}
+      {!loading && !hasCategoryPrerequisite ? (
+        <section className="card" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
+          <h2 className="cardTitle">선행 단계 필요</h2>
+          <p className="sub" style={{ marginTop: 6 }}>옵션 설정 전에 카테고리를 1개 이상 등록해 주세요.</p>
+          <div className="btnRow" style={{ marginTop: 8 }}>
+            <a className="btn btnPrimary" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>카테고리 설정으로 이동</a>
+          </div>
         </section>
       ) : null}
       {showOptionAssist && isCopyMode ? (
