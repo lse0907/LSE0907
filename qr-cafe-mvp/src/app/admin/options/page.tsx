@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
 
 type OptionGroup = {
   id: string;
@@ -702,6 +703,13 @@ function AdminOptionsPageInner() {
         setSaving(false);
       }
     });
+  };
+
+  const onCompleteStep = () => {
+    if (!storeId || groups.length < 1) return;
+    setSetupStepConfirmed(storeId, "step2", true);
+    setMsgTone("success");
+    setMsg("초기설정 2단계(옵션 설정)를 완료 처리했습니다.");
   };
 
   return (
@@ -1709,6 +1717,16 @@ function AdminOptionsPageInner() {
             </div>
           </div>
         </div>
+      ) : null}
+      {storeId ? (
+        <section className="card">
+          <div className="btnRow" style={{ justifyContent: "space-between", marginTop: 0 }}>
+            <p className="muted" style={{ margin: 0 }}>옵션 그룹 1개 이상 등록 후 완료 버튼을 눌러주세요.</p>
+            <button className="btn btnPrimary" type="button" onClick={onCompleteStep} disabled={loading || actionBusy || groups.length < 1}>
+              이 단계 완료
+            </button>
+          </div>
+        </section>
       ) : null}
     </main>
   );
