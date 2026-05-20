@@ -203,6 +203,8 @@ function AdminSetupPageInner() {
   if (counts.options < 1) missingRequirements.push("옵션 그룹 1개 이상 등록이 필요합니다.");
   if (counts.menus < 1) missingRequirements.push("메뉴 1개 이상 등록이 필요합니다.");
   const canFinalize = missingRequirements.length === 0;
+  const canGoOptions = counts.categories >= 1;
+  const canGoMenus = counts.categories >= 1 && counts.options >= 1;
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
@@ -270,6 +272,14 @@ function AdminSetupPageInner() {
             {stepOrder.map((row) => {
               const done = row.step === 1 ? counts.categories > 0 : row.step === 2 ? counts.options > 0 : counts.menus > 0;
               const current = !done && row.step === progressStep;
+              const locked =
+                row.step === 2 ? !canGoOptions : row.step === 3 ? !canGoMenus : false;
+              const lockReason =
+                row.step === 2
+                  ? "카테고리를 1개 이상 등록하면 옵션 설정이 열립니다."
+                  : row.step === 3
+                    ? "카테고리/옵션 설정을 완료하면 메뉴 설정이 열립니다."
+                    : "";
               return (
                 <li key={row.step} className="stepItem">
                   <div>
@@ -277,8 +287,9 @@ function AdminSetupPageInner() {
                       {row.step}. {row.title} {done ? "✅" : current ? "(진행 중)" : ""}
                     </strong>
                     <p className="muted">{row.desc}</p>
+                    {locked ? <p className="muted" style={{ color: "#b45309", marginTop: 4 }}>{lockReason}</p> : null}
                   </div>
-                  <button disabled={saving} onClick={() => onGoStep(row.step, row.href)}>
+                  <button disabled={saving || locked} onClick={() => onGoStep(row.step, row.href)}>
                     {done ? "다시 열기" : "바로 가기"}
                   </button>
                 </li>
