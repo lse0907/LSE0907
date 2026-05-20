@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
 
 type MenuCategory = {
   id: string;
@@ -350,6 +351,13 @@ function CategoriesPageInner() {
     setSaving(false);
   };
 
+  const onCompleteStep = () => {
+    if (!storeId || cats.length < 1) return;
+    setSetupStepConfirmed(storeId, "step1", true);
+    setMsgTone("success");
+    setMsg("초기설정 1단계(카테고리 설정)를 완료 처리했습니다.");
+  };
+
   return (
     <main className="wrap">
       <style jsx global>{`
@@ -474,6 +482,11 @@ function CategoriesPageInner() {
       {isBulkMode ? (
         <section className="card">
           <p className="subText" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+          <div className="row" style={{ marginTop: 10 }}>
+            <a className="btn btnPrimary" href={importHref}>
+              카테고리·메뉴 일괄 등록 시작
+            </a>
+          </div>
         </section>
       ) : null}
 
@@ -518,6 +531,12 @@ function CategoriesPageInner() {
             {msg}
           </div>
         ) : null}
+      </section>
+      <section className="card">
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <p className="muted" style={{ margin: 0 }}>초기설정 단계 완료 후 다음 단계로 이동하세요.</p>
+          <button className="btn btnPrimary" onClick={onCompleteStep} disabled={loading || cats.length < 1 || actionBusy}>이 단계 완료</button>
+        </div>
       </section>
 
       <section className="card">
@@ -603,7 +622,7 @@ function CategoriesPageInner() {
         )}
       </section>
 
-      {showCategoryAssist ? (
+      {showCategoryAssist && !isBulkMode ? (
         <section className="card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div>
