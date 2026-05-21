@@ -705,9 +705,14 @@ function AdminOptionsPageInner() {
     });
   };
 
-  const onCompleteStep = () => {
+  const onCompleteStep = async () => {
     if (!storeId || groups.length < 1) return;
-    setSetupStepConfirmed(storeId, "step2", true);
+    const ok = await setSetupStepConfirmed(storeId, "step2", true);
+    if (!ok) {
+      setMsgTone("error");
+      setMsg("단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
     setMsgTone("success");
     setMsg("초기설정 2단계(옵션 설정)를 완료 처리했습니다.");
   };

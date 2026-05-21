@@ -351,9 +351,14 @@ function CategoriesPageInner() {
     setSaving(false);
   };
 
-  const onCompleteStep = () => {
+  const onCompleteStep = async () => {
     if (!storeId || cats.length < 1) return;
-    setSetupStepConfirmed(storeId, "step1", true);
+    const ok = await setSetupStepConfirmed(storeId, "step1", true);
+    if (!ok) {
+      setMsgTone("error");
+      setMsg("단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
     setMsgTone("success");
     setMsg("초기설정 1단계(카테고리 설정)를 완료 처리했습니다.");
   };

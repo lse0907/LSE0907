@@ -117,7 +117,15 @@ function AdminSetupPageInner() {
 
   useEffect(() => {
     if (!storeId) return;
-    setProgressConfirm(getSetupProgress(storeId));
+    let mounted = true;
+    (async () => {
+      const next = await getSetupProgress(storeId);
+      if (!mounted) return;
+      setProgressConfirm(next);
+    })();
+    return () => {
+      mounted = false;
+    };
   }, [storeId, loading]);
 
   const loadCounts = async (sid: string) => {
@@ -197,7 +205,7 @@ function AdminSetupPageInner() {
       return;
     }
     await saveStep(4);
-    clearSetupProgress(storeId);
+    await clearSetupProgress(storeId);
     setConfirmOpen(false);
     router.push(`/admin?store=${encodeURIComponent(storeId)}`);
   };

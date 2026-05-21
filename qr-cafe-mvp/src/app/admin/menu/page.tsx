@@ -705,9 +705,13 @@ function AdminMenuPageInner() {
     }
   };
 
-  const onCompleteStep = () => {
+  const onCompleteStep = async () => {
     if (!storeId || items.length < 1) return;
-    setSetupStepConfirmed(storeId, "step3", true);
+    const ok = await setSetupStepConfirmed(storeId, "step3", true);
+    if (!ok) {
+      setStatus("error", "단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
     setStatus("success", "초기설정 3단계(메뉴 설정)를 완료 처리했습니다.");
   };
 
