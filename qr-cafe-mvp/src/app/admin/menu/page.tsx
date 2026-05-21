@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
 
 const MENU_IMAGE_BUCKET = "menu-assets";
 
@@ -702,6 +703,16 @@ function AdminMenuPageInner() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const onCompleteStep = async () => {
+    if (!storeId || items.length < 1) return;
+    const ok = await setSetupStepConfirmed(storeId, "step3", true);
+    if (!ok) {
+      setStatus("error", "단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    setStatus("success", "초기설정 3단계(메뉴 설정)를 완료 처리했습니다.");
   };
 
   const toggleGroup = (id: string) => {
@@ -2028,6 +2039,11 @@ function AdminMenuPageInner() {
       {isBulkMode ? (
         <section className="card">
           <p className="sub" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+          <div className="btnRow" style={{ marginTop: 10 }}>
+            <a className="btn btnPrimary" href={importHref}>
+              메뉴·카테고리 일괄 등록 시작
+            </a>
+          </div>
         </section>
       ) : null}
       {showMenuAssist && isCopyMode ? (
@@ -2668,7 +2684,7 @@ function AdminMenuPageInner() {
         </section>
       )}
 
-      {showMenuAssist ? (
+      {showMenuAssist && !isBulkMode ? (
         <section className="card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div>
@@ -2702,6 +2718,16 @@ function AdminMenuPageInner() {
             </div>
           </div>
         </div>
+      ) : null}
+      {storeId ? (
+        <section className="card">
+          <div className="btnRow" style={{ justifyContent: "space-between", marginTop: 0 }}>
+            <p className="muted" style={{ margin: 0 }}>메뉴 1개 이상 등록 후 완료 버튼을 눌러주세요.</p>
+            <button className="btn btnPrimary" type="button" onClick={onCompleteStep} disabled={loading || saving || items.length < 1}>
+              이 단계 완료
+            </button>
+          </div>
+        </section>
       ) : null}
       {pendingOptionPanelClose ? (
         <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="option-panel-close-title">
