@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
 
 type OptionGroup = {
   id: string;
@@ -61,6 +62,7 @@ function AdminOptionsPageInner() {
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [items, setItems] = useState<OptionItem[]>([]);
   const [menus, setMenus] = useState<MenuSummary[]>([]);
+  const [categoryCount, setCategoryCount] = useState(0);
   const [hasLinkedMenuColumn, setHasLinkedMenuColumn] = useState(true);
   const [hasSortOrderColumn, setHasSortOrderColumn] = useState(true);
   const [loading, setLoading] = useState<boolean>(true);
@@ -92,6 +94,7 @@ function AdminOptionsPageInner() {
     description: "",
     action: null,
   });
+  const [bulkNoticeOpen, setBulkNoticeOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState("");
   const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
   const [orderDirty, setOrderDirty] = useState(false);
@@ -185,6 +188,11 @@ function AdminOptionsPageInner() {
         .order("created_at", { ascending: false });
 
       if (mRes.error) throw mRes.error;
+      const cRes = await supabase
+        .from("menu_categories")
+        .select("id", { count: "exact", head: true })
+        .eq("store_id", storeId);
+      if (cRes.error) throw cRes.error;
 
       const nextItems = (iRes.data || []) as OptionItem[];
       const nextMenus = (mRes.data || []) as MenuSummary[];
@@ -192,6 +200,7 @@ function AdminOptionsPageInner() {
       setGroups(nextGroups);
       setItems(nextItems);
       setMenus(nextMenus);
+      setCategoryCount(Number(cRes.count || 0));
       setOrderDirty(false);
 
       // 선택 그룹 자동 세팅
@@ -335,6 +344,15 @@ function AdminOptionsPageInner() {
   const showOptionAssist = isInitialOptionSetup;
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
+  const hasCategoryPrerequisite = categoryCount > 0 || groups.length > 0;
+
+  useEffect(() => {
+    if (isBulkMode) {
+      setBulkNoticeOpen(true);
+      return;
+    }
+    setBulkNoticeOpen(false);
+  }, [isBulkMode, storeId]);
 
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
@@ -685,6 +703,18 @@ function AdminOptionsPageInner() {
         setSaving(false);
       }
     });
+  };
+
+  const onCompleteStep = async () => {
+    if (!storeId || groups.length < 1) return;
+    const ok = await setSetupStepConfirmed(storeId, "step2", true);
+    if (!ok) {
+      setMsgTone("error");
+      setMsg("단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    setMsgTone("success");
+    setMsg("초기설정 2단계(옵션 설정)를 완료 처리했습니다.");
   };
 
   return (
@@ -1253,10 +1283,31 @@ function AdminOptionsPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
-          <p className="sub" style={{ marginTop: 2 }}>
-            현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
-            <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
-          </p>
+          <section className="card" style={{ marginTop: 8, borderColor: "#bfdbfe", background: "#eff6ff" }}>
+            <div className="btnRow" style={{ justifyContent: "space-between", marginTop: 0 }}>
+              <div style={{ display: "grid", gap: 4 }}>
+                <b>초기 설정 진행 중 (2/3)</b>
+                <p className="sub" style={{ margin: 0 }}>
+                  현재 설정 방식: <b>{setupModeLabel}</b>
+                </p>
+                <p className="sub" style={{ margin: 0 }}>
+                  {setupMode === "manual"
+                    ? "옵션 그룹/항목을 직접 등록하는 방식입니다."
+                    : setupMode === "copy"
+                      ? "원본 매장의 옵션을 복사해 빠르게 시작할 수 있습니다."
+                      : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."}
+                </p>
+                <p className="sub" style={{ margin: 0 }}>옵션 그룹/항목을 확인한 뒤 완료 버튼을 눌러주세요.</p>
+              </div>
+              <div className="btnRow" style={{ marginTop: 0, justifyContent: "flex-end" }}>
+                <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>설정 방식 변경</a>
+                <button className="btn btnPrimary" type="button" onClick={() => void onCompleteStep()} disabled={loading || actionBusy || groups.length < 1}>
+                  옵션 설정 완료
+                </button>
+              </div>
+            </div>
+            {groups.length < 1 ? <p className="sub" style={{ color: "#b45309", marginTop: 6 }}>옵션 그룹을 1개 이상 등록하면 완료할 수 있습니다.</p> : null}
+          </section>
           {msg ? (
             <div className={`msgBox ${msgTone === "success" ? "msgBoxSuccess" : msgTone === "error" ? "msgBoxError" : ""}`}>
               {msg}
@@ -1285,6 +1336,33 @@ function AdminOptionsPageInner() {
         <section className="card">
           <p className="sub" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
         </section>
+      ) : null}
+      {!loading && !hasCategoryPrerequisite ? (
+        <section className="card" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
+          <h2 className="cardTitle">선행 단계 필요</h2>
+          <p className="sub" style={{ marginTop: 6 }}>옵션 설정 전에 카테고리를 1개 이상 등록해 주세요.</p>
+          <div className="btnRow" style={{ marginTop: 8 }}>
+            <a className="btn btnPrimary" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>카테고리 설정으로 이동</a>
+          </div>
+        </section>
+      ) : null}
+      {isBulkMode && bulkNoticeOpen ? (
+        <div className="modalOverlay">
+          <div className="modalCard">
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 950 }}>일괄 등록 안내</h3>
+            <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
+              옵션 페이지는 일괄 등록을 지원하지 않습니다. 옵션은 직접 설정으로 등록해 주세요.
+            </p>
+            <div className="btnRow" style={{ justifyContent: "flex-end", marginTop: 4 }}>
+              <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                설정 방식 변경
+              </a>
+              <button className="btn btnPrimary" type="button" onClick={() => setBulkNoticeOpen(false)}>
+                직접 설정으로 계속
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
       {showOptionAssist && isCopyMode ? (
         <section className="card">
