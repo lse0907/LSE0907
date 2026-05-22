@@ -2012,14 +2012,20 @@ function AdminMenuPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
-          <p className="sub" style={{ marginTop: 2 }}>
-            현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
-            <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
-          </p>
           <section className="card" style={{ marginTop: 8, borderColor: "#bfdbfe", background: "#eff6ff" }}>
             <div className="btnRow" style={{ justifyContent: "space-between", marginTop: 0 }}>
               <div style={{ display: "grid", gap: 4 }}>
                 <b>초기 설정 진행 중 (3/3)</b>
+                <p className="sub" style={{ margin: 0 }}>
+                  현재 설정 방식: <b>{setupModeLabel}</b>
+                </p>
+                <p className="sub" style={{ margin: 0 }}>
+                  {setupMode === "manual"
+                    ? "메뉴를 직접 등록하고 옵션/카테고리를 연결하는 방식입니다."
+                    : setupMode === "copy"
+                      ? "원본 매장의 메뉴를 복사해 빠르게 시작할 수 있습니다."
+                      : "일괄 등록 파일 업로드로 메뉴를 한 번에 등록할 수 있습니다."}
+                </p>
                 <p className="sub" style={{ margin: 0 }}>메뉴를 확인한 뒤 완료 버튼을 눌러주세요.</p>
               </div>
               <div className="btnRow" style={{ marginTop: 0, justifyContent: "flex-end" }}>

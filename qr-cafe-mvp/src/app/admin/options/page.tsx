@@ -1283,14 +1283,20 @@ function AdminOptionsPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
-          <p className="sub" style={{ marginTop: 2 }}>
-            현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
-            <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
-          </p>
           <section className="card" style={{ marginTop: 8, borderColor: "#bfdbfe", background: "#eff6ff" }}>
             <div className="btnRow" style={{ justifyContent: "space-between", marginTop: 0 }}>
               <div style={{ display: "grid", gap: 4 }}>
                 <b>초기 설정 진행 중 (2/3)</b>
+                <p className="sub" style={{ margin: 0 }}>
+                  현재 설정 방식: <b>{setupModeLabel}</b>
+                </p>
+                <p className="sub" style={{ margin: 0 }}>
+                  {setupMode === "manual"
+                    ? "옵션 그룹/항목을 직접 등록하는 방식입니다."
+                    : setupMode === "copy"
+                      ? "원본 매장의 옵션을 복사해 빠르게 시작할 수 있습니다."
+                      : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."}
+                </p>
                 <p className="sub" style={{ margin: 0 }}>옵션 그룹/항목을 확인한 뒤 완료 버튼을 눌러주세요.</p>
               </div>
               <div className="btnRow" style={{ marginTop: 0, justifyContent: "flex-end" }}>
