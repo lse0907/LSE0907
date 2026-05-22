@@ -2016,6 +2016,21 @@ function AdminMenuPageInner() {
             현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
             <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
           </p>
+          <section className="card" style={{ marginTop: 8, borderColor: "#bfdbfe", background: "#eff6ff" }}>
+            <div className="btnRow" style={{ justifyContent: "space-between", marginTop: 0 }}>
+              <div style={{ display: "grid", gap: 4 }}>
+                <b>초기 설정 진행 중 (3/3)</b>
+                <p className="sub" style={{ margin: 0 }}>메뉴를 확인한 뒤 완료 버튼을 눌러주세요.</p>
+              </div>
+              <div className="btnRow" style={{ marginTop: 0, justifyContent: "flex-end" }}>
+                <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>설정 방식 변경</a>
+                <button className="btn btnPrimary" type="button" onClick={() => void onCompleteStep()} disabled={loading || saving || items.length < 1}>
+                  메뉴 설정 완료
+                </button>
+              </div>
+            </div>
+            {items.length < 1 ? <p className="sub" style={{ color: "#b45309", marginTop: 6 }}>메뉴를 1개 이상 등록하면 완료할 수 있습니다.</p> : null}
+          </section>
           {msg ? (
             <p
               className="sub"

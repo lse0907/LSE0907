@@ -1287,6 +1287,21 @@ function AdminOptionsPageInner() {
             현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
             <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
           </p>
+          <section className="card" style={{ marginTop: 8, borderColor: "#bfdbfe", background: "#eff6ff" }}>
+            <div className="btnRow" style={{ justifyContent: "space-between", marginTop: 0 }}>
+              <div style={{ display: "grid", gap: 4 }}>
+                <b>초기 설정 진행 중 (2/3)</b>
+                <p className="sub" style={{ margin: 0 }}>옵션 그룹/항목을 확인한 뒤 완료 버튼을 눌러주세요.</p>
+              </div>
+              <div className="btnRow" style={{ marginTop: 0, justifyContent: "flex-end" }}>
+                <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>설정 방식 변경</a>
+                <button className="btn btnPrimary" type="button" onClick={() => void onCompleteStep()} disabled={loading || actionBusy || groups.length < 1}>
+                  옵션 설정 완료
+                </button>
+              </div>
+            </div>
+            {groups.length < 1 ? <p className="sub" style={{ color: "#b45309", marginTop: 6 }}>옵션 그룹을 1개 이상 등록하면 완료할 수 있습니다.</p> : null}
+          </section>
           {msg ? (
             <div className={`msgBox ${msgTone === "success" ? "msgBoxSuccess" : msgTone === "error" ? "msgBoxError" : ""}`}>
               {msg}

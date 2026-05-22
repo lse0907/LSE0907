@@ -483,6 +483,19 @@ function CategoriesPageInner() {
         현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
         <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
       </p>
+      <section className="card" style={{ borderColor: "#bfdbfe", background: "#eff6ff" }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "grid", gap: 4 }}>
+            <b>초기 설정 진행 중 (1/3)</b>
+            <p className="subText" style={{ margin: 0 }}>카테고리를 등록한 뒤 완료 버튼을 눌러주세요.</p>
+          </div>
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>설정 방식 변경</a>
+            <button className="btn btnPrimary" onClick={() => void onCompleteStep()} disabled={loading || cats.length < 1 || actionBusy}>카테고리 설정 완료</button>
+          </div>
+        </div>
+        {cats.length < 1 ? <p className="subText" style={{ color: "#b45309", marginTop: 6 }}>카테고리를 1개 이상 등록하면 완료할 수 있습니다.</p> : null}
+      </section>
 
       {isBulkMode ? (
         <section className="card">
