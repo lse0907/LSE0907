@@ -557,13 +557,6 @@ function CategoriesPageInner() {
         ) : null}
       </section>
       <section className="card">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <p className="muted" style={{ margin: 0 }}>초기설정 단계 완료 후 다음 단계로 이동하세요.</p>
-          <button className="btn btnPrimary" onClick={onCompleteStep} disabled={loading || cats.length < 1 || actionBusy}>이 단계 완료</button>
-        </div>
-      </section>
-
-      <section className="card">
         <div className="listHeaderBlock">
           <div className="row headerRow">
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>카테고리 목록</h2>
