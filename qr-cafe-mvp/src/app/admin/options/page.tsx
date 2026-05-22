@@ -1744,16 +1744,6 @@ function AdminOptionsPageInner() {
           </div>
         </div>
       ) : null}
-      {storeId ? (
-        <section className="card">
-          <div className="btnRow" style={{ justifyContent: "space-between", marginTop: 0 }}>
-            <p className="muted" style={{ margin: 0 }}>옵션 그룹 1개 이상 등록 후 완료 버튼을 눌러주세요.</p>
-            <button className="btn btnPrimary" type="button" onClick={onCompleteStep} disabled={loading || actionBusy || groups.length < 1}>
-              이 단계 완료
-            </button>
-          </div>
-        </section>
-      ) : null}
     </main>
   );
 }
