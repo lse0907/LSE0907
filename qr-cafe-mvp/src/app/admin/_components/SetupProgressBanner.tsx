@@ -78,10 +78,11 @@ export default function SetupProgressBanner({
         }
         .btnCol {
           display: grid;
-          grid-template-columns: repeat(2, minmax(132px, auto));
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           align-items: center;
           gap: 8px;
           justify-content: end;
+          width: min(100%, 360px);
         }
         .secondaryBtn,
         .primaryBtn {
@@ -96,6 +97,7 @@ export default function SetupProgressBanner({
           padding: 10px 14px;
           text-decoration: none;
           white-space: nowrap;
+          width: 100%;
           transition: transform 0.1s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
         }
         .secondaryBtn {
@@ -152,7 +154,7 @@ export default function SetupProgressBanner({
           .stepTitle { font-size: 18px; }
           .btnCol {
             width: 100%;
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             justify-content: stretch;
             gap: 7px;
           }
