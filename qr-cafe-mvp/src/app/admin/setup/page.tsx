@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { clearCurrentStoreId, getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { clearSetupProgress, getSetupProgress, type SetupProgressState } from "@/app/lib/setupProgress";
 
 type SetupStep = 0 | 1 | 2 | 3 | 4;
 type SetupMode = "manual" | "copy" | "bulk";
@@ -60,6 +61,7 @@ function AdminSetupPageInner() {
   const [msg, setMsg] = useState("");
   const [counts, setCounts] = useState<SetupCounts>({ categories: 0, options: 0, menus: 0 });
   const [setupMode, setSetupMode] = useState<SetupMode>("manual");
+  const [progressConfirm, setProgressConfirm] = useState<SetupProgressState>({ step1: false, step2: false, step3: false });
 
   useEffect(() => {
     const mode = (sp.get("mode") || "").trim();
@@ -112,6 +114,19 @@ function AdminSetupPageInner() {
       mounted = false;
     };
   }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const next = await getSetupProgress(storeId);
+      if (!mounted) return;
+      setProgressConfirm(next);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [storeId, loading]);
 
   const loadCounts = async (sid: string) => {
     const [catRes, optRes, menuRes] = await Promise.all([
@@ -190,6 +205,7 @@ function AdminSetupPageInner() {
       return;
     }
     await saveStep(4);
+    await clearSetupProgress(storeId);
     setConfirmOpen(false);
     router.push(`/admin?store=${encodeURIComponent(storeId)}`);
   };
@@ -203,6 +219,9 @@ function AdminSetupPageInner() {
   if (counts.options < 1) missingRequirements.push("옵션 그룹 1개 이상 등록이 필요합니다.");
   if (counts.menus < 1) missingRequirements.push("메뉴 1개 이상 등록이 필요합니다.");
   const canFinalize = missingRequirements.length === 0;
+  const allStepsConfirmed = progressConfirm.step1 && progressConfirm.step2 && progressConfirm.step3;
+  const canGoOptions = counts.categories >= 1;
+  const canGoMenus = counts.categories >= 1 && counts.options >= 1;
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
@@ -270,6 +289,14 @@ function AdminSetupPageInner() {
             {stepOrder.map((row) => {
               const done = row.step === 1 ? counts.categories > 0 : row.step === 2 ? counts.options > 0 : counts.menus > 0;
               const current = !done && row.step === progressStep;
+              const locked =
+                row.step === 2 ? !canGoOptions : row.step === 3 ? !canGoMenus : false;
+              const lockReason =
+                row.step === 2
+                  ? "카테고리를 1개 이상 등록하면 옵션 설정이 열립니다."
+                  : row.step === 3
+                    ? "카테고리/옵션 설정을 완료하면 메뉴 설정이 열립니다."
+                    : "";
               return (
                 <li key={row.step} className="stepItem">
                   <div>
@@ -277,8 +304,9 @@ function AdminSetupPageInner() {
                       {row.step}. {row.title} {done ? "✅" : current ? "(진행 중)" : ""}
                     </strong>
                     <p className="muted">{row.desc}</p>
+                    {locked ? <p className="muted" style={{ color: "#b45309", marginTop: 4 }}>{lockReason}</p> : null}
                   </div>
-                  <button disabled={saving} onClick={() => onGoStep(row.step, row.href)}>
+                  <button disabled={saving || locked} onClick={() => onGoStep(row.step, row.href)}>
                     {done ? "다시 열기" : "바로 가기"}
                   </button>
                 </li>
@@ -290,10 +318,11 @@ function AdminSetupPageInner() {
             <button disabled={saving} onClick={onSkipForNow}>
               나중에 하기
             </button>
-            <button disabled={saving || isCompleted} onClick={() => setConfirmOpen(true)}>
+            <button disabled={saving || isCompleted || !canFinalize || !allStepsConfirmed} onClick={() => setConfirmOpen(true)}>
               {isCompleted ? "초기 설정 완료됨" : "초기 설정 완료"}
             </button>
           </div>
+          {!allStepsConfirmed ? <p className="muted">각 단계 페이지에서 “이 단계 완료”를 눌러야 최종 완료가 가능합니다.</p> : null}
           {msg ? <p className="error">{msg}</p> : null}
 
           {confirmOpen ? (
@@ -313,7 +342,7 @@ function AdminSetupPageInner() {
                 ) : null}
                 <div className="actions" style={{ marginTop: 12 }}>
                   <button disabled={saving} onClick={() => setConfirmOpen(false)}>취소</button>
-                  <button className={!canFinalize ? "btnDisabledLike" : ""} disabled={saving || !canFinalize} onClick={onComplete}>최종 완료</button>
+                  <button className={!canFinalize || !allStepsConfirmed ? "btnDisabledLike" : ""} disabled={saving || !canFinalize || !allStepsConfirmed} onClick={onComplete}>최종 완료</button>
                 </div>
               </div>
             </div>
