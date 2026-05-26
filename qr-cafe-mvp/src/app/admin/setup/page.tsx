@@ -273,10 +273,10 @@ function AdminSetupPageInner() {
           </div>
           <p className="muted" style={{ marginTop: -2 }}>
             {setupMode === "manual"
-              ? "카테고리/옵션/메뉴를 직접 등록하는 방식입니다."
+              ? "현재 매장에서 직접 등록합니다."
               : setupMode === "copy"
-                ? "다른 매장의 설정을 복사해 빠르게 시작하는 방식입니다."
-                : "양식 파일 업로드로 데이터를 한 번에 등록하는 방식입니다."}
+                ? "다른 매장 데이터를 복사합니다."
+                : "파일 업로드로 한 번에 등록합니다."}
           </p>
           <p className="muted">현재 단계: {progressStepLabel(progressStep)}</p>
           <div className="progressWrap" aria-hidden>
@@ -322,7 +322,7 @@ function AdminSetupPageInner() {
               {isCompleted ? "초기 설정 완료됨" : "초기 설정 완료"}
             </button>
           </div>
-          {!allStepsConfirmed ? <p className="muted">각 단계 페이지에서 “이 단계 완료”를 눌러야 최종 완료가 가능합니다.</p> : null}
+          {!allStepsConfirmed ? <p className="muted">각 단계에서 완료 버튼을 눌러야 최종 완료할 수 있습니다.</p> : null}
           {msg ? <p className="error">{msg}</p> : null}
 
           {confirmOpen ? (

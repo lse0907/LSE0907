@@ -515,7 +515,7 @@ function CategoriesPageInner() {
 
       {isBulkMode ? (
         <section className="card">
-          <p className="subText" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+          <p className="subText" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
           <div className="row" style={{ marginTop: 10 }}>
             <a className="btn btnPrimary" href={importHref}>
               카테고리·메뉴 일괄 등록 시작
@@ -540,10 +540,10 @@ function CategoriesPageInner() {
             </button>
           </div>
           <p className="subText copyHelpText">
-            다른 매장의 카테고리를 현재 매장으로 복사합니다.
+            다른 매장 카테고리를 복사합니다.
           </p>
           {!hasCopySource ? (
-            <p className="subText copyWarnText">복사 가능한 원본 매장이 없습니다.</p>
+            <p className="subText copyWarnText">복사할 원본 매장이 없습니다.</p>
           ) : null}
         </section>
       ) : null}
@@ -553,8 +553,8 @@ function CategoriesPageInner() {
           <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
           <button className="btn btnPrimary" onClick={onCreate} disabled={actionBusy || loading || !name.trim()}>생성</button>
         </div>
-        <p className="muted">카테고리 항목을 개별 입력하여 등록합니다.</p>
-        <p className="muted">삭제 정책: 재할당 강제(삭제 시 첫 번째 활성 카테고리로 메뉴 이동)</p>
+        <p className="muted">카테고리를 직접 등록합니다.</p>
+        <p className="muted">삭제 시 메뉴는 다른 카테고리로 재할당됩니다.</p>
         {msg ? (
           <div
             style={{

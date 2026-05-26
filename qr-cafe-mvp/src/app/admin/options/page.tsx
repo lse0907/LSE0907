@@ -1344,13 +1344,13 @@ function AdminOptionsPageInner() {
 
       {isBulkMode ? (
         <section className="card">
-          <p className="sub" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+          <p className="sub" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
         </section>
       ) : null}
       {!loading && !hasCategoryPrerequisite ? (
         <section className="card" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
           <h2 className="cardTitle">선행 단계 필요</h2>
-          <p className="sub" style={{ marginTop: 6 }}>옵션 설정 전에 카테고리를 1개 이상 등록해 주세요.</p>
+          <p className="sub" style={{ marginTop: 6 }}>카테고리를 1개 이상 등록해 주세요.</p>
           <div className="btnRow" style={{ marginTop: 8 }}>
             <a className="btn btnPrimary" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>카테고리 설정으로 이동</a>
           </div>
@@ -1361,7 +1361,7 @@ function AdminOptionsPageInner() {
           <div className="modalCard">
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 950 }}>일괄 등록 안내</h3>
             <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-              옵션 페이지는 일괄 등록을 지원하지 않습니다. 옵션은 직접 설정으로 등록해 주세요.
+              옵션은 일괄 등록을 지원하지 않습니다. 직접 설정으로 진행해 주세요.
             </p>
             <div className="btnRow" style={{ justifyContent: "flex-end", marginTop: 4 }}>
               <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
@@ -1390,12 +1390,12 @@ function AdminOptionsPageInner() {
             </button>
           </div>
           <p className="sub copyHelpText">
-            다른 매장의 옵션을 현재 매장으로 복사합니다.
+            다른 매장 옵션을 복사합니다.
           </p>
           {!hasCopySource ? (
-            <p className="sub copyWarnText">복사 가능한 원본 매장이 없습니다.</p>
+            <p className="sub copyWarnText">복사할 원본 매장이 없습니다.</p>
           ) : (
-            <p className="sub" style={{ marginTop: 2 }}>매장을 추가 생성한 경우 복사 기능을 사용할 수 있습니다.</p>
+            <p className="sub" style={{ marginTop: 2 }}>원본 매장을 만든 뒤 다시 시도해 주세요.</p>
           )}
         </section>
       ) : null}
