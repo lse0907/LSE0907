@@ -333,15 +333,46 @@ function CategoriesPageInner() {
 
   const onDeleteWithReassign = async (cat: MenuCategory) => {
     if (actionBusy) return;
-    const others = cats.filter((c) => c.id !== cat.id && c.is_active !== false);
-    if (!others.length) {
-      setMsgTone("error");
-      setMsg("재할당 가능한 카테고리가 없어 삭제할 수 없습니다. 먼저 다른 카테고리를 만들어주세요.");
-      return;
-    }
-    const target = others[0].id;
     setSaving(true);
     setMsg("");
+
+    const countRes = await supabase
+      .from("menu_items")
+      .select("id", { count: "exact", head: true })
+      .eq("store_id", storeId)
+      .eq("category_id", cat.id);
+
+    if (countRes.error) {
+      setSaving(false);
+      setMsgTone("error");
+      return setMsg(countRes.error.message);
+    }
+
+    const linkedMenuCount = Number(countRes.count || 0);
+
+    if (linkedMenuCount < 1) {
+      const delOnly = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
+      if (delOnly.error) {
+        setSaving(false);
+        setMsgTone("error");
+        return setMsg(delOnly.error.message);
+      }
+      await refresh();
+      setSaving(false);
+      setMsgTone("success");
+      setMsg("카테고리를 삭제했습니다.");
+      return;
+    }
+
+    const others = cats.filter((c) => c.id !== cat.id && c.is_active !== false);
+    if (!others.length) {
+      setSaving(false);
+      setMsgTone("error");
+      setMsg("다른 카테고리를 만든 뒤 삭제해 주세요.");
+      return;
+    }
+
+    const target = others[0].id;
     const upd = await supabase
       .from("menu_items")
       .update({ category_id: target })
@@ -360,7 +391,7 @@ function CategoriesPageInner() {
     } else {
       await refresh();
       setMsgTone("success");
-      setMsg("카테고리를 삭제하고 메뉴를 재할당했습니다.");
+      setMsg("재할당 후 카테고리를 삭제했습니다.");
     }
     setSaving(false);
   };
