@@ -4,6 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
+import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
 
 type MenuCategory = {
   id: string;
@@ -44,6 +46,7 @@ function CategoriesPageInner() {
   const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState(false);
 
   const [editId, setEditId] = useState("");
   const [editName, setEditName] = useState("");
@@ -96,6 +99,18 @@ function CategoriesPageInner() {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      if (!mounted) return;
+      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+    })();
+    return () => {
+      mounted = false;
+    };
   }, [storeId]);
 
   useEffect(() => {
@@ -350,6 +365,18 @@ function CategoriesPageInner() {
     setSaving(false);
   };
 
+  const onCompleteStep = async () => {
+    if (!storeId || cats.length < 1) return;
+    const ok = await setSetupStepConfirmed(storeId, "step1", true);
+    if (!ok) {
+      setMsgTone("error");
+      setMsg("단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    setMsgTone("success");
+    setMsg("초기설정 1단계(카테고리 설정)를 완료 처리했습니다.");
+  };
+
   return (
     <main className="wrap">
       <style jsx global>{`
@@ -466,14 +493,34 @@ function CategoriesPageInner() {
       <p className="subText">
         현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
-      <p className="subText">
-        현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
-        <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
-      </p>
+      {!setupCompleted ? (
+        <SetupProgressBanner
+          stepLabel="초기 설정 진행 중 (1/3)"
+          modeLabel={setupModeLabel}
+          modeDescription={
+            setupMode === "manual"
+              ? "카테고리를 직접 등록하는 방식입니다."
+              : setupMode === "copy"
+                ? "다른 매장의 카테고리를 복사해 빠르게 시작할 수 있습니다."
+                : "일괄 등록 파일 업로드로 카테고리를 한 번에 등록할 수 있습니다."
+          }
+          stepGuide="카테고리를 등록한 뒤 완료 버튼을 눌러주세요."
+          completeLabel="카테고리 설정 완료"
+          completeDisabled={loading || cats.length < 1 || actionBusy}
+          disabledReason="카테고리를 1개 이상 등록하면 완료할 수 있습니다."
+          setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
+          onComplete={() => void onCompleteStep()}
+        />
+      ) : null}
 
       {isBulkMode ? (
         <section className="card">
           <p className="subText" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+          <div className="row" style={{ marginTop: 10 }}>
+            <a className="btn btnPrimary" href={importHref}>
+              카테고리·메뉴 일괄 등록 시작
+            </a>
+          </div>
         </section>
       ) : null}
 
@@ -603,7 +650,7 @@ function CategoriesPageInner() {
         )}
       </section>
 
-      {showCategoryAssist ? (
+      {showCategoryAssist && !isBulkMode ? (
         <section className="card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div>
