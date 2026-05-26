@@ -306,7 +306,7 @@ function AdminSetupPageInner() {
                     <p className="muted">{row.desc}</p>
                     {locked ? <p className="muted" style={{ color: "#b45309", marginTop: 4 }}>{lockReason}</p> : null}
                   </div>
-                  <button disabled={saving || locked} onClick={() => onGoStep(row.step, row.href)}>
+                  <button className="stepBtn" disabled={saving || locked} onClick={() => onGoStep(row.step, row.href)}>
                     {done ? "다시 열기" : "바로 가기"}
                   </button>
                 </li>
@@ -315,10 +315,10 @@ function AdminSetupPageInner() {
           </ul>
 
           <div className="actions">
-            <button disabled={saving} onClick={onSkipForNow}>
+            <button className="ghostBtn" disabled={saving} onClick={onSkipForNow}>
               나중에 하기
             </button>
-            <button disabled={saving || isCompleted || !canFinalize || !allStepsConfirmed} onClick={() => setConfirmOpen(true)}>
+            <button className="primaryBtn" disabled={saving || isCompleted || !canFinalize || !allStepsConfirmed} onClick={() => setConfirmOpen(true)}>
               {isCompleted ? "초기 설정 완료됨" : "초기 설정 완료"}
             </button>
           </div>
@@ -341,8 +341,8 @@ function AdminSetupPageInner() {
                   </div>
                 ) : null}
                 <div className="actions" style={{ marginTop: 12 }}>
-                  <button disabled={saving} onClick={() => setConfirmOpen(false)}>취소</button>
-                  <button className={!canFinalize || !allStepsConfirmed ? "btnDisabledLike" : ""} disabled={saving || !canFinalize || !allStepsConfirmed} onClick={onComplete}>최종 완료</button>
+                  <button className="ghostBtn" disabled={saving} onClick={() => setConfirmOpen(false)}>취소</button>
+                  <button className={`primaryBtn ${!canFinalize || !allStepsConfirmed ? "btnDisabledLike" : ""}`} disabled={saving || !canFinalize || !allStepsConfirmed} onClick={onComplete}>최종 완료</button>
                 </div>
               </div>
             </div>
@@ -351,52 +351,67 @@ function AdminSetupPageInner() {
       ) : null}
 
       <style jsx>{`
-        .wrap { max-width: 920px; margin: 0 auto; padding: 16px; }
-        .muted { color: #6b7280; }
-        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; }
-        ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-        .stepItem { display: flex; justify-content: space-between; gap: 12px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; }
-        .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-        .progressWrap { height: 8px; border-radius: 999px; background: #f3f4f6; overflow: hidden; margin: 8px 0; }
-        .progressFill { height: 100%; background: #111827; border-radius: 999px; transition: width .2s ease; }
-        button { padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; }
-        .error { color: #b91c1c; margin-top: 8px; }
-        .modePicker { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0; }
-        .modeBtn { padding:6px 10px; border-radius:999px; border:1px solid #d1d5db; background:#fff; font-size:12px; font-weight:800; }
-        .modeBtnOn { background:#111827; border-color:#111827; color:#fff; }
-        .warnBox {
-          border: 1px solid #fecaca;
-          background: #fef2f2;
-          color: #b91c1c;
-          border-radius: 10px;
-          padding: 10px;
-          display: grid;
-          gap: 4px;
-          font-size: 13px;
-          font-weight: 800;
-        }
-        .btnDisabledLike {
-          opacity: .5;
-          cursor: not-allowed;
-        }
-        .confirmOverlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(17, 24, 39, 0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 16px;
-          z-index: 50;
-        }
-        .confirmCard {
-          width: 100%;
-          max-width: 460px;
+        .wrap { max-width: 920px; margin: 0 auto; padding: 20px 16px 28px; }
+        h1 { margin: 0 0 4px; font-size: 40px; letter-spacing: -0.02em; line-height: 1.05; color: #0f172a; }
+        h2 { margin: 0 0 10px; font-size: 36px; letter-spacing: -0.02em; line-height: 1.1; color: #0f172a; }
+        .muted { color: #475569; margin: 0; font-size: 20px; line-height: 1.45; font-weight: 600; }
+        .card {
+          margin-top: 14px;
           background: #fff;
-          border: 1px solid #e5e7eb;
-          border-radius: 14px;
-          padding: 14px;
-          box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+          border: 1px solid #dbe1ea;
+          border-radius: 20px;
+          padding: 20px;
+          box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+          display: grid;
+          gap: 10px;
+        }
+        .modePicker { display:flex; gap:8px; flex-wrap:wrap; margin: 0; }
+        .modeBtn { padding: 10px 14px; border-radius: 999px; border: 1px solid #cbd5e1; background:#fff; font-size:14px; font-weight:900; color:#0f172a; }
+        .modeBtnOn { background:#0f172a; border-color:#0f172a; color:#fff; }
+        .progressWrap { height: 10px; border-radius: 999px; background: #e5e7eb; overflow: hidden; margin: 2px 0 4px; }
+        .progressFill { height: 100%; background: linear-gradient(90deg, #0f172a, #1e3a8a); border-radius: 999px; transition: width .2s ease; }
+        ul { list-style: none; padding: 0; margin: 2px 0 0; display: grid; gap: 10px; }
+        .stepItem { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px; background:#fff; }
+        .stepBtn, .ghostBtn, .primaryBtn {
+          min-height: 44px;
+          border-radius: 12px;
+          font-size: 15px;
+          font-weight: 900;
+          padding: 10px 14px;
+          border: 1px solid #cbd5e1;
+          transition: all .15s ease;
+        }
+        .stepBtn, .ghostBtn { background:#fff; color:#0f172a; }
+        .stepBtn:hover:not(:disabled), .ghostBtn:hover:not(:disabled) { background:#f8fafc; border-color:#94a3b8; }
+        .primaryBtn { background:#0f172a; color:#fff; border-color:#0f172a; box-shadow: 0 2px 0 rgba(15,23,42,.16); }
+        .primaryBtn:hover:not(:disabled) { background:#111f38; border-color:#111f38; }
+        button:disabled { opacity: .55; cursor: not-allowed; box-shadow:none; }
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .error { color: #b91c1c; margin-top: 4px; font-weight: 800; }
+        .warnBox { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; border-radius: 10px; padding: 10px; display: grid; gap: 4px; font-size: 13px; font-weight: 800; }
+        .btnDisabledLike { opacity: .55; cursor: not-allowed; }
+        .confirmOverlay { position: fixed; inset: 0; background: rgba(17, 24, 39, 0.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+        .confirmCard { width: 100%; max-width: 480px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 16px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2); display:grid; gap:8px; }
+
+        @media (max-width: 900px) {
+          h1 { font-size: 34px; }
+          h2 { font-size: 30px; }
+          .muted { font-size: 18px; }
+        }
+        @media (max-width: 768px) {
+          .wrap { padding: 14px 12px 24px; }
+          h1 { font-size: 26px; }
+          h2 { font-size: 24px; }
+          .muted { font-size: 15px; }
+          .card { padding: 14px; border-radius: 16px; gap: 8px; }
+          .modeBtn { font-size: 13px; padding: 8px 12px; }
+          .stepItem { padding: 10px; border-radius: 12px; }
+          .stepBtn, .ghostBtn, .primaryBtn { min-height: 40px; font-size: 14px; padding: 8px 10px; }
+        }
+        @media (max-width: 560px) {
+          .stepItem { flex-direction: row; align-items: flex-start; }
+          .stepBtn { min-width: 82px; }
+          .actions { grid-template-columns: 1fr 1fr; }
         }
       `}</style>
     </main>
