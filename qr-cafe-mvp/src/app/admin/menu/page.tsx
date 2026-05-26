@@ -378,6 +378,8 @@ function AdminMenuPageInner() {
   const showMenuAssist = isInitialMenuSetup;
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
+  const hasMenuData = items.length > 0;
+  const canUseBulkImport = !hasMenuData;
   const hasCopySource = myStores.length > 0;
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
@@ -2069,12 +2071,25 @@ function AdminMenuPageInner() {
 
       {isBulkMode ? (
         <section className="card">
-          <p className="sub" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
-          <div className="btnRow" style={{ marginTop: 10 }}>
-            <a className="btn btnPrimary" href={importHref}>
-              메뉴·카테고리 일괄 등록 시작
-            </a>
-          </div>
+          {canUseBulkImport ? (
+            <>
+              <p className="sub" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
+              <div className="btnRow" style={{ marginTop: 10 }}>
+                <a className="btn btnPrimary" href={importHref}>
+                  메뉴·카테고리 일괄 등록 시작
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="sub" style={{ margin: 0 }}>이미 등록된 데이터가 있어 일괄 등록을 사용할 수 없습니다.</p>
+              <div className="btnRow" style={{ marginTop: 10 }}>
+                <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                  설정 방식 변경
+                </a>
+              </div>
+            </>
+          )}
         </section>
       ) : null}
       {showMenuAssist && isCopyMode ? (
@@ -2715,7 +2730,7 @@ function AdminMenuPageInner() {
         </section>
       )}
 
-      {showMenuAssist && !isBulkMode ? (
+      {showMenuAssist && !isBulkMode && canUseBulkImport ? (
         <section className="card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div>
