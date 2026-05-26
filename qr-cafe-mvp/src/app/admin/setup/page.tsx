@@ -393,7 +393,18 @@ function AdminSetupPageInner() {
         .confirmOverlay { position: fixed; inset: 0; background: rgba(17, 24, 39, 0.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
         .confirmCard { width: 100%; max-width: 480px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 16px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2); display:grid; gap:8px; }
 
-                @media (max-width: 768px) {
+                @media (max-width: 1024px) and (orientation: landscape) {
+          .wrap { max-width: 860px; padding: 12px 12px 20px; }
+          .card { padding: 12px; border-radius: 14px; gap: 7px; }
+          h1 { font-size: 24px; line-height: 1.1; }
+          h2 { font-size: 22px; line-height: 1.12; }
+          .muted { font-size: 14px; line-height: 1.4; }
+          .modeBtn { font-size: 12px; padding: 7px 10px; }
+          .stepItem { padding: 9px; gap: 10px; }
+          .stepBtn, .ghostBtn, .primaryBtn { min-height: 38px; font-size: 13px; padding: 7px 10px; }
+          .actions { gap: 8px; }
+        }
+        @media (max-width: 768px) {
           .wrap { padding: 14px 12px 24px; }
           h1 { line-height: 1.1; }
           h2 { line-height: 1.15; }
