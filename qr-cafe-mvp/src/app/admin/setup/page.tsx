@@ -352,9 +352,9 @@ function AdminSetupPageInner() {
 
       <style jsx>{`
         .wrap { max-width: 920px; margin: 0 auto; padding: 20px 16px 28px; }
-        h1 { margin: 0 0 4px; font-size: 40px; letter-spacing: -0.02em; line-height: 1.05; color: #0f172a; }
-        h2 { margin: 0 0 10px; font-size: 36px; letter-spacing: -0.02em; line-height: 1.1; color: #0f172a; }
-        .muted { color: #475569; margin: 0; font-size: 20px; line-height: 1.45; font-weight: 600; }
+        h1 { margin: 0 0 4px; font-size: clamp(26px, 4.2vw, 34px); letter-spacing: -0.02em; line-height: 1.08; color: #0f172a; }
+        h2 { margin: 0 0 10px; font-size: clamp(22px, 3.6vw, 30px); letter-spacing: -0.02em; line-height: 1.12; color: #0f172a; }
+        .muted { color: #475569; margin: 0; font-size: clamp(14px, 2.1vw, 17px); line-height: 1.45; font-weight: 600; }
         .card {
           margin-top: 14px;
           background: #fff;
@@ -393,16 +393,11 @@ function AdminSetupPageInner() {
         .confirmOverlay { position: fixed; inset: 0; background: rgba(17, 24, 39, 0.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
         .confirmCard { width: 100%; max-width: 480px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 16px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2); display:grid; gap:8px; }
 
-        @media (max-width: 900px) {
-          h1 { font-size: 34px; }
-          h2 { font-size: 30px; }
-          .muted { font-size: 18px; }
-        }
-        @media (max-width: 768px) {
+                @media (max-width: 768px) {
           .wrap { padding: 14px 12px 24px; }
-          h1 { font-size: 26px; }
-          h2 { font-size: 24px; }
-          .muted { font-size: 15px; }
+          h1 { line-height: 1.1; }
+          h2 { line-height: 1.15; }
+          .muted { line-height: 1.42; }
           .card { padding: 14px; border-radius: 16px; gap: 8px; }
           .modeBtn { font-size: 13px; padding: 8px 12px; }
           .stepItem { padding: 10px; border-radius: 12px; }
