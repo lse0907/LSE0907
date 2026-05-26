@@ -152,12 +152,22 @@ export default function SetupProgressBanner({
           .stepTitle { font-size: 18px; }
           .btnCol {
             width: 100%;
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             justify-content: stretch;
+            gap: 6px;
           }
           .secondaryBtn,
           .primaryBtn {
             width: 100%;
+            min-height: 40px;
+            padding: 8px 10px;
+            font-size: 13px;
+          }
+        }
+        @media (max-width: 420px) {
+          .btnCol {
+            grid-template-columns: 1fr;
+            gap: 7px;
           }
         }
       `}</style>
