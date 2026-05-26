@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
+import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
 
 const MENU_IMAGE_BUCKET = "menu-assets";
 
@@ -192,6 +193,7 @@ function AdminMenuPageInner() {
   const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("");
   const [soldOutOnly, setSoldOutOnly] = useState(false);
@@ -409,6 +411,18 @@ function AdminMenuPageInner() {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      if (!mounted) return;
+      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+    })();
+    return () => {
+      mounted = false;
+    };
   }, [storeId]);
 
   useEffect(() => {
@@ -2012,31 +2026,27 @@ function AdminMenuPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
-          <section className="card" style={{ marginTop: 8, borderColor: "#bfdbfe", background: "#eff6ff" }}>
-            <div className="btnRow" style={{ justifyContent: "space-between", marginTop: 0 }}>
-              <div style={{ display: "grid", gap: 4 }}>
-                <b>초기 설정 진행 중 (3/3)</b>
-                <p className="sub" style={{ margin: 0 }}>
-                  현재 설정 방식: <b>{setupModeLabel}</b>
-                </p>
-                <p className="sub" style={{ margin: 0 }}>
-                  {setupMode === "manual"
+          {!setupCompleted ? (
+            <section style={{ marginTop: 8 }}>
+              <SetupProgressBanner
+                stepLabel="초기 설정 진행 중 (3/3)"
+                modeLabel={setupModeLabel}
+                modeDescription={
+                  setupMode === "manual"
                     ? "메뉴를 직접 등록하고 옵션/카테고리를 연결하는 방식입니다."
                     : setupMode === "copy"
                       ? "원본 매장의 메뉴를 복사해 빠르게 시작할 수 있습니다."
-                      : "일괄 등록 파일 업로드로 메뉴를 한 번에 등록할 수 있습니다."}
-                </p>
-                <p className="sub" style={{ margin: 0 }}>메뉴를 확인한 뒤 완료 버튼을 눌러주세요.</p>
-              </div>
-              <div className="btnRow" style={{ marginTop: 0, justifyContent: "flex-end" }}>
-                <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>설정 방식 변경</a>
-                <button className="btn btnPrimary" type="button" onClick={() => void onCompleteStep()} disabled={loading || saving || items.length < 1}>
-                  메뉴 설정 완료
-                </button>
-              </div>
-            </div>
-            {items.length < 1 ? <p className="sub" style={{ color: "#b45309", marginTop: 6 }}>메뉴를 1개 이상 등록하면 완료할 수 있습니다.</p> : null}
-          </section>
+                      : "일괄 등록 파일 업로드로 메뉴를 한 번에 등록할 수 있습니다."
+                }
+                stepGuide="메뉴를 확인한 뒤 완료 버튼을 눌러주세요."
+                completeLabel="메뉴 설정 완료"
+                completeDisabled={loading || saving || items.length < 1}
+                disabledReason="메뉴를 1개 이상 등록하면 완료할 수 있습니다."
+                setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
+                onComplete={() => void onCompleteStep()}
+              />
+            </section>
+          ) : null}
           {msg ? (
             <p
               className="sub"
