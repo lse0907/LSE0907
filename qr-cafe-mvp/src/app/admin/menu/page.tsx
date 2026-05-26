@@ -4,6 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
+import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
 
 const MENU_IMAGE_BUCKET = "menu-assets";
 
@@ -191,6 +193,7 @@ function AdminMenuPageInner() {
   const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("");
   const [soldOutOnly, setSoldOutOnly] = useState(false);
@@ -408,6 +411,18 @@ function AdminMenuPageInner() {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      if (!mounted) return;
+      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+    })();
+    return () => {
+      mounted = false;
+    };
   }, [storeId]);
 
   useEffect(() => {
@@ -702,6 +717,16 @@ function AdminMenuPageInner() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const onCompleteStep = async () => {
+    if (!storeId || items.length < 1) return;
+    const ok = await setSetupStepConfirmed(storeId, "step3", true);
+    if (!ok) {
+      setStatus("error", "단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    setStatus("success", "초기설정 3단계(메뉴 설정)를 완료 처리했습니다.");
   };
 
   const toggleGroup = (id: string) => {
@@ -2001,10 +2026,27 @@ function AdminMenuPageInner() {
           <p className="sub" style={{ marginTop: 6 }}>
             현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
-          <p className="sub" style={{ marginTop: 2 }}>
-            현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
-            <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
-          </p>
+          {!setupCompleted ? (
+            <section style={{ marginTop: 8 }}>
+              <SetupProgressBanner
+                stepLabel="초기 설정 진행 중 (3/3)"
+                modeLabel={setupModeLabel}
+                modeDescription={
+                  setupMode === "manual"
+                    ? "메뉴를 직접 등록하고 옵션/카테고리를 연결하는 방식입니다."
+                    : setupMode === "copy"
+                      ? "원본 매장의 메뉴를 복사해 빠르게 시작할 수 있습니다."
+                      : "일괄 등록 파일 업로드로 메뉴를 한 번에 등록할 수 있습니다."
+                }
+                stepGuide="메뉴를 확인한 뒤 완료 버튼을 눌러주세요."
+                completeLabel="메뉴 설정 완료"
+                completeDisabled={loading || saving || items.length < 1}
+                disabledReason="메뉴를 1개 이상 등록하면 완료할 수 있습니다."
+                setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
+                onComplete={() => void onCompleteStep()}
+              />
+            </section>
+          ) : null}
           {msg ? (
             <p
               className="sub"
@@ -2027,7 +2069,12 @@ function AdminMenuPageInner() {
 
       {isBulkMode ? (
         <section className="card">
-          <p className="sub" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+          <p className="sub" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
+          <div className="btnRow" style={{ marginTop: 10 }}>
+            <a className="btn btnPrimary" href={importHref}>
+              메뉴·카테고리 일괄 등록 시작
+            </a>
+          </div>
         </section>
       ) : null}
       {showMenuAssist && isCopyMode ? (
@@ -2046,10 +2093,10 @@ function AdminMenuPageInner() {
             </button>
           </div>
           <p className="sub copyHelpText">
-            다른 매장의 메뉴를 현재 매장으로 복사합니다.
+            다른 매장 메뉴를 복사합니다.
           </p>
           {!hasCopySource ? (
-            <p className="sub copyWarnText">복사 가능한 원본 매장이 없습니다.</p>
+            <p className="sub copyWarnText">복사할 원본 매장이 없습니다.</p>
           ) : null}
         </section>
       ) : null}
@@ -2668,7 +2715,7 @@ function AdminMenuPageInner() {
         </section>
       )}
 
-      {showMenuAssist ? (
+      {showMenuAssist && !isBulkMode ? (
         <section className="card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div>
