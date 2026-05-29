@@ -366,8 +366,8 @@ function AdminSetupPageInner() {
           gap: 10px;
         }
         .modePicker { display:flex; gap:8px; flex-wrap:wrap; margin: 0; }
-        .modeBtn { padding: 10px 14px; border-radius: 999px; border: 1px solid #cbd5e1; background:#fff; font-size:14px; font-weight:900; color:#0f172a; }
-        .modeBtnOn { background:#0f172a; border-color:#0f172a; color:#fff; }
+        .modeBtn { min-height: 40px; padding: 8px 14px; border-radius: 999px; border: 1px solid #cbd5e1; background:#fff; font-size:14px; font-weight:900; color:#0f172a; line-height:1.2; }
+        .modeBtnOn { background:#0f172a; border-color:#0f172a; color:#fff; box-shadow: 0 2px 0 rgba(15,23,42,.16); }
         .progressWrap { height: 10px; border-radius: 999px; background: #e5e7eb; overflow: hidden; margin: 2px 0 4px; }
         .progressFill { height: 100%; background: linear-gradient(90deg, #0f172a, #1e3a8a); border-radius: 999px; transition: width .2s ease; }
         ul { list-style: none; padding: 0; margin: 2px 0 0; display: grid; gap: 10px; }
@@ -399,7 +399,7 @@ function AdminSetupPageInner() {
           h1 { font-size: 24px; line-height: 1.1; }
           h2 { font-size: 22px; line-height: 1.12; }
           .muted { font-size: 14px; line-height: 1.4; }
-          .modeBtn { font-size: 12px; padding: 7px 10px; }
+          .modeBtn { min-height: 36px; font-size: 12px; padding: 6px 10px; }
           .stepItem { padding: 9px; gap: 10px; }
           .stepBtn, .ghostBtn, .primaryBtn { min-height: 38px; font-size: 13px; padding: 7px 10px; }
           .actions { gap: 8px; }
@@ -410,7 +410,7 @@ function AdminSetupPageInner() {
           h2 { line-height: 1.15; }
           .muted { line-height: 1.42; }
           .card { padding: 14px; border-radius: 16px; gap: 8px; }
-          .modeBtn { font-size: 13px; padding: 8px 12px; }
+          .modeBtn { min-height: 36px; font-size: 13px; padding: 7px 12px; }
           .stepItem { padding: 10px; border-radius: 12px; }
           .stepBtn, .ghostBtn, .primaryBtn { min-height: 40px; font-size: 14px; padding: 8px 10px; }
         }

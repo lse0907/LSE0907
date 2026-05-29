@@ -148,6 +148,7 @@ function CategoriesPageInner() {
   const isBulkMode = setupMode === "bulk";
   const hasCategoryData = cats.length > 0;
   const canUseBulkImport = !hasCategoryData;
+  const showCopyHiddenNotice = isCopyMode && hasCategoryData;
   const hasCopySource = myStores.length > 0;
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
@@ -567,6 +568,18 @@ function CategoriesPageInner() {
               </div>
             </>
           )}
+        </section>
+      ) : null}
+
+
+      {showCopyHiddenNotice ? (
+        <section className="card">
+          <p className="subText" style={{ margin: 0 }}>이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다.</p>
+          <div className="row" style={{ marginTop: 10 }}>
+            <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+              설정 방식 변경
+            </a>
+          </div>
         </section>
       ) : null}
 

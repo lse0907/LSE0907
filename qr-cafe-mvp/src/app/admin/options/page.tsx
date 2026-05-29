@@ -359,6 +359,8 @@ function AdminOptionsPageInner() {
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
   const hasCategoryPrerequisite = categoryCount > 0 || groups.length > 0;
+  const hasOptionData = groups.length > 0;
+  const showCopyHiddenNotice = isCopyMode && hasOptionData;
 
   useEffect(() => {
     if (isBulkMode) {
@@ -1374,6 +1376,18 @@ function AdminOptionsPageInner() {
           </div>
         </div>
       ) : null}
+
+      {showCopyHiddenNotice ? (
+        <section className="card">
+          <p className="sub" style={{ margin: 0 }}>이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다.</p>
+          <div className="btnRow" style={{ marginTop: 10 }}>
+            <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+              설정 방식 변경
+            </a>
+          </div>
+        </section>
+      ) : null}
+
       {showOptionAssist && isCopyMode ? (
         <section className="card">
           <div className="copyRow">

@@ -380,6 +380,7 @@ function AdminMenuPageInner() {
   const isBulkMode = setupMode === "bulk";
   const hasMenuData = items.length > 0;
   const canUseBulkImport = !hasMenuData;
+  const showCopyHiddenNotice = isCopyMode && hasMenuData;
   const hasCopySource = myStores.length > 0;
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
@@ -2092,6 +2093,18 @@ function AdminMenuPageInner() {
           )}
         </section>
       ) : null}
+
+      {showCopyHiddenNotice ? (
+        <section className="card">
+          <p className="sub" style={{ margin: 0 }}>이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다.</p>
+          <div className="btnRow" style={{ marginTop: 10 }}>
+            <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+              설정 방식 변경
+            </a>
+          </div>
+        </section>
+      ) : null}
+
       {showMenuAssist && isCopyMode ? (
         <section className="card">
           <div className="copyRow">
