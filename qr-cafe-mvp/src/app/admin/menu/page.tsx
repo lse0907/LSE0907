@@ -2045,6 +2045,7 @@ function AdminMenuPageInner() {
                 completeLabel="메뉴 설정 완료"
                 completeDisabled={loading || saving || items.length < 1}
                 disabledReason="메뉴를 1개 이상 등록하면 완료할 수 있습니다."
+                noticeText={showCopyHiddenNotice ? "이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다." : ""}
                 setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
                 onComplete={() => void onCompleteStep()}
               />
@@ -2091,17 +2092,6 @@ function AdminMenuPageInner() {
               </div>
             </>
           )}
-        </section>
-      ) : null}
-
-      {showCopyHiddenNotice ? (
-        <section className="card">
-          <p className="sub" style={{ margin: 0 }}>이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다.</p>
-          <div className="btnRow" style={{ marginTop: 10 }}>
-            <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-              설정 방식 변경
-            </a>
-          </div>
         </section>
       ) : null}
 

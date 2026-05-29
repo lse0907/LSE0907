@@ -8,6 +8,7 @@ type SetupProgressBannerProps = {
   completeLabel: string;
   completeDisabled: boolean;
   disabledReason?: string;
+  noticeText?: string;
   setupHref: string;
   onComplete: () => void;
 };
@@ -20,6 +21,7 @@ export default function SetupProgressBanner({
   completeLabel,
   completeDisabled,
   disabledReason = "",
+  noticeText = "",
   setupHref,
   onComplete,
 }: SetupProgressBannerProps) {
@@ -183,7 +185,9 @@ export default function SetupProgressBanner({
           </button>
         </div>
       </div>
-      {completeDisabled && disabledReason ? (
+      {noticeText ? (
+        <p className="warnText">{noticeText}</p>
+      ) : completeDisabled && disabledReason ? (
         <p className="warnText">{disabledReason}</p>
       ) : null}
     </section>
