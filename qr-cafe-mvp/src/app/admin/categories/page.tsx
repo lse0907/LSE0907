@@ -625,7 +625,6 @@ function CategoriesPageInner() {
           </div>
         ) : null}
       </section>
-
       <section className="card">
         <div className="listHeaderBlock">
           <div className="row headerRow">
