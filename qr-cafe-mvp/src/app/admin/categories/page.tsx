@@ -4,6 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
+import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
 
 type MenuCategory = {
   id: string;
@@ -44,6 +46,7 @@ function CategoriesPageInner() {
   const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState(false);
 
   const [editId, setEditId] = useState("");
   const [editName, setEditName] = useState("");
@@ -97,6 +100,18 @@ function CategoriesPageInner() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
+  useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      if (!mounted) return;
+      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -131,6 +146,9 @@ function CategoriesPageInner() {
   const showCategoryAssist = isInitialCategorySetup;
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
+  const hasCategoryData = cats.length > 0;
+  const canUseBulkImport = !hasCategoryData;
+  const showCopyHiddenNotice = isCopyMode && hasCategoryData;
   const hasCopySource = myStores.length > 0;
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
@@ -318,15 +336,46 @@ function CategoriesPageInner() {
 
   const onDeleteWithReassign = async (cat: MenuCategory) => {
     if (actionBusy) return;
-    const others = cats.filter((c) => c.id !== cat.id && c.is_active !== false);
-    if (!others.length) {
-      setMsgTone("error");
-      setMsg("재할당 가능한 카테고리가 없어 삭제할 수 없습니다. 먼저 다른 카테고리를 만들어주세요.");
-      return;
-    }
-    const target = others[0].id;
     setSaving(true);
     setMsg("");
+
+    const countRes = await supabase
+      .from("menu_items")
+      .select("id", { count: "exact", head: true })
+      .eq("store_id", storeId)
+      .eq("category_id", cat.id);
+
+    if (countRes.error) {
+      setSaving(false);
+      setMsgTone("error");
+      return setMsg(countRes.error.message);
+    }
+
+    const linkedMenuCount = Number(countRes.count || 0);
+
+    if (linkedMenuCount < 1) {
+      const delOnly = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
+      if (delOnly.error) {
+        setSaving(false);
+        setMsgTone("error");
+        return setMsg(delOnly.error.message);
+      }
+      await refresh();
+      setSaving(false);
+      setMsgTone("success");
+      setMsg("카테고리를 삭제했습니다.");
+      return;
+    }
+
+    const others = cats.filter((c) => c.id !== cat.id && c.is_active !== false);
+    if (!others.length) {
+      setSaving(false);
+      setMsgTone("error");
+      setMsg("다른 카테고리를 만든 뒤 삭제해 주세요.");
+      return;
+    }
+
+    const target = others[0].id;
     const upd = await supabase
       .from("menu_items")
       .update({ category_id: target })
@@ -345,9 +394,21 @@ function CategoriesPageInner() {
     } else {
       await refresh();
       setMsgTone("success");
-      setMsg("카테고리를 삭제하고 메뉴를 재할당했습니다.");
+      setMsg("재할당 후 카테고리를 삭제했습니다.");
     }
     setSaving(false);
+  };
+
+  const onCompleteStep = async () => {
+    if (!storeId || cats.length < 1) return;
+    const ok = await setSetupStepConfirmed(storeId, "step1", true);
+    if (!ok) {
+      setMsgTone("error");
+      setMsg("단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    setMsgTone("success");
+    setMsg("초기설정 1단계(카테고리 설정)를 완료 처리했습니다.");
   };
 
   return (
@@ -466,16 +527,51 @@ function CategoriesPageInner() {
       <p className="subText">
         현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
-      <p className="subText">
-        현재 설정 방식: <b>{setupModeLabel}</b> ·{" "}
-        <a href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>방식 변경</a>
-      </p>
+      {!setupCompleted ? (
+        <SetupProgressBanner
+          stepLabel="초기 설정 진행 중 (1/3)"
+          modeLabel={setupModeLabel}
+          modeDescription={
+            setupMode === "manual"
+              ? "카테고리를 직접 등록하는 방식입니다."
+              : setupMode === "copy"
+                ? "다른 매장의 카테고리를 복사해 빠르게 시작할 수 있습니다."
+                : "일괄 등록 파일 업로드로 카테고리를 한 번에 등록할 수 있습니다."
+          }
+          stepGuide="카테고리를 등록한 뒤 완료 버튼을 눌러주세요."
+          completeLabel="카테고리 설정 완료"
+          completeDisabled={loading || cats.length < 1 || actionBusy}
+          disabledReason="카테고리를 1개 이상 등록하면 완료할 수 있습니다."
+          noticeText={showCopyHiddenNotice ? "이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다." : ""}
+          setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
+          onComplete={() => void onCompleteStep()}
+        />
+      ) : null}
 
       {isBulkMode ? (
         <section className="card">
-          <p className="subText" style={{ margin: 0 }}>일괄 등록 방식이 선택되었습니다. 초기설정 페이지에서 업로드 경로를 이용해 주세요.</p>
+          {canUseBulkImport ? (
+            <>
+              <p className="subText" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
+              <div className="row" style={{ marginTop: 10 }}>
+                <a className="btn btnPrimary" href={importHref}>
+                  카테고리·메뉴 일괄 등록 시작
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="subText" style={{ margin: 0 }}>이미 등록된 데이터가 있어 일괄 등록을 사용할 수 없습니다.</p>
+              <div className="row" style={{ marginTop: 10 }}>
+                <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                  설정 방식 변경
+                </a>
+              </div>
+            </>
+          )}
         </section>
       ) : null}
+
 
       {showCategoryAssist && isCopyMode ? (
         <section className="card copyCard">
@@ -493,10 +589,10 @@ function CategoriesPageInner() {
             </button>
           </div>
           <p className="subText copyHelpText">
-            다른 매장의 카테고리를 현재 매장으로 복사합니다.
+            다른 매장 카테고리를 복사합니다.
           </p>
           {!hasCopySource ? (
-            <p className="subText copyWarnText">복사 가능한 원본 매장이 없습니다.</p>
+            <p className="subText copyWarnText">복사할 원본 매장이 없습니다.</p>
           ) : null}
         </section>
       ) : null}
@@ -506,8 +602,8 @@ function CategoriesPageInner() {
           <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
           <button className="btn btnPrimary" onClick={onCreate} disabled={actionBusy || loading || !name.trim()}>생성</button>
         </div>
-        <p className="muted">카테고리 항목을 개별 입력하여 등록합니다.</p>
-        <p className="muted">삭제 정책: 재할당 강제(삭제 시 첫 번째 활성 카테고리로 메뉴 이동)</p>
+        <p className="muted">카테고리를 직접 등록합니다.</p>
+        <p className="muted">삭제 시 메뉴는 다른 카테고리로 재할당됩니다.</p>
         {msg ? (
           <div
             style={{
@@ -603,7 +699,7 @@ function CategoriesPageInner() {
         )}
       </section>
 
-      {showCategoryAssist ? (
+      {showCategoryAssist && !isBulkMode && canUseBulkImport ? (
         <section className="card">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div>
