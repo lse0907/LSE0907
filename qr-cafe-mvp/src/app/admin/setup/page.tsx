@@ -62,7 +62,7 @@ const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: 
   {
     mode: "bulk",
     title: "일괄 등록",
-    badge: "대량 메뉴",
+    badge: "대량 등록",
     desc: "메뉴가 많을 때 파일로 등록합니다.",
     note: "옵션은 직접 설정이 필요합니다.",
   },
@@ -379,9 +379,6 @@ function AdminSetupPageInner() {
           <h1>초기 설정</h1>
           <p className="heroText">{storeName ? `${storeName} 매장` : "선택한 매장"}의 주문 접수에 필요한 기본 정보를 완성해 주세요.</p>
         </div>
-        <span className={`statePill ${isCompleted ? "stateDone" : isReady ? "stateReady" : "stateWorking"}`}>
-          {isCompleted ? "최종 완료" : isReady ? "확정 대기" : "진행 중"}
-        </span>
       </header>
 
       {loading ? (
@@ -399,7 +396,12 @@ function AdminSetupPageInner() {
             <div className="summaryTop">
               <div>
                 <p className="eyebrow">다음 할 일</p>
-                <h2>{isCompleted ? "초기 설정 완료" : nextStep.title}</h2>
+                <div className="summaryTitleRow">
+                  <h2>{isCompleted ? "초기 설정 완료" : nextStep.title}</h2>
+                  <span className={`statePill ${isCompleted ? "stateDone" : isReady ? "stateReady" : "stateWorking"}`}>
+                    {isCompleted ? "최종 완료" : isReady ? "확정 대기" : "진행 중"}
+                  </span>
+                </div>
                 <p className="summaryText">{nextActionText}</p>
               </div>
               {!isCompleted ? (
@@ -436,7 +438,7 @@ function AdminSetupPageInner() {
             <div className="sectionHead">
               <div>
                 <p className="eyebrow">설정 방식</p>
-                <h2>어떤 방식으로 준비할까요?</h2>
+                <h2 className="sectionTitleCompact">설정 방식을 선택해 주세요.</h2>
               </div>
               <span className="modeCurrent">현재: {setupMode === "manual" ? "직접 설정" : setupMode === "copy" ? "원본 복사" : "일괄 등록"}</span>
             </div>
@@ -449,8 +451,10 @@ function AdminSetupPageInner() {
                   aria-pressed={setupMode === option.mode}
                   onClick={() => setSetupMode(option.mode)}
                 >
-                  <span className="modeBadge">{option.badge}</span>
-                  <strong>{option.title}</strong>
+                  <span className="modeTitleRow">
+                    <strong>{option.title}</strong>
+                    <span className="modeBadge">{option.badge}</span>
+                  </span>
                   <span>{option.desc}</span>
                   <small>{option.note}</small>
                 </button>
@@ -496,7 +500,7 @@ function AdminSetupPageInner() {
           <section className="card finishCard">
             <div>
               <p className="eyebrow">최종 확인</p>
-              <h2>주문 준비를 마무리해 주세요.</h2>
+              <h2 className="sectionTitleCompact">초기 매장 설정을 마무리해 주세요.</h2>
               <p className="muted finishGuide">완료 전에는 주문 화면이 제한될 수 있습니다.</p>
             </div>
             {missingRequirements.length > 0 ? (
@@ -575,6 +579,8 @@ function AdminSetupPageInner() {
         }
         .summaryCard { border-color: #bfdbfe; background: linear-gradient(180deg, #eef5ff 0%, #ffffff 100%); }
         .summaryTop, .sectionHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+        .summaryTitleRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .sectionTitleCompact { font-size: clamp(19px, 2.6vw, 25px); }
         .summaryCta { min-width: 180px; align-self: center; }
         .progressWrap { height: 12px; border-radius: 999px; background: #dbeafe; overflow: hidden; }
         .progressFill { height: 100%; background: linear-gradient(90deg, #2563eb, #0f172a); border-radius: 999px; transition: width .2s ease; }
@@ -592,7 +598,8 @@ function AdminSetupPageInner() {
         .modeCard:hover { border-color: #93c5fd; box-shadow: 0 8px 20px rgba(37, 99, 235, .1); }
         .modeCard:active { transform: translateY(1px); }
         .modeCardOn { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .14); background: #eff6ff; }
-        .modeBadge { width: fit-content; border-radius: 999px; background: #dbeafe; color: #1e40af; padding: 4px 8px; font-size: 11px; font-weight: 950; }
+        .modeTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+        .modeBadge { width: fit-content; flex: 0 0 auto; border-radius: 999px; background: #dbeafe; color: #1e40af; padding: 4px 8px; font-size: 11px; font-weight: 950; }
         .modeCard strong { font-size: 17px; font-weight: 950; }
         .modeCard span:not(.modeBadge), .modeCard small { color: #475569; line-height: 1.4; font-weight: 750; }
         .modeCard small { color: #64748b; }
@@ -647,6 +654,7 @@ function AdminSetupPageInner() {
           .card, .summaryCard { padding: 14px; border-radius: 18px; gap: 10px; }
           h1 { font-size: 26px; }
           h2 { font-size: 22px; }
+          .sectionTitleCompact { font-size: 20px; }
           .heroText, .summaryText, .muted { font-size: 14px; line-height: 1.42; }
           .modeCard { min-height: 132px; padding: 12px; }
           .stepItem { padding: 11px; gap: 10px; }
@@ -670,6 +678,7 @@ function AdminSetupPageInner() {
           .eyebrow { margin-bottom: 3px; font-size: 10px; }
           h1 { margin-bottom: 3px; font-size: 24px; }
           h2 { font-size: 18px; line-height: 1.12; }
+          .sectionTitleCompact { font-size: 17px; }
           h3 { font-size: 18px; }
           .heroText, .summaryText, .muted { font-size: 13px; line-height: 1.34; }
           .statePill, .modeCurrent { padding: 5px 8px; font-size: 11px; }
@@ -683,9 +692,10 @@ function AdminSetupPageInner() {
           .sectionHead { gap: 6px; }
           .modeGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
           .modeCard { min-height: 0; padding: 8px 6px; border-radius: 999px; text-align: center; justify-items: center; gap: 0; }
+          .modeTitleRow { justify-content: center; }
           .modeCard strong { font-size: 12px; line-height: 1.2; }
           .modeCard .modeBadge,
-          .modeCard span:not(.modeBadge),
+          .modeCard > span:not(.modeTitleRow),
           .modeCard small { display: none; }
           .stepList { gap: 7px; }
           .stepItem { flex-direction: row; align-items: center; gap: 8px; padding: 8px; border-radius: 12px; }
