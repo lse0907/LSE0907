@@ -39,9 +39,9 @@ type StepView = {
 };
 
 const stepOrder: Array<{ step: ActiveSetupStep; title: string; desc: string; href: string; noun: string }> = [
-  { step: 1, title: "카테고리 설정", desc: "메뉴를 나눌 기본 분류를 먼저 만듭니다.", href: "/admin/categories", noun: "카테고리" },
-  { step: 2, title: "옵션 설정", desc: "사이즈, 온도, 추가 샷처럼 메뉴에 붙는 선택지를 만듭니다.", href: "/admin/options", noun: "옵션 그룹" },
-  { step: 3, title: "메뉴 설정", desc: "고객에게 보일 메뉴를 등록하고 카테고리/옵션을 연결합니다.", href: "/admin/menu", noun: "메뉴" },
+  { step: 1, title: "카테고리 설정", desc: "메뉴를 나눌 분류를 만듭니다.", href: "/admin/categories", noun: "카테고리" },
+  { step: 2, title: "옵션 설정", desc: "사이즈, 온도 등 선택지를 만듭니다.", href: "/admin/options", noun: "옵션 그룹" },
+  { step: 3, title: "메뉴 설정", desc: "판매 메뉴를 등록하고 옵션을 연결합니다.", href: "/admin/menu", noun: "메뉴" },
 ];
 
 const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: string; note: string }> = [
@@ -49,22 +49,22 @@ const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: 
     mode: "manual",
     title: "직접 설정",
     badge: "추천",
-    desc: "처음 매장을 만드는 경우 가장 안전합니다.",
-    note: "카테고리 → 옵션 → 메뉴 순서로 직접 입력합니다.",
+    desc: "처음 설정할 때 추천합니다.",
+    note: "카테고리 → 옵션 → 메뉴 순서로 입력합니다.",
   },
   {
     mode: "copy",
     title: "원본 복사",
     badge: "빠른 시작",
-    desc: "이미 운영 중인 다른 매장이 있을 때 적합합니다.",
-    note: "원본 매장의 카테고리/옵션/메뉴를 가져와 수정합니다.",
+    desc: "다른 매장이 있다면 빠르게 시작할 수 있습니다.",
+    note: "원본 데이터를 복사한 뒤 수정합니다.",
   },
   {
     mode: "bulk",
     title: "일괄 등록",
     badge: "대량 메뉴",
-    desc: "메뉴가 많을 때 파일 업로드로 빠르게 시작합니다.",
-    note: "옵션은 직접 설정해야 하며, 기존 데이터가 있으면 일부 제한됩니다.",
+    desc: "메뉴가 많을 때 파일로 등록합니다.",
+    note: "옵션은 직접 설정이 필요합니다.",
   },
 ];
 
@@ -290,9 +290,9 @@ function AdminSetupPageInner() {
     const locked = row.step === 2 ? !canGoOptions : row.step === 3 ? !canGoMenus : false;
     const lockReason =
       row.step === 2
-        ? "카테고리를 1개 이상 등록하면 옵션 설정이 열립니다."
+        ? "카테고리 등록 후 진행할 수 있습니다."
         : row.step === 3
-          ? "카테고리와 옵션 그룹을 먼저 준비하면 메뉴 설정이 열립니다."
+          ? "카테고리와 옵션 등록 후 진행할 수 있습니다."
           : "";
     const statusLabel = locked
       ? "잠김"
@@ -304,31 +304,37 @@ function AdminSetupPageInner() {
     const buttonLabel = locked
       ? "대기 중"
       : confirmed
-        ? "수정/확인하기"
+        ? "수정/확인"
         : dataReady
-          ? "확인하고 완료하기"
-          : "등록하러 가기";
+          ? "확인/완료"
+          : "등록하기";
     const statusClass = locked ? "locked" : confirmed ? "done" : "need";
     return { ...row, count, dataReady, confirmed, locked, lockReason, statusLabel, statusClass, buttonLabel };
   });
 
   const missingRequirements: string[] = [];
-  if (counts.categories < 1) missingRequirements.push("카테고리 1개 이상 등록이 필요합니다.");
-  if (counts.options < 1) missingRequirements.push("옵션 그룹 1개 이상 등록이 필요합니다.");
-  if (counts.menus < 1) missingRequirements.push("메뉴 1개 이상 등록이 필요합니다.");
-  if (counts.categories >= 1 && !progressConfirm.step1) missingRequirements.push("카테고리 페이지에서 ‘카테고리 설정 완료’를 눌러주세요.");
-  if (counts.options >= 1 && !progressConfirm.step2) missingRequirements.push("옵션 페이지에서 ‘옵션 설정 완료’를 눌러주세요.");
-  if (counts.menus >= 1 && !progressConfirm.step3) missingRequirements.push("메뉴 페이지에서 ‘메뉴 설정 완료’를 눌러주세요.");
+  if (counts.categories < 1) missingRequirements.push("카테고리를 1개 이상 등록해 주세요.");
+  if (counts.options < 1) missingRequirements.push("옵션 그룹을 1개 이상 등록해 주세요.");
+  if (counts.menus < 1) missingRequirements.push("메뉴를 1개 이상 등록해 주세요.");
+  if (counts.categories >= 1 && !progressConfirm.step1) missingRequirements.push("카테고리 설정 완료 버튼을 눌러주세요.");
+  if (counts.options >= 1 && !progressConfirm.step2) missingRequirements.push("옵션 설정 완료 버튼을 눌러주세요.");
+  if (counts.menus >= 1 && !progressConfirm.step3) missingRequirements.push("메뉴 설정 완료 버튼을 눌러주세요.");
   const canFinalize = missingRequirements.length === 0;
 
   const nextStep = stepViews.find((step) => !step.locked && (!step.dataReady || !step.confirmed)) || stepViews[2];
+  const nextRegisterPrompt =
+    nextStep.step === 1
+      ? "카테고리를 1개 이상 등록해 주세요."
+      : nextStep.step === 2
+        ? "옵션 그룹을 1개 이상 등록해 주세요."
+        : "메뉴를 1개 이상 등록해 주세요.";
   const nextActionText = isCompleted
-    ? "초기 설정이 완료되었습니다. 필요한 경우 각 설정 화면에서 언제든 수정할 수 있습니다."
+    ? "초기 설정이 완료되었습니다. 이후에도 수정할 수 있습니다."
     : !nextStep.dataReady
-      ? `${nextStep.noun}을 1개 이상 등록해 주세요.`
+      ? nextRegisterPrompt
       : !nextStep.confirmed
-        ? `${nextStep.title} 화면에서 내용을 확인한 뒤 완료 버튼을 눌러주세요.`
-        : "모든 데이터가 준비되었습니다. 최종 완료만 누르면 관리자 홈으로 이동합니다.";
+        ? `${nextStep.title}에서 확인 후 완료 버튼을 눌러주세요.`
+        : "모든 데이터가 준비되었습니다. 최종 완료해 주세요.";
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
@@ -419,6 +425,9 @@ function AdminSetupPageInner() {
               <span>메뉴 {counts.menus}개</span>
               <span>현재 단계 {progressStepLabel(progressStep)}</span>
             </div>
+            <p className="summaryCompact">
+              진행률 {completedSteps}/3 · 카테고리 {counts.categories} · 옵션 {counts.options} · 메뉴 {counts.menus}
+            </p>
           </section>
 
           {msg ? <div className="error" role="alert">{msg}</div> : null}
@@ -471,10 +480,10 @@ function AdminSetupPageInner() {
                     <div className="stepBadges">
                       <span>{row.noun} {row.count}개</span>
                       <span className={`statusBadge ${row.statusClass}`}>{row.statusLabel}</span>
-                      {lastStep === row.step ? <span>최근 방문 단계</span> : null}
+                      {lastStep === row.step ? <span className="recentBadge">최근 방문 단계</span> : null}
                     </div>
                     {row.locked ? <p className="warnText">{row.lockReason}</p> : null}
-                    {!row.locked && row.dataReady && !row.confirmed ? <p className="warnText">등록 데이터는 있습니다. 해당 페이지에서 완료 버튼을 눌러 확인을 마무리해 주세요.</p> : null}
+                    {!row.locked && row.dataReady && !row.confirmed ? <p className="warnText">등록 후 완료 버튼을 눌러주세요.</p> : null}
                   </div>
                   <button className="stepBtn" type="button" disabled={saving || row.locked} onClick={() => onGoStep(row.step, row.href)}>
                     {row.buttonLabel}
@@ -487,18 +496,18 @@ function AdminSetupPageInner() {
           <section className="card finishCard">
             <div>
               <p className="eyebrow">최종 확인</p>
-              <h2>주문 받을 준비가 끝났나요?</h2>
-              <p className="muted">초기 설정을 완료하기 전에는 고객 주문 화면에 메뉴가 정상 표시되지 않을 수 있습니다.</p>
+              <h2>주문 준비를 마무리해 주세요.</h2>
+              <p className="muted finishGuide">완료 전에는 주문 화면이 제한될 수 있습니다.</p>
             </div>
             {missingRequirements.length > 0 ? (
               <div className="warnBox" role="status">
-                <strong>최종 완료까지 {missingRequirements.length}가지가 남았습니다.</strong>
+                <strong>남은 항목 {missingRequirements.length}개를 확인해 주세요.</strong>
                 {missingRequirements.map((text) => (
                   <p key={text}>{text}</p>
                 ))}
               </div>
             ) : (
-              <div className="successBox" role="status">모든 필수 설정이 확인되었습니다. 최종 완료 후 관리자 홈으로 이동합니다.</div>
+              <div className="successBox" role="status">모든 설정이 확인되었습니다. 완료 후 관리자 홈으로 이동합니다.</div>
             )}
             <div className="actions">
               <button className="ghostBtn" disabled={saving} onClick={onSkipForNow}>
@@ -516,7 +525,7 @@ function AdminSetupPageInner() {
                 <div>
                   <p className="eyebrow">최종 완료</p>
                   <h3 id="setup-confirm-title">초기 설정을 완료할까요?</h3>
-                  <p className="muted">완료하면 관리자 홈으로 이동합니다. 이후에도 카테고리/옵션/메뉴는 언제든 수정할 수 있습니다.</p>
+                  <p className="muted">완료 후 관리자 홈으로 이동합니다. 메뉴 설정은 나중에도 수정할 수 있습니다.</p>
                 </div>
                 <div className="countGrid">
                   <div><span>카테고리</span><strong>{counts.categories}개</strong></div>
@@ -533,7 +542,7 @@ function AdminSetupPageInner() {
                 <div className="actions modalActions">
                   <button className="ghostBtn" disabled={saving} onClick={closeConfirm}>계속 수정하기</button>
                   <button className="primaryBtn" disabled={saving || !canFinalize} onClick={onComplete}>
-                    {saving ? "완료 처리 중..." : "완료하고 관리자 홈으로 이동"}
+                    {saving ? "완료 처리 중..." : "완료하고 이동"}
                   </button>
                 </div>
               </div>
@@ -570,6 +579,7 @@ function AdminSetupPageInner() {
         .progressWrap { height: 12px; border-radius: 999px; background: #dbeafe; overflow: hidden; }
         .progressFill { height: 100%; background: linear-gradient(90deg, #2563eb, #0f172a); border-radius: 999px; transition: width .2s ease; }
         .summaryMeta { display: flex; flex-wrap: wrap; gap: 8px; }
+        .summaryCompact { display: none; margin: 0; color: #334155; font-size: 12px; line-height: 1.35; font-weight: 900; }
         .summaryMeta span, .stepBadges span { border: 1px solid #dbe1ea; background: #f8fafc; border-radius: 999px; padding: 6px 9px; color: #334155; font-size: 12px; font-weight: 900; }
         .loadingCard { overflow: hidden; }
         .skeletonTitle, .skeletonLine { height: 18px; border-radius: 999px; background: linear-gradient(90deg, #e2e8f0, #f8fafc, #e2e8f0); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
@@ -655,11 +665,52 @@ function AdminSetupPageInner() {
           .stepBtn, .ghostBtn, .primaryBtn { min-height: 44px; font-size: 14px; padding: 9px 11px; }
         }
         @media (max-width: 560px) {
-          .stepItem { flex-direction: column; }
-          .stepBtn { width: 100%; min-width: 0; }
-          .actions, .modalActions { grid-template-columns: 1fr; }
-          .countGrid { grid-template-columns: 1fr; }
-          .summaryMeta span, .stepBadges span { font-size: 11px; }
+          .wrap { padding: 10px 10px 18px; }
+          .hero { margin-bottom: 8px; gap: 8px; }
+          .eyebrow { margin-bottom: 3px; font-size: 10px; }
+          h1 { margin-bottom: 3px; font-size: 24px; }
+          h2 { font-size: 18px; line-height: 1.12; }
+          h3 { font-size: 18px; }
+          .heroText, .summaryText, .muted { font-size: 13px; line-height: 1.34; }
+          .statePill, .modeCurrent { padding: 5px 8px; font-size: 11px; }
+          .card, .summaryCard { margin-top: 8px; padding: 10px; border-radius: 14px; gap: 8px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04); }
+          .summaryTop { flex-direction: row; align-items: center; gap: 8px; }
+          .summaryCta { width: auto; min-width: 82px; min-height: 40px; flex: 0 0 auto; }
+          .sectionHead { flex-direction: row; align-items: center; }
+          .progressWrap { height: 8px; }
+          .summaryMeta { display: none; }
+          .summaryCompact { display: block; }
+          .sectionHead { gap: 6px; }
+          .modeGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+          .modeCard { min-height: 0; padding: 8px 6px; border-radius: 999px; text-align: center; justify-items: center; gap: 0; }
+          .modeCard strong { font-size: 12px; line-height: 1.2; }
+          .modeCard .modeBadge,
+          .modeCard span:not(.modeBadge),
+          .modeCard small { display: none; }
+          .stepList { gap: 7px; }
+          .stepItem { flex-direction: row; align-items: center; gap: 8px; padding: 8px; border-radius: 12px; }
+          .stepMain { gap: 5px; }
+          .stepTitleRow { gap: 7px; align-items: center; }
+          .stepTitleRow strong { font-size: 14px; line-height: 1.2; }
+          .stepTitleRow .muted { display: none; }
+          .stepNumber { width: 24px; height: 24px; font-size: 12px; }
+          .stepBadges { gap: 4px; }
+          .summaryMeta span, .stepBadges span { padding: 4px 6px; font-size: 10px; }
+          .recentBadge { display: none; }
+          .warnText { padding: 5px 7px; border-radius: 9px; font-size: 11px; line-height: 1.3; }
+          .stepBtn, .ghostBtn, .primaryBtn { min-height: 40px; border-radius: 11px; font-size: 13px; padding: 8px 10px; }
+          .stepBtn { width: auto; min-width: 76px; white-space: nowrap; }
+          .actions, .modalActions { grid-template-columns: 1fr 1fr; gap: 7px; }
+          .finishGuide { display: none; }
+          .finishCard .warnBox p { display: none; }
+          .warnBox, .successBox { padding: 8px 9px; border-radius: 11px; gap: 4px; font-size: 12px; }
+          .error { margin-top: 8px; padding: 9px; border-radius: 11px; font-size: 13px; }
+          .confirmOverlay { padding: 10px; }
+          .confirmCard { border-radius: 16px; padding: 12px; gap: 10px; }
+          .countGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+          .countGrid div { padding: 8px 6px; border-radius: 10px; }
+          .countGrid span { font-size: 10px; }
+          .countGrid strong { font-size: 15px; }
         }
       `}</style>
     </main>
