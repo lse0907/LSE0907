@@ -672,6 +672,33 @@ function AdminSetupPageInner() {
           .stepItem { align-items: flex-start; }
           .stepBtn, .ghostBtn, .primaryBtn { min-height: 44px; font-size: 14px; padding: 9px 11px; }
         }
+
+        @media (min-width: 561px) and (max-width: 768px) {
+          .summaryTop,
+          .sectionHead {
+            flex-direction: row;
+            align-items: center;
+          }
+          .summaryCta {
+            width: auto;
+            min-width: 150px;
+            flex: 0 0 auto;
+          }
+          .modeCurrent { width: fit-content; }
+          .modeGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .modeCard {
+            min-height: 126px;
+            padding: 12px;
+          }
+          .modeCard strong { font-size: 15px; }
+          .modeCard span:not(.modeBadge),
+          .modeCard small {
+            font-size: 12px;
+            line-height: 1.35;
+          }
+          .stepItem { align-items: center; }
+          .stepBtn { min-width: 128px; }
+        }
         @media (max-width: 560px) {
           .wrap { padding: 10px 10px 18px; }
           .hero { margin-bottom: 8px; gap: 8px; }
