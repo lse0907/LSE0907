@@ -1310,7 +1310,7 @@ function AdminOptionsPageInner() {
                   showCopyHiddenNotice
                     ? "이미 등록된 옵션이 있어 원본 복사를 사용할 수 없습니다."
                     : isBulkMode
-                      ? "옵션 그룹을 직접 등록한 뒤 완료 버튼을 눌러주세요."
+                      ? "옵션은 일괄 등록을 지원하지 않습니다. 옵션 그룹과 항목을 직접 등록해 주세요."
                       : ""
                 }
                 setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
