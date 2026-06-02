@@ -151,6 +151,7 @@ function CategoriesPageInner() {
   const hasCategoryData = cats.length > 0;
   const canUseBulkImport = !hasCategoryData;
   const showCopyHiddenNotice = isCopyMode && hasCategoryData;
+  const showBulkHiddenNotice = isBulkMode && hasCategoryData;
   const hasCopySource = myStores.length > 0;
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
@@ -580,33 +581,26 @@ function CategoriesPageInner() {
           completeLabel="카테고리 설정 완료"
           completeDisabled={loading || !hasActiveCategory || actionBusy}
           disabledReason="활성 카테고리를 1개 이상 등록하면 완료할 수 있습니다."
-          noticeText={showCopyHiddenNotice ? "이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다." : ""}
+          noticeText={
+            showCopyHiddenNotice
+              ? "이미 등록된 카테고리가 있어 원본 복사를 사용할 수 없습니다."
+              : showBulkHiddenNotice
+                ? "이미 등록된 카테고리가 있어 일괄 등록을 사용할 수 없습니다."
+                : ""
+          }
           setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
           onComplete={() => void onCompleteStep()}
         />
       ) : null}
 
-      {isBulkMode ? (
+      {isBulkMode && canUseBulkImport ? (
         <section className="card">
-          {canUseBulkImport ? (
-            <>
-              <p className="subText" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
-              <div className="row" style={{ marginTop: 10 }}>
-                <a className="btn btnPrimary" href={importHref}>
-                  카테고리·메뉴 일괄 등록 시작
-                </a>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="subText" style={{ margin: 0 }}>이미 등록된 데이터가 있어 일괄 등록을 사용할 수 없습니다.</p>
-              <div className="row" style={{ marginTop: 10 }}>
-                <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                  설정 방식 변경
-                </a>
-              </div>
-            </>
-          )}
+          <p className="subText" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
+          <div className="row" style={{ marginTop: 10 }}>
+            <a className="btn btnPrimary" href={importHref}>
+              카테고리·메뉴 일괄 등록 시작
+            </a>
+          </div>
         </section>
       ) : null}
 
