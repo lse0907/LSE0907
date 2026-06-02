@@ -350,6 +350,59 @@ function AdminSetupPageInner() {
         ? `${nextStep.title}에서 확인 후 완료 버튼을 눌러주세요.`
         : "모든 데이터가 준비되었습니다. 최종 완료해 주세요.";
 
+  const stepViews: StepView[] = stepOrder.map((row) => {
+    const count = getCountForStep(row.step, counts);
+    const dataReady = count > 0;
+    const confirmed = getConfirmedForStep(row.step, progressConfirm);
+    const locked = row.step === 2 ? !canGoOptions : row.step === 3 ? !canGoMenus : false;
+    const lockReason =
+      row.step === 2
+        ? "카테고리 등록 후 진행할 수 있습니다."
+        : row.step === 3
+          ? "카테고리와 옵션 등록 후 진행할 수 있습니다."
+          : "";
+    const statusLabel = locked
+      ? "잠김"
+      : confirmed
+        ? "완료 확인됨"
+        : dataReady
+          ? "등록됨 · 완료 확인 필요"
+          : "등록 필요";
+    const buttonLabel = locked
+      ? "대기 중"
+      : confirmed
+        ? "수정/확인"
+        : dataReady
+          ? "확인/완료"
+          : "등록하기";
+    const statusClass = locked ? "locked" : confirmed ? "done" : "need";
+    return { ...row, count, dataReady, confirmed, locked, lockReason, statusLabel, statusClass, buttonLabel };
+  });
+
+  const missingRequirements: string[] = [];
+  if (counts.categories < 1) missingRequirements.push("카테고리를 1개 이상 등록해 주세요.");
+  if (counts.options < 1) missingRequirements.push("옵션 그룹을 1개 이상 등록해 주세요.");
+  if (counts.menus < 1) missingRequirements.push("메뉴를 1개 이상 등록해 주세요.");
+  if (counts.categories >= 1 && !progressConfirm.step1) missingRequirements.push("카테고리 설정 완료 버튼을 눌러주세요.");
+  if (counts.options >= 1 && !progressConfirm.step2) missingRequirements.push("옵션 설정 완료 버튼을 눌러주세요.");
+  if (counts.menus >= 1 && !progressConfirm.step3) missingRequirements.push("메뉴 설정 완료 버튼을 눌러주세요.");
+  const canFinalize = missingRequirements.length === 0;
+
+  const nextStep = stepViews.find((step) => !step.locked && (!step.dataReady || !step.confirmed)) || stepViews[2];
+  const nextRegisterPrompt =
+    nextStep.step === 1
+      ? "카테고리를 1개 이상 등록해 주세요."
+      : nextStep.step === 2
+        ? "옵션 그룹을 1개 이상 등록해 주세요."
+        : "메뉴를 1개 이상 등록해 주세요.";
+  const nextActionText = isCompleted
+    ? "초기 설정이 완료되었습니다. 이후에도 수정할 수 있습니다."
+    : !nextStep.dataReady
+      ? nextRegisterPrompt
+      : !nextStep.confirmed
+        ? `${nextStep.title}에서 확인 후 완료 버튼을 눌러주세요.`
+        : "모든 데이터가 준비되었습니다. 최종 완료해 주세요.";
+
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
     const { data: authData } = await supabase.auth.getUser();

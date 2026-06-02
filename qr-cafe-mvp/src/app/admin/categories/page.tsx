@@ -365,6 +365,19 @@ function CategoriesPageInner() {
     return true;
   };
 
+  const deleteCategoryOnly = async (cat: MenuCategory) => {
+    const delOnly = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
+    if (delOnly.error) {
+      setMsgTone("error");
+      setMsg(delOnly.error.message);
+      return false;
+    }
+    await refresh();
+    setMsgTone("success");
+    setMsg("카테고리를 삭제했습니다.");
+    return true;
+  };
+
   const onDeleteWithReassign = async (cat: MenuCategory) => {
     if (actionBusy) return;
     setSaving(true);
