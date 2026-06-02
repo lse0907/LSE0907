@@ -46,6 +46,7 @@ function CategoriesPageInner() {
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState(false);
+  const [copyConfirmOpen, setCopyConfirmOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ category: MenuCategory; linkedMenuCount: number; targetCategoryId: string } | null>(null);
 
   const [editId, setEditId] = useState("");
@@ -155,22 +156,35 @@ function CategoriesPageInner() {
   const hasCopySource = myStores.length > 0;
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
-  const onCopyCategories = async () => {
+  const openCopyConfirm = () => {
     if (actionBusy) return;
     if (!storeId) {
       setMsgTone("error");
-      return setMsg("현재 매장을 먼저 선택해주세요.");
+      setMsg("현재 매장을 먼저 선택해주세요.");
+      return;
     }
     if (!copySourceStoreId) {
       setMsgTone("error");
-      return setMsg("원본 매장을 선택해주세요.");
+      setMsg("원본 매장을 선택해주세요.");
+      return;
     }
     if (copySourceStoreId === storeId) {
       setMsgTone("error");
-      return setMsg("원본/대상 매장은 동일할 수 없습니다.");
+      setMsg("원본/대상 매장은 동일할 수 없습니다.");
+      return;
     }
-    if (!confirm("선택한 매장의 카테고리를 현재 매장으로 복사할까요?")) return;
+    setCopyConfirmOpen(true);
+  };
+
+  const closeCopyConfirm = () => {
+    if (actionBusy) return;
+    setCopyConfirmOpen(false);
+  };
+
+  const onCopyCategories = async () => {
+    if (actionBusy || !storeId || !copySourceStoreId) return;
     setCopying(true);
+    setCopyConfirmOpen(false);
     setMsg("");
     setMsgTone("neutral");
     const { error } = await supabase.rpc("admin_copy_categories_v1", {
@@ -430,6 +444,17 @@ function CategoriesPageInner() {
     setSaving(false);
   };
 
+  useEffect(() => {
+    if (!copyConfirmOpen && !deleteConfirm) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || actionBusy) return;
+      setCopyConfirmOpen(false);
+      setDeleteConfirm(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [actionBusy, copyConfirmOpen, deleteConfirm]);
+
   const onCompleteStep = async () => {
     if (!storeId || !hasActiveCategory) return;
     const ok = await setSetupStepConfirmed(storeId, "step1", true);
@@ -489,6 +514,7 @@ function CategoriesPageInner() {
         .modalNotice{margin:0;border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:900;line-height:1.35}
         .modalActions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
         .modalActions .btn{min-width:108px}
+        .modalPrimary{background:#111827;color:#fff;border-color:#111827}
         .targetSelect{width:100%}
         .categoryListScroll{
           max-height:56vh;
@@ -616,7 +642,7 @@ function CategoriesPageInner() {
                 </option>
               ))}
             </select>
-            <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !hasCopySource || !copySourceStoreId}>
+            <button className="btn copyBtn" onClick={openCopyConfirm} disabled={actionBusy || loading || !hasCopySource || !copySourceStoreId}>
               {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
             </button>
           </div>
@@ -731,8 +757,42 @@ function CategoriesPageInner() {
       </section>
 
 
+      {copyConfirmOpen ? (
+        <div
+          className="modalOverlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="copy-category-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeCopyConfirm();
+          }}
+        >
+          <div className="modalCard">
+            <h3 id="copy-category-title" className="modalTitle">카테고리 복사</h3>
+            <p className="modalDesc">선택한 원본 매장의 카테고리를 현재 매장으로 복사합니다.</p>
+            <p className="modalNotice">기존 카테고리가 없는 초기 설정 상태에서만 복사하는 것을 권장합니다.</p>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={closeCopyConfirm} disabled={actionBusy}>
+                취소
+              </button>
+              <button className="btn modalPrimary" type="button" onClick={() => void onCopyCategories()} disabled={actionBusy}>
+                복사하기
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {deleteConfirm ? (
-        <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="delete-category-title">
+        <div
+          className="modalOverlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-category-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeDeleteConfirm();
+          }}
+        >
           <div className="modalCard">
             <h3 id="delete-category-title" className="modalTitle">카테고리 삭제</h3>
             <p className="modalDesc">
