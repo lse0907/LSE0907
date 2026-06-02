@@ -1347,7 +1347,7 @@ function AdminOptionsPageInner() {
 
       {isBulkMode ? (
         <section className="card">
-          <p className="sub" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
+          <p className="sub" style={{ margin: 0 }}>옵션은 직접 설정이 필요합니다. 메뉴·카테고리 일괄 등록 후 옵션 그룹을 등록해 주세요.</p>
         </section>
       ) : null}
       {!loading && !hasCategoryPrerequisite ? (
@@ -1398,9 +1398,7 @@ function AdminOptionsPageInner() {
           </p>
           {!hasCopySource ? (
             <p className="sub copyWarnText">복사할 원본 매장이 없습니다.</p>
-          ) : (
-            <p className="sub" style={{ marginTop: 2 }}>원본 매장을 만든 뒤 다시 시도해 주세요.</p>
-          )}
+          ) : null}
         </section>
       ) : null}
 

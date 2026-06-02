@@ -43,10 +43,10 @@ function CategoriesPageInner() {
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"error" | "success" | "neutral">("neutral");
   const [myStores, setMyStores] = useState<MyStore[]>([]);
-  const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ category: MenuCategory; linkedMenuCount: number; targetCategoryId: string } | null>(null);
 
   const [editId, setEditId] = useState("");
   const [editName, setEditName] = useState("");
@@ -146,6 +146,8 @@ function CategoriesPageInner() {
   const showCategoryAssist = isInitialCategorySetup;
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
+  const activeCategoryCount = cats.filter((cat) => cat.is_active !== false).length;
+  const hasActiveCategory = activeCategoryCount > 0;
   const hasCategoryData = cats.length > 0;
   const canUseBulkImport = !hasCategoryData;
   const showCopyHiddenNotice = isCopyMode && hasCategoryData;
@@ -334,10 +336,24 @@ function CategoriesPageInner() {
     setMsg("카테고리를 비활성화했습니다.");
   };
 
+  const deleteCategoryOnly = async (cat: MenuCategory) => {
+    const delOnly = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
+    if (delOnly.error) {
+      setMsgTone("error");
+      setMsg(delOnly.error.message);
+      return false;
+    }
+    await refresh();
+    setMsgTone("success");
+    setMsg("카테고리를 삭제했습니다.");
+    return true;
+  };
+
   const onDeleteWithReassign = async (cat: MenuCategory) => {
     if (actionBusy) return;
     setSaving(true);
     setMsg("");
+    setMsgTone("neutral");
 
     const countRes = await supabase
       .from("menu_items")
@@ -354,16 +370,8 @@ function CategoriesPageInner() {
     const linkedMenuCount = Number(countRes.count || 0);
 
     if (linkedMenuCount < 1) {
-      const delOnly = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
-      if (delOnly.error) {
-        setSaving(false);
-        setMsgTone("error");
-        return setMsg(delOnly.error.message);
-      }
-      await refresh();
+      await deleteCategoryOnly(cat);
       setSaving(false);
-      setMsgTone("success");
-      setMsg("카테고리를 삭제했습니다.");
       return;
     }
 
@@ -371,36 +379,58 @@ function CategoriesPageInner() {
     if (!others.length) {
       setSaving(false);
       setMsgTone("error");
-      setMsg("다른 카테고리를 만든 뒤 삭제해 주세요.");
+      setMsg("다른 활성 카테고리를 만든 뒤 삭제해 주세요.");
       return;
     }
 
-    const target = others[0].id;
+    setDeleteConfirm({ category: cat, linkedMenuCount, targetCategoryId: others[0].id });
+    setSaving(false);
+  };
+
+  const closeDeleteConfirm = () => {
+    if (actionBusy) return;
+    setDeleteConfirm(null);
+  };
+
+  const confirmDeleteWithReassign = async () => {
+    if (!deleteConfirm || actionBusy) return;
+    const { category, targetCategoryId } = deleteConfirm;
+    if (!targetCategoryId) {
+      setMsgTone("error");
+      setMsg("이동할 카테고리를 선택해 주세요.");
+      return;
+    }
+
+    setSaving(true);
+    setMsg("");
+    setMsgTone("neutral");
+
     const upd = await supabase
       .from("menu_items")
-      .update({ category_id: target })
+      .update({ category_id: targetCategoryId })
       .eq("store_id", storeId)
-      .eq("category_id", cat.id);
+      .eq("category_id", category.id);
     if (upd.error) {
       setSaving(false);
       setMsgTone("error");
       return setMsg(upd.error.message);
     }
 
-    const del = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
+    const del = await supabase.from("menu_categories").delete().eq("id", category.id).eq("store_id", storeId);
     if (del.error) {
       setMsgTone("error");
       setMsg(del.error.message);
     } else {
+      setDeleteConfirm(null);
       await refresh();
       setMsgTone("success");
-      setMsg("재할당 후 카테고리를 삭제했습니다.");
+      setMsg("선택한 카테고리로 메뉴를 이동한 뒤 삭제했습니다.");
     }
     setSaving(false);
   };
 
   const onCompleteStep = async () => {
-    if (!storeId || cats.length < 1) return;
+    if (!storeId || !hasActiveCategory) return;
     const ok = await setSetupStepConfirmed(storeId, "step1", true);
     if (!ok) {
       setMsgTone("error");
@@ -451,6 +481,14 @@ function CategoriesPageInner() {
         .subText{margin:0;color:#6b7280;font-size:13px;font-weight:800;line-height:1.4}
         .copyHelpText{margin-top:6px}
         .copyWarnText{margin-top:2px;color:#b45309}
+        .modalOverlay{position:fixed;inset:0;z-index:50;background:rgba(15,23,42,.46);display:flex;align-items:center;justify-content:center;padding:18px}
+        .modalCard{width:min(100%,420px);background:#fff;border:1px solid #dbe2ea;border-radius:18px;padding:18px;box-shadow:0 20px 45px rgba(15,23,42,.2);display:grid;gap:12px}
+        .modalTitle{margin:0;font-size:18px;font-weight:950;letter-spacing:-.02em}
+        .modalDesc{margin:0;color:#475569;font-size:13px;font-weight:800;line-height:1.45}
+        .modalNotice{margin:0;border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:900;line-height:1.35}
+        .modalActions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+        .modalActions .btn{min-width:108px}
+        .targetSelect{width:100%}
         .categoryListScroll{
           max-height:56vh;
           overflow-y:auto;
@@ -540,8 +578,8 @@ function CategoriesPageInner() {
           }
           stepGuide="카테고리를 등록한 뒤 완료 버튼을 눌러주세요."
           completeLabel="카테고리 설정 완료"
-          completeDisabled={loading || cats.length < 1 || actionBusy}
-          disabledReason="카테고리를 1개 이상 등록하면 완료할 수 있습니다."
+          completeDisabled={loading || !hasActiveCategory || actionBusy}
+          disabledReason="활성 카테고리를 1개 이상 등록하면 완료할 수 있습니다."
           noticeText={showCopyHiddenNotice ? "이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다." : ""}
           setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
           onComplete={() => void onCompleteStep()}
@@ -697,6 +735,41 @@ function CategoriesPageInner() {
           </div>
         )}
       </section>
+
+
+      {deleteConfirm ? (
+        <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="delete-category-title">
+          <div className="modalCard">
+            <h3 id="delete-category-title" className="modalTitle">카테고리 삭제</h3>
+            <p className="modalDesc">
+              <b>{deleteConfirm.category.name}</b>에 연결된 메뉴 {deleteConfirm.linkedMenuCount}개를 이동한 뒤 삭제합니다.
+            </p>
+            <p className="modalNotice">삭제 전, 메뉴를 이동할 카테고리를 선택해 주세요.</p>
+            <select
+              className="input targetSelect"
+              value={deleteConfirm.targetCategoryId}
+              onChange={(e) => setDeleteConfirm((prev) => (prev ? { ...prev, targetCategoryId: e.target.value } : prev))}
+              disabled={actionBusy}
+            >
+              {cats
+                .filter((cat) => cat.id !== deleteConfirm.category.id && cat.is_active !== false)
+                .map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+            </select>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={closeDeleteConfirm} disabled={actionBusy}>
+                취소
+              </button>
+              <button className="btn btnDelete" type="button" onClick={() => void confirmDeleteWithReassign()} disabled={actionBusy || !deleteConfirm.targetCategoryId}>
+                이동 후 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showCategoryAssist && !isBulkMode && canUseBulkImport ? (
         <section className="card">
