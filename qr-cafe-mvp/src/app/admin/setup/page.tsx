@@ -19,7 +19,9 @@ type StoreSetupRow = {
 type SetupCounts = {
   categories: number;
   options: number;
+  optionItems: number;
   menus: number;
+  readyMenus: number;
 };
 
 type StepView = {
@@ -40,8 +42,8 @@ type StepView = {
 
 const stepOrder: Array<{ step: ActiveSetupStep; title: string; desc: string; href: string; noun: string }> = [
   { step: 1, title: "카테고리 설정", desc: "메뉴를 나눌 분류를 만듭니다.", href: "/admin/categories", noun: "카테고리" },
-  { step: 2, title: "옵션 설정", desc: "사이즈, 온도 등 선택지를 만듭니다.", href: "/admin/options", noun: "옵션 그룹" },
-  { step: 3, title: "메뉴 설정", desc: "판매 메뉴를 등록하고 옵션을 연결합니다.", href: "/admin/menu", noun: "메뉴" },
+  { step: 2, title: "옵션 설정", desc: "사이즈, 온도 등 선택지를 만듭니다.", href: "/admin/options", noun: "옵션 항목" },
+  { step: 3, title: "메뉴 설정", desc: "판매 메뉴를 등록하고 옵션을 연결합니다.", href: "/admin/menu", noun: "판매 메뉴" },
 ];
 
 const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: string; note: string }> = [
@@ -73,18 +75,26 @@ function setupModeFromQuery(raw: string): SetupMode {
   return "manual";
 }
 
+function hasOptionSetupReady(counts: SetupCounts) {
+  return counts.options > 0 && counts.optionItems > 0;
+}
+
+function hasMenuSetupReady(counts: SetupCounts) {
+  return counts.readyMenus > 0;
+}
+
 function computeProgressStep(counts: SetupCounts): ActiveSetupStep {
   if (counts.categories < 1) return 1;
-  if (counts.options < 1) return 2;
-  if (counts.menus < 1) return 3;
+  if (!hasOptionSetupReady(counts)) return 2;
+  if (!hasMenuSetupReady(counts)) return 3;
   return 3;
 }
 
 function computeCompletedSteps(counts: SetupCounts) {
   let done = 0;
   if (counts.categories > 0) done += 1;
-  if (counts.options > 0) done += 1;
-  if (counts.menus > 0) done += 1;
+  if (hasOptionSetupReady(counts)) done += 1;
+  if (hasMenuSetupReady(counts)) done += 1;
   return done;
 }
 
@@ -96,8 +106,8 @@ function progressStepLabel(step: ActiveSetupStep) {
 
 function getCountForStep(step: ActiveSetupStep, counts: SetupCounts) {
   if (step === 1) return counts.categories;
-  if (step === 2) return counts.options;
-  return counts.menus;
+  if (step === 2) return counts.optionItems;
+  return counts.readyMenus;
 }
 
 function getConfirmedForStep(step: ActiveSetupStep, progressConfirm: SetupProgressState) {
@@ -117,7 +127,7 @@ function AdminSetupPageInner() {
   const [dbCompleted, setDbCompleted] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [msg, setMsg] = useState("");
-  const [counts, setCounts] = useState<SetupCounts>({ categories: 0, options: 0, menus: 0 });
+  const [counts, setCounts] = useState<SetupCounts>({ categories: 0, options: 0, optionItems: 0, menus: 0, readyMenus: 0 });
   const [setupMode, setSetupMode] = useState<SetupMode>(() => setupModeFromQuery((sp.get("mode") || "").trim()));
   const [progressConfirm, setProgressConfirm] = useState<SetupProgressState>({ step1: false, step2: false, step3: false });
 
@@ -194,16 +204,20 @@ function AdminSetupPageInner() {
   }, [confirmOpen, saving]);
 
   const loadCounts = async (sid: string) => {
-    const [catRes, optRes, menuRes] = await Promise.all([
-      supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", sid),
+    const [catRes, optRes, itemRes, menuRes] = await Promise.all([
+      supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", sid).eq("is_active", true),
       supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", sid),
-      supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", sid),
+      supabase.from("option_items").select("id", { count: "exact", head: true }).eq("store_id", sid),
+      supabase.from("menu_items").select("id,price,is_sold_out,category_id").eq("store_id", sid),
     ]);
-    if (catRes.error || optRes.error || menuRes.error) return null;
+    if (catRes.error || optRes.error || itemRes.error || menuRes.error) return null;
+    const menuRows = Array.isArray(menuRes.data) ? menuRes.data : [];
     const next = {
       categories: Number(catRes.count || 0),
       options: Number(optRes.count || 0),
-      menus: Number(menuRes.count || 0),
+      optionItems: Number(itemRes.count || 0),
+      menus: menuRows.length,
+      readyMenus: menuRows.filter((menu) => Number(menu.price || 0) > 0 && !menu.is_sold_out && Boolean(menu.category_id)).length,
     };
     setCounts(next);
     return next;
@@ -261,12 +275,12 @@ function AdminSetupPageInner() {
       setMsg("초기 설정 완료 전, 카테고리를 최소 1개 이상 등록해 주세요.");
       return;
     }
-    if (latest.options < 1) {
-      setMsg("초기 설정 완료 전, 옵션 그룹을 최소 1개 이상 등록해 주세요.");
+    if (!hasOptionSetupReady(latest)) {
+      setMsg("초기 설정 완료 전, 옵션 그룹과 항목을 최소 1개 이상 등록해 주세요.");
       return;
     }
-    if (latest.menus < 1) {
-      setMsg("초기 설정 완료 전, 메뉴를 최소 1개 이상 등록해 주세요.");
+    if (!hasMenuSetupReady(latest)) {
+      setMsg("초기 설정 완료 전, 가격이 있는 판매 메뉴를 카테고리에 연결해 주세요.");
       return;
     }
     await saveStep(4);
@@ -281,7 +295,60 @@ function AdminSetupPageInner() {
   const isCompleted = dbCompleted && isReady;
   const allStepsConfirmed = progressConfirm.step1 && progressConfirm.step2 && progressConfirm.step3;
   const canGoOptions = counts.categories >= 1;
-  const canGoMenus = counts.categories >= 1 && counts.options >= 1;
+  const canGoMenus = counts.categories >= 1 && hasOptionSetupReady(counts);
+
+  const stepViews: StepView[] = stepOrder.map((row) => {
+    const count = getCountForStep(row.step, counts);
+    const dataReady = row.step === 2 ? hasOptionSetupReady(counts) : row.step === 3 ? hasMenuSetupReady(counts) : count > 0;
+    const confirmed = getConfirmedForStep(row.step, progressConfirm);
+    const locked = row.step === 2 ? !canGoOptions : row.step === 3 ? !canGoMenus : false;
+    const lockReason =
+      row.step === 2
+        ? "카테고리 등록 후 진행할 수 있습니다."
+        : row.step === 3
+          ? "카테고리와 옵션 항목 등록 후 진행할 수 있습니다."
+          : "";
+    const statusLabel = locked
+      ? "잠김"
+      : confirmed
+        ? "완료 확인됨"
+        : dataReady
+          ? "등록됨 · 완료 확인 필요"
+          : "등록 필요";
+    const buttonLabel = locked
+      ? "대기 중"
+      : confirmed
+        ? "수정/확인"
+        : dataReady
+          ? "확인/완료"
+          : "등록하기";
+    const statusClass = locked ? "locked" : confirmed ? "done" : "need";
+    return { ...row, count, dataReady, confirmed, locked, lockReason, statusLabel, statusClass, buttonLabel };
+  });
+
+  const missingRequirements: string[] = [];
+  if (counts.categories < 1) missingRequirements.push("카테고리를 1개 이상 등록해 주세요.");
+  if (!hasOptionSetupReady(counts)) missingRequirements.push("옵션 그룹과 항목을 1개 이상 등록해 주세요.");
+  if (!hasMenuSetupReady(counts)) missingRequirements.push("가격이 있는 판매 메뉴를 카테고리에 연결해 주세요.");
+  if (counts.categories >= 1 && !progressConfirm.step1) missingRequirements.push("카테고리 설정 완료 버튼을 눌러주세요.");
+  if (hasOptionSetupReady(counts) && !progressConfirm.step2) missingRequirements.push("옵션 설정 완료 버튼을 눌러주세요.");
+  if (hasMenuSetupReady(counts) && !progressConfirm.step3) missingRequirements.push("메뉴 설정 완료 버튼을 눌러주세요.");
+  const canFinalize = missingRequirements.length === 0;
+
+  const nextStep = stepViews.find((step) => !step.locked && (!step.dataReady || !step.confirmed)) || stepViews[2];
+  const nextRegisterPrompt =
+    nextStep.step === 1
+      ? "카테고리를 1개 이상 등록해 주세요."
+      : nextStep.step === 2
+        ? "옵션 그룹을 1개 이상 등록해 주세요."
+        : "메뉴를 1개 이상 등록해 주세요.";
+  const nextActionText = isCompleted
+    ? "초기 설정이 완료되었습니다. 이후에도 수정할 수 있습니다."
+    : !nextStep.dataReady
+      ? nextRegisterPrompt
+      : !nextStep.confirmed
+        ? `${nextStep.title}에서 확인 후 완료 버튼을 눌러주세요.`
+        : "모든 데이터가 준비되었습니다. 최종 완료해 주세요.";
 
   const stepViews: StepView[] = stepOrder.map((row) => {
     const count = getCountForStep(row.step, counts);
@@ -423,12 +490,12 @@ function AdminSetupPageInner() {
             <div className="summaryMeta" aria-label="현재 등록 수">
               <span>진행률 {completedSteps}/3</span>
               <span>카테고리 {counts.categories}개</span>
-              <span>옵션그룹 {counts.options}개</span>
-              <span>메뉴 {counts.menus}개</span>
+              <span>옵션항목 {counts.optionItems}개</span>
+              <span>판매메뉴 {counts.readyMenus}개</span>
               <span>현재 단계 {progressStepLabel(progressStep)}</span>
             </div>
             <p className="summaryCompact">
-              진행률 {completedSteps}/3 · 카테고리 {counts.categories} · 옵션 {counts.options} · 메뉴 {counts.menus}
+              진행률 {completedSteps}/3 · 카테고리 {counts.categories} · 옵션항목 {counts.optionItems} · 판매메뉴 {counts.readyMenus}
             </p>
           </section>
 
@@ -533,8 +600,8 @@ function AdminSetupPageInner() {
                 </div>
                 <div className="countGrid">
                   <div><span>카테고리</span><strong>{counts.categories}개</strong></div>
-                  <div><span>옵션그룹</span><strong>{counts.options}개</strong></div>
-                  <div><span>메뉴</span><strong>{counts.menus}개</strong></div>
+                  <div><span>옵션항목</span><strong>{counts.optionItems}개</strong></div>
+                  <div><span>판매메뉴</span><strong>{counts.readyMenus}개</strong></div>
                 </div>
                 {missingRequirements.length > 0 ? (
                   <div className="warnBox" role="alert">

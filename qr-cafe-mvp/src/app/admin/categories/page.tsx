@@ -335,11 +335,12 @@ function CategoriesPageInner() {
     }
   };
 
-  const onDisable = async (cat: MenuCategory) => {
+  const onToggleActive = async (cat: MenuCategory) => {
     if (actionBusy) return;
+    const nextActive = cat.is_active === false;
     const { error } = await supabase
       .from("menu_categories")
-      .update({ is_active: false })
+      .update({ is_active: nextActive })
       .eq("id", cat.id)
       .eq("store_id", storeId);
     if (error) {
@@ -348,7 +349,20 @@ function CategoriesPageInner() {
     }
     await refresh();
     setMsgTone("success");
-    setMsg("카테고리를 비활성화했습니다.");
+    setMsg(nextActive ? "카테고리를 다시 활성화했습니다." : "카테고리를 비활성화했습니다.");
+  };
+
+  const deleteCategoryOnly = async (cat: MenuCategory) => {
+    const delOnly = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
+    if (delOnly.error) {
+      setMsgTone("error");
+      setMsg(delOnly.error.message);
+      return false;
+    }
+    await refresh();
+    setMsgTone("success");
+    setMsg("카테고리를 삭제했습니다.");
+    return true;
   };
 
   const deleteCategoryOnly = async (cat: MenuCategory) => {
@@ -489,6 +503,7 @@ function CategoriesPageInner() {
         .btnSmall{padding:7px 10px;font-size:12px;border-radius:9px;font-weight:800}
         .btnEdit{border-color:#d1d5db;color:#334155;background:#fff}
         .btnDisable{border-color:#fcd34d;color:#92400e;background:#fffbeb}
+        .btnActivate{border-color:#bbf7d0;color:#166534;background:#f0fdf4}
         .btnDelete{border-color:#fecaca;color:#b91c1c;background:#fff1f2}
         .orderActionRow{display:inline-flex;gap:4px}
         .orderBtn{border:1px solid #dbe2ea;background:linear-gradient(180deg,#fff,#f8fafc);border-radius:9px;width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
@@ -709,7 +724,13 @@ function CategoriesPageInner() {
                         </div>
                         <div className="categoryActionRow">
                           <button className="btn btnSmall btnEdit" onClick={() => startEdit(cat)} disabled={actionBusy || loading}>수정</button>
-                          <button className="btn btnSmall btnDisable" onClick={() => onDisable(cat)} disabled={actionBusy || loading || cat.is_active === false}>비활성화</button>
+                          <button
+                            className={`btn btnSmall ${cat.is_active === false ? "btnActivate" : "btnDisable"}`}
+                            onClick={() => onToggleActive(cat)}
+                            disabled={actionBusy || loading}
+                          >
+                            {cat.is_active === false ? "다시 활성화" : "비활성화"}
+                          </button>
                           <button className="btn btnSmall btnDelete" onClick={() => onDeleteWithReassign(cat)} disabled={actionBusy || loading}>삭제(재할당)</button>
                         </div>
                         <div className="categoryOrderEdge">

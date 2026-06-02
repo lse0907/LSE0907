@@ -359,6 +359,8 @@ function AdminOptionsPageInner() {
   const isBulkMode = setupMode === "bulk";
   const hasCategoryPrerequisite = categoryCount > 0 || groups.length > 0;
   const hasOptionData = groups.length > 0;
+  const groupIdsWithItems = new Set(items.map((item) => item.group_id));
+  const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
   const showCopyHiddenNotice = isCopyMode && hasOptionData;
 
   const linkedMenus = useMemo(() => {
@@ -713,7 +715,7 @@ function AdminOptionsPageInner() {
   };
 
   const onCompleteStep = async () => {
-    if (!storeId || groups.length < 1) return;
+    if (!storeId || !hasOptionSetupReady) return;
     const ok = await setSetupStepConfirmed(storeId, "step2", true);
     if (!ok) {
       setMsgTone("error");
@@ -1302,10 +1304,10 @@ function AdminOptionsPageInner() {
                       ? "원본 매장의 옵션을 복사해 빠르게 시작할 수 있습니다."
                       : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."
                 }
-                stepGuide="옵션 그룹/항목을 확인한 뒤 완료 버튼을 눌러주세요."
+                stepGuide="옵션 그룹과 항목을 확인한 뒤 완료 버튼을 눌러주세요."
                 completeLabel="옵션 설정 완료"
-                completeDisabled={loading || actionBusy || groups.length < 1}
-                disabledReason="옵션 그룹을 1개 이상 등록하면 완료할 수 있습니다."
+                completeDisabled={loading || actionBusy || !hasOptionSetupReady}
+                disabledReason="옵션 그룹과 항목을 1개 이상 등록하면 완료할 수 있습니다."
                 noticeText={
                   showCopyHiddenNotice
                     ? "이미 등록된 옵션이 있어 원본 복사를 사용할 수 없습니다."
