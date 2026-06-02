@@ -340,8 +340,8 @@ function AdminSetupPageInner() {
     nextStep.step === 1
       ? "카테고리를 1개 이상 등록해 주세요."
       : nextStep.step === 2
-        ? "옵션 그룹과 항목을 1개 이상 등록해 주세요."
-        : "가격이 있는 판매 메뉴를 카테고리에 연결해 주세요.";
+        ? "옵션 그룹을 1개 이상 등록해 주세요."
+        : "메뉴를 1개 이상 등록해 주세요.";
   const nextActionText = isCompleted
     ? "초기 설정이 완료되었습니다. 이후에도 수정할 수 있습니다."
     : !nextStep.dataReady
@@ -349,7 +349,6 @@ function AdminSetupPageInner() {
       : !nextStep.confirmed
         ? `${nextStep.title}에서 확인 후 완료 버튼을 눌러주세요.`
         : "모든 데이터가 준비되었습니다. 최종 완료해 주세요.";
-
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");

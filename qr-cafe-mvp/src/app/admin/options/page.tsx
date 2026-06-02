@@ -59,6 +59,7 @@ function AdminOptionsPageInner() {
   const setupMode = (sp.get("mode") || "manual").trim();
   const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
   const [storeId, setStoreId] = useState<string>("");
+  const [storeName, setStoreName] = useState("");
 
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [items, setItems] = useState<OptionItem[]>([]);
@@ -225,12 +226,17 @@ function AdminOptionsPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId) {
+      setStoreName("");
+      return;
+    }
     let mounted = true;
     (async () => {
-      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      const { data } = await supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle();
       if (!mounted) return;
-      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+      const row = data as { setup_completed?: boolean | null; store_name?: string | null } | null;
+      setSetupCompleted(Boolean(row?.setup_completed));
+      setStoreName(String(row?.store_name || ""));
     })();
     return () => {
       mounted = false;
@@ -1235,6 +1241,20 @@ function AdminOptionsPageInner() {
           box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
         }
 
+        @media (min-width: 561px) and (max-width: 768px) {
+          .wrap { padding: 12px; gap: 9px; }
+          .card { padding: 12px; border-radius: 14px; }
+          .h1 { font-size: 22px; }
+          .headerActionRow { gap: 6px; }
+          .headerActionRow .btn { padding: 8px 10px; font-size: 12px; }
+          .scopeRow { gap: 6px; }
+          .scopeBtn, .modeSwitchBtn { min-height: 38px; padding: 7px 10px; font-size: 12px; }
+          .groupList { gap: 7px; }
+          .rowBtn { padding: 10px; }
+          .detailCard { padding: 11px; }
+          .btnRow { gap: 6px; }
+        }
+
         @media (max-width: 980px) {
           .grid {
             grid-template-columns: 1fr;
@@ -1290,7 +1310,7 @@ function AdminOptionsPageInner() {
             메뉴에 연결되는 옵션을 등록 및 관리 합니다.
           </p>
           <p className="sub" style={{ marginTop: 6 }}>
-            현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
+            현재 매장: <b>{storeName || storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>

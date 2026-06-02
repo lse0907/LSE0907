@@ -35,6 +35,7 @@ function CategoriesPageInner() {
   const setupMode = (sp.get("mode") || "manual").trim();
   const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
   const [storeId, setStoreIdState] = useState("");
+  const [storeName, setStoreName] = useState("");
   const [cats, setCats] = useState<MenuCategory[]>([]);
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,12 +103,17 @@ function CategoriesPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId) {
+      setStoreName("");
+      return;
+    }
     let mounted = true;
     (async () => {
-      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      const { data } = await supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle();
       if (!mounted) return;
-      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+      const row = data as { setup_completed?: boolean | null; store_name?: string | null } | null;
+      setSetupCompleted(Boolean(row?.setup_completed));
+      setStoreName(String(row?.store_name || ""));
     })();
     return () => {
       mounted = false;
@@ -592,7 +598,7 @@ function CategoriesPageInner() {
       </header>
       <p className="subText">메뉴 분류(카테고리)를 등록/수정/정렬합니다.</p>
       <p className="subText">
-        현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
+        현재 매장: <b>{storeName || storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
       {!setupCompleted ? (
         <SetupProgressBanner

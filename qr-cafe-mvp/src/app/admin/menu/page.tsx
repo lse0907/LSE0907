@@ -161,6 +161,7 @@ function AdminMenuPageInner() {
   const setupMode = (sp.get("mode") || "manual").trim();
   const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
   const [storeId, setStoreId] = useState("");
+  const [storeName, setStoreName] = useState("");
   const [items, setItems] = useState<MenuItem[]>([]);
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [optionItems, setOptionItems] = useState<OptionItem[]>([]);
@@ -425,12 +426,17 @@ function AdminMenuPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId) {
+      setStoreName("");
+      return;
+    }
     let mounted = true;
     (async () => {
-      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      const { data } = await supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle();
       if (!mounted) return;
-      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+      const row = data as { setup_completed?: boolean | null; store_name?: string | null } | null;
+      setSetupCompleted(Boolean(row?.setup_completed));
+      setStoreName(String(row?.store_name || ""));
     })();
     return () => {
       mounted = false;
@@ -1868,6 +1874,7 @@ function AdminMenuPageInner() {
           gap: 8px;
           background: var(--surface-soft);
         }
+        .sectionDivider { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
         .optionSectionBox {
           margin-top: 14px;
           border: 1px solid var(--line);
@@ -1956,6 +1963,21 @@ function AdminMenuPageInner() {
           flex-wrap: wrap;
           margin-top: 4px;
         }
+        @media (min-width: 561px) and (max-width: 768px) {
+          .wrap { padding: 12px; gap: 10px; }
+          .card { padding: 12px; border-radius: 14px; }
+          .h1 { font-size: 22px; }
+          .headerActionRow { gap: 6px; }
+          .headerActionRow .btn { padding: 8px 10px; font-size: 12px; }
+          .listScroll { max-height: 38vh; }
+          .detailTopRow { grid-template-columns: minmax(0, 1fr) 108px; }
+          .detailTopRow .field:last-child { grid-column: 1 / -1; }
+          .imageUploadRow { grid-template-columns: 72px minmax(0, 1fr); }
+          .previewThumb, .previewPlaceholder { width: 72px; height: 72px; }
+          .modeSwitchBtn { min-height: 38px; padding: 7px 10px; font-size: 12px; }
+          .btnRow { gap: 6px; }
+        }
+
         @media (max-width: 980px) {
           .grid {
             grid-template-columns: 1fr;
@@ -2036,7 +2058,7 @@ function AdminMenuPageInner() {
           </div>
           <p className="sub">메뉴 기본정보와 옵션 가격을 관리합니다.</p>
           <p className="sub" style={{ marginTop: 6 }}>
-            현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
+            현재 매장: <b>{storeName || storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
@@ -2289,9 +2311,10 @@ function AdminMenuPageInner() {
           <div className="detailColumn">
             <div className="card">
               <h2 className="cardTitle">메뉴 상세</h2>
+              <h3 className="sectionTitle">기본정보</h3>
 
-            <div className="detailTopRow">
-              <div className="field" style={{ marginTop: 0 }}>
+              <div className="detailTopRow">
+                <div className="field" style={{ marginTop: 0 }}>
                 <div className="label">메뉴명</div>
                 <input
                   className="input"
@@ -2325,11 +2348,11 @@ function AdminMenuPageInner() {
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
+                </div>
               </div>
-            </div>
 
-            <div className="idSoldOutRow">
-              <div className="field menuIdInput" style={{ marginTop: 0 }}>
+              <div className="idSoldOutRow">
+                <div className="field menuIdInput" style={{ marginTop: 0 }}>
                 <div className="menuIdLabelRow">
                   <div className="label">메뉴 ID</div>
                   <label className="soldOutInline">
@@ -2350,13 +2373,15 @@ function AdminMenuPageInner() {
                   disabled={saving || loading || isEditing}
                 />
                 <div className="hint">ID는 저장 후에는 변경할 수 없습니다.</div>
+                </div>
               </div>
-            </div>
 
-            <div className="field">
-              <div className="label">메뉴 이미지</div>
-              <div className="imageUploadRow" style={{ marginTop: 4 }}>
+              <div className="field sectionDivider">
+                <h3 className="sectionTitle">이미지</h3>
+                <div className="label">메뉴 이미지</div>
+                <div className="imageUploadRow" style={{ marginTop: 4 }}>
                 {draft.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={draft.image} alt={`${draft.name || draft.id || "menu"} preview`} className="previewThumb" />
                 ) : (
                   <div className="previewPlaceholder">미리보기</div>
