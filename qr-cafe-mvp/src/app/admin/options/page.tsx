@@ -96,7 +96,6 @@ function AdminOptionsPageInner() {
     description: "",
     action: null,
   });
-  const [bulkNoticeOpen, setBulkNoticeOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState("");
   const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
   const [orderDirty, setOrderDirty] = useState(false);
@@ -360,15 +359,9 @@ function AdminOptionsPageInner() {
   const isBulkMode = setupMode === "bulk";
   const hasCategoryPrerequisite = categoryCount > 0 || groups.length > 0;
   const hasOptionData = groups.length > 0;
+  const groupIdsWithItems = new Set(items.map((item) => item.group_id));
+  const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
   const showCopyHiddenNotice = isCopyMode && hasOptionData;
-
-  useEffect(() => {
-    if (isBulkMode) {
-      setBulkNoticeOpen(true);
-      return;
-    }
-    setBulkNoticeOpen(false);
-  }, [isBulkMode, storeId]);
 
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
@@ -722,7 +715,7 @@ function AdminOptionsPageInner() {
   };
 
   const onCompleteStep = async () => {
-    if (!storeId || groups.length < 1) return;
+    if (!storeId || !hasOptionSetupReady) return;
     const ok = await setSetupStepConfirmed(storeId, "step2", true);
     if (!ok) {
       setMsgTone("error");
@@ -1311,11 +1304,17 @@ function AdminOptionsPageInner() {
                       ? "원본 매장의 옵션을 복사해 빠르게 시작할 수 있습니다."
                       : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."
                 }
-                stepGuide="옵션 그룹/항목을 확인한 뒤 완료 버튼을 눌러주세요."
+                stepGuide="옵션 그룹과 항목을 확인한 뒤 완료 버튼을 눌러주세요."
                 completeLabel="옵션 설정 완료"
-                completeDisabled={loading || actionBusy || groups.length < 1}
-                disabledReason="옵션 그룹을 1개 이상 등록하면 완료할 수 있습니다."
-                noticeText={showCopyHiddenNotice ? "이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다." : ""}
+                completeDisabled={loading || actionBusy || !hasOptionSetupReady}
+                disabledReason="옵션 그룹과 항목을 1개 이상 등록하면 완료할 수 있습니다."
+                noticeText={
+                  showCopyHiddenNotice
+                    ? "이미 등록된 옵션이 있어 원본 복사를 사용할 수 없습니다."
+                    : isBulkMode
+                      ? "옵션은 일괄 등록을 지원하지 않습니다. 옵션 그룹과 항목을 직접 등록해 주세요."
+                      : ""
+                }
                 setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
                 onComplete={() => void onCompleteStep()}
               />
@@ -1345,11 +1344,6 @@ function AdminOptionsPageInner() {
 
       </header>
 
-      {isBulkMode ? (
-        <section className="card">
-          <p className="sub" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
-        </section>
-      ) : null}
       {!loading && !hasCategoryPrerequisite ? (
         <section className="card" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
           <h2 className="cardTitle">선행 단계 필요</h2>
@@ -1359,25 +1353,6 @@ function AdminOptionsPageInner() {
           </div>
         </section>
       ) : null}
-      {isBulkMode && bulkNoticeOpen ? (
-        <div className="modalOverlay">
-          <div className="modalCard">
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 950 }}>일괄 등록 안내</h3>
-            <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-              옵션은 일괄 등록을 지원하지 않습니다. 직접 설정으로 진행해 주세요.
-            </p>
-            <div className="btnRow" style={{ justifyContent: "flex-end", marginTop: 4 }}>
-              <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                설정 방식 변경
-              </a>
-              <button className="btn btnPrimary" type="button" onClick={() => setBulkNoticeOpen(false)}>
-                직접 설정으로 계속
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {showOptionAssist && isCopyMode ? (
         <section className="card">
           <div className="copyRow">
@@ -1398,9 +1373,7 @@ function AdminOptionsPageInner() {
           </p>
           {!hasCopySource ? (
             <p className="sub copyWarnText">복사할 원본 매장이 없습니다.</p>
-          ) : (
-            <p className="sub" style={{ marginTop: 2 }}>원본 매장을 만든 뒤 다시 시도해 주세요.</p>
-          )}
+          ) : null}
         </section>
       ) : null}
 
