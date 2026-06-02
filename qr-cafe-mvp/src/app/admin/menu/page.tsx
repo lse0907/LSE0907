@@ -2780,22 +2780,6 @@ function AdminMenuPageInner() {
         </section>
       )}
 
-      {showMenuAssist && !isBulkMode && canUseBulkImport ? (
-        <section className="card">
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <div>
-              <h2 className="cardTitle" style={{ margin: 0 }}>일괄 등록(선택)</h2>
-              <p className="sub" style={{ marginTop: 2 }}>
-                양식 파일로 업로드하여 메뉴/카테고리 항목을 일괄 등록합니다.
-              </p>
-            </div>
-            <a className="btn" href={importHref}>
-              메뉴·카테고리 일괄 등록
-            </a>
-          </div>
-          <p className="sub" style={{ marginTop: 4 }}>일괄 등록 기능은 최초 등록 시에만 활성화됩니다.</p>
-        </section>
-      ) : null}
       {pendingOptionTab ? (
         <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="option-tab-confirm-title">
           <div className="confirmCard">
