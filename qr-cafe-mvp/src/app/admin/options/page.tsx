@@ -59,6 +59,7 @@ function AdminOptionsPageInner() {
   const setupMode = (sp.get("mode") || "manual").trim();
   const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
   const [storeId, setStoreId] = useState<string>("");
+  const [storeName, setStoreName] = useState("");
 
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [items, setItems] = useState<OptionItem[]>([]);
@@ -81,6 +82,8 @@ function AdminOptionsPageInner() {
     scope: "common" as "common" | "exclusive",
     linkedMenuId: "",
   });
+  const [showCreateGroupForm, setShowCreateGroupForm] = useState(false);
+  const [createGroupDraft, setCreateGroupDraft] = useState({ name: "", required: false, max: "1" });
   const [showCreateItemForm, setShowCreateItemForm] = useState(false);
   const [newItemDraft, setNewItemDraft] = useState({ name: "", price: "" });
   const [myStores, setMyStores] = useState<MyStore[]>([]);
@@ -96,7 +99,6 @@ function AdminOptionsPageInner() {
     description: "",
     action: null,
   });
-  const [bulkNoticeOpen, setBulkNoticeOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState("");
   const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
   const [orderDirty, setOrderDirty] = useState(false);
@@ -226,12 +228,17 @@ function AdminOptionsPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId) {
+      setStoreName("");
+      return;
+    }
     let mounted = true;
     (async () => {
-      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      const { data } = await supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle();
       if (!mounted) return;
-      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+      const row = data as { setup_completed?: boolean | null; store_name?: string | null } | null;
+      setSetupCompleted(Boolean(row?.setup_completed));
+      setStoreName(String(row?.store_name || ""));
     })();
     return () => {
       mounted = false;
@@ -360,15 +367,9 @@ function AdminOptionsPageInner() {
   const isBulkMode = setupMode === "bulk";
   const hasCategoryPrerequisite = categoryCount > 0 || groups.length > 0;
   const hasOptionData = groups.length > 0;
+  const groupIdsWithItems = new Set(items.map((item) => item.group_id));
+  const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
   const showCopyHiddenNotice = isCopyMode && hasOptionData;
-
-  useEffect(() => {
-    if (isBulkMode) {
-      setBulkNoticeOpen(true);
-      return;
-    }
-    setBulkNoticeOpen(false);
-  }, [isBulkMode, storeId]);
 
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
@@ -387,6 +388,15 @@ function AdminOptionsPageInner() {
   }, [groups, menus]);
 
   const isExclusiveSelected = (selectedGroup?.scope || "common") === "exclusive";
+  const selectedRuleSummary = selectedGroup
+    ? (() => {
+        const max = Math.max(toInt(groupDraft.max, selectedGroup.max || 1), 1);
+        if (groupDraft.required) {
+          return max === 1 ? "고객이 반드시 1개를 선택합니다." : `고객이 최소 1개, 최대 ${max}개까지 선택합니다.`;
+        }
+        return max === 1 ? "고객이 선택하지 않아도 됩니다." : `고객이 선택하지 않거나 최대 ${max}개까지 선택할 수 있습니다.`;
+      })()
+    : "";
 
   // 공통: 뱃지 처리
   const markSaved = () => {
@@ -415,25 +425,26 @@ function AdminOptionsPageInner() {
       setMsgTone("error");
       return setMsg("전용옵션 그룹 등록은 메뉴관리에서만 가능합니다.");
     }
-    if (!hasLinkedMenuColumn) {
-      markError();
+    const nextName = createGroupDraft.name.trim();
+    if (!nextName) {
       setMsgTone("error");
-      return setMsg("DB에 linked_menu_id 컬럼이 없어 전용옵션 그룹을 만들 수 없습니다. SQL 마이그레이션을 먼저 실행해 주세요.");
+      return setMsg("옵션 그룹명을 입력해 주세요.");
     }
     try {
       setSaving(true);
       setBadge("idle");
 
       const id = uid("group");
+      const max = Math.max(toInt(createGroupDraft.max, 1), 1);
       const row = {
         id,
         store_id: storeId,
-        name: "새 옵션그룹",
-        required: false,
-        min: 0,
-        max: 1,
+        name: nextName,
+        required: createGroupDraft.required,
+        min: createGroupDraft.required ? 1 : 0,
+        max,
         sort_order: scopedGroups.length + 1,
-        scope: activeScope,
+        scope: "common" as const,
         linked_menu_id: null,
       };
 
@@ -442,9 +453,13 @@ function AdminOptionsPageInner() {
 
       await refresh();
       setSelectedGroupId(id);
+      setShowCreateGroupForm(false);
+      setCreateGroupDraft({ name: "", required: false, max: "1" });
+      setShowCreateItemForm(true);
+      setNewItemDraft({ name: "", price: "" });
       markSaved();
       setMsgTone("success");
-      setMsg("옵션 그룹을 생성했습니다.");
+      setMsg("옵션 그룹을 만들었습니다. 이제 옵션 항목을 추가해 주세요.");
     } catch (e: unknown) {
       console.error("[admin/options] addGroup:", toErrMsg(e));
       markError();
@@ -722,7 +737,7 @@ function AdminOptionsPageInner() {
   };
 
   const onCompleteStep = async () => {
-    if (!storeId || groups.length < 1) return;
+    if (!storeId || !hasOptionSetupReady) return;
     const ok = await setSetupStepConfirmed(storeId, "step2", true);
     if (!ok) {
       setMsgTone("error");
@@ -1098,6 +1113,51 @@ function AdminOptionsPageInner() {
           color: #334155;
           font-size: 12px;
         }
+        .createGroupCard {
+          margin-top: 10px;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          border-radius: 14px;
+          padding: 12px;
+          display: grid;
+          gap: 8px;
+        }
+        .createGroupGrid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(92px, 120px);
+          gap: 8px;
+        }
+        .createRequiredInline {
+          white-space: normal;
+          align-items: flex-start;
+        }
+        .createGroupActions {
+          margin-top: 4px;
+        }
+        .ruleSummary {
+          margin-top: 8px;
+          border: 1px solid #dbeafe;
+          background: #eff6ff;
+          color: #1e40af;
+          border-radius: 12px;
+          padding: 9px 11px;
+          font-size: 12px;
+          font-weight: 900;
+          line-height: 1.35;
+        }
+        .emptyItemCard,
+        .emptyLinkBox {
+          margin-top: 10px;
+          border: 1px dashed var(--line);
+          border-radius: 12px;
+          background: #f8fafc;
+          padding: 10px;
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+        }
         .itemCollapsedHint {
           margin-top: 8px;
           border: 1px solid var(--line);
@@ -1242,6 +1302,20 @@ function AdminOptionsPageInner() {
           box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
         }
 
+        @media (min-width: 561px) and (max-width: 768px) {
+          .wrap { padding: 12px; gap: 9px; }
+          .card { padding: 12px; border-radius: 14px; }
+          .h1 { font-size: 22px; }
+          .headerActionRow { gap: 6px; }
+          .headerActionRow .btn { padding: 8px 10px; font-size: 12px; }
+          .scopeRow { gap: 6px; }
+          .scopeBtn, .modeSwitchBtn { min-height: 38px; padding: 7px 10px; font-size: 12px; }
+          .groupList { gap: 7px; }
+          .rowBtn { padding: 10px; }
+          .detailCard { padding: 11px; }
+          .btnRow { gap: 6px; }
+        }
+
         @media (max-width: 980px) {
           .grid {
             grid-template-columns: 1fr;
@@ -1262,6 +1336,9 @@ function AdminOptionsPageInner() {
           }
           .itemLine {
             grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr);
+          }
+          .createGroupGrid {
+            grid-template-columns: minmax(0, 1fr) minmax(86px, 110px);
           }
           .itemName {
             font-size: 14px;
@@ -1297,7 +1374,7 @@ function AdminOptionsPageInner() {
             메뉴에 연결되는 옵션을 등록 및 관리 합니다.
           </p>
           <p className="sub" style={{ marginTop: 6 }}>
-            현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
+            현재 매장: <b>{storeName || storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
@@ -1311,11 +1388,17 @@ function AdminOptionsPageInner() {
                       ? "원본 매장의 옵션을 복사해 빠르게 시작할 수 있습니다."
                       : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."
                 }
-                stepGuide="옵션 그룹/항목을 확인한 뒤 완료 버튼을 눌러주세요."
+                stepGuide="옵션 그룹과 항목을 확인한 뒤 완료 버튼을 눌러주세요."
                 completeLabel="옵션 설정 완료"
-                completeDisabled={loading || actionBusy || groups.length < 1}
-                disabledReason="옵션 그룹을 1개 이상 등록하면 완료할 수 있습니다."
-                noticeText={showCopyHiddenNotice ? "이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다." : ""}
+                completeDisabled={loading || actionBusy || !hasOptionSetupReady}
+                disabledReason="옵션 그룹과 항목을 1개 이상 등록하면 완료할 수 있습니다."
+                noticeText={
+                  showCopyHiddenNotice
+                    ? "이미 등록된 옵션이 있어 원본 복사를 사용할 수 없습니다."
+                    : isBulkMode
+                      ? "옵션은 일괄 등록을 지원하지 않습니다. 옵션 그룹과 항목을 직접 등록해 주세요."
+                      : ""
+                }
                 setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
                 onComplete={() => void onCompleteStep()}
               />
@@ -1345,11 +1428,6 @@ function AdminOptionsPageInner() {
 
       </header>
 
-      {isBulkMode ? (
-        <section className="card">
-          <p className="sub" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
-        </section>
-      ) : null}
       {!loading && !hasCategoryPrerequisite ? (
         <section className="card" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
           <h2 className="cardTitle">선행 단계 필요</h2>
@@ -1359,25 +1437,6 @@ function AdminOptionsPageInner() {
           </div>
         </section>
       ) : null}
-      {isBulkMode && bulkNoticeOpen ? (
-        <div className="modalOverlay">
-          <div className="modalCard">
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 950 }}>일괄 등록 안내</h3>
-            <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-              옵션은 일괄 등록을 지원하지 않습니다. 직접 설정으로 진행해 주세요.
-            </p>
-            <div className="btnRow" style={{ justifyContent: "flex-end", marginTop: 4 }}>
-              <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                설정 방식 변경
-              </a>
-              <button className="btn btnPrimary" type="button" onClick={() => setBulkNoticeOpen(false)}>
-                직접 설정으로 계속
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {showOptionAssist && isCopyMode ? (
         <section className="card">
           <div className="copyRow">
@@ -1398,9 +1457,7 @@ function AdminOptionsPageInner() {
           </p>
           {!hasCopySource ? (
             <p className="sub copyWarnText">복사할 원본 매장이 없습니다.</p>
-          ) : (
-            <p className="sub" style={{ marginTop: 2 }}>원본 매장을 만든 뒤 다시 시도해 주세요.</p>
-          )}
+          ) : null}
         </section>
       ) : null}
 
@@ -1436,8 +1493,13 @@ function AdminOptionsPageInner() {
             {activeScope === "common" ? (
               <>
                 <div className="btnRow">
-                  <button className="btn btnPrimary" onClick={addGroup} disabled={actionBusy || loading}>
-                    + 새 그룹
+                  <button
+                    className="btn btnPrimary"
+                    onClick={() => setShowCreateGroupForm((v) => !v)}
+                    disabled={actionBusy || loading}
+                    type="button"
+                  >
+                    {showCreateGroupForm ? "그룹 만들기 닫기" : "+ 새 그룹"}
                   </button>
                   <button className="btn" onClick={refresh} disabled={actionBusy || loading}>
                     새로고침
@@ -1446,6 +1508,54 @@ function AdminOptionsPageInner() {
                     순서 저장
                   </button>
                 </div>
+                {showCreateGroupForm ? (
+                  <div className="createGroupCard">
+                    <div className="label">새 옵션 그룹 만들기</div>
+                    <div className="muted">예: 사이즈, 맵기, 소스, 포장 옵션</div>
+                    <div className="createGroupGrid">
+                      <input
+                        className="input"
+                        value={createGroupDraft.name}
+                        onChange={(e) => setCreateGroupDraft((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder="옵션 그룹명"
+                        disabled={actionBusy || loading}
+                      />
+                      <input
+                        className="input"
+                        inputMode="numeric"
+                        value={createGroupDraft.max}
+                        onChange={(e) => setCreateGroupDraft((prev) => ({ ...prev, max: e.target.value }))}
+                        placeholder="최대 선택"
+                        disabled={actionBusy || loading}
+                      />
+                    </div>
+                    <label className="requiredInline createRequiredInline">
+                      <input
+                        type="checkbox"
+                        checked={createGroupDraft.required}
+                        onChange={(e) => setCreateGroupDraft((prev) => ({ ...prev, required: e.target.checked }))}
+                        disabled={actionBusy || loading}
+                      />
+                      고객이 반드시 선택해야 합니다.
+                    </label>
+                    <div className="btnRow createGroupActions">
+                      <button className="btn btnPrimary" onClick={addGroup} disabled={actionBusy || loading || !createGroupDraft.name.trim()} type="button">
+                        그룹 만들기
+                      </button>
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          setShowCreateGroupForm(false);
+                          setCreateGroupDraft({ name: "", required: false, max: "1" });
+                        }}
+                        disabled={actionBusy || loading}
+                        type="button"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 {!hasSortOrderColumn ? (
                   <div className="muted" style={{ marginTop: 6 }}>
                     DB에 sort_order 컬럼이 없어 순서 이동/저장이 비활성화되었습니다. SQL 적용 후 사용해주세요.
@@ -1519,7 +1629,7 @@ function AdminOptionsPageInner() {
                 <div className="muted" style={{ marginTop: 10 }}>
                   {activeScope === "exclusive"
                     ? "전용옵션 그룹 등록은 메뉴관리에서 해주세요. 여기서는 조회/삭제만 가능합니다."
-                    : "아직 옵션 그룹이 없습니다. “+ 새 그룹”으로 시작하세요."}
+                    : "아직 옵션 그룹이 없습니다. 새 그룹을 만들고 항목을 추가해 주세요."}
                 </div>
               ) : null}
             </div>
@@ -1588,13 +1698,15 @@ function AdminOptionsPageInner() {
                   </label>
                 </div>
 
+                <div className="ruleSummary">{selectedRuleSummary}</div>
+
                 <div className="btnRow">
                   {!isExclusiveSelected ? (
                     <button
                       className="btn"
                       onClick={() => {
                         const min = groupDraft.required ? 1 : 0;
-                        const max = Math.max(toInt(groupDraft.max, selectedGroup.max), 0);
+                        const max = Math.max(toInt(groupDraft.max, selectedGroup.max || 1), 1);
                         const sortOrder = Math.max(toInt(groupDraft.sortOrder, selectedGroup.sort_order ?? 1), 1);
                         updateGroup({
                           name: groupDraft.name.trim() || selectedGroup.name,
@@ -1621,7 +1733,7 @@ function AdminOptionsPageInner() {
                     <button className="btn btnPrimary" onClick={() => setShowCreateItemForm((v) => !v)} disabled={actionBusy || loading}>
                       + 옵션 추가
                     </button>
-                    <div className="muted">옵션 항목은 최소 1개 이상 등록해주세요.</div>
+                    <div className="muted">무료 항목은 추가금액에 0을 입력해 주세요.</div>
                   </div>
                 ) : null}
 
@@ -1646,7 +1758,7 @@ function AdminOptionsPageInner() {
                                   inputMode="numeric"
                                   value={editItemDraft.price}
                                   onChange={(e) => setEditItemDraft((p) => ({ ...p, price: e.target.value }))}
-                                  placeholder="단가 입력"
+                                  placeholder="추가금액(원)"
                                   disabled={actionBusy || loading}
                                 />
                               </div>
@@ -1678,7 +1790,16 @@ function AdminOptionsPageInner() {
                         </div>
                       ))}
 
-                      {!loading && groupItems.length === 0 ? <div className="muted" style={{ marginTop: 10 }}>옵션 항목을 추가해주세요.</div> : null}
+                      {!loading && groupItems.length === 0 ? (
+                        <div className="emptyItemCard">
+                          <div className="muted">아직 옵션 항목이 없습니다. 예: 기본 0원, 라지 +500원</div>
+                          {!isExclusiveSelected ? (
+                            <button className="btn" type="button" onClick={() => setShowCreateItemForm(true)} disabled={actionBusy || loading}>
+                              첫 항목 추가
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
 
                       {!isExclusiveSelected && showCreateItemForm ? (
                         <div className="itemCard">
@@ -1695,7 +1816,7 @@ function AdminOptionsPageInner() {
                               inputMode="numeric"
                               value={newItemDraft.price}
                               onChange={(e) => setNewItemDraft((p) => ({ ...p, price: e.target.value }))}
-                              placeholder="단가 입력"
+                              placeholder="추가금액(원)"
                               disabled={actionBusy || loading}
                             />
                             <button className="btn itemSaveBtn" onClick={addItem} disabled={actionBusy || loading}>
@@ -1721,8 +1842,11 @@ function AdminOptionsPageInner() {
                 <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
                   <div className="label">연결된 메뉴</div>
                   {linkedMenus.length === 0 ? (
-                    <div className="muted" style={{ marginTop: 6 }}>
-                      아직 연결된 메뉴가 없습니다. 메뉴관리에서 이 옵션을 연결하세요.
+                    <div className="emptyLinkBox">
+                      <div className="muted">아직 연결된 메뉴가 없습니다. 메뉴관리에서 메뉴를 선택한 뒤 이 옵션을 연결하세요.</div>
+                      <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                        메뉴관리로 이동
+                      </a>
                     </div>
                   ) : (
                     <div className="scopeRow">
