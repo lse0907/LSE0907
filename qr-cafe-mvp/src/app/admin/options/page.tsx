@@ -553,9 +553,9 @@ function AdminOptionsPageInner() {
   }, [scopedGroups]);
 
   const isInitialOptionSetup = !loading && groups.length === 0;
-  const showOptionAssist = isInitialOptionSetup;
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
+  const showOptionAssist = isInitialOptionSetup && !isCopyMode && !isBulkMode;
   const hasCategoryPrerequisite = categoryCount > 0 || groups.length > 0;
   const hasOptionData = groups.length > 0;
   const groupIdsWithItems = new Set(items.map((item) => item.group_id));
@@ -1079,6 +1079,38 @@ function AdminOptionsPageInner() {
         }
         .copyHelpText { margin-top: 6px; }
         .copyWarnText { margin-top: 2px; color: #b45309; }
+        .modeActionCard {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+          box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
+        }
+        .modeActionBulk {
+          border-color: #fde68a;
+          background: linear-gradient(180deg, #fffbeb, #ffffff);
+          box-shadow: 0 8px 24px rgba(245, 158, 11, 0.1);
+        }
+        .modeActionHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 6px;
+        }
+        .modeActionTitle {
+          font-weight: 950;
+          font-size: 14px;
+          color: #0f172a;
+        }
+        .modeActionBadge {
+          border: 1px solid #93c5fd;
+          background: #dbeafe;
+          color: #1d4ed8;
+          border-radius: 999px;
+          padding: 4px 8px;
+          font-size: 11px;
+          font-weight: 950;
+          white-space: nowrap;
+        }
         .msgBox {
           border-radius: 12px;
           padding: 10px 12px;
@@ -1144,6 +1176,17 @@ function AdminOptionsPageInner() {
           flex-wrap: wrap;
           align-items: center;
           margin-top: 12px;
+        }
+        .createActionRow {
+          justify-content: space-between;
+          align-items: center;
+        }
+        .primaryActionGroup,
+        .utilityActionGroup {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
         }
         .btn {
           border: 1px solid var(--line);
@@ -1447,6 +1490,10 @@ function AdminOptionsPageInner() {
         .templatePreviewList {
           display: grid;
           gap: 7px;
+          max-height: 178px;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding-right: 2px;
         }
         .templatePreviewRow {
           display: grid;
@@ -1692,6 +1739,9 @@ function AdminOptionsPageInner() {
           .templateGrid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+          .templatePreviewList {
+            max-height: 150px;
+          }
           .templatePreviewRow {
             grid-template-columns: 1fr;
           }
@@ -1835,8 +1885,12 @@ function AdminOptionsPageInner() {
           </div>
         </section>
       ) : null}
-      {showOptionAssist && isCopyMode ? (
-        <section className="card">
+      {isInitialOptionSetup && isCopyMode ? (
+        <section className="card modeActionCard">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">원본 매장 옵션 복사</div>
+            <span className="modeActionBadge">원본 복사</span>
+          </div>
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
               <option value="">원본 매장 선택</option>
@@ -1890,41 +1944,45 @@ function AdminOptionsPageInner() {
 
             {activeScope === "common" ? (
               <>
-                <div className="btnRow">
-                  <button
-                    className="btn btnPrimary"
-                    onClick={() => {
-                      setShowTemplatePanel(false);
-                      setSelectedTemplateId("");
-                      setShowCreateGroupForm((v) => !v);
-                    }}
-                    disabled={actionBusy || loading}
-                    type="button"
-                  >
-                    {showCreateGroupForm ? "그룹 만들기 닫기" : "+ 새 그룹"}
-                  </button>
-                  {showOptionAssist ? (
+                <div className="btnRow createActionRow">
+                  <div className="primaryActionGroup">
                     <button
-                      className="btn"
+                      className="btn btnPrimary"
                       onClick={() => {
-                        setShowCreateGroupForm(false);
-                        setShowTemplatePanel((prev) => {
-                          if (prev) setSelectedTemplateId("");
-                          return !prev;
-                        });
+                        setShowTemplatePanel(false);
+                        setSelectedTemplateId("");
+                        setShowCreateGroupForm((v) => !v);
                       }}
                       disabled={actionBusy || loading}
                       type="button"
                     >
-                      {showTemplatePanel ? "빠른 옵션 닫기" : "빠른 옵션 만들기"}
+                      {showCreateGroupForm ? "그룹 만들기 닫기" : "+ 새 그룹"}
                     </button>
-                  ) : null}
-                  <button className="btn" onClick={refresh} disabled={actionBusy || loading}>
-                    새로고침
-                  </button>
-                  <button className="btn" onClick={saveCommonOrder} disabled={actionBusy || loading || !orderDirty || !hasSortOrderColumn}>
-                    순서 저장
-                  </button>
+                    {showOptionAssist ? (
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          setShowCreateGroupForm(false);
+                          setShowTemplatePanel((prev) => {
+                            if (prev) setSelectedTemplateId("");
+                            return !prev;
+                          });
+                        }}
+                        disabled={actionBusy || loading}
+                        type="button"
+                      >
+                        {showTemplatePanel ? "빠른 옵션 닫기" : "빠른 옵션 만들기"}
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="utilityActionGroup">
+                    <button className="btn" onClick={refresh} disabled={actionBusy || loading}>
+                      새로고침
+                    </button>
+                    <button className="btn" onClick={saveCommonOrder} disabled={actionBusy || loading || !orderDirty || !hasSortOrderColumn}>
+                      순서 저장
+                    </button>
+                  </div>
                 </div>
                 {showOptionAssist && showTemplatePanel ? (
                   <div className="templateCard">

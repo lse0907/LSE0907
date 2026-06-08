@@ -1379,6 +1379,43 @@ function AdminMenuPageInner() {
         }
         .copyHelpText { margin-top: 6px; }
         .copyWarnText { margin-top: 2px; color: #b45309; }
+        .modeActionCard {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+          box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
+        }
+        .modeActionBulk {
+          border-color: #fde68a;
+          background: linear-gradient(180deg, #fffbeb, #ffffff);
+          box-shadow: 0 8px 24px rgba(245, 158, 11, 0.1);
+        }
+        .modeActionHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 6px;
+        }
+        .modeActionTitle {
+          font-weight: 950;
+          font-size: 14px;
+          color: #0f172a;
+        }
+        .modeActionBadge {
+          border: 1px solid #93c5fd;
+          background: #dbeafe;
+          color: #1d4ed8;
+          border-radius: 999px;
+          padding: 4px 8px;
+          font-size: 11px;
+          font-weight: 950;
+          white-space: nowrap;
+        }
+        .modeActionBulk .modeActionBadge {
+          border-color: #fcd34d;
+          background: #fef3c7;
+          color: #92400e;
+        }
         .card {
           background: var(--card);
           border: 1px solid var(--line);
@@ -2129,8 +2166,12 @@ function AdminMenuPageInner() {
       ) : null}
 
       {isBulkMode && canUseBulkImport ? (
-        <section className="card">
-          <p className="sub" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
+        <section className="card modeActionCard modeActionBulk">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">메뉴·카테고리 일괄 등록</div>
+            <span className="modeActionBadge">일괄 등록</span>
+          </div>
+          <p className="sub" style={{ margin: 0 }}>파일 업로드로 한 번에 등록합니다.</p>
           <div className="btnRow" style={{ marginTop: 10 }}>
             <a className="btn btnPrimary" href={importHref}>
               메뉴·카테고리 일괄 등록 시작
@@ -2140,7 +2181,11 @@ function AdminMenuPageInner() {
       ) : null}
 
       {showMenuAssist && isCopyMode ? (
-        <section className="card">
+        <section className="card modeActionCard">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">원본 매장 메뉴 복사</div>
+            <span className="modeActionBadge">원본 복사</span>
+          </div>
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
               <option value="">원본 매장 선택</option>

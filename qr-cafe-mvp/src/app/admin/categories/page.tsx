@@ -515,6 +515,12 @@ function CategoriesPageInner() {
         .subText{margin:0;color:#6b7280;font-size:13px;font-weight:800;line-height:1.4}
         .copyHelpText{margin-top:6px}
         .copyWarnText{margin-top:2px;color:#b45309}
+        .modeActionCard{border-color:#bfdbfe;background:linear-gradient(180deg,#eff6ff,#fff);box-shadow:0 8px 24px rgba(37,99,235,.08)}
+        .modeActionBulk{border-color:#fde68a;background:linear-gradient(180deg,#fffbeb,#fff);box-shadow:0 8px 24px rgba(245,158,11,.1)}
+        .modeActionHead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+        .modeActionTitle{font-weight:950;font-size:14px;color:#0f172a}
+        .modeActionBadge{border:1px solid #93c5fd;background:#dbeafe;color:#1d4ed8;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:950;white-space:nowrap}
+        .modeActionBulk .modeActionBadge{border-color:#fcd34d;background:#fef3c7;color:#92400e}
         .modalOverlay{position:fixed;inset:0;z-index:50;background:rgba(15,23,42,.46);display:flex;align-items:center;justify-content:center;padding:18px}
         .modalCard{width:min(100%,420px);background:#fff;border:1px solid #dbe2ea;border-radius:18px;padding:18px;box-shadow:0 20px 45px rgba(15,23,42,.2);display:grid;gap:12px}
         .modalTitle{margin:0;font-size:18px;font-weight:950;letter-spacing:-.02em}
@@ -628,8 +634,12 @@ function CategoriesPageInner() {
       ) : null}
 
       {isBulkMode && canUseBulkImport ? (
-        <section className="card">
-          <p className="subText" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
+        <section className="card modeActionCard modeActionBulk">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">카테고리·메뉴 일괄 등록</div>
+            <span className="modeActionBadge">일괄 등록</span>
+          </div>
+          <p className="subText" style={{ margin: 0 }}>파일 업로드로 한 번에 등록합니다.</p>
           <div className="row" style={{ marginTop: 10 }}>
             <a className="btn btnPrimary" href={importHref}>
               카테고리·메뉴 일괄 등록 시작
@@ -640,7 +650,11 @@ function CategoriesPageInner() {
 
 
       {showCategoryAssist && isCopyMode ? (
-        <section className="card copyCard">
+        <section className="card copyCard modeActionCard">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">원본 매장 카테고리 복사</div>
+            <span className="modeActionBadge">원본 복사</span>
+          </div>
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
               <option value="">원본 매장 선택</option>
