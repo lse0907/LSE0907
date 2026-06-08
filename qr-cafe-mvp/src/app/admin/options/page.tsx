@@ -44,6 +44,26 @@ type ConfirmState = {
   action: null | (() => void);
 };
 
+type OptionTemplateItem = {
+  name: string;
+  priceDelta: number;
+};
+
+type OptionTemplateGroup = {
+  name: string;
+  required: boolean;
+  min: number;
+  max: number;
+  items: OptionTemplateItem[];
+};
+
+type OptionTemplate = {
+  id: string;
+  title: string;
+  summary: string;
+  groups: OptionTemplateGroup[];
+};
+
 function uid(prefix = "opt") {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 8)}`;
 }
@@ -52,6 +72,233 @@ function toInt(v: string, fallback: number) {
   const n = Number(v);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(0, Math.round(n));
+}
+
+const optionTemplates: OptionTemplate[] = [
+  {
+    id: "cafe-drink",
+    title: "카페/음료",
+    summary: "온도 · 사이즈 · 샷/시럽",
+    groups: [
+      {
+        name: "온도",
+        required: true,
+        min: 1,
+        max: 1,
+        items: [
+          { name: "HOT", priceDelta: 0 },
+          { name: "ICE", priceDelta: 0 },
+        ],
+      },
+      {
+        name: "사이즈",
+        required: true,
+        min: 1,
+        max: 1,
+        items: [
+          { name: "기본", priceDelta: 0 },
+          { name: "라지", priceDelta: 500 },
+          { name: "점보", priceDelta: 1000 },
+        ],
+      },
+      {
+        name: "샷 추가",
+        required: false,
+        min: 0,
+        max: 2,
+        items: [
+          { name: "1샷 추가", priceDelta: 500 },
+          { name: "2샷 추가", priceDelta: 1000 },
+        ],
+      },
+      {
+        name: "시럽 추가",
+        required: false,
+        min: 0,
+        max: 2,
+        items: [
+          { name: "헤이즐넛", priceDelta: 500 },
+          { name: "바닐라", priceDelta: 500 },
+          { name: "카라멜", priceDelta: 500 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "restaurant",
+    title: "일반 식당",
+    summary: "맵기 · 밥 양 · 토핑",
+    groups: [
+      {
+        name: "맵기",
+        required: true,
+        min: 1,
+        max: 1,
+        items: [
+          { name: "순한맛", priceDelta: 0 },
+          { name: "보통맛", priceDelta: 0 },
+          { name: "매운맛", priceDelta: 0 },
+        ],
+      },
+      {
+        name: "밥 양",
+        required: false,
+        min: 0,
+        max: 1,
+        items: [
+          { name: "적게", priceDelta: 0 },
+          { name: "보통", priceDelta: 0 },
+          { name: "많이", priceDelta: 1000 },
+        ],
+      },
+      {
+        name: "추가 토핑",
+        required: false,
+        min: 0,
+        max: 3,
+        items: [
+          { name: "계란 추가", priceDelta: 1000 },
+          { name: "치즈 추가", priceDelta: 1500 },
+          { name: "고기 추가", priceDelta: 3000 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "snack-foodtruck",
+    title: "분식/푸드트럭",
+    summary: "소스 · 토핑 · 포장",
+    groups: [
+      {
+        name: "소스",
+        required: false,
+        min: 0,
+        max: 2,
+        items: [
+          { name: "케첩", priceDelta: 0 },
+          { name: "머스타드", priceDelta: 0 },
+          { name: "칠리", priceDelta: 0 },
+          { name: "마요", priceDelta: 0 },
+        ],
+      },
+      {
+        name: "토핑 추가",
+        required: false,
+        min: 0,
+        max: 3,
+        items: [
+          { name: "치즈 추가", priceDelta: 1000 },
+          { name: "소시지 추가", priceDelta: 1500 },
+          { name: "계란 추가", priceDelta: 1000 },
+        ],
+      },
+      {
+        name: "수령 방식",
+        required: true,
+        min: 1,
+        max: 1,
+        items: [
+          { name: "바로 먹기", priceDelta: 0 },
+          { name: "포장", priceDelta: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "dessert-bakery",
+    title: "디저트/베이커리",
+    summary: "맛 · 포장 · 초 추가",
+    groups: [
+      {
+        name: "맛 선택",
+        required: true,
+        min: 1,
+        max: 1,
+        items: [
+          { name: "바닐라", priceDelta: 0 },
+          { name: "초코", priceDelta: 0 },
+          { name: "딸기", priceDelta: 0 },
+          { name: "말차", priceDelta: 0 },
+        ],
+      },
+      {
+        name: "포장",
+        required: false,
+        min: 0,
+        max: 1,
+        items: [
+          { name: "일반 포장", priceDelta: 0 },
+          { name: "선물 포장", priceDelta: 1000 },
+        ],
+      },
+      {
+        name: "초 추가",
+        required: false,
+        min: 0,
+        max: 1,
+        items: [
+          { name: "기본 초", priceDelta: 0 },
+          { name: "숫자 초", priceDelta: 1000 },
+          { name: "파티 초", priceDelta: 2000 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "popup-goods",
+    title: "팝업스토어/굿즈",
+    summary: "사이즈 · 색상 · 수령",
+    groups: [
+      {
+        name: "사이즈",
+        required: true,
+        min: 1,
+        max: 1,
+        items: [
+          { name: "S", priceDelta: 0 },
+          { name: "M", priceDelta: 0 },
+          { name: "L", priceDelta: 0 },
+          { name: "XL", priceDelta: 0 },
+        ],
+      },
+      {
+        name: "색상",
+        required: true,
+        min: 1,
+        max: 1,
+        items: [
+          { name: "블랙", priceDelta: 0 },
+          { name: "화이트", priceDelta: 0 },
+          { name: "네이비", priceDelta: 0 },
+          { name: "레드", priceDelta: 0 },
+        ],
+      },
+      {
+        name: "포장",
+        required: false,
+        min: 0,
+        max: 1,
+        items: [
+          { name: "일반 포장", priceDelta: 0 },
+          { name: "선물 포장", priceDelta: 1000 },
+        ],
+      },
+      {
+        name: "수령 방식",
+        required: true,
+        min: 1,
+        max: 1,
+        items: [
+          { name: "현장 수령", priceDelta: 0 },
+          { name: "예약 수령", priceDelta: 0 },
+        ],
+      },
+    ],
+  },
+];
+
+function formatTemplateItem(item: OptionTemplateItem) {
+  return item.priceDelta > 0 ? `${item.name}(+${item.priceDelta.toLocaleString()})` : item.name;
 }
 
 function AdminOptionsPageInner() {
@@ -102,6 +349,7 @@ function AdminOptionsPageInner() {
   const [editingItemId, setEditingItemId] = useState("");
   const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
   const [orderDirty, setOrderDirty] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
   const toErrMsg = (e: unknown) => {
     if (e instanceof Error) return e.message;
@@ -310,6 +558,10 @@ function AdminOptionsPageInner() {
     () => groups.find((g) => g.id === selectedGroupId) || null,
     [groups, selectedGroupId]
   );
+  const selectedTemplate = useMemo(
+    () => optionTemplates.find((template) => template.id === selectedTemplateId) || null,
+    [selectedTemplateId]
+  );
 
   useEffect(() => {
     if (!selectedGroup) {
@@ -468,6 +720,86 @@ function AdminOptionsPageInner() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const applyTemplate = async (template: OptionTemplate) => {
+    if (!storeId) {
+      setMsgTone("error");
+      return setMsg("선택된 매장이 없습니다. 매장을 먼저 선택/생성하세요.");
+    }
+    if (groups.length > 0) {
+      markError();
+      setMsgTone("error");
+      return setMsg("템플릿은 옵션 그룹이 없을 때만 적용할 수 있습니다.");
+    }
+
+    closeConfirm();
+    try {
+      setSaving(true);
+      setBadge("idle");
+
+      const groupRows = template.groups.map((group, idx) => ({
+        id: uid("group"),
+        store_id: storeId,
+        name: group.name,
+        required: group.required,
+        min: group.required ? Math.max(group.min, 1) : Math.max(group.min, 0),
+        max: Math.max(group.max, 1),
+        sort_order: idx + 1,
+        scope: "common" as const,
+        linked_menu_id: null,
+      }));
+
+      const { error: groupError } = await supabase.from("option_groups").insert(groupRows);
+      if (groupError) throw groupError;
+
+      const itemRows = groupRows.flatMap((groupRow, groupIndex) =>
+        template.groups[groupIndex].items.map((item) => ({
+          id: uid("item"),
+          store_id: storeId,
+          group_id: groupRow.id,
+          name: item.name,
+          price_delta: item.priceDelta,
+        }))
+      );
+
+      if (itemRows.length > 0) {
+        const { error: itemError } = await supabase.from("option_items").insert(itemRows);
+        if (itemError) {
+          await supabase
+            .from("option_groups")
+            .delete()
+            .eq("store_id", storeId)
+            .in("id", groupRows.map((group) => group.id));
+          throw itemError;
+        }
+      }
+
+      await refresh();
+      setSelectedGroupId(groupRows[0]?.id || "");
+      setSelectedTemplateId("");
+      setShowCreateGroupForm(false);
+      setShowCreateItemForm(false);
+      setNewItemDraft({ name: "", price: "" });
+      markSaved();
+      setMsgTone("success");
+      setMsg("템플릿을 적용했습니다. 가격과 항목을 매장에 맞게 수정해 주세요.");
+    } catch (e: unknown) {
+      console.error("[admin/options] applyTemplate:", toErrMsg(e));
+      markError();
+      setMsgTone("error");
+      setMsg(`템플릿 적용 실패: ${toErrMsg(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmApplyTemplate = (template: OptionTemplate) => {
+    openConfirm(
+      "템플릿 적용",
+      `${template.title} 템플릿의 옵션 그룹과 항목을 추가할까요?`,
+      () => void applyTemplate(template)
+    );
   };
 
   const updateGroup = async (patch: Partial<OptionGroup>) => {
@@ -1113,6 +1445,105 @@ function AdminOptionsPageInner() {
           color: #334155;
           font-size: 12px;
         }
+        .templateCard {
+          margin-top: 10px;
+          border: 1px solid #dbeafe;
+          background: #f8fafc;
+          border-radius: 14px;
+          padding: 12px;
+          display: grid;
+          gap: 10px;
+        }
+        .templateGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .templateBtn {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px;
+          text-align: left;
+          cursor: pointer;
+          display: grid;
+          gap: 4px;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+        }
+        .templateBtn:hover:not(:disabled),
+        .templateBtnOn {
+          border-color: #2563eb;
+          background: #eff6ff;
+          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+        }
+        .templateBtn:disabled {
+          cursor: not-allowed;
+          opacity: 0.65;
+        }
+        .templateBtn strong {
+          color: #0f172a;
+          font-size: 13px;
+          font-weight: 900;
+        }
+        .templateBtn span {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.35;
+        }
+        .templatePreview {
+          border: 1px solid #bfdbfe;
+          background: #fff;
+          border-radius: 12px;
+          padding: 10px;
+          display: grid;
+          gap: 8px;
+        }
+        .templatePreviewTitle {
+          font-size: 13px;
+          font-weight: 900;
+          color: #1e40af;
+        }
+        .templatePreviewList {
+          display: grid;
+          gap: 7px;
+        }
+        .templatePreviewRow {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+          align-items: center;
+          padding: 8px;
+          border: 1px solid #eef2f7;
+          border-radius: 10px;
+          background: #f8fafc;
+        }
+        .templatePreviewRow div {
+          min-width: 0;
+          display: grid;
+          gap: 3px;
+        }
+        .templatePreviewRow strong {
+          font-size: 12px;
+          font-weight: 900;
+          color: #0f172a;
+        }
+        .templatePreviewRow div span {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.35;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .templateActions {
+          margin-top: 0;
+          justify-content: flex-end;
+        }
+        .templateFooter {
+          margin-top: -2px;
+        }
         .createGroupCard {
           margin-top: 10px;
           border: 1px solid #bfdbfe;
@@ -1315,6 +1746,18 @@ function AdminOptionsPageInner() {
           display: grid;
           gap: 10px;
           box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
+        }
+
+        @media (max-width: 560px) {
+          .templateGrid {
+            grid-template-columns: 1fr;
+          }
+          .templatePreviewRow {
+            grid-template-columns: 1fr;
+          }
+          .templatePreviewRow > .pill {
+            justify-self: start;
+          }
         }
 
         @media (min-width: 561px) and (max-width: 768px) {
@@ -1523,6 +1966,65 @@ function AdminOptionsPageInner() {
                     순서 저장
                   </button>
                 </div>
+                {showOptionAssist ? (
+                  <div className="templateCard">
+                    <div>
+                      <div className="label">빠른 옵션 만들기</div>
+                      <div className="muted">업종별 기본 옵션을 먼저 만들 수 있습니다.</div>
+                    </div>
+                    <div className="templateGrid">
+                      {optionTemplates.map((template) => (
+                        <button
+                          key={template.id}
+                          className={`templateBtn ${selectedTemplateId === template.id ? "templateBtnOn" : ""}`}
+                          onClick={() => setSelectedTemplateId((prev) => (prev === template.id ? "" : template.id))}
+                          disabled={actionBusy || loading}
+                          type="button"
+                        >
+                          <strong>{template.title}</strong>
+                          <span>{template.summary}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {selectedTemplate ? (
+                      <div className="templatePreview">
+                        <div className="templatePreviewTitle">{selectedTemplate.title} 미리보기</div>
+                        <div className="templatePreviewList">
+                          {selectedTemplate.groups.map((group) => (
+                            <div key={group.name} className="templatePreviewRow">
+                              <div>
+                                <strong>{group.name}</strong>
+                                <span>{group.items.map(formatTemplateItem).join(", ")}</span>
+                              </div>
+                              <span className="pill">
+                                {group.required ? "필수" : "선택"} · 최대 {group.max}개
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="btnRow templateActions">
+                          <button
+                            className="btn"
+                            onClick={() => setSelectedTemplateId("")}
+                            disabled={actionBusy || loading}
+                            type="button"
+                          >
+                            취소
+                          </button>
+                          <button
+                            className="btn btnPrimary"
+                            onClick={() => confirmApplyTemplate(selectedTemplate)}
+                            disabled={actionBusy || loading}
+                            type="button"
+                          >
+                            템플릿 적용
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="muted templateFooter">원하는 업종이 없으면 + 새 그룹으로 직접 만들 수 있습니다.</div>
+                  </div>
+                ) : null}
                 {showCreateGroupForm ? (
                   <div className="createGroupCard">
                     <div className="label">새 옵션 그룹 만들기</div>
