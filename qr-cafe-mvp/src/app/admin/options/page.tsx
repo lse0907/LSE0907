@@ -1170,6 +1170,9 @@ function AdminOptionsPageInner() {
           justify-content: space-between;
           flex-wrap: wrap;
         }
+        .emptyItemCard {
+          justify-content: flex-start;
+        }
         .itemCollapsedHint {
           margin-top: 8px;
           border: 1px solid var(--line);
@@ -1811,12 +1814,7 @@ function AdminOptionsPageInner() {
 
                       {!loading && groupItems.length === 0 ? (
                         <div className="emptyItemCard">
-                          <div className="muted">아직 옵션 항목이 없습니다. 예: 기본 0원, 라지 +500원</div>
-                          {!isExclusiveSelected ? (
-                            <button className="btn" type="button" onClick={() => setShowCreateItemForm(true)} disabled={actionBusy || loading}>
-                              첫 항목 추가
-                            </button>
-                          ) : null}
+                          <div className="muted">아직 옵션 항목이 없습니다. 옵션 항목을 추가해 주세요.</div>
                         </div>
                       ) : null}
 
