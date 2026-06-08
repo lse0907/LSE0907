@@ -35,6 +35,7 @@ function CategoriesPageInner() {
   const setupMode = (sp.get("mode") || "manual").trim();
   const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
   const [storeId, setStoreIdState] = useState("");
+  const [storeName, setStoreName] = useState("");
   const [cats, setCats] = useState<MenuCategory[]>([]);
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,10 +44,11 @@ function CategoriesPageInner() {
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"error" | "success" | "neutral">("neutral");
   const [myStores, setMyStores] = useState<MyStore[]>([]);
-  const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState(false);
+  const [copyConfirmOpen, setCopyConfirmOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ category: MenuCategory; linkedMenuCount: number; targetCategoryId: string } | null>(null);
 
   const [editId, setEditId] = useState("");
   const [editName, setEditName] = useState("");
@@ -101,12 +103,17 @@ function CategoriesPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId) {
+      setStoreName("");
+      return;
+    }
     let mounted = true;
     (async () => {
-      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      const { data } = await supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle();
       if (!mounted) return;
-      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+      const row = data as { setup_completed?: boolean | null; store_name?: string | null } | null;
+      setSetupCompleted(Boolean(row?.setup_completed));
+      setStoreName(String(row?.store_name || ""));
     })();
     return () => {
       mounted = false;
@@ -146,28 +153,44 @@ function CategoriesPageInner() {
   const showCategoryAssist = isInitialCategorySetup;
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
+  const activeCategoryCount = cats.filter((cat) => cat.is_active !== false).length;
+  const hasActiveCategory = activeCategoryCount > 0;
   const hasCategoryData = cats.length > 0;
   const canUseBulkImport = !hasCategoryData;
   const showCopyHiddenNotice = isCopyMode && hasCategoryData;
+  const showBulkHiddenNotice = isBulkMode && hasCategoryData;
   const hasCopySource = myStores.length > 0;
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
 
-  const onCopyCategories = async () => {
+  const openCopyConfirm = () => {
     if (actionBusy) return;
     if (!storeId) {
       setMsgTone("error");
-      return setMsg("현재 매장을 먼저 선택해주세요.");
+      setMsg("현재 매장을 먼저 선택해주세요.");
+      return;
     }
     if (!copySourceStoreId) {
       setMsgTone("error");
-      return setMsg("원본 매장을 선택해주세요.");
+      setMsg("원본 매장을 선택해주세요.");
+      return;
     }
     if (copySourceStoreId === storeId) {
       setMsgTone("error");
-      return setMsg("원본/대상 매장은 동일할 수 없습니다.");
+      setMsg("원본/대상 매장은 동일할 수 없습니다.");
+      return;
     }
-    if (!confirm("선택한 매장의 카테고리를 현재 매장으로 복사할까요?")) return;
+    setCopyConfirmOpen(true);
+  };
+
+  const closeCopyConfirm = () => {
+    if (actionBusy) return;
+    setCopyConfirmOpen(false);
+  };
+
+  const onCopyCategories = async () => {
+    if (actionBusy || !storeId || !copySourceStoreId) return;
     setCopying(true);
+    setCopyConfirmOpen(false);
     setMsg("");
     setMsgTone("neutral");
     const { error } = await supabase.rpc("admin_copy_categories_v1", {
@@ -318,11 +341,12 @@ function CategoriesPageInner() {
     }
   };
 
-  const onDisable = async (cat: MenuCategory) => {
+  const onToggleActive = async (cat: MenuCategory) => {
     if (actionBusy) return;
+    const nextActive = cat.is_active === false;
     const { error } = await supabase
       .from("menu_categories")
-      .update({ is_active: false })
+      .update({ is_active: nextActive })
       .eq("id", cat.id)
       .eq("store_id", storeId);
     if (error) {
@@ -331,13 +355,27 @@ function CategoriesPageInner() {
     }
     await refresh();
     setMsgTone("success");
-    setMsg("카테고리를 비활성화했습니다.");
+    setMsg(nextActive ? "카테고리를 다시 활성화했습니다." : "카테고리를 비활성화했습니다.");
+  };
+
+  const deleteCategoryOnly = async (cat: MenuCategory) => {
+    const delOnly = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
+    if (delOnly.error) {
+      setMsgTone("error");
+      setMsg(delOnly.error.message);
+      return false;
+    }
+    await refresh();
+    setMsgTone("success");
+    setMsg("카테고리를 삭제했습니다.");
+    return true;
   };
 
   const onDeleteWithReassign = async (cat: MenuCategory) => {
     if (actionBusy) return;
     setSaving(true);
     setMsg("");
+    setMsgTone("neutral");
 
     const countRes = await supabase
       .from("menu_items")
@@ -354,16 +392,8 @@ function CategoriesPageInner() {
     const linkedMenuCount = Number(countRes.count || 0);
 
     if (linkedMenuCount < 1) {
-      const delOnly = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
-      if (delOnly.error) {
-        setSaving(false);
-        setMsgTone("error");
-        return setMsg(delOnly.error.message);
-      }
-      await refresh();
+      await deleteCategoryOnly(cat);
       setSaving(false);
-      setMsgTone("success");
-      setMsg("카테고리를 삭제했습니다.");
       return;
     }
 
@@ -371,36 +401,69 @@ function CategoriesPageInner() {
     if (!others.length) {
       setSaving(false);
       setMsgTone("error");
-      setMsg("다른 카테고리를 만든 뒤 삭제해 주세요.");
+      setMsg("다른 활성 카테고리를 만든 뒤 삭제해 주세요.");
       return;
     }
 
-    const target = others[0].id;
+    setDeleteConfirm({ category: cat, linkedMenuCount, targetCategoryId: others[0].id });
+    setSaving(false);
+  };
+
+  const closeDeleteConfirm = () => {
+    if (actionBusy) return;
+    setDeleteConfirm(null);
+  };
+
+  const confirmDeleteWithReassign = async () => {
+    if (!deleteConfirm || actionBusy) return;
+    const { category, targetCategoryId } = deleteConfirm;
+    if (!targetCategoryId) {
+      setMsgTone("error");
+      setMsg("이동할 카테고리를 선택해 주세요.");
+      return;
+    }
+
+    setSaving(true);
+    setMsg("");
+    setMsgTone("neutral");
+
     const upd = await supabase
       .from("menu_items")
-      .update({ category_id: target })
+      .update({ category_id: targetCategoryId })
       .eq("store_id", storeId)
-      .eq("category_id", cat.id);
+      .eq("category_id", category.id);
     if (upd.error) {
       setSaving(false);
       setMsgTone("error");
       return setMsg(upd.error.message);
     }
 
-    const del = await supabase.from("menu_categories").delete().eq("id", cat.id).eq("store_id", storeId);
+    const del = await supabase.from("menu_categories").delete().eq("id", category.id).eq("store_id", storeId);
     if (del.error) {
       setMsgTone("error");
       setMsg(del.error.message);
     } else {
+      setDeleteConfirm(null);
       await refresh();
       setMsgTone("success");
-      setMsg("재할당 후 카테고리를 삭제했습니다.");
+      setMsg("선택한 카테고리로 메뉴를 이동한 뒤 삭제했습니다.");
     }
     setSaving(false);
   };
 
+  useEffect(() => {
+    if (!copyConfirmOpen && !deleteConfirm) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || actionBusy) return;
+      setCopyConfirmOpen(false);
+      setDeleteConfirm(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [actionBusy, copyConfirmOpen, deleteConfirm]);
+
   const onCompleteStep = async () => {
-    if (!storeId || cats.length < 1) return;
+    if (!storeId || !hasActiveCategory) return;
     const ok = await setSetupStepConfirmed(storeId, "step1", true);
     if (!ok) {
       setMsgTone("error");
@@ -433,6 +496,7 @@ function CategoriesPageInner() {
         .btnSmall{padding:7px 10px;font-size:12px;border-radius:9px;font-weight:800}
         .btnEdit{border-color:#d1d5db;color:#334155;background:#fff}
         .btnDisable{border-color:#fcd34d;color:#92400e;background:#fffbeb}
+        .btnActivate{border-color:#bbf7d0;color:#166534;background:#f0fdf4}
         .btnDelete{border-color:#fecaca;color:#b91c1c;background:#fff1f2}
         .orderActionRow{display:inline-flex;gap:4px}
         .orderBtn{border:1px solid #dbe2ea;background:linear-gradient(180deg,#fff,#f8fafc);border-radius:9px;width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
@@ -451,6 +515,21 @@ function CategoriesPageInner() {
         .subText{margin:0;color:#6b7280;font-size:13px;font-weight:800;line-height:1.4}
         .copyHelpText{margin-top:6px}
         .copyWarnText{margin-top:2px;color:#b45309}
+        .modeActionCard{border-color:#bfdbfe;background:linear-gradient(180deg,#eff6ff,#fff);box-shadow:0 8px 24px rgba(37,99,235,.08)}
+        .modeActionBulk{border-color:#fde68a;background:linear-gradient(180deg,#fffbeb,#fff);box-shadow:0 8px 24px rgba(245,158,11,.1)}
+        .modeActionHead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+        .modeActionTitle{font-weight:950;font-size:14px;color:#0f172a}
+        .modeActionBadge{border:1px solid #93c5fd;background:#dbeafe;color:#1d4ed8;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:950;white-space:nowrap}
+        .modeActionBulk .modeActionBadge{border-color:#fcd34d;background:#fef3c7;color:#92400e}
+        .modalOverlay{position:fixed;inset:0;z-index:50;background:rgba(15,23,42,.46);display:flex;align-items:center;justify-content:center;padding:18px}
+        .modalCard{width:min(100%,420px);background:#fff;border:1px solid #dbe2ea;border-radius:18px;padding:18px;box-shadow:0 20px 45px rgba(15,23,42,.2);display:grid;gap:12px}
+        .modalTitle{margin:0;font-size:18px;font-weight:950;letter-spacing:-.02em}
+        .modalDesc{margin:0;color:#475569;font-size:13px;font-weight:800;line-height:1.45}
+        .modalNotice{margin:0;border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:900;line-height:1.35}
+        .modalActions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+        .modalActions .btn{min-width:108px}
+        .modalPrimary{background:#111827;color:#fff;border-color:#111827}
+        .targetSelect{width:100%}
         .categoryListScroll{
           max-height:56vh;
           overflow-y:auto;
@@ -525,7 +604,7 @@ function CategoriesPageInner() {
       </header>
       <p className="subText">메뉴 분류(카테고리)를 등록/수정/정렬합니다.</p>
       <p className="subText">
-        현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
+        현재 매장: <b>{storeName || storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
       </p>
       {!setupCompleted ? (
         <SetupProgressBanner
@@ -540,41 +619,42 @@ function CategoriesPageInner() {
           }
           stepGuide="카테고리를 등록한 뒤 완료 버튼을 눌러주세요."
           completeLabel="카테고리 설정 완료"
-          completeDisabled={loading || cats.length < 1 || actionBusy}
-          disabledReason="카테고리를 1개 이상 등록하면 완료할 수 있습니다."
-          noticeText={showCopyHiddenNotice ? "이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다." : ""}
+          completeDisabled={loading || !hasActiveCategory || actionBusy}
+          disabledReason="활성 카테고리를 1개 이상 등록하면 완료할 수 있습니다."
+          noticeText={
+            showCopyHiddenNotice
+              ? "이미 등록된 카테고리가 있어 원본 복사를 사용할 수 없습니다."
+              : showBulkHiddenNotice
+                ? "이미 등록된 카테고리가 있어 일괄 등록을 사용할 수 없습니다."
+                : ""
+          }
           setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
           onComplete={() => void onCompleteStep()}
         />
       ) : null}
 
-      {isBulkMode ? (
-        <section className="card">
-          {canUseBulkImport ? (
-            <>
-              <p className="subText" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
-              <div className="row" style={{ marginTop: 10 }}>
-                <a className="btn btnPrimary" href={importHref}>
-                  카테고리·메뉴 일괄 등록 시작
-                </a>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="subText" style={{ margin: 0 }}>이미 등록된 데이터가 있어 일괄 등록을 사용할 수 없습니다.</p>
-              <div className="row" style={{ marginTop: 10 }}>
-                <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                  설정 방식 변경
-                </a>
-              </div>
-            </>
-          )}
+      {isBulkMode && canUseBulkImport ? (
+        <section className="card modeActionCard modeActionBulk">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">카테고리·메뉴 일괄 등록</div>
+            <span className="modeActionBadge">일괄 등록</span>
+          </div>
+          <p className="subText" style={{ margin: 0 }}>파일 업로드로 한 번에 등록합니다.</p>
+          <div className="row" style={{ marginTop: 10 }}>
+            <a className="btn btnPrimary" href={importHref}>
+              카테고리·메뉴 일괄 등록 시작
+            </a>
+          </div>
         </section>
       ) : null}
 
 
       {showCategoryAssist && isCopyMode ? (
-        <section className="card copyCard">
+        <section className="card copyCard modeActionCard">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">원본 매장 카테고리 복사</div>
+            <span className="modeActionBadge">원본 복사</span>
+          </div>
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
               <option value="">원본 매장 선택</option>
@@ -584,7 +664,7 @@ function CategoriesPageInner() {
                 </option>
               ))}
             </select>
-            <button className="btn copyBtn" onClick={onCopyCategories} disabled={actionBusy || loading || !hasCopySource || !copySourceStoreId}>
+            <button className="btn copyBtn" onClick={openCopyConfirm} disabled={actionBusy || loading || !hasCopySource || !copySourceStoreId}>
               {copying ? "복사 중..." : <><span className="copyBtnLong">다른 매장 카테고리 복사</span><span className="copyBtnShort">카테고리 복사</span></>}
             </button>
           </div>
@@ -651,7 +731,13 @@ function CategoriesPageInner() {
                         </div>
                         <div className="categoryActionRow">
                           <button className="btn btnSmall btnEdit" onClick={() => startEdit(cat)} disabled={actionBusy || loading}>수정</button>
-                          <button className="btn btnSmall btnDisable" onClick={() => onDisable(cat)} disabled={actionBusy || loading || cat.is_active === false}>비활성화</button>
+                          <button
+                            className={`btn btnSmall ${cat.is_active === false ? "btnActivate" : "btnDisable"}`}
+                            onClick={() => onToggleActive(cat)}
+                            disabled={actionBusy || loading}
+                          >
+                            {cat.is_active === false ? "다시 활성화" : "비활성화"}
+                          </button>
                           <button className="btn btnSmall btnDelete" onClick={() => onDeleteWithReassign(cat)} disabled={actionBusy || loading}>삭제(재할당)</button>
                         </div>
                         <div className="categoryOrderEdge">
@@ -698,22 +784,75 @@ function CategoriesPageInner() {
         )}
       </section>
 
-      {showCategoryAssist && !isBulkMode && canUseBulkImport ? (
-        <section className="card">
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <div>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>일괄 등록(선택)</h2>
-              <p className="subText" style={{ marginTop: 2 }}>
-                양식 파일로 업로드하여 카테고리/메뉴 항목을 일괄 등록합니다.
-              </p>
+
+      {copyConfirmOpen ? (
+        <div
+          className="modalOverlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="copy-category-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeCopyConfirm();
+          }}
+        >
+          <div className="modalCard">
+            <h3 id="copy-category-title" className="modalTitle">카테고리 복사</h3>
+            <p className="modalDesc">선택한 원본 매장의 카테고리를 현재 매장으로 복사합니다.</p>
+            <p className="modalNotice">기존 카테고리가 없는 초기 설정 상태에서만 복사하는 것을 권장합니다.</p>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={closeCopyConfirm} disabled={actionBusy}>
+                취소
+              </button>
+              <button className="btn modalPrimary" type="button" onClick={() => void onCopyCategories()} disabled={actionBusy}>
+                복사하기
+              </button>
             </div>
-            <a className="btn" href={importHref}>
-              카테고리·메뉴 일괄 등록
-            </a>
           </div>
-          <p className="subText" style={{ marginTop: 4 }}>일괄 등록 기능은 최초 등록 시에만 활성화됩니다.</p>
-        </section>
+        </div>
       ) : null}
+
+      {deleteConfirm ? (
+        <div
+          className="modalOverlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-category-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeDeleteConfirm();
+          }}
+        >
+          <div className="modalCard">
+            <h3 id="delete-category-title" className="modalTitle">카테고리 삭제</h3>
+            <p className="modalDesc">
+              <b>{deleteConfirm.category.name}</b>에 연결된 메뉴 {deleteConfirm.linkedMenuCount}개를 이동한 뒤 삭제합니다.
+            </p>
+            <p className="modalNotice">삭제 전, 메뉴를 이동할 카테고리를 선택해 주세요.</p>
+            <select
+              className="input targetSelect"
+              value={deleteConfirm.targetCategoryId}
+              onChange={(e) => setDeleteConfirm((prev) => (prev ? { ...prev, targetCategoryId: e.target.value } : prev))}
+              disabled={actionBusy}
+            >
+              {cats
+                .filter((cat) => cat.id !== deleteConfirm.category.id && cat.is_active !== false)
+                .map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+            </select>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={closeDeleteConfirm} disabled={actionBusy}>
+                취소
+              </button>
+              <button className="btn btnDelete" type="button" onClick={() => void confirmDeleteWithReassign()} disabled={actionBusy || !deleteConfirm.targetCategoryId}>
+                이동 후 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </main>
   );
 }
