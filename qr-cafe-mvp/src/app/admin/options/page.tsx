@@ -289,6 +289,7 @@ function AdminOptionsPageInner() {
   const [orderDirty, setOrderDirty] = useState(false);
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [showTemplateNextStep, setShowTemplateNextStep] = useState(false);
 
   const toErrMsg = (e: unknown) => {
     if (e instanceof Error) return e.message;
@@ -718,6 +719,7 @@ function AdminOptionsPageInner() {
       setSelectedGroupId(groupRows[0]?.id || "");
       setSelectedTemplateId("");
       setShowTemplatePanel(false);
+      setShowTemplateNextStep(true);
       setShowCreateGroupForm(false);
       setShowCreateItemForm(false);
       setNewItemDraft({ name: "", price: "" });
@@ -1130,6 +1132,23 @@ function AdminOptionsPageInner() {
           background: #fef2f2;
           color: #991b1b;
         }
+        .nextStepCard {
+          margin-top: 8px;
+          border: 1px solid #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+          border-radius: 14px;
+          padding: 12px;
+          display: grid;
+          gap: 8px;
+        }
+        .nextStepTitle {
+          font-size: 13px;
+          font-weight: 950;
+          color: #1d4ed8;
+        }
+        .nextStepActions {
+          margin-top: 0;
+        }
         .badge {
           padding: 8px 10px;
           border-radius: 999px;
@@ -1296,6 +1315,14 @@ function AdminOptionsPageInner() {
         .statusOptional {
           background: #e5e7eb;
           color: #374151;
+        }
+        .statusLinked {
+          background: #dcfce7;
+          color: #166534;
+        }
+        .statusUnlinked {
+          background: #fff7ed;
+          color: #9a3412;
         }
         .muted {
           color: var(--muted);
@@ -1524,6 +1551,16 @@ function AdminOptionsPageInner() {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
+        .templateEditHint {
+          border: 1px solid #e0e7ff;
+          background: #eef2ff;
+          color: #3730a3;
+          border-radius: 10px;
+          padding: 8px 9px;
+          font-size: 12px;
+          font-weight: 900;
+          line-height: 1.35;
+        }
         .templateActions {
           margin-top: 0;
           justify-content: flex-end;
@@ -1590,6 +1627,10 @@ function AdminOptionsPageInner() {
         }
         .emptyItemCard {
           justify-content: flex-start;
+        }
+        .emptyLinkText {
+          display: grid;
+          gap: 6px;
         }
         .itemCollapsedHint {
           margin-top: 8px;
@@ -1857,6 +1898,22 @@ function AdminOptionsPageInner() {
               {msg}
             </div>
           ) : null}
+          {showTemplateNextStep ? (
+            <div className="nextStepCard">
+              <div>
+                <div className="nextStepTitle">다음 단계</div>
+                <div className="muted">가격 확인 후 메뉴에 옵션을 연결해 주세요.</div>
+              </div>
+              <div className="btnRow nextStepActions">
+                <a className="btn btnPrimary" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                  메뉴관리로 이동
+                </a>
+                <button className="btn" type="button" onClick={() => setShowTemplateNextStep(false)}>
+                  닫기
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="scopeRow">
             {[
               { key: "common", label: "공통옵션" },
@@ -2020,6 +2077,7 @@ function AdminOptionsPageInner() {
                             </div>
                           ))}
                         </div>
+                        <div className="templateEditHint">적용 후 그룹과 항목은 수정/삭제할 수 있습니다.</div>
                         <div className="btnRow templateActions">
                           <button
                             className="btn"
@@ -2124,6 +2182,14 @@ function AdminOptionsPageInner() {
                         {g.required ? "필수" : "선택"}
                       </span>
                       <span className="muted">{g.min}~{g.max}개</span>
+                      {(() => {
+                        const linkedCount = (linkedMenuNamesByGroupId[g.id] || []).length;
+                        return (
+                          <span className={`statusBadge ${linkedCount > 0 ? "statusLinked" : "statusUnlinked"}`}>
+                            {linkedCount > 0 ? `연결 ${linkedCount}개` : "미연결"}
+                          </span>
+                        );
+                      })()}
                       {activeScope === "common" ? (
                         <span className="orderActionRow">
                           <button
@@ -2380,7 +2446,10 @@ function AdminOptionsPageInner() {
                   <div className="label">연결된 메뉴</div>
                   {linkedMenus.length === 0 ? (
                     <div className="emptyLinkBox">
-                      <div className="muted">아직 연결된 메뉴가 없습니다. 메뉴관리에서 메뉴를 선택한 뒤 이 옵션을 연결하세요.</div>
+                      <div className="emptyLinkText">
+                        <span className="statusBadge statusUnlinked">미연결</span>
+                        <div className="muted">메뉴에 연결해야 주문 화면에 표시됩니다.</div>
+                      </div>
                       <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
                         메뉴관리로 이동
                       </a>
