@@ -392,9 +392,9 @@ function AdminOptionsPageInner() {
     ? (() => {
         const max = Math.max(toInt(groupDraft.max, selectedGroup.max || 1), 1);
         if (groupDraft.required) {
-          return max === 1 ? "고객이 반드시 1개를 선택합니다." : `고객이 최소 1개, 최대 ${max}개까지 선택합니다.`;
+          return max === 1 ? "필수 · 1개 선택" : `필수 · 최대 ${max}개 선택/추가`;
         }
-        return max === 1 ? "고객이 선택하지 않아도 됩니다." : `고객이 선택하지 않거나 최대 ${max}개까지 선택할 수 있습니다.`;
+        return max === 1 ? "선택 옵션 · 최대 1개" : `선택 옵션 · 최대 ${max}개 선택/추가`;
       })()
     : "";
 
@@ -1124,8 +1124,20 @@ function AdminOptionsPageInner() {
         }
         .createGroupGrid {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(92px, 120px);
+          grid-template-columns: minmax(0, 1fr) minmax(120px, 150px);
           gap: 8px;
+          align-items: start;
+        }
+        .createGroupField {
+          display: grid;
+          gap: 5px;
+        }
+        .createGroupHint {
+          margin-top: -2px;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.35;
         }
         .createRequiredInline {
           white-space: normal;
@@ -1338,7 +1350,7 @@ function AdminOptionsPageInner() {
             grid-template-columns: minmax(0, 1fr) minmax(110px, 0.8fr);
           }
           .createGroupGrid {
-            grid-template-columns: minmax(0, 1fr) minmax(86px, 110px);
+            grid-template-columns: minmax(0, 1fr);
           }
           .itemName {
             font-size: 14px;
@@ -1511,24 +1523,31 @@ function AdminOptionsPageInner() {
                 {showCreateGroupForm ? (
                   <div className="createGroupCard">
                     <div className="label">새 옵션 그룹 만들기</div>
-                    <div className="muted">예: 사이즈, 맵기, 소스, 포장 옵션</div>
+                    <div className="muted">예: 사이즈, 맵기, 소스</div>
                     <div className="createGroupGrid">
-                      <input
-                        className="input"
-                        value={createGroupDraft.name}
-                        onChange={(e) => setCreateGroupDraft((prev) => ({ ...prev, name: e.target.value }))}
-                        placeholder="옵션 그룹명"
-                        disabled={actionBusy || loading}
-                      />
-                      <input
-                        className="input"
-                        inputMode="numeric"
-                        value={createGroupDraft.max}
-                        onChange={(e) => setCreateGroupDraft((prev) => ({ ...prev, max: e.target.value }))}
-                        placeholder="최대 선택"
-                        disabled={actionBusy || loading}
-                      />
+                      <div className="createGroupField">
+                        <div className="label">그룹명</div>
+                        <input
+                          className="input"
+                          value={createGroupDraft.name}
+                          onChange={(e) => setCreateGroupDraft((prev) => ({ ...prev, name: e.target.value }))}
+                          placeholder="예: 시럽 추가"
+                          disabled={actionBusy || loading}
+                        />
+                      </div>
+                      <div className="createGroupField">
+                        <div className="label">최대 선택 수량</div>
+                        <input
+                          className="input"
+                          inputMode="numeric"
+                          value={createGroupDraft.max}
+                          onChange={(e) => setCreateGroupDraft((prev) => ({ ...prev, max: e.target.value }))}
+                          placeholder="예: 2"
+                          disabled={actionBusy || loading}
+                        />
+                      </div>
                     </div>
+                    <div className="createGroupHint">같은 항목도 여러 번 추가할 수 있어요.</div>
                     <label className="requiredInline createRequiredInline">
                       <input
                         type="checkbox"
@@ -1536,7 +1555,7 @@ function AdminOptionsPageInner() {
                         onChange={(e) => setCreateGroupDraft((prev) => ({ ...prev, required: e.target.checked }))}
                         disabled={actionBusy || loading}
                       />
-                      고객이 반드시 선택해야 합니다.
+                      필수 옵션
                     </label>
                     <div className="btnRow createGroupActions">
                       <button className="btn btnPrimary" onClick={addGroup} disabled={actionBusy || loading || !createGroupDraft.name.trim()} type="button">
