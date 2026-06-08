@@ -78,7 +78,7 @@ const optionTemplates: OptionTemplate[] = [
   {
     id: "cafe-drink",
     title: "카페/음료",
-    summary: "온도 · 사이즈 · 샷/시럽",
+    summary: "온도 · 사이즈",
     groups: [
       {
         name: "온도",
@@ -127,7 +127,7 @@ const optionTemplates: OptionTemplate[] = [
   {
     id: "restaurant",
     title: "일반 식당",
-    summary: "맵기 · 밥 양 · 토핑",
+    summary: "맵기 · 곱빼기",
     groups: [
       {
         name: "맵기",
@@ -141,25 +141,13 @@ const optionTemplates: OptionTemplate[] = [
         ],
       },
       {
-        name: "밥 양",
-        required: false,
-        min: 0,
+        name: "기본선택",
+        required: true,
+        min: 1,
         max: 1,
         items: [
-          { name: "적게", priceDelta: 0 },
-          { name: "보통", priceDelta: 0 },
-          { name: "많이", priceDelta: 1000 },
-        ],
-      },
-      {
-        name: "추가 토핑",
-        required: false,
-        min: 0,
-        max: 3,
-        items: [
-          { name: "계란 추가", priceDelta: 1000 },
-          { name: "치즈 추가", priceDelta: 1500 },
-          { name: "고기 추가", priceDelta: 3000 },
+          { name: "기본", priceDelta: 0 },
+          { name: "곱빼기", priceDelta: 1000 },
         ],
       },
     ],
@@ -167,7 +155,7 @@ const optionTemplates: OptionTemplate[] = [
   {
     id: "snack-foodtruck",
     title: "분식/푸드트럭",
-    summary: "소스 · 토핑 · 포장",
+    summary: "소스 · 토핑",
     groups: [
       {
         name: "소스",
@@ -192,62 +180,12 @@ const optionTemplates: OptionTemplate[] = [
           { name: "계란 추가", priceDelta: 1000 },
         ],
       },
-      {
-        name: "수령 방식",
-        required: true,
-        min: 1,
-        max: 1,
-        items: [
-          { name: "바로 먹기", priceDelta: 0 },
-          { name: "포장", priceDelta: 0 },
-        ],
-      },
-    ],
-  },
-  {
-    id: "dessert-bakery",
-    title: "디저트/베이커리",
-    summary: "맛 · 포장 · 초 추가",
-    groups: [
-      {
-        name: "맛 선택",
-        required: true,
-        min: 1,
-        max: 1,
-        items: [
-          { name: "바닐라", priceDelta: 0 },
-          { name: "초코", priceDelta: 0 },
-          { name: "딸기", priceDelta: 0 },
-          { name: "말차", priceDelta: 0 },
-        ],
-      },
-      {
-        name: "포장",
-        required: false,
-        min: 0,
-        max: 1,
-        items: [
-          { name: "일반 포장", priceDelta: 0 },
-          { name: "선물 포장", priceDelta: 1000 },
-        ],
-      },
-      {
-        name: "초 추가",
-        required: false,
-        min: 0,
-        max: 1,
-        items: [
-          { name: "기본 초", priceDelta: 0 },
-          { name: "숫자 초", priceDelta: 1000 },
-          { name: "파티 초", priceDelta: 2000 },
-        ],
-      },
     ],
   },
   {
     id: "popup-goods",
-    title: "팝업스토어/굿즈",
-    summary: "사이즈 · 색상 · 수령",
+    title: "팝업/굿즈",
+    summary: "사이즈 · 색상",
     groups: [
       {
         name: "사이즈",
@@ -349,6 +287,7 @@ function AdminOptionsPageInner() {
   const [editingItemId, setEditingItemId] = useState("");
   const [editItemDraft, setEditItemDraft] = useState({ name: "", price: "" });
   const [orderDirty, setOrderDirty] = useState(false);
+  const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
   const toErrMsg = (e: unknown) => {
@@ -778,6 +717,7 @@ function AdminOptionsPageInner() {
       await refresh();
       setSelectedGroupId(groupRows[0]?.id || "");
       setSelectedTemplateId("");
+      setShowTemplatePanel(false);
       setShowCreateGroupForm(false);
       setShowCreateItemForm(false);
       setNewItemDraft({ name: "", price: "" });
@@ -1450,9 +1390,9 @@ function AdminOptionsPageInner() {
           border: 1px solid #dbeafe;
           background: #f8fafc;
           border-radius: 14px;
-          padding: 12px;
+          padding: 10px;
           display: grid;
-          gap: 10px;
+          gap: 8px;
         }
         .templateGrid {
           display: grid;
@@ -1463,7 +1403,7 @@ function AdminOptionsPageInner() {
           border: 1px solid var(--line);
           border-radius: 12px;
           background: #fff;
-          padding: 10px;
+          padding: 9px;
           text-align: left;
           cursor: pointer;
           display: grid;
@@ -1750,7 +1690,7 @@ function AdminOptionsPageInner() {
 
         @media (max-width: 560px) {
           .templateGrid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
           .templatePreviewRow {
             grid-template-columns: 1fr;
@@ -1953,12 +1893,32 @@ function AdminOptionsPageInner() {
                 <div className="btnRow">
                   <button
                     className="btn btnPrimary"
-                    onClick={() => setShowCreateGroupForm((v) => !v)}
+                    onClick={() => {
+                      setShowTemplatePanel(false);
+                      setSelectedTemplateId("");
+                      setShowCreateGroupForm((v) => !v);
+                    }}
                     disabled={actionBusy || loading}
                     type="button"
                   >
                     {showCreateGroupForm ? "그룹 만들기 닫기" : "+ 새 그룹"}
                   </button>
+                  {showOptionAssist ? (
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        setShowCreateGroupForm(false);
+                        setShowTemplatePanel((prev) => {
+                          if (prev) setSelectedTemplateId("");
+                          return !prev;
+                        });
+                      }}
+                      disabled={actionBusy || loading}
+                      type="button"
+                    >
+                      {showTemplatePanel ? "빠른 옵션 닫기" : "빠른 옵션 만들기"}
+                    </button>
+                  ) : null}
                   <button className="btn" onClick={refresh} disabled={actionBusy || loading}>
                     새로고침
                   </button>
@@ -1966,7 +1926,7 @@ function AdminOptionsPageInner() {
                     순서 저장
                   </button>
                 </div>
-                {showOptionAssist ? (
+                {showOptionAssist && showTemplatePanel ? (
                   <div className="templateCard">
                     <div>
                       <div className="label">빠른 옵션 만들기</div>
