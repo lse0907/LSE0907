@@ -31,28 +31,28 @@ export default function SetupProgressBanner({
         .setupBanner {
           border: 1px solid #bfdbfe;
           background: linear-gradient(180deg, #eef5ff 0%, #f8fbff 100%);
-          border-radius: 18px;
-          padding: 16px;
+          border-radius: 16px;
+          padding: 14px;
           display: grid;
-          gap: 12px;
+          gap: 10px;
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 1px 2px rgba(15, 23, 42, 0.04);
         }
         .bannerRow {
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
-          gap: 14px;
+          gap: 12px;
           flex-wrap: wrap;
         }
         .textCol {
           display: grid;
-          gap: 7px;
+          gap: 6px;
           min-width: 0;
           flex: 1 1 420px;
         }
         .stepTitle {
           margin: 0;
-          font-size: 21px;
+          font-size: 19px;
           line-height: 1.2;
           letter-spacing: -0.02em;
           color: #0f172a;
@@ -60,7 +60,7 @@ export default function SetupProgressBanner({
         }
         .modeLabel {
           margin: 0;
-          font-size: 14px;
+          font-size: 13px;
           color: #1e3a8a;
           font-weight: 900;
         }
@@ -88,15 +88,15 @@ export default function SetupProgressBanner({
         }
         .secondaryBtn,
         .primaryBtn {
-          min-height: 44px;
-          border-radius: 12px;
-          font-size: 14px;
+          min-height: 40px;
+          border-radius: 11px;
+          font-size: 13px;
           font-weight: 900;
           line-height: 1.2;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 10px 14px;
+          padding: 9px 12px;
           text-decoration: none;
           white-space: nowrap;
           width: 100%;
@@ -136,13 +136,13 @@ export default function SetupProgressBanner({
         }
         .warnText {
           margin: 0;
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 900;
           color: #b45309;
           background: #fffbeb;
           border: 1px solid #fde68a;
-          border-radius: 10px;
-          padding: 8px 10px;
+          border-radius: 9px;
+          padding: 7px 9px;
         }
         @media (max-width: 1024px) {
           .stepTitle { font-size: 19px; }
@@ -150,22 +150,22 @@ export default function SetupProgressBanner({
         }
         @media (max-width: 768px) {
           .setupBanner {
-            padding: 14px;
-            gap: 10px;
+            padding: 12px;
+            gap: 8px;
           }
-          .stepTitle { font-size: 18px; }
+          .stepTitle { font-size: 17px; }
           .btnCol {
             width: 100%;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             justify-content: stretch;
-            gap: 7px;
+            gap: 6px;
           }
           .secondaryBtn,
           .primaryBtn {
             width: 100%;
-            min-height: 40px;
-            padding: 8px 10px;
-            font-size: 13px;
+            min-height: 38px;
+            padding: 7px 9px;
+            font-size: 12px;
           }
         }
       `}</style>
