@@ -108,6 +108,11 @@ function summarizeFileName(name: string, maxLen = 24) {
   return `${raw.slice(0, keep)}…${suffix}`;
 }
 
+function toErrMsg(e: unknown) {
+  if (e instanceof Error) return e.message;
+  return String(e ?? "알 수 없는 오류");
+}
+
 const emptyDraft: MenuDraft = {
   id: "",
   name: "",
@@ -156,6 +161,7 @@ function AdminMenuPageInner() {
   const setupMode = (sp.get("mode") || "manual").trim();
   const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
   const [storeId, setStoreId] = useState("");
+  const [storeName, setStoreName] = useState("");
   const [items, setItems] = useState<MenuItem[]>([]);
   const [groups, setGroups] = useState<OptionGroup[]>([]);
   const [optionItems, setOptionItems] = useState<OptionItem[]>([]);
@@ -190,7 +196,6 @@ function AdminMenuPageInner() {
   const [exclusiveEdit, setExclusiveEdit] = useState({ name: "", max: "1" });
   const [exclusiveEditItems, setExclusiveEditItems] = useState<Array<{ id: string; name: string; price: string }>>([]);
   const [myStores, setMyStores] = useState<MyStore[]>([]);
-  const [memberStoreCount, setMemberStoreCount] = useState<number | null>(null);
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState(false);
@@ -338,11 +343,11 @@ function AdminMenuPageInner() {
         if (prev && (menuRes.data || []).some((x) => x.id === prev)) return prev;
         return (menuRes.data || [])[0]?.id || "";
       });
-    } catch (e: any) {
-      console.error("[admin/menu] refresh error:", e?.message || e);
+    } catch (e: unknown) {
+      console.error("[admin/menu] refresh error:", toErrMsg(e));
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
-      setStatus("error", `메뉴 데이터 로드 실패: ${String(e?.message || e)}`);
+      setStatus("error", `메뉴 데이터 로드 실패: ${toErrMsg(e)}`);
     } finally {
       setLoading(false);
     }
@@ -356,7 +361,7 @@ function AdminMenuPageInner() {
       if (authErr || !authData?.user) return;
       const memRes = await supabase.from("store_members").select("store_id").eq("user_id", authData.user.id);
       if (memRes.error) return;
-      const ids = (memRes.data || []).map((x: any) => String(x.store_id || "")).filter(Boolean);
+      const ids = (memRes.data || []).map((x: { store_id: string | null }) => String(x.store_id || "")).filter(Boolean);
       const uniqueIds = Array.from(new Set(ids));
       if (!mounted) return;
       if (!uniqueIds.length) {
@@ -379,10 +384,16 @@ function AdminMenuPageInner() {
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
   const hasMenuData = items.length > 0;
+  const canShowMenuManagement = setupMode === "manual" || hasMenuData;
+  const readyMenuCount = items.filter((item) => Number(item.price || 0) > 0 && !item.is_sold_out && Boolean(item.category_id)).length;
+  const groupIdsWithItems = new Set(optionItems.map((item) => item.group_id));
+  const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
+  const showMenuPrerequisiteNotice = !setupCompleted && !loading && storeId && (categories.length < 1 || !hasOptionSetupReady);
   const canUseBulkImport = !hasMenuData;
   const showCopyHiddenNotice = isCopyMode && hasMenuData;
+  const showBulkHiddenNotice = isBulkMode && hasMenuData;
   const hasCopySource = myStores.length > 0;
-  const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
+  const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}&target=menus` : "?target=menus"}`;
 
   const onCopyMenus = async () => {
     if (!storeId) return setStatus("error", "대상 매장을 먼저 선택해주세요.");
@@ -402,8 +413,8 @@ function AdminMenuPageInner() {
           if (error) throw error;
           await refresh();
           setStatus("success", "메뉴 복사가 완료되었습니다.");
-        } catch (e: any) {
-          setStatus("error", `메뉴 복사 실패: ${String(e?.message || e)}`);
+        } catch (e: unknown) {
+          setStatus("error", `메뉴 복사 실패: ${toErrMsg(e)}`);
         } finally {
           setCopying(false);
         }
@@ -416,12 +427,17 @@ function AdminMenuPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId) {
+      setStoreName("");
+      return;
+    }
     let mounted = true;
     (async () => {
-      const { data } = await supabase.from("stores").select("setup_completed").eq("store_id", storeId).maybeSingle();
+      const { data } = await supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle();
       if (!mounted) return;
-      setSetupCompleted(Boolean((data as { setup_completed?: boolean | null } | null)?.setup_completed));
+      const row = data as { setup_completed?: boolean | null; store_name?: string | null } | null;
+      setSetupCompleted(Boolean(row?.setup_completed));
+      setStoreName(String(row?.store_name || ""));
     })();
     return () => {
       mounted = false;
@@ -643,11 +659,11 @@ function AdminMenuPageInner() {
       setBadge("saved");
       setTimeout(() => setBadge("idle"), 1600);
       setStatus("success", "메뉴를 저장했습니다.");
-    } catch (e: any) {
-      console.error("[admin/menu] save error:", e?.message || e);
+    } catch (e: unknown) {
+      console.error("[admin/menu] save error:", toErrMsg(e));
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
-      setStatus("error", `메뉴 저장 실패: ${String(e?.message || e)}`);
+      setStatus("error", `메뉴 저장 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -669,11 +685,11 @@ function AdminMenuPageInner() {
       setBadge("saved");
       setTimeout(() => setBadge("idle"), 1600);
       setStatus("success", "메뉴를 삭제했습니다.");
-    } catch (e: any) {
-      console.error("[admin/menu] delete error:", e?.message || e);
+    } catch (e: unknown) {
+      console.error("[admin/menu] delete error:", toErrMsg(e));
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
-      setStatus("error", `메뉴 삭제 실패: ${String(e?.message || e)}`);
+      setStatus("error", `메뉴 삭제 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -713,8 +729,8 @@ function AdminMenuPageInner() {
       await refresh();
       setStatus("success", "메뉴 노출 순서를 저장했습니다.");
       setOrderDirty(false);
-    } catch (e: any) {
-      setStatus("error", `메뉴 순서 저장 실패: ${String(e?.message || e)}`);
+    } catch (e: unknown) {
+      setStatus("error", `메뉴 순서 저장 실패: ${toErrMsg(e)}`);
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
     } finally {
@@ -723,7 +739,7 @@ function AdminMenuPageInner() {
   };
 
   const onCompleteStep = async () => {
-    if (!storeId || items.length < 1) return;
+    if (!storeId || readyMenuCount < 1) return;
     const ok = await setSetupStepConfirmed(storeId, "step3", true);
     if (!ok) {
       setStatus("error", "단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
@@ -960,8 +976,8 @@ function AdminMenuPageInner() {
       setStatus("success", "전용옵션을 저장했습니다.");
       setExclusiveDirty(false);
       setExclusiveEditorMode("none");
-    } catch (e: any) {
-      setStatus("error", `전용옵션 저장 실패: ${String(e?.message || e)}`);
+    } catch (e: unknown) {
+      setStatus("error", `전용옵션 저장 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -1036,8 +1052,8 @@ function AdminMenuPageInner() {
       setStatus("success", "공통옵션 단가/제외 항목을 저장했습니다.");
       setCommonDirty(false);
       return true;
-    } catch (e: any) {
-      setStatus("error", `공통옵션 저장 실패: ${String(e?.message || e)}`);
+    } catch (e: unknown) {
+      setStatus("error", `공통옵션 저장 실패: ${toErrMsg(e)}`);
       return false;
     } finally {
       setSaving(false);
@@ -1096,8 +1112,8 @@ function AdminMenuPageInner() {
           setStatus("success", "전용옵션을 삭제했습니다.");
           setExclusiveDirty(false);
           setExclusiveEditorMode("none");
-        } catch (e: any) {
-          setStatus("error", `전용옵션 삭제 실패: ${String(e?.message || e)}`);
+        } catch (e: unknown) {
+          setStatus("error", `전용옵션 삭제 실패: ${toErrMsg(e)}`);
         } finally {
           setSaving(false);
         }
@@ -1177,8 +1193,8 @@ function AdminMenuPageInner() {
       await refresh();
       setStatus("success", "전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
       setExclusiveDirty(false);
-    } catch (e: any) {
-      setStatus("error", `전용옵션 생성 실패: ${String(e?.message || e)}`);
+    } catch (e: unknown) {
+      setStatus("error", `전용옵션 생성 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -1288,8 +1304,8 @@ function AdminMenuPageInner() {
       const { data } = supabase.storage.from(MENU_IMAGE_BUCKET).getPublicUrl(path);
       const url = data.publicUrl || "";
       if (url) setDraft((prev) => ({ ...prev, image: url }));
-    } catch (e: any) {
-      setStatus("error", `메뉴 이미지 업로드 실패: ${String(e?.message || e)}`);
+    } catch (e: unknown) {
+      setStatus("error", `메뉴 이미지 업로드 실패: ${toErrMsg(e)}`);
     } finally {
       setUploadingImage(false);
     }
@@ -1364,6 +1380,43 @@ function AdminMenuPageInner() {
         }
         .copyHelpText { margin-top: 6px; }
         .copyWarnText { margin-top: 2px; color: #b45309; }
+        .modeActionCard {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+          box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
+        }
+        .modeActionBulk {
+          border-color: #fde68a;
+          background: linear-gradient(180deg, #fffbeb, #ffffff);
+          box-shadow: 0 8px 24px rgba(245, 158, 11, 0.1);
+        }
+        .modeActionHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 6px;
+        }
+        .modeActionTitle {
+          font-weight: 950;
+          font-size: 14px;
+          color: #0f172a;
+        }
+        .modeActionBadge {
+          border: 1px solid #93c5fd;
+          background: #dbeafe;
+          color: #1d4ed8;
+          border-radius: 999px;
+          padding: 4px 8px;
+          font-size: 11px;
+          font-weight: 950;
+          white-space: nowrap;
+        }
+        .modeActionBulk .modeActionBadge {
+          border-color: #fcd34d;
+          background: #fef3c7;
+          color: #92400e;
+        }
         .card {
           background: var(--card);
           border: 1px solid var(--line);
@@ -1859,6 +1912,7 @@ function AdminMenuPageInner() {
           gap: 8px;
           background: var(--surface-soft);
         }
+        .sectionDivider { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
         .optionSectionBox {
           margin-top: 14px;
           border: 1px solid var(--line);
@@ -1947,6 +2001,21 @@ function AdminMenuPageInner() {
           flex-wrap: wrap;
           margin-top: 4px;
         }
+        @media (min-width: 561px) and (max-width: 768px) {
+          .wrap { padding: 12px; gap: 10px; }
+          .card { padding: 12px; border-radius: 14px; }
+          .h1 { font-size: 22px; }
+          .headerActionRow { gap: 6px; }
+          .headerActionRow .btn { padding: 8px 10px; font-size: 12px; }
+          .listScroll { max-height: 38vh; }
+          .detailTopRow { grid-template-columns: minmax(0, 1fr) 108px; }
+          .detailTopRow .field:last-child { grid-column: 1 / -1; }
+          .imageUploadRow { grid-template-columns: 72px minmax(0, 1fr); }
+          .previewThumb, .previewPlaceholder { width: 72px; height: 72px; }
+          .modeSwitchBtn { min-height: 38px; padding: 7px 10px; font-size: 12px; }
+          .btnRow { gap: 6px; }
+        }
+
         @media (max-width: 980px) {
           .grid {
             grid-template-columns: 1fr;
@@ -2027,7 +2096,7 @@ function AdminMenuPageInner() {
           </div>
           <p className="sub">메뉴 기본정보와 옵션 가격을 관리합니다.</p>
           <p className="sub" style={{ marginTop: 6 }}>
-            현재 매장: <b>{storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
+            현재 매장: <b>{storeName || storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
           </p>
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
@@ -2041,11 +2110,17 @@ function AdminMenuPageInner() {
                       ? "원본 매장의 메뉴를 복사해 빠르게 시작할 수 있습니다."
                       : "일괄 등록 파일 업로드로 메뉴를 한 번에 등록할 수 있습니다."
                 }
-                stepGuide="메뉴를 확인한 뒤 완료 버튼을 눌러주세요."
+                stepGuide="판매 가능한 메뉴를 확인한 뒤 완료 버튼을 눌러주세요."
                 completeLabel="메뉴 설정 완료"
-                completeDisabled={loading || saving || items.length < 1}
-                disabledReason="메뉴를 1개 이상 등록하면 완료할 수 있습니다."
-                noticeText={showCopyHiddenNotice ? "이미 등록된 데이터가 있어 원본 복사가 숨겨졌습니다." : ""}
+                completeDisabled={loading || saving || readyMenuCount < 1}
+                disabledReason="가격이 있는 판매 메뉴를 카테고리에 연결하면 완료할 수 있습니다."
+                noticeText={
+                  showCopyHiddenNotice
+                    ? "이미 등록된 메뉴가 있어 원본 복사를 사용할 수 없습니다."
+                    : showBulkHiddenNotice
+                      ? "이미 등록된 메뉴가 있어 일괄 등록을 사용할 수 없습니다."
+                      : ""
+                }
                 setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
                 onComplete={() => void onCompleteStep()}
               />
@@ -2071,32 +2146,47 @@ function AdminMenuPageInner() {
         ) : null}
       </header>
 
-      {isBulkMode ? (
-        <section className="card">
-          {canUseBulkImport ? (
-            <>
-              <p className="sub" style={{ margin: 0 }}>일괄 등록 모드입니다. 업로드를 진행해 주세요.</p>
-              <div className="btnRow" style={{ marginTop: 10 }}>
-                <a className="btn btnPrimary" href={importHref}>
-                  메뉴·카테고리 일괄 등록 시작
-                </a>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="sub" style={{ margin: 0 }}>이미 등록된 데이터가 있어 일괄 등록을 사용할 수 없습니다.</p>
-              <div className="btnRow" style={{ marginTop: 10 }}>
-                <a className="btn" href={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                  설정 방식 변경
-                </a>
-              </div>
-            </>
-          )}
+
+      {showMenuPrerequisiteNotice ? (
+        <section className="card" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
+          <h2 className="cardTitle">메뉴 등록 전 확인</h2>
+          <p className="sub" style={{ marginTop: 6 }}>카테고리와 옵션을 먼저 준비하면 메뉴 등록이 쉬워집니다.</p>
+          <div className="btnRow" style={{ marginTop: 8 }}>
+            {categories.length < 1 ? (
+              <a className="btn btnPrimary" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                카테고리 설정
+              </a>
+            ) : null}
+            {!hasOptionSetupReady ? (
+              <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                옵션 설정
+              </a>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {isBulkMode && canUseBulkImport ? (
+        <section className="card modeActionCard modeActionBulk">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">메뉴·카테고리 일괄 등록</div>
+            <span className="modeActionBadge">일괄 등록</span>
+          </div>
+          <p className="sub" style={{ margin: 0 }}>파일 업로드로 한 번에 등록합니다.</p>
+          <div className="btnRow" style={{ marginTop: 10 }}>
+            <a className="btn btnPrimary" href={importHref}>
+              메뉴·카테고리 일괄 등록 시작
+            </a>
+          </div>
         </section>
       ) : null}
 
       {showMenuAssist && isCopyMode ? (
-        <section className="card">
+        <section className="card modeActionCard">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">원본 매장 메뉴 복사</div>
+            <span className="modeActionBadge">원본 복사</span>
+          </div>
           <div className="copyRow">
             <select className="input copySelect" value={copySourceStoreId} onChange={(e) => setCopySourceStoreId(e.target.value)}>
               <option value="">원본 매장 선택</option>
@@ -2132,7 +2222,7 @@ function AdminMenuPageInner() {
             </button>
           </div>
         </section>
-      ) : (
+      ) : canShowMenuManagement ? (
         <section className="grid">
           <div className="card">
             <h2 className="cardTitle">메뉴 목록 ({items.length})</h2>
@@ -2267,9 +2357,10 @@ function AdminMenuPageInner() {
           <div className="detailColumn">
             <div className="card">
               <h2 className="cardTitle">메뉴 상세</h2>
+              <h3 className="sectionTitle">기본정보</h3>
 
-            <div className="detailTopRow">
-              <div className="field" style={{ marginTop: 0 }}>
+              <div className="detailTopRow">
+                <div className="field" style={{ marginTop: 0 }}>
                 <div className="label">메뉴명</div>
                 <input
                   className="input"
@@ -2303,11 +2394,11 @@ function AdminMenuPageInner() {
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
+                </div>
               </div>
-            </div>
 
-            <div className="idSoldOutRow">
-              <div className="field menuIdInput" style={{ marginTop: 0 }}>
+              <div className="idSoldOutRow">
+                <div className="field menuIdInput" style={{ marginTop: 0 }}>
                 <div className="menuIdLabelRow">
                   <div className="label">메뉴 ID</div>
                   <label className="soldOutInline">
@@ -2328,13 +2419,15 @@ function AdminMenuPageInner() {
                   disabled={saving || loading || isEditing}
                 />
                 <div className="hint">ID는 저장 후에는 변경할 수 없습니다.</div>
+                </div>
               </div>
-            </div>
 
-            <div className="field">
-              <div className="label">메뉴 이미지</div>
-              <div className="imageUploadRow" style={{ marginTop: 4 }}>
+              <div className="field sectionDivider">
+                <h3 className="sectionTitle">이미지</h3>
+                <div className="label">메뉴 이미지</div>
+                <div className="imageUploadRow" style={{ marginTop: 4 }}>
                 {draft.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={draft.image} alt={`${draft.name || draft.id || "menu"} preview`} className="previewThumb" />
                 ) : (
                   <div className="previewPlaceholder">미리보기</div>
@@ -2731,24 +2824,8 @@ function AdminMenuPageInner() {
 
           </div>
         </section>
-      )}
-
-      {showMenuAssist && !isBulkMode && canUseBulkImport ? (
-        <section className="card">
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <div>
-              <h2 className="cardTitle" style={{ margin: 0 }}>일괄 등록(선택)</h2>
-              <p className="sub" style={{ marginTop: 2 }}>
-                양식 파일로 업로드하여 메뉴/카테고리 항목을 일괄 등록합니다.
-              </p>
-            </div>
-            <a className="btn" href={importHref}>
-              메뉴·카테고리 일괄 등록
-            </a>
-          </div>
-          <p className="sub" style={{ marginTop: 4 }}>일괄 등록 기능은 최초 등록 시에만 활성화됩니다.</p>
-        </section>
       ) : null}
+
       {pendingOptionTab ? (
         <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="option-tab-confirm-title">
           <div className="confirmCard">
