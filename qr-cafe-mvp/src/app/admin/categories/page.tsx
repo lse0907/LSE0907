@@ -161,7 +161,7 @@ function CategoriesPageInner() {
   const showCopyHiddenNotice = isCopyMode && hasCategoryData;
   const showBulkHiddenNotice = isBulkMode && hasCategoryData;
   const hasCopySource = myStores.length > 0;
-  const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
+  const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}&target=categories` : "?target=categories"}`;
 
   const openCopyConfirm = () => {
     if (actionBusy) return;

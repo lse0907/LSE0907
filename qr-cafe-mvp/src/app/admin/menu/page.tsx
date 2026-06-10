@@ -393,7 +393,7 @@ function AdminMenuPageInner() {
   const showCopyHiddenNotice = isCopyMode && hasMenuData;
   const showBulkHiddenNotice = isBulkMode && hasMenuData;
   const hasCopySource = myStores.length > 0;
-  const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
+  const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}&target=menus` : "?target=menus"}`;
 
   const onCopyMenus = async () => {
     if (!storeId) return setStatus("error", "대상 매장을 먼저 선택해주세요.");
