@@ -156,6 +156,7 @@ function CategoriesPageInner() {
   const activeCategoryCount = cats.filter((cat) => cat.is_active !== false).length;
   const hasActiveCategory = activeCategoryCount > 0;
   const hasCategoryData = cats.length > 0;
+  const canShowCategoryManagement = setupMode === "manual" || hasCategoryData;
   const canUseBulkImport = !hasCategoryData;
   const showCopyHiddenNotice = isCopyMode && hasCategoryData;
   const showBulkHiddenNotice = isBulkMode && hasCategoryData;
@@ -677,8 +678,21 @@ function CategoriesPageInner() {
         </section>
       ) : null}
 
-      <section className="card">
-        <div className="row createRow">
+      {!canShowCategoryManagement && msg ? (
+        <div
+          style={{
+            color: msgTone === "success" ? "#065f46" : msgTone === "error" ? "#b91c1c" : "#374151",
+            fontWeight: 900,
+          }}
+        >
+          {msg}
+        </div>
+      ) : null}
+
+      {canShowCategoryManagement ? (
+        <>
+          <section className="card">
+            <div className="row createRow">
           <input className="input" placeholder="카테고리명" value={name} onChange={(e) => setName(e.target.value)} />
           <button className="btn btnPrimary" onClick={onCreate} disabled={actionBusy || loading || !name.trim()}>생성</button>
         </div>
@@ -782,7 +796,9 @@ function CategoriesPageInner() {
             </div>
           </div>
         )}
-      </section>
+          </section>
+        </>
+      ) : null}
 
 
       {copyConfirmOpen ? (

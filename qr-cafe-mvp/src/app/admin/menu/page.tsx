@@ -384,6 +384,7 @@ function AdminMenuPageInner() {
   const isCopyMode = setupMode === "copy";
   const isBulkMode = setupMode === "bulk";
   const hasMenuData = items.length > 0;
+  const canShowMenuManagement = setupMode === "manual" || hasMenuData;
   const readyMenuCount = items.filter((item) => Number(item.price || 0) > 0 && !item.is_sold_out && Boolean(item.category_id)).length;
   const groupIdsWithItems = new Set(optionItems.map((item) => item.group_id));
   const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
@@ -2221,7 +2222,7 @@ function AdminMenuPageInner() {
             </button>
           </div>
         </section>
-      ) : (
+      ) : canShowMenuManagement ? (
         <section className="grid">
           <div className="card">
             <h2 className="cardTitle">메뉴 목록 ({items.length})</h2>
@@ -2823,7 +2824,7 @@ function AdminMenuPageInner() {
 
           </div>
         </section>
-      )}
+      ) : null}
 
       {pendingOptionTab ? (
         <div className="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="option-tab-confirm-title">

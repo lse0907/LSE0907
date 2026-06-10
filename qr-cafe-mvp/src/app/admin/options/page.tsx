@@ -559,6 +559,7 @@ function AdminOptionsPageInner() {
   const showOptionAssist = isInitialOptionSetup && !isCopyMode && !isBulkMode;
   const hasCategoryPrerequisite = categoryCount > 0 || groups.length > 0;
   const hasOptionData = groups.length > 0;
+  const canShowOptionManagement = setupMode === "manual" || hasOptionData;
   const groupIdsWithItems = new Set(items.map((item) => item.group_id));
   const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
   const showCopyHiddenNotice = isCopyMode && hasOptionData;
@@ -1983,7 +1984,7 @@ function AdminOptionsPageInner() {
             </a>
           </div>
         </section>
-      ) : (
+      ) : canShowOptionManagement ? (
         <section className="grid">
           {/* 그룹 */}
           <div className="card">
@@ -2468,7 +2469,17 @@ function AdminOptionsPageInner() {
             )}
           </div>
         </section>
-      )}
+      ) : isBulkMode ? (
+        <section className="card modeActionCard modeActionBulk">
+          <div className="modeActionHead">
+            <div className="modeActionTitle">옵션은 직접 설정이 필요합니다</div>
+            <span className="modeActionBadge">안내</span>
+          </div>
+          <p className="sub" style={{ margin: 0 }}>
+            옵션은 일괄 등록으로 자동 생성되지 않습니다. 직접 등록하려면 위의 설정 방식 변경에서 직접 설정을 선택해 주세요.
+          </p>
+        </section>
+      ) : null}
 
       {confirmState.open ? (
         <div className="modalOverlay">
