@@ -7,6 +7,8 @@ import { getCurrentStoreId } from "@/app/lib/currentStore";
 
 type ImportTarget = "categories" | "menus";
 
+type ImportTarget = "categories" | "menus" | "all";
+
 type CategoryUploadRow = {
   category_name: string;
   sort_order: number | null;
@@ -231,6 +233,12 @@ function AdminImportPageInner() {
     };
   }, [storeId, fetchExistingCategories]);
 
+
+  const onTargetChange = (next: ImportTarget) => {
+    setTarget(next);
+    resetValidation();
+    setStatus("neutral", "");
+  };
 
   const onTargetChange = (next: ImportTarget) => {
     setTarget(next);
