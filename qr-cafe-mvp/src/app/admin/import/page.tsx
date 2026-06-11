@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
@@ -16,7 +16,6 @@ type CategoryUploadRow = {
 type MenuUploadRow = {
   menu_name: string;
   price: number;
-  category_name: string;
   is_sold_out: boolean;
 };
 
@@ -49,9 +48,9 @@ type ImportResult = {
   updatedMenus: number;
 };
 
-const targetOptions: Array<{ key: ImportTarget; title: string; summary: string; badge: string }> = [
-  { key: "categories", title: "카테고리 등록", summary: "초기설정 순서에 맞게 categories.csv만 업로드합니다.", badge: "categories.csv" },
-  { key: "menus", title: "메뉴 등록", summary: "등록된 카테고리에 menus.csv를 연결합니다.", badge: "menus.csv" },
+const targetOptions: Array<{ key: ImportTarget; title: string }> = [
+  { key: "categories", title: "카테고리 등록" },
+  { key: "menus", title: "메뉴 등록" },
 ];
 
 function uid(prefix = "row") {
@@ -151,7 +150,6 @@ function AdminImportPageInner() {
   const [storeId] = useState(() => (sp.get("store") || getCurrentStoreId() || "").trim());
   const [target, setTarget] = useState<ImportTarget>(() => getInitialTarget(sp.get("target")));
   const [storeName, setStoreName] = useState("");
-  const [existingCategories, setExistingCategories] = useState<CategoryDbRow[]>([]);
   const [categoriesFile, setCategoriesFile] = useState<File | null>(null);
   const [menusFile, setMenusFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<UploadError[]>([]);
@@ -176,7 +174,6 @@ function AdminImportPageInner() {
   }, [storeId, categoriesFile, menusFile, needsCategoriesFile, needsMenusFile]);
   const canApply = hasValidated && errors.length === 0 && (needsCategoriesFile ? categoryRows.length > 0 : true) && (needsMenusFile ? menuRows.length > 0 : true);
   const validationSummary = `${needsCategoriesFile ? `카테고리 ${categoryRows.length}건` : "카테고리 파일 없음"} / ${needsMenusFile ? `메뉴 ${menuRows.length}건` : "메뉴 파일 없음"}`;
-  const categoryNameGuide = existingCategories.map((cat) => cat.name).join(" / ");
 
   const setStatus = (tone: "neutral" | "success" | "error", text: string) => {
     setMsgTone(tone);
@@ -192,36 +189,16 @@ function AdminImportPageInner() {
     setConfirmOpen(false);
   };
 
-  const fetchExistingCategories = useCallback(async (nextStoreId = storeId) => {
-    if (!nextStoreId) {
-      setExistingCategories([]);
-      return [] as CategoryDbRow[];
-    }
-    const { data, error } = await supabase
-      .from("menu_categories")
-      .select("id,name,sort_order,is_active")
-      .eq("store_id", nextStoreId);
-    if (error) throw error;
-    const rows = ((data || []) as CategoryDbRow[]).sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
-    setExistingCategories(rows);
-    return rows;
-  }, [storeId]);
-
   useEffect(() => {
     let mounted = true;
     (async () => {
       if (!storeId) {
         setStoreName("");
-        setExistingCategories([]);
         return;
       }
-      const [{ data: storeData }, categories] = await Promise.all([
-        supabase.from("stores").select("store_name").eq("store_id", storeId).maybeSingle(),
-        fetchExistingCategories(storeId),
-      ]);
+      const { data: storeData } = await supabase.from("stores").select("store_name").eq("store_id", storeId).maybeSingle();
       if (!mounted) return;
       setStoreName(String(storeData?.store_name || ""));
-      setExistingCategories(categories);
     })().catch(() => {
       if (!mounted) return;
       setStoreName("");
@@ -229,7 +206,7 @@ function AdminImportPageInner() {
     return () => {
       mounted = false;
     };
-  }, [storeId, fetchExistingCategories]);
+  }, [storeId]);
 
 
   const onTargetChange = (next: ImportTarget) => {
@@ -260,13 +237,11 @@ function AdminImportPageInner() {
   };
 
   const onDownloadMenuTemplate = () => {
-    const fallbackCategory = existingCategories[0]?.name || "커피";
-    const secondCategory = existingCategories[1]?.name || fallbackCategory;
     const menusCsv = [
-      "menu_name,price,category_name,is_sold_out",
-      `아메리카노,4500,${fallbackCategory},N`,
-      `카페라떼,5200,${fallbackCategory},N`,
-      `쿠키,3200,${secondCategory},N`,
+      "menu_name,price,is_sold_out",
+      "아메리카노,4500,N",
+      "카페라떼,5200,N",
+      "쿠키,3200,N",
     ].join("\r\n");
     downloadTemplate("menus_template.csv", menusCsv);
   };
@@ -371,7 +346,7 @@ function AdminImportPageInner() {
     return { parsedCats, catNameSet };
   };
 
-  const parseMenuRows = (menuRowsRaw: string[][], nextErrors: UploadError[], availableCategoryNames: Set<string>) => {
+  const parseMenuRows = (menuRowsRaw: string[][], nextErrors: UploadError[]) => {
     const menuHeader = menuRowsRaw[0] || [];
     const menuIndex = new Map(menuHeader.map((h, i) => [normalizeKey(h), i]));
     const parsedMenus: MenuUploadRow[] = [];
@@ -388,7 +363,7 @@ function AdminImportPageInner() {
       });
     }
 
-    for (const col of ["menu_name", "price", "category_name"]) {
+    for (const col of ["menu_name", "price"]) {
       if (!menuIndex.has(col)) {
         addError(nextErrors, {
           sheet: "menus",
@@ -400,15 +375,14 @@ function AdminImportPageInner() {
         });
       }
     }
-    if (!menuIndex.has("menu_name") || !menuIndex.has("price") || !menuIndex.has("category_name")) return parsedMenus;
+    if (!menuIndex.has("menu_name") || !menuIndex.has("price")) return parsedMenus;
 
     for (let r = 1; r < menuRowsRaw.length; r += 1) {
       const row = menuRowsRaw[r];
       const menuName = normalizeName(row[menuIndex.get("menu_name") ?? -1] || "");
       const priceText = normalizeName(row[menuIndex.get("price") ?? -1] || "");
-      const categoryName = normalizeName(row[menuIndex.get("category_name") ?? -1] || "");
       const soldOutText = normalizeName(row[menuIndex.get("is_sold_out") ?? -1] || "");
-      if (!menuName && !priceText && !categoryName && !soldOutText) continue;
+      if (!menuName && !priceText && !soldOutText) continue;
 
       if (!menuName) {
         addError(nextErrors, {
@@ -460,29 +434,6 @@ function AdminImportPageInner() {
         continue;
       }
 
-      if (!categoryName) {
-        addError(nextErrors, {
-          sheet: "menus",
-          row: r + 1,
-          column: "category_name",
-          message: "카테고리명이 비어 있습니다.",
-          value: categoryName,
-          solution: "category_name을 등록된 카테고리명과 동일하게 입력해 주세요.",
-        });
-        continue;
-      }
-      if (!availableCategoryNames.has(normalizeKey(categoryName))) {
-        addError(nextErrors, {
-          sheet: "menus",
-          row: r + 1,
-          column: "category_name",
-          message: "등록된 카테고리에 없는 이름입니다.",
-          value: categoryName,
-          solution: "현재 매장에 등록된 카테고리명과 동일하게 수정해 주세요.",
-        });
-        continue;
-      }
-
       const soldOutParsed = parseBooleanValue(soldOutText, false);
       if (!soldOutParsed.valid) {
         addError(nextErrors, {
@@ -496,7 +447,7 @@ function AdminImportPageInner() {
         continue;
       }
 
-      parsedMenus.push({ menu_name: menuName, price, category_name: categoryName, is_sold_out: soldOutParsed.value });
+      parsedMenus.push({ menu_name: menuName, price, is_sold_out: soldOutParsed.value });
     }
 
     return parsedMenus;
@@ -514,35 +465,20 @@ function AdminImportPageInner() {
 
     try {
       const nextErrors: UploadError[] = [];
-      const currentCategories = await fetchExistingCategories(storeId);
-      const dbCategoryNames = new Set(currentCategories.map((cat) => normalizeKey(cat.name)));
       let parsedCats: CategoryUploadRow[] = [];
       let parsedMenus: MenuUploadRow[] = [];
-      let uploadedCategoryNames = new Set<string>();
 
       if (needsCategoriesFile) {
         if (!categoriesFile) throw new Error("카테고리 파일을 선택해 주세요.");
         const catRowsRaw = parseCsv(await categoriesFile.text());
         const result = parseCategoryRows(catRowsRaw, nextErrors);
         parsedCats = result.parsedCats;
-        uploadedCategoryNames = result.catNameSet;
       }
 
       if (needsMenusFile) {
         if (!menusFile) throw new Error("메뉴 파일을 선택해 주세요.");
         const menuRowsRaw = parseCsv(await menusFile.text());
-        const availableCategoryNames = new Set([...dbCategoryNames, ...uploadedCategoryNames]);
-        if (availableCategoryNames.size === 0) {
-          addError(nextErrors, {
-            sheet: "menus",
-            row: 1,
-            column: "category_name",
-            message: "메뉴를 연결할 카테고리가 없습니다.",
-            value: "",
-            solution: "카테고리를 먼저 등록한 뒤 메뉴 등록을 진행해 주세요.",
-          });
-        }
-        parsedMenus = parseMenuRows(menuRowsRaw, nextErrors, availableCategoryNames);
+        parsedMenus = parseMenuRows(menuRowsRaw, nextErrors);
       }
 
       setErrors(nextErrors);
@@ -582,7 +518,6 @@ function AdminImportPageInner() {
       if (catRes.error) throw catRes.error;
       const existingCats = (catRes.data || []) as CategoryDbRow[];
       const catByName = new Map(existingCats.map((c) => [normalizeKey(c.name), c]));
-      const categoryIdByName = new Map(existingCats.map((c) => [normalizeKey(c.name), c.id]));
       let createdCats = 0;
       let updatedCats = 0;
 
@@ -599,7 +534,6 @@ function AdminImportPageInner() {
               .eq("id", found.id);
             if (error) throw error;
             updatedCats += 1;
-            categoryIdByName.set(key, found.id);
           } else {
             const newId = uid("cat");
             const { error } = await supabase.from("menu_categories").insert([
@@ -607,7 +541,6 @@ function AdminImportPageInner() {
             ]);
             if (error) throw error;
             createdCats += 1;
-            categoryIdByName.set(key, newId);
             catByName.set(key, { id: newId, name: row.category_name, sort_order: row.sort_order ?? i + 1, is_active: row.is_active });
           }
         }
@@ -630,13 +563,10 @@ function AdminImportPageInner() {
           const row = menuRows[i];
           const key = normalizeKey(row.menu_name);
           const found = menuByName.get(key);
-          const categoryId = categoryIdByName.get(normalizeKey(row.category_name));
-          if (!categoryId) throw new Error(`카테고리 매핑 실패: ${row.category_name}`);
-
           if (found) {
             const { error } = await supabase
               .from("menu_items")
-              .update({ name: row.menu_name, price: row.price, category_id: categoryId, is_sold_out: row.is_sold_out })
+              .update({ name: row.menu_name, price: row.price, is_sold_out: row.is_sold_out })
               .eq("store_id", storeId)
               .eq("id", found.id);
             if (error) throw error;
@@ -645,7 +575,7 @@ function AdminImportPageInner() {
             const id = buildNextMenuId(storeId, usedMenuIds);
             usedMenuIds.push(id);
             const { error } = await supabase.from("menu_items").insert([
-              { id, store_id: storeId, name: row.menu_name, price: row.price, category_id: categoryId, is_sold_out: row.is_sold_out, image: "", option_group_ids: [], sort_order: maxSort + i + 1 },
+              { id, store_id: storeId, name: row.menu_name, price: row.price, category_id: null, is_sold_out: row.is_sold_out, image: "", option_group_ids: [], sort_order: maxSort + i + 1 },
             ]);
             if (error) throw error;
             createdMenus += 1;
@@ -656,7 +586,6 @@ function AdminImportPageInner() {
       const nextResult = { createdCats, updatedCats, createdMenus, updatedMenus };
       setResult(nextResult);
       setStatus("success", `반영 완료: 카테고리 생성 ${createdCats} / 수정 ${updatedCats}, 메뉴 생성 ${createdMenus} / 수정 ${updatedMenus}`);
-      await fetchExistingCategories(storeId);
     } catch (e) {
       setStatus("error", `반영 실패: ${String((e as Error)?.message || e)}`);
     } finally {
@@ -760,7 +689,10 @@ function AdminImportPageInner() {
       <section className="card">
         <div>
           <h2 className="sectionTitle">무엇을 등록할까요?</h2>
-          <p className="muted" style={{ marginTop: 4 }}>초기설정 순서에 맞게 카테고리 등록 또는 메뉴 등록을 선택해 주세요.</p>
+          <div className="summaryText" style={{ marginTop: 4 }}>
+            <p className="muted">카테고리를 먼저 등록해 주세요.</p>
+            <p className="muted">메뉴 등록 후 카테고리는 메뉴 관리에서 선택할 수 있습니다.</p>
+          </div>
         </div>
         <div className="modeGrid">
           {targetOptions.map((option) => (
@@ -779,9 +711,8 @@ function AdminImportPageInner() {
             >
               <span className="modeHead">
                 <span className="modeTitle">{option.title}</span>
-                <span className="badge">{target === option.key ? "선택됨" : option.badge}</span>
+                {target === option.key ? <span className="badge">선택됨</span> : null}
               </span>
-              <span className="muted">{option.summary}</span>
               {target === option.key ? (
                 <button
                   className="btn"
@@ -792,7 +723,7 @@ function AdminImportPageInner() {
                   }}
                   type="button"
                 >
-                  {option.key === "categories" ? "카테고리 템플릿 다운로드" : "메뉴 템플릿 다운로드"}
+                  템플릿 다운로드
                 </button>
               ) : null}
             </div>
@@ -815,11 +746,10 @@ function AdminImportPageInner() {
           {needsMenusFile ? (
             <div className="miniCard">
               <div className="miniTitle">메뉴 작성 규칙</div>
-              <p className="muted"><b>필수</b> menu_name, price, category_name</p>
+              <p className="muted"><b>필수</b> menu_name, price</p>
+              <p className="muted"><b>선택</b> is_sold_out: Y 또는 N으로 입력합니다. 비우면 N입니다.</p>
               <p className="muted">price는 4500처럼 숫자만 입력합니다. 쉼표, 원, ₩ 기호는 제외해 주세요.</p>
-              <p className="muted">is_sold_out은 Y/N으로 입력합니다. 비우면 N입니다.</p>
-              <div className="guideBox">category_name은 현재 등록된 카테고리명과 정확히 같아야 합니다.</div>
-              <p className="muted">현재 카테고리: {categoryNameGuide || "등록된 카테고리가 없습니다. 카테고리를 먼저 등록해 주세요."}</p>
+              <div className="guideBox">메뉴 등록 후 카테고리는 메뉴 관리에서 선택할 수 있습니다.</div>
             </div>
           ) : null}
         </div>
@@ -884,7 +814,7 @@ function AdminImportPageInner() {
           {needsMenusFile ? <span className="countPill">메뉴 {menuRows.length}건</span> : null}
         </div>
         <p className="muted">같은 이름의 카테고리/메뉴가 이미 있으면 새로 만들지 않고 수정됩니다.</p>
-        {needsMenusFile ? <p className="muted">품절(Y) 메뉴와 가격 0원 메뉴는 등록되지만, 초기 설정 완료 조건에는 포함되지 않을 수 있습니다.</p> : null}
+        {needsMenusFile ? <p className="muted">메뉴 등록 후 카테고리는 메뉴 관리에서 선택할 수 있습니다.</p> : null}
         <div className="row">
           <button className="btn btnPrimary" onClick={openApplyConfirm} disabled={checking || saving || !canApply} type="button">
             {saving ? "반영 중..." : "검증 통과 데이터 반영"}
