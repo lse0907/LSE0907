@@ -49,7 +49,7 @@ type ImportResult = {
 };
 
 const targetOptions: Array<{ key: ImportTarget; title: string; step: string; icon: string; fileName: string }> = [
-  { key: "categories", title: "카테고리 등록", step: "01", icon: "분류", fileName: "categories.csv" },
+  { key: "categories", title: "카테고리 등록", step: "01", icon: "카테고리", fileName: "categories.csv" },
   { key: "menus", title: "메뉴 등록", step: "02", icon: "메뉴", fileName: "menus.csv" },
 ];
 
@@ -631,7 +631,7 @@ function AdminImportPageInner() {
         .modeCardOn::before { background: linear-gradient(90deg, #2563eb, #60a5fa); }
         .modeHead { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
         .modeIdentity { display: flex; align-items: center; gap: 10px; min-width: 0; }
-        .modeIcon { width: 38px; height: 38px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; background: #f1f5f9; color: #334155; font-size: 12px; font-weight: 950; flex: 0 0 auto; }
+        .modeIcon { width: fit-content; min-width: 38px; height: 38px; border-radius: 999px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; background: #f1f5f9; color: #334155; font-size: 12px; font-weight: 950; flex: 0 0 auto; white-space: nowrap; }
         .modeCardOn .modeIcon { background: #dbeafe; color: #1d4ed8; }
         .modeTitleBlock { display: grid; gap: 3px; min-width: 0; }
         .modeStep { color: #64748b; font-size: 12px; font-weight: 950; letter-spacing: 0.04em; }
@@ -669,9 +669,10 @@ function AdminImportPageInner() {
           .modeGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .workGrid, .resultGrid { grid-template-columns: 1fr; }
           .modeCard { padding: 12px; min-height: 118px; }
-          .modeHead { flex-direction: column; }
+          .modeHead { flex-direction: row; align-items: flex-start; gap: 8px; }
           .modeIdentity { align-items: flex-start; flex-direction: column; gap: 8px; }
-          .modeIcon { width: 34px; height: 34px; border-radius: 12px; }
+          .modeIcon { min-width: 34px; height: 30px; border-radius: 999px; padding: 0 8px; font-size: 11px; }
+          .modeStatus { flex: 0 0 auto; padding: 4px 7px; font-size: 11px; }
           .modeTitle { font-size: 15px; }
           .btn:not(.heroBtn), .input { width: 100%; }
           .heroActions { gap: 6px; }
