@@ -48,9 +48,9 @@ type ImportResult = {
   updatedMenus: number;
 };
 
-const targetOptions: Array<{ key: ImportTarget; title: string }> = [
-  { key: "categories", title: "카테고리 등록" },
-  { key: "menus", title: "메뉴 등록" },
+const targetOptions: Array<{ key: ImportTarget; title: string; step: string; icon: string; fileName: string }> = [
+  { key: "categories", title: "카테고리 등록", step: "01", icon: "분류", fileName: "categories.csv" },
+  { key: "menus", title: "메뉴 등록", step: "02", icon: "메뉴", fileName: "menus.csv" },
 ];
 
 function uid(prefix = "row") {
@@ -609,28 +609,39 @@ function AdminImportPageInner() {
       `}</style>
       <style jsx>{`
         .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; display: grid; gap: 14px; }
-        .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); display: grid; gap: 14px; }
-        .hero { border-color: #bfdbfe; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 58%); }
+        .card { background: rgba(255, 255, 255, 0.96); border: 1px solid #e2e8f0; border-radius: 20px; padding: 18px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); display: grid; gap: 14px; }
+        .hero { border-color: #bfdbfe; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 58%); box-shadow: 0 14px 36px rgba(37, 99, 235, 0.09); }
         .heroActions { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
         .heroBtn { flex: 1 0 0; min-width: 0; min-height: 36px; padding: 8px 10px; font-size: 13px; white-space: nowrap; }
         .title { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 950; }
         .sectionTitle { margin: 0; font-size: 18px; font-weight: 950; color: #0f172a; }
         .muted { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0; }
         .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .btn { border: 1px solid #d1d5db; background: #fff; border-radius: 12px; padding: 10px 13px; font-weight: 900; cursor: pointer; color: #111827; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; }
-        .btn:hover:not(:disabled) { border-color: #94a3b8; background: #f8fafc; }
-        .btn:disabled { cursor: not-allowed; background: #f3f4f6; color: #9ca3af; }
-        .btnPrimary { background: #111827; color: #fff; border-color: #111827; }
+        .btn { border: 1px solid #d1d5db; background: #fff; border-radius: 12px; padding: 10px 13px; font-weight: 900; cursor: pointer; color: #111827; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease; }
+        .btn:hover:not(:disabled) { border-color: #94a3b8; background: #f8fafc; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.07); transform: translateY(-1px); }
+        .btn:disabled { cursor: not-allowed; background: #f3f4f6; color: #9ca3af; box-shadow: none; transform: none; }
+        .btnPrimary { background: #111827; color: #fff; border-color: #111827; box-shadow: 0 10px 20px rgba(17, 24, 39, 0.16); }
         .btnPrimary:hover:not(:disabled) { background: #1f2937; border-color: #1f2937; }
         .input { border: 1px solid #d1d5db; border-radius: 12px; padding: 10px 12px; background: #fff; color: #111827; min-height: 42px; }
-        .modeGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-        .modeCard { text-align: left; border: 1px solid #e5e7eb; border-radius: 16px; background: #fff; padding: 14px; cursor: pointer; display: grid; gap: 10px; }
-        .modeCardOn { border-color: #60a5fa; background: #eff6ff; box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16); }
-        .modeHead { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+        .modeGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .modeCard { position: relative; overflow: hidden; text-align: left; border: 1px solid #e2e8f0; border-radius: 18px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); padding: 14px; cursor: pointer; display: grid; gap: 12px; min-height: 126px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05); transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease; }
+        .modeCard::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: #e2e8f0; }
+        .modeCard:hover { border-color: #bfdbfe; box-shadow: 0 14px 30px rgba(37, 99, 235, 0.10); transform: translateY(-1px); }
+        .modeCardOn { border-color: #60a5fa; background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%); box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16), 0 16px 34px rgba(37, 99, 235, 0.14); }
+        .modeCardOn::before { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+        .modeHead { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+        .modeIdentity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .modeIcon { width: 38px; height: 38px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; background: #f1f5f9; color: #334155; font-size: 12px; font-weight: 950; flex: 0 0 auto; }
+        .modeCardOn .modeIcon { background: #dbeafe; color: #1d4ed8; }
+        .modeTitleBlock { display: grid; gap: 3px; min-width: 0; }
+        .modeStep { color: #64748b; font-size: 12px; font-weight: 950; letter-spacing: 0.04em; }
         .modeTitle { font-size: 16px; font-weight: 950; color: #0f172a; }
         .badge { border-radius: 999px; padding: 4px 8px; font-size: 12px; font-weight: 950; background: #e0f2fe; color: #075985; white-space: nowrap; }
-        .uploadGrid, .guideGrid, .resultGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-        .miniCard { border: 1px solid #e5e7eb; border-radius: 16px; padding: 14px; background: #f8fafc; display: grid; gap: 10px; }
+        .modeStatus { width: fit-content; border-radius: 999px; padding: 5px 9px; font-size: 12px; font-weight: 950; background: #f1f5f9; color: #475569; }
+        .modeStatusOn { background: #dbeafe; color: #1d4ed8; }
+        .modeDownload { justify-self: stretch; }
+        .workGrid, .resultGrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr); gap: 14px; align-items: stretch; }
+        .miniCard { border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); display: grid; gap: 10px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8); }
         .miniTitle { font-weight: 950; color: #0f172a; }
         .guideBox { border: 1px solid #fde68a; background: #fffbeb; color: #92400e; border-radius: 14px; padding: 12px; font-weight: 850; line-height: 1.5; }
         .fieldLabel { font-weight: 950; color: #334155; font-size: 13px; }
@@ -656,15 +667,26 @@ function AdminImportPageInner() {
           .card { padding: 14px; border-radius: 16px; }
           .title { font-size: 24px; }
           .modeGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .uploadGrid, .guideGrid, .resultGrid { grid-template-columns: 1fr; }
-          .modeCard { padding: 12px; }
-          .modeHead { align-items: flex-start; flex-direction: column; }
+          .workGrid, .resultGrid { grid-template-columns: 1fr; }
+          .modeCard { padding: 12px; min-height: 118px; }
+          .modeHead { flex-direction: column; }
+          .modeIdentity { align-items: flex-start; flex-direction: column; gap: 8px; }
+          .modeIcon { width: 34px; height: 34px; border-radius: 12px; }
           .modeTitle { font-size: 15px; }
           .btn:not(.heroBtn), .input { width: 100%; }
           .heroActions { gap: 6px; }
           .heroBtn { padding: 7px 8px; font-size: 12px; }
           .row { align-items: stretch; }
           .modalActions { flex-direction: column-reverse; }
+        }
+        @media (min-width: 761px) and (max-width: 980px) {
+          .wrap { max-width: 860px; }
+          .workGrid { grid-template-columns: minmax(0, 1fr) minmax(260px, 0.92fr); }
+        }
+        @media (max-width: 420px) {
+          .modeGrid { gap: 8px; }
+          .modeCard { padding: 11px; }
+          .modeDownload { padding-left: 8px; padding-right: 8px; font-size: 13px; }
         }
       `}</style>
 
@@ -710,12 +732,20 @@ function AdminImportPageInner() {
               tabIndex={0}
             >
               <span className="modeHead">
-                <span className="modeTitle">{option.title}</span>
-                {target === option.key ? <span className="badge">선택됨</span> : null}
+                <span className="modeIdentity">
+                  <span className="modeIcon" aria-hidden="true">{option.icon}</span>
+                  <span className="modeTitleBlock">
+                    <span className="modeStep">STEP {option.step}</span>
+                    <span className="modeTitle">{option.title}</span>
+                  </span>
+                </span>
+                <span className={`modeStatus ${target === option.key ? "modeStatusOn" : ""}`}>
+                  {target === option.key ? "선택됨" : "선택하기"}
+                </span>
               </span>
               {target === option.key ? (
                 <button
-                  className="btn"
+                  className="btn modeDownload"
                   onClick={(event) => {
                     event.stopPropagation();
                     if (option.key === "categories") onDownloadCategoryTemplate();
@@ -733,47 +763,46 @@ function AdminImportPageInner() {
 
       <section className="card">
         <h2 className="sectionTitle">1. 작성 방법 및 업로드</h2>
-        <div className="guideGrid">
-          {needsCategoriesFile ? (
-            <div className="miniCard">
-              <div className="miniTitle">카테고리 작성 규칙</div>
-              <p className="muted"><b>필수</b> category_name: 카테고리명입니다. 예: 커피, 식사, 사이드</p>
-              <p className="muted"><b>선택</b> sort_order: 숫자가 작을수록 먼저 보입니다.</p>
-              <p className="muted"><b>선택</b> is_active: Y 또는 N으로 입력합니다. 비우면 Y입니다.</p>
-              <div className="guideBox">첫 줄의 영문 컬럼명은 수정하지 마세요. 같은 카테고리명은 한 번만 입력해 주세요.</div>
-            </div>
-          ) : null}
-          {needsMenusFile ? (
-            <div className="miniCard">
-              <div className="miniTitle">메뉴 작성 규칙</div>
-              <p className="muted"><b>필수</b> menu_name, price</p>
-              <p className="muted"><b>선택</b> is_sold_out: Y 또는 N으로 입력합니다. 비우면 N입니다.</p>
-              <p className="muted">price는 4500처럼 숫자만 입력합니다. 쉼표, 원, ₩ 기호는 제외해 주세요.</p>
-              <div className="guideBox">메뉴 등록 후 카테고리는 메뉴 관리에서 선택할 수 있습니다.</div>
-            </div>
-          ) : null}
-        </div>
         {!storeId ? <div className="statusCard statusWarn">관리자 홈에서 매장을 먼저 선택하면 파일 검증을 실행할 수 있습니다.</div> : null}
-        <div className="uploadGrid">
+        <div className="workGrid">
           {needsCategoriesFile ? (
-            <div className="miniCard">
-              <div className="miniTitle">카테고리 파일 업로드</div>
-              <input className="input" type="file" accept=".csv,text/csv" onChange={(e) => { setCategoriesFile(e.target.files?.[0] || null); resetValidation(); }} />
-              <div className="fileName">{categoriesFile ? `✅ ${categoriesFile.name}` : "아직 선택된 파일이 없습니다."}</div>
-            </div>
+            <>
+              <div className="miniCard">
+                <div className="miniTitle">카테고리 작성 규칙</div>
+                <p className="muted"><b>필수</b> category_name: 카테고리명입니다. 예: 커피, 식사, 사이드</p>
+                <p className="muted"><b>선택</b> sort_order: 숫자가 작을수록 먼저 보입니다.</p>
+                <p className="muted"><b>선택</b> is_active: Y 또는 N으로 입력합니다. 비우면 Y입니다.</p>
+                <div className="guideBox">첫 줄의 영문 컬럼명은 수정하지 마세요. 같은 카테고리명은 한 번만 입력해 주세요.</div>
+              </div>
+              <div className="miniCard">
+                <div className="miniTitle">카테고리 파일 업로드</div>
+                <input className="input" type="file" accept=".csv,text/csv" onChange={(e) => { setCategoriesFile(e.target.files?.[0] || null); resetValidation(); }} />
+                <div className="fileName">{categoriesFile ? `✅ ${categoriesFile.name}` : "아직 선택된 파일이 없습니다."}</div>
+                <button className="btn btnPrimary" onClick={parseAndValidate} disabled={!canValidate || checking || saving} type="button">
+                  {checking ? "검증 중..." : "검증 실행"}
+                </button>
+              </div>
+            </>
           ) : null}
           {needsMenusFile ? (
-            <div className="miniCard">
-              <div className="miniTitle">메뉴 파일 업로드</div>
-              <input className="input" type="file" accept=".csv,text/csv" onChange={(e) => { setMenusFile(e.target.files?.[0] || null); resetValidation(); }} />
-              <div className="fileName">{menusFile ? `✅ ${menusFile.name}` : "아직 선택된 파일이 없습니다."}</div>
-            </div>
+            <>
+              <div className="miniCard">
+                <div className="miniTitle">메뉴 작성 규칙</div>
+                <p className="muted"><b>필수</b> menu_name, price</p>
+                <p className="muted"><b>선택</b> is_sold_out: Y 또는 N으로 입력합니다. 비우면 N입니다.</p>
+                <p className="muted">price는 4500처럼 숫자만 입력합니다. 쉼표, 원, ₩ 기호는 제외해 주세요.</p>
+                <div className="guideBox">메뉴 등록 후 카테고리는 메뉴 관리에서 선택할 수 있습니다.</div>
+              </div>
+              <div className="miniCard">
+                <div className="miniTitle">메뉴 파일 업로드</div>
+                <input className="input" type="file" accept=".csv,text/csv" onChange={(e) => { setMenusFile(e.target.files?.[0] || null); resetValidation(); }} />
+                <div className="fileName">{menusFile ? `✅ ${menusFile.name}` : "아직 선택된 파일이 없습니다."}</div>
+                <button className="btn btnPrimary" onClick={parseAndValidate} disabled={!canValidate || checking || saving} type="button">
+                  {checking ? "검증 중..." : "검증 실행"}
+                </button>
+              </div>
+            </>
           ) : null}
-        </div>
-        <div className="row">
-          <button className="btn btnPrimary" onClick={parseAndValidate} disabled={!canValidate || checking || saving} type="button">
-            {checking ? "검증 중..." : "검증 실행"}
-          </button>
         </div>
         {msg ? <div className={`msg ${msgTone === "success" ? "msgSuccess" : msgTone === "error" ? "msgError" : ""}`.trim()}>{msg}</div> : null}
       </section>
