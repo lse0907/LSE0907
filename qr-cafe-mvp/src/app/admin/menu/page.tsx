@@ -1429,17 +1429,19 @@ function AdminMenuPageInner() {
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
         }
         .summaryGrid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 10px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
         }
         .summaryItem {
           border: 1px solid #dbe1ea;
-          border-radius: 14px;
-          padding: 12px;
+          border-radius: 999px;
+          padding: 7px 10px;
           background: linear-gradient(180deg, #ffffff, #f8fafc);
-          display: grid;
-          gap: 5px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-height: 34px;
         }
         .summaryItemWarn {
           border-color: #fde68a;
@@ -1449,12 +1451,14 @@ function AdminMenuPageInner() {
           color: var(--muted);
           font-size: 12px;
           font-weight: 900;
+          white-space: nowrap;
         }
         .summaryValue {
           color: var(--text);
-          font-size: 22px;
+          font-size: 16px;
           font-weight: 950;
           letter-spacing: -0.03em;
+          line-height: 1;
         }
         .uncategorizedNotice {
           border-color: #fde68a;
@@ -2087,8 +2091,14 @@ function AdminMenuPageInner() {
             grid-template-columns: 1fr;
           }
           .summaryGrid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
           }
+          .summaryItem {
+            padding: 6px 8px;
+            min-height: 30px;
+          }
+          .summaryLabel { font-size: 11px; }
+          .summaryValue { font-size: 15px; }
           .listScroll {
             max-height: 45vh;
           }
@@ -2288,7 +2298,7 @@ function AdminMenuPageInner() {
       ) : canShowMenuManagement ? (
         <>
           <section className="card">
-            <h2 className="cardTitle">메뉴 현황</h2>
+            <h2 className="cardTitle">메뉴 등록 현황</h2>
             <div className="summaryGrid" style={{ marginTop: 10 }}>
               <div className="summaryItem">
                 <span className="summaryLabel">전체 메뉴</span>
@@ -2312,12 +2322,7 @@ function AdminMenuPageInner() {
           {uncategorizedMenuCount > 0 ? (
             <section className="card uncategorizedNotice">
               <h2 className="noticeTitle">카테고리 연결이 필요한 메뉴가 있습니다.</h2>
-              <p className="sub" style={{ marginTop: 6 }}>미분류 메뉴를 선택한 뒤 카테고리를 지정해 주세요.</p>
-              <div className="btnRow" style={{ marginTop: 10 }}>
-                <button className="btn btnPrimary" type="button" onClick={() => setFilterCategoryId("__uncategorized")} disabled={saving || loading}>
-                  미분류 메뉴만 보기
-                </button>
-              </div>
+              <p className="sub" style={{ marginTop: 6 }}>미분류 메뉴를 선택해 카테고리를 지정해 주세요.</p>
             </section>
           ) : null}
 
