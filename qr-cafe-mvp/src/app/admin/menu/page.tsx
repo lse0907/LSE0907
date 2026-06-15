@@ -183,7 +183,7 @@ function AdminMenuPageInner() {
   const [commonDirty, setCommonDirty] = useState(false);
   const [exclusiveDirty, setExclusiveDirty] = useState(false);
   const [pendingOptionTab, setPendingOptionTab] = useState<"common" | "exclusive" | null>(null);
-  const [optionPanelOpen, setOptionPanelOpen] = useState(true);
+  const [optionPanelOpen, setOptionPanelOpen] = useState(false);
   const [pendingOptionPanelClose, setPendingOptionPanelClose] = useState(false);
   const [commonGroupToAdd, setCommonGroupToAdd] = useState("");
   const [newExclusiveGroup, setNewExclusiveGroup] = useState({
@@ -1198,7 +1198,7 @@ function AdminMenuPageInner() {
       setStatus("success", "전용옵션 그룹을 생성했고 현재 메뉴에 자동 연결했습니다.");
       setExclusiveDirty(false);
     } catch (e: unknown) {
-      setStatus("error", `전용옵션 생성 실패: ${toErrMsg(e)}`);
+      setStatus("error", `전용옵션 만들기 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -1719,6 +1719,28 @@ function AdminMenuPageInner() {
           font-size: 12px;
           font-weight: 700;
         }
+        .statusControlRow {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          padding: 10px;
+          background: var(--surface-muted);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+        }
+        .soldOutToggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          border: 1px solid var(--danger-line);
+          background: var(--danger-bg);
+          color: var(--danger-text);
+          border-radius: 999px;
+          padding: 7px 10px;
+          font-weight: 950;
+          white-space: nowrap;
+        }
         .label {
           font-size: 12px;
           color: var(--muted);
@@ -1976,12 +1998,50 @@ function AdminMenuPageInner() {
           background: var(--surface-soft);
         }
         .sectionDivider { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+        .advancedBox {
+          margin-top: 12px;
+          padding: 12px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: var(--surface-muted);
+        }
+        .advancedInput {
+          background: #fff;
+        }
         .optionSectionBox {
           margin-top: 14px;
-          border: 1px solid var(--line);
+          border: 1px solid #dbe1ea;
           border-radius: 14px;
           padding: 12px;
-          background: var(--surface);
+          background: linear-gradient(180deg, #f8fafc, #ffffff);
+        }
+        .optionSectionHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .optionClosedBox {
+          margin-top: 10px;
+          border: 1px dashed #cbd5e1;
+          border-radius: 12px;
+          background: #ffffff;
+          color: var(--muted);
+          padding: 10px;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.45;
+        }
+        .optionSaveGuide {
+          margin-top: 8px;
+          border: 1px solid #bfdbfe;
+          border-radius: 12px;
+          background: #eff6ff;
+          color: #1e40af;
+          padding: 9px 10px;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.4;
         }
         .exclusiveWorkspace {
           display: flex;
@@ -2099,6 +2159,14 @@ function AdminMenuPageInner() {
           }
           .summaryLabel { font-size: 11px; }
           .summaryValue { font-size: 15px; }
+          .statusControlRow,
+          .optionSectionHead {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .soldOutToggle {
+            justify-content: center;
+          }
           .listScroll {
             max-height: 45vh;
           }
@@ -2462,7 +2530,7 @@ function AdminMenuPageInner() {
           </div>
 
           <div className="detailColumn">
-            <div className="card">
+            <div className="card detailFormCard">
               <h2 className="cardTitle">메뉴 상세</h2>
               <h3 className="sectionTitle">기본정보</h3>
 
@@ -2504,29 +2572,20 @@ function AdminMenuPageInner() {
                 </div>
               </div>
 
-              <div className="idSoldOutRow">
-                <div className="field menuIdInput" style={{ marginTop: 0 }}>
-                <div className="menuIdLabelRow">
-                  <div className="label">메뉴 ID</div>
-                  <label className="soldOutInline">
-                    <span className="soldOutLabel">품절</span>
-                    <input
-                      type="checkbox"
-                      checked={draft.isSoldOut}
-                      onChange={(e) => setDraft((prev) => ({ ...prev, isSoldOut: e.target.checked }))}
-                      disabled={saving || loading}
-                    />
-                  </label>
+              <div className="statusControlRow" style={{ marginTop: 10 }}>
+                <div>
+                  <div className="label">판매 상태</div>
+                  <div className="hint">품절 선택 시 고객 주문 화면에서 품절로 표시됩니다.</div>
                 </div>
-                <input
-                  className="input"
-                  value={draft.id}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
-                  placeholder="예: testximen-menu-0001"
-                  disabled={saving || loading || isEditing}
-                />
-                <div className="hint">ID는 저장 후에는 변경할 수 없습니다.</div>
-                </div>
+                <label className="soldOutToggle">
+                  <span>품절</span>
+                  <input
+                    type="checkbox"
+                    checked={draft.isSoldOut}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, isSoldOut: e.target.checked }))}
+                    disabled={saving || loading}
+                  />
+                </label>
               </div>
 
               <div className="field sectionDivider">
@@ -2557,9 +2616,22 @@ function AdminMenuPageInner() {
               </div>
             </div>
 
+            <div className="field advancedBox">
+              <h3 className="sectionTitle">고급 정보</h3>
+              <div className="label">메뉴 ID</div>
+              <input
+                className="input advancedInput"
+                value={draft.id}
+                onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
+                placeholder="예: testximen-menu-0001"
+                disabled={saving || loading || isEditing}
+              />
+              <div className="hint">메뉴 ID는 자동으로 생성되며 저장 후에는 변경할 수 없습니다.</div>
+            </div>
+
             <div className="btnRow">
               <button className="btn btnPrimary" onClick={onSave} disabled={saving || loading}>
-                {saving ? "저장 중..." : "저장"}
+                {saving ? "저장 중..." : "기본정보 저장"}
               </button>
               <button className="btn" onClick={onNew} disabled={saving || loading}>
                 새로 작성
@@ -2571,14 +2643,27 @@ function AdminMenuPageInner() {
           </div>
 
           <div className="card optionSectionBox">
-            <div className="field" style={{ marginTop: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <h3 className="sectionTitle">옵션 연결</h3>
-              <button className="btn btnMini" type="button" onClick={toggleOptionPanel} disabled={saving || loading}>
-                {optionPanelOpen ? "옵션연결 -" : "옵션연결 +"}
+            <div className="optionSectionHead">
+              <div>
+                <h3 className="sectionTitle">옵션 설정</h3>
+                <p className="sub" style={{ marginTop: 4 }}>선택사항입니다. 메뉴 저장 후 연결해도 됩니다.</p>
+              </div>
+              <button
+                className="btn btnMini"
+                type="button"
+                onClick={toggleOptionPanel}
+                disabled={saving || loading}
+                aria-expanded={optionPanelOpen}
+              >
+                {optionPanelOpen ? "옵션 설정 닫기" : "옵션 설정 열기"}
               </button>
             </div>
+            {!optionPanelOpen ? (
+              <div className="optionClosedBox">옵션은 메뉴별 추가 선택지입니다. 필요할 때 열어서 공통옵션 또는 전용옵션을 연결해 주세요.</div>
+            ) : null}
             {optionPanelOpen ? (
               <>
+            <div className="optionSaveGuide">옵션 변경사항은 기본정보와 별도로 저장됩니다.</div>
             <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
               {optionTabs.map((tab) => (
                 <button
@@ -2615,7 +2700,7 @@ function AdminMenuPageInner() {
                     ))}
                   </select>
                   <button className="btn" type="button" onClick={addCommonGroup} disabled={saving || loading || !commonGroupToAdd}>
-                    + 옵션연결
+                    옵션 연결
                   </button>
                 </div>
 
@@ -2687,7 +2772,7 @@ function AdminMenuPageInner() {
                     </div>
                     <div className="optionActionRow">
                       <button className="btn btnPrimary" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading}>
-                        옵션수정 저장
+                        공통옵션 저장
                       </button>
                     </div>
                     {!hasExclusionTable ? (
@@ -2814,7 +2899,7 @@ function AdminMenuPageInner() {
                             </div>
                             <div className="optionActionRow">
                               <button className="btn btnPrimary" type="button" onClick={saveExclusiveEditor} disabled={saving || loading}>
-                                저장
+                                전용옵션 저장
                               </button>
                               <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
                                 취소
@@ -2910,7 +2995,7 @@ function AdminMenuPageInner() {
                             </div>
                             <div className="optionActionRow">
                               <button className="btn btnPrimary" type="button" onClick={createExclusiveGroupInMenu} disabled={saving || loading}>
-                                전용옵션 생성
+                                전용옵션 만들기
                               </button>
                               <button className="btn" type="button" onClick={closeExclusiveEditor} disabled={saving || loading}>
                                 취소
