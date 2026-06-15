@@ -2077,6 +2077,7 @@ function AdminMenuPageInner() {
           .previewThumb, .previewPlaceholder { width: 72px; height: 72px; }
           .modeSwitchBtn { min-height: 38px; padding: 7px 10px; font-size: 12px; }
           .btnRow { gap: 6px; }
+          .summaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
 
         @media (max-width: 980px) {
