@@ -212,6 +212,7 @@ function AdminMenuPageInner() {
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
+  const isEditing = Boolean(selectedId);
   const optionTabs: Array<{ key: "common" | "exclusive"; label: string }> = [
     { key: "common", label: "공통옵션" },
     { key: "exclusive", label: "전용옵션" },
@@ -1715,39 +1716,23 @@ function AdminMenuPageInner() {
         .statusControlRow {
           border: 1px solid var(--line);
           border-radius: 12px;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           padding: 8px 10px;
-=======
-          padding: 10px;
->>>>>>> main
           background: var(--surface-muted);
           display: flex;
           justify-content: space-between;
           align-items: center;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           gap: 10px;
-=======
-          gap: 12px;
->>>>>>> main
         }
         .soldOutToggle {
           display: inline-flex;
           align-items: center;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           gap: 6px;
-=======
-          gap: 7px;
->>>>>>> main
           border: 1px solid var(--danger-line);
           background: var(--danger-bg);
           color: var(--danger-text);
           border-radius: 999px;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           padding: 5px 9px;
           font-size: 12px;
-=======
-          padding: 7px 10px;
->>>>>>> main
           font-weight: 950;
           white-space: nowrap;
         }
@@ -2022,28 +2007,13 @@ function AdminMenuPageInner() {
           margin-top: 14px;
           border: 1px solid #dbe1ea;
           border-radius: 14px;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           padding: 10px;
-=======
-          padding: 12px;
->>>>>>> main
           background: linear-gradient(180deg, #f8fafc, #ffffff);
         }
         .optionSectionHead {
           display: flex;
           justify-content: space-between;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           align-items: center;
-          gap: 10px;
-        }
-        .optionClosedBox {
-          margin-top: 6px;
-          color: var(--muted);
-          font-size: 12px;
-          font-weight: 800;
-          line-height: 1.4;
-=======
-          align-items: flex-start;
           gap: 10px;
         }
         .optionClosedBox {
@@ -2056,7 +2026,6 @@ function AdminMenuPageInner() {
           font-size: 12px;
           font-weight: 850;
           line-height: 1.45;
->>>>>>> main
         }
         .optionSaveGuide {
           margin-top: 8px;
@@ -2185,25 +2154,20 @@ function AdminMenuPageInner() {
           }
           .summaryLabel { font-size: 11px; }
           .summaryValue { font-size: 15px; }
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           .statusControlRow {
             padding: 7px 8px;
             gap: 8px;
-          }
-          .soldOutToggle {
-            padding: 4px 8px;
-          }
-          .optionSectionHead {
-            gap: 8px;
-=======
-          .statusControlRow,
-          .optionSectionHead {
             flex-direction: column;
             align-items: stretch;
           }
           .soldOutToggle {
+            padding: 4px 8px;
             justify-content: center;
->>>>>>> main
+          }
+          .optionSectionHead {
+            gap: 8px;
+            flex-direction: column;
+            align-items: stretch;
           }
           .listScroll {
             max-height: 45vh;
@@ -2613,11 +2577,7 @@ function AdminMenuPageInner() {
               <div className="statusControlRow" style={{ marginTop: 10 }}>
                 <div>
                   <div className="label">판매 상태</div>
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
-                  <div className="hint">주문 화면에 품절로 표시됩니다.</div>
-=======
                   <div className="hint">품절 선택 시 고객 주문 화면에서 품절로 표시됩니다.</div>
->>>>>>> main
                 </div>
                 <label className="soldOutToggle">
                   <span>품절</span>
@@ -2697,19 +2657,11 @@ function AdminMenuPageInner() {
                 disabled={saving || loading}
                 aria-expanded={optionPanelOpen}
               >
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
-                {optionPanelOpen ? "옵션 닫기" : "옵션 열기"}
-              </button>
-            </div>
-            {!optionPanelOpen ? (
-              <div className="optionClosedBox">필요할 때 공통옵션 또는 전용옵션을 연결할 수 있습니다.</div>
-=======
                 {optionPanelOpen ? "옵션 설정 닫기" : "옵션 설정 열기"}
               </button>
             </div>
             {!optionPanelOpen ? (
               <div className="optionClosedBox">옵션은 메뉴별 추가 선택지입니다. 필요할 때 열어서 공통옵션 또는 전용옵션을 연결해 주세요.</div>
->>>>>>> main
             ) : null}
             {optionPanelOpen ? (
               <>
