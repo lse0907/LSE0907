@@ -1715,23 +1715,39 @@ function AdminMenuPageInner() {
         .statusControlRow {
           border: 1px solid var(--line);
           border-radius: 12px;
+<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           padding: 8px 10px;
+=======
+          padding: 10px;
+>>>>>>> main
           background: var(--surface-muted);
           display: flex;
           justify-content: space-between;
           align-items: center;
+<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           gap: 10px;
+=======
+          gap: 12px;
+>>>>>>> main
         }
         .soldOutToggle {
           display: inline-flex;
           align-items: center;
+<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           gap: 6px;
+=======
+          gap: 7px;
+>>>>>>> main
           border: 1px solid var(--danger-line);
           background: var(--danger-bg);
           color: var(--danger-text);
           border-radius: 999px;
+<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           padding: 5px 9px;
           font-size: 12px;
+=======
+          padding: 7px 10px;
+>>>>>>> main
           font-weight: 950;
           white-space: nowrap;
         }
@@ -1992,16 +2008,31 @@ function AdminMenuPageInner() {
           background: var(--surface-soft);
         }
         .sectionDivider { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+        .advancedBox {
+          margin-top: 12px;
+          padding: 12px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: var(--surface-muted);
+        }
+        .advancedInput {
+          background: #fff;
+        }
         .optionSectionBox {
           margin-top: 14px;
           border: 1px solid #dbe1ea;
           border-radius: 14px;
+<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           padding: 10px;
+=======
+          padding: 12px;
+>>>>>>> main
           background: linear-gradient(180deg, #f8fafc, #ffffff);
         }
         .optionSectionHead {
           display: flex;
           justify-content: space-between;
+<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           align-items: center;
           gap: 10px;
         }
@@ -2011,6 +2042,21 @@ function AdminMenuPageInner() {
           font-size: 12px;
           font-weight: 800;
           line-height: 1.4;
+=======
+          align-items: flex-start;
+          gap: 10px;
+        }
+        .optionClosedBox {
+          margin-top: 10px;
+          border: 1px dashed #cbd5e1;
+          border-radius: 12px;
+          background: #ffffff;
+          color: var(--muted);
+          padding: 10px;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.45;
+>>>>>>> main
         }
         .optionSaveGuide {
           margin-top: 8px;
@@ -2117,6 +2163,7 @@ function AdminMenuPageInner() {
           .previewThumb, .previewPlaceholder { width: 72px; height: 72px; }
           .modeSwitchBtn { min-height: 38px; padding: 7px 10px; font-size: 12px; }
           .btnRow { gap: 6px; }
+          .summaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
 
         @media (max-width: 980px) {
@@ -2138,6 +2185,7 @@ function AdminMenuPageInner() {
           }
           .summaryLabel { font-size: 11px; }
           .summaryValue { font-size: 15px; }
+<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           .statusControlRow {
             padding: 7px 8px;
             gap: 8px;
@@ -2147,6 +2195,15 @@ function AdminMenuPageInner() {
           }
           .optionSectionHead {
             gap: 8px;
+=======
+          .statusControlRow,
+          .optionSectionHead {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .soldOutToggle {
+            justify-content: center;
+>>>>>>> main
           }
           .listScroll {
             max-height: 45vh;
@@ -2556,7 +2613,11 @@ function AdminMenuPageInner() {
               <div className="statusControlRow" style={{ marginTop: 10 }}>
                 <div>
                   <div className="label">판매 상태</div>
+<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
                   <div className="hint">주문 화면에 품절로 표시됩니다.</div>
+=======
+                  <div className="hint">품절 선택 시 고객 주문 화면에서 품절로 표시됩니다.</div>
+>>>>>>> main
                 </div>
                 <label className="soldOutToggle">
                   <span>품절</span>
@@ -2597,6 +2658,19 @@ function AdminMenuPageInner() {
               </div>
             </div>
 
+            <div className="field advancedBox">
+              <h3 className="sectionTitle">고급 정보</h3>
+              <div className="label">메뉴 ID</div>
+              <input
+                className="input advancedInput"
+                value={draft.id}
+                onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
+                placeholder="예: testximen-menu-0001"
+                disabled={saving || loading || isEditing}
+              />
+              <div className="hint">메뉴 ID는 자동으로 생성되며 저장 후에는 변경할 수 없습니다.</div>
+            </div>
+
             <div className="btnRow">
               <button className="btn btnPrimary" onClick={onSave} disabled={saving || loading}>
                 {saving ? "저장 중..." : "기본정보 저장"}
@@ -2623,11 +2697,19 @@ function AdminMenuPageInner() {
                 disabled={saving || loading}
                 aria-expanded={optionPanelOpen}
               >
+<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
                 {optionPanelOpen ? "옵션 닫기" : "옵션 열기"}
               </button>
             </div>
             {!optionPanelOpen ? (
               <div className="optionClosedBox">필요할 때 공통옵션 또는 전용옵션을 연결할 수 있습니다.</div>
+=======
+                {optionPanelOpen ? "옵션 설정 닫기" : "옵션 설정 열기"}
+              </button>
+            </div>
+            {!optionPanelOpen ? (
+              <div className="optionClosedBox">옵션은 메뉴별 추가 선택지입니다. 필요할 때 열어서 공통옵션 또는 전용옵션을 연결해 주세요.</div>
+>>>>>>> main
             ) : null}
             {optionPanelOpen ? (
               <>
