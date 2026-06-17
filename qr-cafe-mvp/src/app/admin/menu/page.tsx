@@ -1713,15 +1713,11 @@ function AdminMenuPageInner() {
           font-size: 12px;
           font-weight: 700;
         }
-        .statusControlRow {
-          border: 1px solid var(--line);
-          border-radius: 12px;
-          padding: 8px 10px;
-          background: var(--surface-muted);
+        .soldOutCompactRow {
           display: flex;
-          justify-content: space-between;
+          justify-content: flex-end;
           align-items: center;
-          gap: 10px;
+          margin-top: 10px;
         }
         .soldOutToggle {
           display: inline-flex;
@@ -2168,11 +2164,8 @@ function AdminMenuPageInner() {
           }
           .summaryLabel { font-size: 11px; }
           .summaryValue { font-size: 15px; }
-          .statusControlRow {
-            padding: 7px 8px;
-            gap: 8px;
-            flex-direction: column;
-            align-items: flex-start;
+          .soldOutCompactRow {
+            justify-content: flex-start;
           }
           .soldOutToggle {
             width: fit-content;
@@ -2181,11 +2174,13 @@ function AdminMenuPageInner() {
             justify-content: center;
           }
           .optionSectionHead {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
             gap: 8px;
-            flex-direction: column;
-            align-items: flex-start;
+            align-items: start;
           }
           .optionPanelToggleBtn {
+            justify-self: end;
             width: fit-content;
             max-width: 100%;
           }
@@ -2594,19 +2589,15 @@ function AdminMenuPageInner() {
                 </div>
               </div>
 
-              <div className="statusControlRow" style={{ marginTop: 10 }}>
-                <div>
-                  <div className="label">판매 상태</div>
-                  <div className="hint">품절 선택 시 고객 주문 화면에서 품절로 표시됩니다.</div>
-                </div>
+              <div className="soldOutCompactRow">
                 <label className="soldOutToggle">
-                  <span>품절</span>
                   <input
                     type="checkbox"
                     checked={draft.isSoldOut}
                     onChange={(e) => setDraft((prev) => ({ ...prev, isSoldOut: e.target.checked }))}
                     disabled={saving || loading}
                   />
+                  <span>품절</span>
                 </label>
               </div>
 
@@ -2672,7 +2663,7 @@ function AdminMenuPageInner() {
                 disabled={saving || loading}
                 aria-expanded={optionPanelOpen}
               >
-                {optionPanelOpen ? "옵션 설정 닫기" : "옵션 설정 열기"}
+                {optionPanelOpen ? "옵션 닫기" : "옵션 열기"}
               </button>
             </div>
             {!optionPanelOpen ? (
