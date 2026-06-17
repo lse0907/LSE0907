@@ -212,6 +212,7 @@ function AdminMenuPageInner() {
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
+  const isEditing = Boolean(selectedId);
   const optionTabs: Array<{ key: "common" | "exclusive"; label: string }> = [
     { key: "common", label: "공통옵션" },
     { key: "exclusive", label: "전용옵션" },
