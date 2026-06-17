@@ -2302,7 +2302,8 @@ function AdminOptionsPageInner() {
                 <div className="ruleSummary">{selectedRuleSummary}</div>
 
                 <details className="idInlineRow">
-                  <summary>고급 정보 보기</summary>
+                  {/* Internal IDs are hidden by default for the live admin UX. */}
+                  <summary>고급 정보 보기 (ID)</summary>
                   <div className="idValue idFull" title={selectedGroup.id}>
                     옵션그룹 ID: {selectedGroup.id}
                   </div>

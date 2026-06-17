@@ -2639,7 +2639,8 @@ function AdminMenuPageInner() {
             </div>
 
             <details className="advancedBox">
-              <summary>고급 정보 보기</summary>
+              {/* Internal IDs are hidden by default for the live admin UX. */}
+              <summary>고급 정보 보기 (ID)</summary>
               <div className="readonlyIdValue" title={draft.id || "저장 시 자동 생성"}>
                 메뉴 ID: {draft.id || "저장 시 자동 생성"}
               </div>
