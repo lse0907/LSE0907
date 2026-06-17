@@ -1508,6 +1508,18 @@ function AdminMenuPageInner() {
           flex-wrap: wrap;
           margin-top: 12px;
         }
+        .menuListToolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-top: 12px;
+        }
+        .menuListActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
         .optionActionRow {
           display: flex;
           gap: 8px;
@@ -1577,10 +1589,23 @@ function AdminMenuPageInner() {
         }
         .filterRow {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 150px auto;
+          grid-template-columns: minmax(0, 1fr) minmax(118px, 150px);
           gap: 8px;
           margin-top: 10px;
           align-items: center;
+        }
+        .soldOutFilterToggle {
+          border: 1px solid var(--danger-line);
+          border-radius: 999px;
+          background: var(--danger-bg);
+          color: var(--danger-text);
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 950;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
         }
         .list {
           display: grid;
@@ -1640,6 +1665,13 @@ function AdminMenuPageInner() {
           fill: none;
           stroke-linecap: round;
           stroke-linejoin: round;
+        }
+        .menuNameLine {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
         }
         .name {
           font-weight: 900;
@@ -1708,10 +1740,6 @@ function AdminMenuPageInner() {
           color: var(--danger-text);
           font-weight: 900;
           font-size: 12px;
-        }
-        .soldOutOnlyLabel {
-          font-size: 12px;
-          font-weight: 700;
         }
         .soldOutCompactRow {
           display: flex;
@@ -1989,30 +2017,6 @@ function AdminMenuPageInner() {
           background: var(--surface-soft);
         }
         .sectionDivider { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-        .advancedBox {
-          margin-top: 10px;
-          border: 1px dashed var(--line);
-          border-radius: 12px;
-          background: var(--surface-muted);
-        }
-        .advancedBox summary {
-          cursor: pointer;
-          padding: 9px 10px;
-          font-size: 12px;
-          font-weight: 900;
-          color: var(--muted);
-        }
-        .readonlyIdValue {
-          margin: 0 10px 10px;
-          border: 1px solid var(--line);
-          border-radius: 10px;
-          background: var(--surface);
-          padding: 8px 10px;
-          font-size: 12px;
-          font-weight: 850;
-          line-height: 1.35;
-          word-break: break-all;
-        }
         .optionSectionBox {
           margin-top: 14px;
           border: 1px solid #dbe1ea;
@@ -2025,6 +2029,16 @@ function AdminMenuPageInner() {
           justify-content: space-between;
           align-items: center;
           gap: 10px;
+        }
+        .optionPanelToggleBtn {
+          border-color: #2563eb;
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+        .optionPanelToggleBtnOpen {
+          border-color: #cbd5e1;
+          background: #ffffff;
+          color: var(--muted);
         }
         .optionClosedBox {
           margin-top: 10px;
@@ -2152,8 +2166,11 @@ function AdminMenuPageInner() {
           .inlineSelectRow {
             grid-template-columns: 1fr;
           }
+          .menuListToolbar {
+            align-items: flex-start;
+          }
           .filterRow {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr) minmax(112px, 140px);
           }
           .summaryGrid {
             gap: 6px;
@@ -2226,6 +2243,11 @@ function AdminMenuPageInner() {
           .previewPlaceholder {
             width: 80px;
             height: 80px;
+          }
+        }
+        @media (max-width: 360px) {
+          .filterRow {
+            grid-template-columns: 1fr;
           }
         }
         @media (min-width: 900px) {
@@ -2415,16 +2437,27 @@ function AdminMenuPageInner() {
           <div className="card">
             <h2 className="cardTitle">메뉴 목록 ({items.length})</h2>
 
-            <div className="btnRow">
-              <button className="btn btnPrimary" onClick={onNew} disabled={saving || loading}>
-                + 새 메뉴
-              </button>
-              <button className="btn" onClick={refresh} disabled={saving || loading}>
-                새로고침
-              </button>
-              <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
-                순서 저장
-              </button>
+            <div className="menuListToolbar">
+              <div className="menuListActions">
+                <button className="btn btnPrimary" onClick={onNew} disabled={saving || loading}>
+                  + 새 메뉴
+                </button>
+                <button className="btn" onClick={refresh} disabled={saving || loading}>
+                  새로고침
+                </button>
+                <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
+                  순서 저장
+                </button>
+              </div>
+              <label className="soldOutFilterToggle">
+                <input
+                  type="checkbox"
+                  checked={soldOutOnly}
+                  onChange={(e) => setSoldOutOnly(e.target.checked)}
+                  disabled={saving || loading}
+                />
+                품절만
+              </label>
             </div>
             <div className="filterRow">
               <input
@@ -2446,15 +2479,6 @@ function AdminMenuPageInner() {
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
-              <label className="optionRow soldOutOnlyLabel" style={{ justifyContent: "flex-end" }}>
-                <input
-                  type="checkbox"
-                  checked={soldOutOnly}
-                  onChange={(e) => setSoldOutOnly(e.target.checked)}
-                  disabled={saving || loading}
-                />
-                품절만
-              </label>
             </div>
             <p className="muted" style={{ marginTop: 8 }}>
               메뉴 항목을 개별 입력하여 등록합니다.
@@ -2492,8 +2516,9 @@ function AdminMenuPageInner() {
                     tabIndex={0}
                   >
                     <div className="menuRowHeader">
-                      <div className="name">
-                        {m.name}
+                      <div className="menuNameLine">
+                        <span className="name">{m.name}</span>
+                        <span className={`categoryChip ${m.category_id ? "" : "categoryChipWarn"}`.trim()}>{categoryName}</span>
                         {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
                       </div>
                       <span className="orderActionRow">
@@ -2531,7 +2556,6 @@ function AdminMenuPageInner() {
                     </div>
                     <div className="muted" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                       <span>{Number(m.price || 0).toLocaleString()}원</span>
-                      <span className={`categoryChip ${m.category_id ? "" : "categoryChipWarn"}`.trim()}>{categoryName}</span>
                       <span>공통 {commonCount}개 · 전용 {exclusiveCount}개</span>
                     </div>
                   </div>
@@ -2549,8 +2573,6 @@ function AdminMenuPageInner() {
           <div className="detailColumn">
             <div className="card detailFormCard">
               <h2 className="cardTitle">메뉴 상세</h2>
-              <h3 className="sectionTitle">기본정보</h3>
-
               <div className="detailTopRow">
                 <div className="field" style={{ marginTop: 0 }}>
                 <div className="label">메뉴명</div>
@@ -2602,7 +2624,6 @@ function AdminMenuPageInner() {
               </div>
 
               <div className="field sectionDivider">
-                <h3 className="sectionTitle">이미지</h3>
                 <div className="label">메뉴 이미지</div>
                 <div className="imageUploadRow" style={{ marginTop: 4 }}>
                 {draft.image ? (
@@ -2629,14 +2650,6 @@ function AdminMenuPageInner() {
               </div>
             </div>
 
-            <details className="advancedBox">
-              {/* Internal IDs are hidden by default for the live admin UX. */}
-              <summary>고급 정보 보기 (ID)</summary>
-              <div className="readonlyIdValue" title={draft.id || "저장 시 자동 생성"}>
-                메뉴 ID: {draft.id || "저장 시 자동 생성"}
-              </div>
-            </details>
-
             <div className="btnRow">
               <button className="btn btnPrimary" onClick={onSave} disabled={saving || loading}>
                 {saving ? "저장 중..." : "기본정보 저장"}
@@ -2657,7 +2670,7 @@ function AdminMenuPageInner() {
                 <p className="sub" style={{ marginTop: 4 }}>선택사항입니다. 메뉴 저장 후 연결해도 됩니다.</p>
               </div>
               <button
-                className="btn btnMini optionPanelToggleBtn"
+                className={`btn btnMini optionPanelToggleBtn ${optionPanelOpen ? "optionPanelToggleBtnOpen" : ""}`}
                 type="button"
                 onClick={toggleOptionPanel}
                 disabled={saving || loading}

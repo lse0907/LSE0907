@@ -1423,29 +1423,6 @@ function AdminOptionsPageInner() {
           gap: 10px;
           align-items: end;
         }
-        .idValue {
-          font-weight: 500;
-          background: #f8fafc;
-          border: 1px dashed var(--line);
-          border-radius: 10px;
-          padding: 7px 10px;
-          display: flex;
-          align-items: center;
-        }
-        .idInlineRow {
-          margin-top: 8px;
-        }
-        .idInlineRow summary {
-          cursor: pointer;
-          font-size: 12px;
-          font-weight: 900;
-          color: var(--muted);
-        }
-        .idFull {
-          font-size: 12px;
-          line-height: 1.35;
-          word-break: break-all;
-        }
         .requiredInline {
           display: inline-flex;
           align-items: center;
@@ -1812,9 +1789,6 @@ function AdminOptionsPageInner() {
           .groupTopRow {
             grid-template-columns: 1fr minmax(86px, 110px);
             align-items: end;
-          }
-          .idInlineRow {
-            margin-top: 8px;
           }
           .name {
             font-size: 14px;
