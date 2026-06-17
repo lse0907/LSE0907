@@ -1419,33 +1419,9 @@ function AdminOptionsPageInner() {
         }
         .groupTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1.6fr) auto minmax(88px, 110px);
+          grid-template-columns: minmax(0, 1.6fr) minmax(88px, 110px) auto;
           gap: 10px;
           align-items: end;
-        }
-        .idValue {
-          font-weight: 500;
-          background: #f8fafc;
-          border: 1px dashed var(--line);
-          border-radius: 10px;
-          padding: 7px 10px;
-          display: flex;
-          align-items: center;
-        }
-        .idInlineRow {
-          display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto;
-          gap: 8px;
-          align-items: center;
-          margin-top: 8px;
-        }
-        .idInlineRow .label {
-          white-space: nowrap;
-        }
-        .idFull {
-          font-size: 12px;
-          line-height: 1.35;
-          word-break: break-all;
         }
         .requiredInline {
           display: inline-flex;
@@ -1813,9 +1789,6 @@ function AdminOptionsPageInner() {
           .groupTopRow {
             grid-template-columns: 1fr minmax(86px, 110px);
             align-items: end;
-          }
-          .idInlineRow {
-            grid-template-columns: auto minmax(0, 1fr) auto;
           }
           .name {
             font-size: 14px;
@@ -2286,13 +2259,6 @@ function AdminOptionsPageInner() {
                       onChange={(e) => setGroupDraft((prev) => ({ ...prev, max: e.target.value }))}
                       disabled={actionBusy || loading || isExclusiveSelected}
                     />
-                  </div>
-                </div>
-
-                <div className="idInlineRow">
-                  <div className="label">그룹 ID</div>
-                  <div className="idValue idFull" title={selectedGroup.id}>
-                    {selectedGroup.id}
                   </div>
                   <label className="requiredInline">
                     <input
