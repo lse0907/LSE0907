@@ -1994,14 +1994,28 @@ function AdminMenuPageInner() {
         }
         .sectionDivider { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
         .advancedBox {
-          margin-top: 12px;
-          padding: 12px;
-          border: 1px solid var(--line);
+          margin-top: 10px;
+          border: 1px dashed var(--line);
           border-radius: 12px;
           background: var(--surface-muted);
         }
-        .advancedInput {
-          background: #fff;
+        .advancedBox summary {
+          cursor: pointer;
+          padding: 9px 10px;
+          font-size: 12px;
+          font-weight: 900;
+          color: var(--muted);
+        }
+        .readonlyIdValue {
+          margin: 0 10px 10px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          background: var(--surface);
+          padding: 8px 10px;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.35;
+          word-break: break-all;
         }
         .optionSectionBox {
           margin-top: 14px;
@@ -2158,16 +2172,22 @@ function AdminMenuPageInner() {
             padding: 7px 8px;
             gap: 8px;
             flex-direction: column;
-            align-items: stretch;
+            align-items: flex-start;
           }
           .soldOutToggle {
+            width: fit-content;
+            max-width: 100%;
             padding: 4px 8px;
             justify-content: center;
           }
           .optionSectionHead {
             gap: 8px;
             flex-direction: column;
-            align-items: stretch;
+            align-items: flex-start;
+          }
+          .optionPanelToggleBtn {
+            width: fit-content;
+            max-width: 100%;
           }
           .listScroll {
             max-height: 45vh;
@@ -2618,18 +2638,12 @@ function AdminMenuPageInner() {
               </div>
             </div>
 
-            <div className="field advancedBox">
-              <h3 className="sectionTitle">고급 정보</h3>
-              <div className="label">메뉴 ID</div>
-              <input
-                className="input advancedInput"
-                value={draft.id}
-                onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
-                placeholder="예: testximen-menu-0001"
-                disabled={saving || loading || isEditing}
-              />
-              <div className="hint">메뉴 ID는 자동으로 생성되며 저장 후에는 변경할 수 없습니다.</div>
-            </div>
+            <details className="advancedBox">
+              <summary>고급 정보 보기</summary>
+              <div className="readonlyIdValue" title={draft.id || "저장 시 자동 생성"}>
+                메뉴 ID: {draft.id || "저장 시 자동 생성"}
+              </div>
+            </details>
 
             <div className="btnRow">
               <button className="btn btnPrimary" onClick={onSave} disabled={saving || loading}>
@@ -2651,7 +2665,7 @@ function AdminMenuPageInner() {
                 <p className="sub" style={{ marginTop: 4 }}>선택사항입니다. 메뉴 저장 후 연결해도 됩니다.</p>
               </div>
               <button
-                className="btn btnMini"
+                className="btn btnMini optionPanelToggleBtn"
                 type="button"
                 onClick={toggleOptionPanel}
                 disabled={saving || loading}

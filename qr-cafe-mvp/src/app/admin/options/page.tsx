@@ -1419,7 +1419,7 @@ function AdminOptionsPageInner() {
         }
         .groupTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1.6fr) auto minmax(88px, 110px);
+          grid-template-columns: minmax(0, 1.6fr) minmax(88px, 110px) auto;
           gap: 10px;
           align-items: end;
         }
@@ -1433,14 +1433,13 @@ function AdminOptionsPageInner() {
           align-items: center;
         }
         .idInlineRow {
-          display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto;
-          gap: 8px;
-          align-items: center;
           margin-top: 8px;
         }
-        .idInlineRow .label {
-          white-space: nowrap;
+        .idInlineRow summary {
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 900;
+          color: var(--muted);
         }
         .idFull {
           font-size: 12px;
@@ -1815,7 +1814,7 @@ function AdminOptionsPageInner() {
             align-items: end;
           }
           .idInlineRow {
-            grid-template-columns: auto minmax(0, 1fr) auto;
+            margin-top: 8px;
           }
           .name {
             font-size: 14px;
@@ -2287,13 +2286,6 @@ function AdminOptionsPageInner() {
                       disabled={actionBusy || loading || isExclusiveSelected}
                     />
                   </div>
-                </div>
-
-                <div className="idInlineRow">
-                  <div className="label">그룹 ID</div>
-                  <div className="idValue idFull" title={selectedGroup.id}>
-                    {selectedGroup.id}
-                  </div>
                   <label className="requiredInline">
                     <input
                       type="checkbox"
@@ -2308,6 +2300,13 @@ function AdminOptionsPageInner() {
                 </div>
 
                 <div className="ruleSummary">{selectedRuleSummary}</div>
+
+                <details className="idInlineRow">
+                  <summary>고급 정보 보기</summary>
+                  <div className="idValue idFull" title={selectedGroup.id}>
+                    옵션그룹 ID: {selectedGroup.id}
+                  </div>
+                </details>
 
                 <div className="btnRow">
                   {!isExclusiveSelected ? (
