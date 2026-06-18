@@ -290,6 +290,9 @@ function AdminOptionsPageInner() {
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [showTemplateNextStep, setShowTemplateNextStep] = useState(false);
+  const [menuLinkQuery, setMenuLinkQuery] = useState("");
+  const [menuLinkStatusFilter, setMenuLinkStatusFilter] = useState<"all" | "linked" | "unlinked">("all");
+  const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([]);
 
   const toErrMsg = (e: unknown) => {
     if (e instanceof Error) return e.message;
@@ -571,6 +574,26 @@ function AdminOptionsPageInner() {
       Array.isArray(m.option_group_ids) ? m.option_group_ids.includes(selectedGroup.id) : false
     );
   }, [menus, selectedGroup]);
+  const linkedMenuIdSet = useMemo(() => new Set(linkedMenus.map((m) => m.id)), [linkedMenus]);
+  const connectionTargetMenus = useMemo(() => {
+    if (!selectedGroup || isExclusiveSelected) return [];
+    const q = menuLinkQuery.trim().toLowerCase();
+    return menus.filter((m) => {
+      const linked = linkedMenuIdSet.has(m.id);
+      const matchesQuery = !q || m.name.toLowerCase().includes(q);
+      const matchesStatus =
+        menuLinkStatusFilter === "all" ||
+        (menuLinkStatusFilter === "linked" && linked) ||
+        (menuLinkStatusFilter === "unlinked" && !linked);
+      return matchesQuery && matchesStatus;
+    });
+  }, [isExclusiveSelected, linkedMenuIdSet, menuLinkQuery, menuLinkStatusFilter, menus, selectedGroup]);
+  const selectedVisibleMenuIds = useMemo(
+    () => connectionTargetMenus.map((menu) => menu.id),
+    [connectionTargetMenus]
+  );
+  const allVisibleMenusSelected =
+    selectedVisibleMenuIds.length > 0 && selectedVisibleMenuIds.every((id) => selectedMenuIds.includes(id));
   const linkedMenuNamesByGroupId = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const g of groups) {
@@ -1586,6 +1609,128 @@ function AdminOptionsPageInner() {
           font-size: 12px;
           font-weight: 900;
           line-height: 1.35;
+        }
+        .menuConnectionCard {
+          margin-top: 12px;
+          border-top: 1px solid var(--line);
+          padding-top: 12px;
+          display: grid;
+          gap: 10px;
+        }
+        .menuConnectionHead {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .menuConnectionTitle {
+          margin: 0;
+          font-size: 14px;
+          font-weight: 950;
+        }
+        .menuConnectionSummary {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .menuConnectionTools {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+          align-items: center;
+        }
+        .menuConnectionFilters {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .filterChip {
+          border: 1px solid var(--line);
+          background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
+          border-radius: 999px;
+          padding: 7px 10px;
+          font-size: 12px;
+          font-weight: 950;
+          cursor: pointer;
+        }
+        .filterChipOn {
+          border-color: #111827;
+          background: #111827;
+          color: #fff;
+        }
+        .menuSelectBar {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #f8fafc;
+          padding: 9px 10px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .menuCheckLabel {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 950;
+          color: #111827;
+          cursor: pointer;
+        }
+        .menuConnectionList {
+          display: grid;
+          gap: 8px;
+          max-height: 320px;
+          overflow-y: auto;
+          padding-right: 2px;
+        }
+        .menuConnectionRow {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px 12px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 10px;
+          align-items: center;
+        }
+        .menuConnectionRowOn {
+          border-color: #bfdbfe;
+          background: #eff6ff;
+        }
+        .menuConnectionMeta {
+          min-width: 0;
+          display: grid;
+          gap: 4px;
+        }
+        .menuConnectionName {
+          font-size: 14px;
+          font-weight: 950;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .menuConnectionActions {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          border-top: 1px dashed var(--line);
+          padding-top: 10px;
+        }
+        .menuConnectionButtons {
+          display: inline-flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
         }
         .emptyItemCard,
         .emptyLinkBox {
