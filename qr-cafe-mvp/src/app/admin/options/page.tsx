@@ -290,6 +290,9 @@ function AdminOptionsPageInner() {
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [showTemplateNextStep, setShowTemplateNextStep] = useState(false);
+  const [menuLinkQuery, setMenuLinkQuery] = useState("");
+  const [menuLinkStatusFilter, setMenuLinkStatusFilter] = useState<"all" | "linked" | "unlinked">("all");
+  const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([]);
 
   const toErrMsg = (e: unknown) => {
     if (e instanceof Error) return e.message;
@@ -563,6 +566,7 @@ function AdminOptionsPageInner() {
   const groupIdsWithItems = new Set(items.map((item) => item.group_id));
   const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
   const showCopyHiddenNotice = isCopyMode && hasOptionData;
+  const isExclusiveSelected = (selectedGroup?.scope || "common") === "exclusive";
 
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
@@ -570,6 +574,26 @@ function AdminOptionsPageInner() {
       Array.isArray(m.option_group_ids) ? m.option_group_ids.includes(selectedGroup.id) : false
     );
   }, [menus, selectedGroup]);
+  const linkedMenuIdSet = useMemo(() => new Set(linkedMenus.map((m) => m.id)), [linkedMenus]);
+  const connectionTargetMenus = useMemo(() => {
+    if (!selectedGroup || isExclusiveSelected) return [];
+    const q = menuLinkQuery.trim().toLowerCase();
+    return menus.filter((m) => {
+      const linked = linkedMenuIdSet.has(m.id);
+      const matchesQuery = !q || m.name.toLowerCase().includes(q);
+      const matchesStatus =
+        menuLinkStatusFilter === "all" ||
+        (menuLinkStatusFilter === "linked" && linked) ||
+        (menuLinkStatusFilter === "unlinked" && !linked);
+      return matchesQuery && matchesStatus;
+    });
+  }, [isExclusiveSelected, linkedMenuIdSet, menuLinkQuery, menuLinkStatusFilter, menus, selectedGroup]);
+  const selectedVisibleMenuIds = useMemo(
+    () => connectionTargetMenus.map((menu) => menu.id),
+    [connectionTargetMenus]
+  );
+  const allVisibleMenusSelected =
+    selectedVisibleMenuIds.length > 0 && selectedVisibleMenuIds.every((id) => selectedMenuIds.includes(id));
   const linkedMenuNamesByGroupId = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const g of groups) {
@@ -580,7 +604,6 @@ function AdminOptionsPageInner() {
     return map;
   }, [groups, menus]);
 
-  const isExclusiveSelected = (selectedGroup?.scope || "common") === "exclusive";
   const selectedRuleSummary = selectedGroup
     ? (() => {
         const max = Math.max(toInt(groupDraft.max, selectedGroup.max || 1), 1);
@@ -590,6 +613,13 @@ function AdminOptionsPageInner() {
         return max === 1 ? "선택 옵션 · 최대 1개" : `선택 옵션 · 최대 ${max}개 선택/추가`;
       })()
     : "";
+  const selectedGroupItemNames = groupItems.map((it) => it.name).join(" / ");
+
+  useEffect(() => {
+    setSelectedMenuIds([]);
+    setMenuLinkStatusFilter("all");
+    setMenuLinkQuery("");
+  }, [selectedGroupId]);
 
   // 공통: 뱃지 처리
   const markSaved = () => {
@@ -605,6 +635,84 @@ function AdminOptionsPageInner() {
   };
   const closeConfirm = () => {
     setConfirmState({ open: false, title: "", description: "", action: null });
+  };
+  const toggleMenuSelection = (menuId: string) => {
+    setSelectedMenuIds((prev) => (prev.includes(menuId) ? prev.filter((id) => id !== menuId) : [...prev, menuId]));
+  };
+  const toggleVisibleMenus = () => {
+    const visibleIds = selectedVisibleMenuIds;
+    if (visibleIds.length === 0) return;
+    setSelectedMenuIds((prev) => {
+      const prevSet = new Set(prev);
+      const everyVisibleSelected = visibleIds.every((id) => prevSet.has(id));
+      if (everyVisibleSelected) {
+        return prev.filter((id) => !visibleIds.includes(id));
+      }
+      for (const id of visibleIds) prevSet.add(id);
+      return Array.from(prevSet);
+    });
+  };
+  const applyMenuConnection = async (mode: "connect" | "disconnect") => {
+    if (!selectedGroup || isExclusiveSelected || actionBusy || loading) return;
+    const targetIds = selectedMenuIds.filter((id) => menus.some((menu) => menu.id === id));
+    if (targetIds.length === 0) {
+      setMsgTone("error");
+      setMsg("연결을 변경할 메뉴를 선택해 주세요.");
+      return;
+    }
+
+    const run = async () => {
+      closeConfirm();
+      try {
+        setSaving(true);
+        setBadge("idle");
+        const nextMenus = menus.map((menu) => {
+          if (!targetIds.includes(menu.id)) return menu;
+          const currentIds = Array.isArray(menu.option_group_ids) ? menu.option_group_ids : [];
+          const nextIds =
+            mode === "connect"
+              ? Array.from(new Set([...currentIds, selectedGroup.id]))
+              : currentIds.filter((id) => id !== selectedGroup.id);
+          return { ...menu, option_group_ids: nextIds };
+        });
+
+        for (const menu of nextMenus.filter((menu) => targetIds.includes(menu.id))) {
+          const { error } = await supabase
+            .from("menu_items")
+            .update({ option_group_ids: menu.option_group_ids || [] })
+            .eq("store_id", storeId)
+            .eq("id", menu.id);
+          if (error) throw error;
+        }
+
+        setMenus(nextMenus);
+        setSelectedMenuIds([]);
+        markSaved();
+        setMsgTone("success");
+        setMsg(
+          mode === "connect"
+            ? `${targetIds.length}개 메뉴에 "${selectedGroup.name}" 옵션을 연결했습니다.`
+            : `${targetIds.length}개 메뉴에서 "${selectedGroup.name}" 옵션 연결을 해제했습니다.`
+        );
+      } catch (e: unknown) {
+        console.error("[admin/options] applyMenuConnection:", toErrMsg(e));
+        markError();
+        setMsgTone("error");
+        setMsg(`메뉴 옵션 연결 변경 실패: ${toErrMsg(e)}`);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    if (mode === "disconnect") {
+      openConfirm(
+        "옵션 연결 해제",
+        `선택한 ${targetIds.length}개 메뉴에서 "${selectedGroup.name}" 옵션을 제거할까요? 고객 주문 화면에서 해당 옵션이 보이지 않습니다.`,
+        () => void run()
+      );
+      return;
+    }
+    await run();
   };
 
   // ===== 그룹 CRUD =====
@@ -1589,6 +1697,128 @@ function AdminOptionsPageInner() {
           font-weight: 900;
           line-height: 1.35;
         }
+        .menuConnectionCard {
+          margin-top: 12px;
+          border-top: 1px solid var(--line);
+          padding-top: 12px;
+          display: grid;
+          gap: 10px;
+        }
+        .menuConnectionHead {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .menuConnectionTitle {
+          margin: 0;
+          font-size: 14px;
+          font-weight: 950;
+        }
+        .menuConnectionSummary {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .menuConnectionTools {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+          align-items: center;
+        }
+        .menuConnectionFilters {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .filterChip {
+          border: 1px solid var(--line);
+          background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
+          border-radius: 999px;
+          padding: 7px 10px;
+          font-size: 12px;
+          font-weight: 950;
+          cursor: pointer;
+        }
+        .filterChipOn {
+          border-color: #111827;
+          background: #111827;
+          color: #fff;
+        }
+        .menuSelectBar {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #f8fafc;
+          padding: 9px 10px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .menuCheckLabel {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 950;
+          color: #111827;
+          cursor: pointer;
+        }
+        .menuConnectionList {
+          display: grid;
+          gap: 8px;
+          max-height: 320px;
+          overflow-y: auto;
+          padding-right: 2px;
+        }
+        .menuConnectionRow {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px 12px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 10px;
+          align-items: center;
+        }
+        .menuConnectionRowOn {
+          border-color: #bfdbfe;
+          background: #eff6ff;
+        }
+        .menuConnectionMeta {
+          min-width: 0;
+          display: grid;
+          gap: 4px;
+        }
+        .menuConnectionName {
+          font-size: 14px;
+          font-weight: 950;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .menuConnectionActions {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          border-top: 1px dashed var(--line);
+          padding-top: 10px;
+        }
+        .menuConnectionButtons {
+          display: inline-flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
         .emptyItemCard,
         .emptyLinkBox {
           margin-top: 10px;
@@ -1814,6 +2044,22 @@ function AdminOptionsPageInner() {
             width: 100%;
             justify-self: stretch;
           }
+          .menuConnectionTools {
+            grid-template-columns: 1fr;
+          }
+          .menuConnectionFilters {
+            justify-content: flex-start;
+          }
+          .menuConnectionRow {
+            grid-template-columns: 1fr;
+          }
+          .menuConnectionSummary,
+          .menuConnectionButtons {
+            width: 100%;
+          }
+          .menuConnectionButtons .btn {
+            flex: 1 1 140px;
+          }
         }
       `}</style>
 
@@ -1876,11 +2122,11 @@ function AdminOptionsPageInner() {
             <div className="nextStepCard">
               <div>
                 <div className="nextStepTitle">다음 단계</div>
-                <div className="muted">가격 확인 후 메뉴에 옵션을 연결해 주세요.</div>
+                <div className="muted">항목 확인 후 아래 주문 옵션 연결에서 메뉴에 연결해 주세요.</div>
               </div>
               <div className="btnRow nextStepActions">
-                <a className="btn btnPrimary" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                  메뉴관리로 이동
+                <a className="btn btnPrimary" href="#option-connections">
+                  주문 옵션 연결 보기
                 </a>
                 <button className="btn" type="button" onClick={() => setShowTemplateNextStep(false)}>
                   닫기
@@ -2409,28 +2655,160 @@ function AdminOptionsPageInner() {
                     </div>
                   </div>
 
-                <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-                  <div className="label">연결된 메뉴</div>
-                  {linkedMenus.length === 0 ? (
-                    <div className="emptyLinkBox">
-                      <div className="emptyLinkText">
-                        <span className="statusBadge statusUnlinked">미연결</span>
-                        <div className="muted">메뉴에 연결해야 주문 화면에 표시됩니다.</div>
+                {!isExclusiveSelected ? (
+                  <div className="menuConnectionCard" id="option-connections">
+                    <div className="menuConnectionHead">
+                      <div>
+                        <h3 className="menuConnectionTitle">주문 옵션 연결</h3>
+                        <div className="muted" style={{ marginTop: 4 }}>
+                          선택한 공통옵션을 여러 메뉴에 한 번에 연결하거나 해제할 수 있습니다.
+                        </div>
                       </div>
-                      <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                        메뉴관리로 이동
-                      </a>
+                      <div className="menuConnectionSummary">
+                        <span className="statusBadge statusLinked">연결 {linkedMenus.length}개</span>
+                        <span className="statusBadge statusUnlinked">미연결 {Math.max(menus.length - linkedMenus.length, 0)}개</span>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="scopeRow">
-                      {linkedMenus.map((m) => (
-                        <span key={m.id} className="pill">
-                          {m.name}
-                        </span>
-                      ))}
+
+                    <div className="ruleSummary">
+                      {selectedGroup.name} {selectedGroupItemNames ? `· ${selectedGroupItemNames}` : "· 옵션 항목을 먼저 추가해 주세요."}
                     </div>
-                  )}
-                </div>
+
+                    <div className="menuConnectionTools">
+                      <input
+                        className="input"
+                        value={menuLinkQuery}
+                        onChange={(e) => setMenuLinkQuery(e.target.value)}
+                        placeholder="메뉴명 검색"
+                        disabled={actionBusy || loading || menus.length === 0}
+                      />
+                      <div className="menuConnectionFilters" role="tablist" aria-label="옵션 연결 상태 필터">
+                        {[
+                          { key: "all", label: "전체" },
+                          { key: "linked", label: "연결됨" },
+                          { key: "unlinked", label: "미연결" },
+                        ].map((filter) => (
+                          <button
+                            key={filter.key}
+                            className={`filterChip ${menuLinkStatusFilter === filter.key ? "filterChipOn" : ""}`}
+                            type="button"
+                            onClick={() => setMenuLinkStatusFilter(filter.key as "all" | "linked" | "unlinked")}
+                            disabled={actionBusy || loading}
+                          >
+                            {filter.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="menuSelectBar">
+                      <label className="menuCheckLabel">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleMenusSelected}
+                          onChange={toggleVisibleMenus}
+                          disabled={actionBusy || loading || selectedVisibleMenuIds.length === 0}
+                        />
+                        현재 목록 전체 선택
+                      </label>
+                      <div className="muted">
+                        표시 {connectionTargetMenus.length}개 · 선택 {selectedMenuIds.length}개
+                      </div>
+                    </div>
+
+                    {menus.length === 0 ? (
+                      <div className="emptyLinkBox">
+                        <div className="emptyLinkText">
+                          <span className="statusBadge statusUnlinked">메뉴 없음</span>
+                          <div className="muted">메뉴를 등록한 뒤 공통옵션을 연결할 수 있습니다.</div>
+                        </div>
+                        <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                          메뉴관리로 이동
+                        </a>
+                      </div>
+                    ) : connectionTargetMenus.length === 0 ? (
+                      <div className="emptyLinkBox">
+                        <div className="emptyLinkText">
+                          <span className="statusBadge statusUnlinked">결과 없음</span>
+                          <div className="muted">검색어 또는 연결 상태 필터를 변경해 주세요.</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="menuConnectionList">
+                        {connectionTargetMenus.map((menu) => {
+                          const isLinked = linkedMenuIdSet.has(menu.id);
+                          const isSelected = selectedMenuIds.includes(menu.id);
+                          return (
+                            <label key={menu.id} className={`menuConnectionRow ${isSelected ? "menuConnectionRowOn" : ""}`}>
+                              <span className="menuCheckLabel">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleMenuSelection(menu.id)}
+                                  disabled={actionBusy || loading}
+                                />
+                                <span className="menuConnectionMeta">
+                                  <span className="menuConnectionName">{menu.name}</span>
+                                  <span className="muted">고객 주문 화면에 이 옵션을 표시할 메뉴입니다.</span>
+                                </span>
+                              </span>
+                              <span className={`statusBadge ${isLinked ? "statusLinked" : "statusUnlinked"}`}>
+                                {isLinked ? "연결됨" : "미연결"}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="menuConnectionActions">
+                      <div className="muted">
+                        공통옵션 연결만 일괄 변경합니다. 전용옵션은 메뉴관리에서 개별로 설정해 주세요.
+                      </div>
+                      <div className="menuConnectionButtons">
+                        <button
+                          className="btn btnPrimary"
+                          type="button"
+                          onClick={() => void applyMenuConnection("connect")}
+                          disabled={actionBusy || loading || selectedMenuIds.length === 0 || !selectedGroupItemNames}
+                        >
+                          선택 메뉴에 연결
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => void applyMenuConnection("disconnect")}
+                          disabled={actionBusy || loading || selectedMenuIds.length === 0}
+                        >
+                          선택 메뉴 연결 해제
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                    <div className="label">연결된 메뉴</div>
+                    {linkedMenus.length === 0 ? (
+                      <div className="emptyLinkBox">
+                        <div className="emptyLinkText">
+                          <span className="statusBadge statusUnlinked">미연결</span>
+                          <div className="muted">전용옵션 연결은 메뉴관리에서 설정해 주세요.</div>
+                        </div>
+                        <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                          메뉴관리로 이동
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="scopeRow">
+                        {linkedMenus.map((m) => (
+                          <span key={m.id} className="pill">
+                            {m.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

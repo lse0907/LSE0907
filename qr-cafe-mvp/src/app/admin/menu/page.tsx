@@ -2062,6 +2062,24 @@ function AdminMenuPageInner() {
           font-weight: 850;
           line-height: 1.4;
         }
+        .optionBulkGuide {
+          margin-top: 8px;
+          border: 1px dashed #bfdbfe;
+          border-radius: 12px;
+          background: #ffffff;
+          padding: 9px 10px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .optionBulkGuideText {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.4;
+        }
         .exclusiveWorkspace {
           display: flex;
           flex-direction: column;
@@ -2685,6 +2703,14 @@ function AdminMenuPageInner() {
             {optionPanelOpen ? (
               <>
             <div className="optionSaveGuide">옵션 변경사항은 기본정보와 별도로 저장됩니다.</div>
+            <div className="optionBulkGuide">
+              <div className="optionBulkGuideText">
+                여러 메뉴에 같은 공통옵션을 연결하려면 옵션관리의 주문 옵션 연결을 사용해 주세요.
+              </div>
+              <a className="btn btnMini" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}#option-connections` : "#option-connections"}`}>
+                주문 옵션 연결
+              </a>
+            </div>
             <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
               {optionTabs.map((tab) => (
                 <button

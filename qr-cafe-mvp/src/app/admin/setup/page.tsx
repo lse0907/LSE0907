@@ -42,8 +42,8 @@ type StepView = {
 
 const stepOrder: Array<{ step: ActiveSetupStep; title: string; desc: string; href: string; noun: string }> = [
   { step: 1, title: "카테고리 설정", desc: "메뉴를 나눌 분류를 만듭니다.", href: "/admin/categories", noun: "카테고리" },
-  { step: 2, title: "옵션 설정", desc: "사이즈, 온도 등 선택지를 만듭니다.", href: "/admin/options", noun: "옵션 항목" },
-  { step: 3, title: "메뉴 설정", desc: "판매 메뉴를 등록하고 옵션을 연결합니다.", href: "/admin/menu", noun: "판매 메뉴" },
+  { step: 2, title: "옵션 설정", desc: "사이즈, 온도 등 공통옵션을 만들고 메뉴 연결을 확인합니다.", href: "/admin/options", noun: "옵션 항목" },
+  { step: 3, title: "메뉴 설정", desc: "판매 메뉴를 등록하고 개별 메뉴 예외 옵션을 확인합니다.", href: "/admin/menu", noun: "판매 메뉴" },
 ];
 
 const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: string; note: string }> = [
@@ -52,7 +52,7 @@ const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: 
     title: "직접 설정",
     badge: "추천",
     desc: "처음 설정할 때 추천합니다.",
-    note: "카테고리 → 옵션 → 메뉴 순서로 입력합니다.",
+    note: "카테고리 → 공통옵션 → 메뉴 → 주문 옵션 연결 순서로 확인합니다.",
   },
   {
     mode: "copy",
