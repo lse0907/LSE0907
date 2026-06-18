@@ -613,14 +613,6 @@ function AdminOptionsPageInner() {
         return max === 1 ? "선택 옵션 · 최대 1개" : `선택 옵션 · 최대 ${max}개 선택/추가`;
       })()
     : "";
-  const selectedGroupItemNames = groupItems.map((it) => it.name).join(" / ");
-
-  useEffect(() => {
-    setSelectedMenuIds([]);
-    setMenuLinkStatusFilter("all");
-    setMenuLinkQuery("");
-  }, [selectedGroupId]);
-
   // 공통: 뱃지 처리
   const markSaved = () => {
     setBadge("saved");
@@ -636,85 +628,6 @@ function AdminOptionsPageInner() {
   const closeConfirm = () => {
     setConfirmState({ open: false, title: "", description: "", action: null });
   };
-  const toggleMenuSelection = (menuId: string) => {
-    setSelectedMenuIds((prev) => (prev.includes(menuId) ? prev.filter((id) => id !== menuId) : [...prev, menuId]));
-  };
-  const toggleVisibleMenus = () => {
-    const visibleIds = selectedVisibleMenuIds;
-    if (visibleIds.length === 0) return;
-    setSelectedMenuIds((prev) => {
-      const prevSet = new Set(prev);
-      const everyVisibleSelected = visibleIds.every((id) => prevSet.has(id));
-      if (everyVisibleSelected) {
-        return prev.filter((id) => !visibleIds.includes(id));
-      }
-      for (const id of visibleIds) prevSet.add(id);
-      return Array.from(prevSet);
-    });
-  };
-  const applyMenuConnection = async (mode: "connect" | "disconnect") => {
-    if (!selectedGroup || isExclusiveSelected || actionBusy || loading) return;
-    const targetIds = selectedMenuIds.filter((id) => menus.some((menu) => menu.id === id));
-    if (targetIds.length === 0) {
-      setMsgTone("error");
-      setMsg("연결을 변경할 메뉴를 선택해 주세요.");
-      return;
-    }
-
-    const run = async () => {
-      closeConfirm();
-      try {
-        setSaving(true);
-        setBadge("idle");
-        const nextMenus = menus.map((menu) => {
-          if (!targetIds.includes(menu.id)) return menu;
-          const currentIds = Array.isArray(menu.option_group_ids) ? menu.option_group_ids : [];
-          const nextIds =
-            mode === "connect"
-              ? Array.from(new Set([...currentIds, selectedGroup.id]))
-              : currentIds.filter((id) => id !== selectedGroup.id);
-          return { ...menu, option_group_ids: nextIds };
-        });
-
-        for (const menu of nextMenus.filter((menu) => targetIds.includes(menu.id))) {
-          const { error } = await supabase
-            .from("menu_items")
-            .update({ option_group_ids: menu.option_group_ids || [] })
-            .eq("store_id", storeId)
-            .eq("id", menu.id);
-          if (error) throw error;
-        }
-
-        setMenus(nextMenus);
-        setSelectedMenuIds([]);
-        markSaved();
-        setMsgTone("success");
-        setMsg(
-          mode === "connect"
-            ? `${targetIds.length}개 메뉴에 "${selectedGroup.name}" 옵션을 연결했습니다.`
-            : `${targetIds.length}개 메뉴에서 "${selectedGroup.name}" 옵션 연결을 해제했습니다.`
-        );
-      } catch (e: unknown) {
-        console.error("[admin/options] applyMenuConnection:", toErrMsg(e));
-        markError();
-        setMsgTone("error");
-        setMsg(`메뉴 옵션 연결 변경 실패: ${toErrMsg(e)}`);
-      } finally {
-        setSaving(false);
-      }
-    };
-
-    if (mode === "disconnect") {
-      openConfirm(
-        "옵션 연결 해제",
-        `선택한 ${targetIds.length}개 메뉴에서 "${selectedGroup.name}" 옵션을 제거할까요? 고객 주문 화면에서 해당 옵션이 보이지 않습니다.`,
-        () => void run()
-      );
-      return;
-    }
-    await run();
-  };
-
   // ===== 그룹 CRUD =====
   const addGroup = async () => {
     if (!storeId) {
@@ -2655,160 +2568,31 @@ function AdminOptionsPageInner() {
                     </div>
                   </div>
 
-                {!isExclusiveSelected ? (
-                  <div className="menuConnectionCard" id="option-connections">
-                    <div className="menuConnectionHead">
-                      <div>
-                        <h3 className="menuConnectionTitle">주문 옵션 연결</h3>
-                        <div className="muted" style={{ marginTop: 4 }}>
-                          선택한 공통옵션을 여러 메뉴에 한 번에 연결하거나 해제할 수 있습니다.
-                        </div>
-                      </div>
-                      <div className="menuConnectionSummary">
-                        <span className="statusBadge statusLinked">연결 {linkedMenus.length}개</span>
-                        <span className="statusBadge statusUnlinked">미연결 {Math.max(menus.length - linkedMenus.length, 0)}개</span>
+                <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                  <div className="label">연결된 메뉴</div>
+                  {linkedMenus.length === 0 ? (
+                    <div className="emptyLinkBox">
+                      <div className="emptyLinkText">
+                        <span className="statusBadge statusUnlinked">미연결</span>
+                        <div className="muted">메뉴관리에서 필요한 메뉴에 공통옵션을 연결할 수 있습니다.</div>
                       </div>
                     </div>
-
-                    <div className="ruleSummary">
-                      {selectedGroup.name} {selectedGroupItemNames ? `· ${selectedGroupItemNames}` : "· 옵션 항목을 먼저 추가해 주세요."}
-                    </div>
-
-                    <div className="menuConnectionTools">
-                      <input
-                        className="input"
-                        value={menuLinkQuery}
-                        onChange={(e) => setMenuLinkQuery(e.target.value)}
-                        placeholder="메뉴명 검색"
-                        disabled={actionBusy || loading || menus.length === 0}
-                      />
-                      <div className="menuConnectionFilters" role="tablist" aria-label="옵션 연결 상태 필터">
-                        {[
-                          { key: "all", label: "전체" },
-                          { key: "linked", label: "연결됨" },
-                          { key: "unlinked", label: "미연결" },
-                        ].map((filter) => (
-                          <button
-                            key={filter.key}
-                            className={`filterChip ${menuLinkStatusFilter === filter.key ? "filterChipOn" : ""}`}
-                            type="button"
-                            onClick={() => setMenuLinkStatusFilter(filter.key as "all" | "linked" | "unlinked")}
-                            disabled={actionBusy || loading}
-                          >
-                            {filter.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="menuSelectBar">
-                      <label className="menuCheckLabel">
-                        <input
-                          type="checkbox"
-                          checked={allVisibleMenusSelected}
-                          onChange={toggleVisibleMenus}
-                          disabled={actionBusy || loading || selectedVisibleMenuIds.length === 0}
-                        />
-                        현재 목록 전체 선택
-                      </label>
-                      <div className="muted">
-                        표시 {connectionTargetMenus.length}개 · 선택 {selectedMenuIds.length}개
-                      </div>
-                    </div>
-
-                    {menus.length === 0 ? (
-                      <div className="emptyLinkBox">
-                        <div className="emptyLinkText">
-                          <span className="statusBadge statusUnlinked">메뉴 없음</span>
-                          <div className="muted">메뉴를 등록한 뒤 공통옵션을 연결할 수 있습니다.</div>
-                        </div>
-                        <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                          메뉴관리로 이동
-                        </a>
-                      </div>
-                    ) : connectionTargetMenus.length === 0 ? (
-                      <div className="emptyLinkBox">
-                        <div className="emptyLinkText">
-                          <span className="statusBadge statusUnlinked">결과 없음</span>
-                          <div className="muted">검색어 또는 연결 상태 필터를 변경해 주세요.</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="menuConnectionList">
-                        {connectionTargetMenus.map((menu) => {
-                          const isLinked = linkedMenuIdSet.has(menu.id);
-                          const isSelected = selectedMenuIds.includes(menu.id);
-                          return (
-                            <label key={menu.id} className={`menuConnectionRow ${isSelected ? "menuConnectionRowOn" : ""}`}>
-                              <span className="menuCheckLabel">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => toggleMenuSelection(menu.id)}
-                                  disabled={actionBusy || loading}
-                                />
-                                <span className="menuConnectionMeta">
-                                  <span className="menuConnectionName">{menu.name}</span>
-                                  <span className="muted">고객 주문 화면에 이 옵션을 표시할 메뉴입니다.</span>
-                                </span>
-                              </span>
-                              <span className={`statusBadge ${isLinked ? "statusLinked" : "statusUnlinked"}`}>
-                                {isLinked ? "연결됨" : "미연결"}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    <div className="menuConnectionActions">
-                      <div className="muted">
-                        공통옵션 연결만 일괄 변경합니다. 전용옵션은 메뉴관리에서 개별로 설정해 주세요.
-                      </div>
-                      <div className="menuConnectionButtons">
-                        <button
-                          className="btn btnPrimary"
-                          type="button"
-                          onClick={() => void applyMenuConnection("connect")}
-                          disabled={actionBusy || loading || selectedMenuIds.length === 0 || !selectedGroupItemNames}
-                        >
-                          선택 메뉴에 연결
-                        </button>
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => void applyMenuConnection("disconnect")}
-                          disabled={actionBusy || loading || selectedMenuIds.length === 0}
-                        >
-                          선택 메뉴 연결 해제
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-                    <div className="label">연결된 메뉴</div>
-                    {linkedMenus.length === 0 ? (
-                      <div className="emptyLinkBox">
-                        <div className="emptyLinkText">
-                          <span className="statusBadge statusUnlinked">미연결</span>
-                          <div className="muted">전용옵션 연결은 메뉴관리에서 설정해 주세요.</div>
-                        </div>
-                        <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                          메뉴관리로 이동
-                        </a>
-                      </div>
-                    ) : (
+                  ) : (
+                    <>
                       <div className="scopeRow">
-                        {linkedMenus.map((m) => (
+                        {linkedMenus.slice(0, 8).map((m) => (
                           <span key={m.id} className="pill">
                             {m.name}
                           </span>
                         ))}
+                        {linkedMenus.length > 8 ? <span className="pill">외 {linkedMenus.length - 8}개</span> : null}
                       </div>
-                    )}
-                  </div>
-                )}
+                      <div className="muted" style={{ marginTop: 8 }}>
+                        총 {linkedMenus.length}개 메뉴에 연결되어 있습니다.
+                      </div>
+                    </>
+                  )}
+                </div>
               </>
             )}
           </div>
