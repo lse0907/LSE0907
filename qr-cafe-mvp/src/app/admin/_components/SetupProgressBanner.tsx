@@ -2,6 +2,7 @@
 
 type SetupProgressBannerProps = {
   stepLabel: string;
+  stepNumber?: number;
   modeLabel: string;
   modeDescription: string;
   stepGuide: string;
@@ -18,6 +19,7 @@ type SetupProgressBannerProps = {
 
 export default function SetupProgressBanner({
   stepLabel,
+  stepNumber,
   modeLabel,
   modeDescription,
   stepGuide,
@@ -66,11 +68,39 @@ export default function SetupProgressBanner({
         }
         .stepTitle {
           margin: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
           font-size: 19px;
           line-height: 1.2;
           letter-spacing: -0.02em;
           color: #0f172a;
           font-weight: 950;
+        }
+        .stepNumberBadge {
+          width: 28px;
+          height: 28px;
+          border-radius: 999px;
+          border: 1px solid #bfdbfe;
+          background: #ffffff;
+          color: #1d4ed8;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+          font-size: 14px;
+          font-weight: 950;
+          box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+        }
+        .setupBannerDone .stepNumberBadge {
+          border-color: #bbf7d0;
+          color: #166534;
+          background: #f0fdf4;
+        }
+        .stepTitleText {
+          min-width: 0;
+          overflow-wrap: anywhere;
         }
         .modeLine {
           margin: 0;
@@ -219,7 +249,12 @@ export default function SetupProgressBanner({
       `}</style>
       <div className="bannerRow">
         <div className="textCol">
-          <h2 className="stepTitle">{displayTitle}</h2>
+          <h2 className="stepTitle">
+            {typeof stepNumber === "number" ? (
+              <span className="stepNumberBadge" aria-label={`초기 설정 ${stepNumber}단계`}>{stepNumber}</span>
+            ) : null}
+            <span className="stepTitleText">{displayTitle}</span>
+          </h2>
           <p className="modeLine">
             <span className="modeLabel">현재 설정 방식: <b>{modeLabel}</b></span>
             {isCompleted ? <span className="doneBadge" title={completedLabel}>완료 확인됨</span> : null}

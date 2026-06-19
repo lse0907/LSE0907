@@ -2305,7 +2305,8 @@ function AdminMenuPageInner() {
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
               <SetupProgressBanner
-                stepLabel="3/4 메뉴 확인"
+                stepLabel="메뉴 확인"
+                stepNumber={3}
                 modeLabel={setupModeLabel}
                 modeDescription={
                   setupMode === "manual"

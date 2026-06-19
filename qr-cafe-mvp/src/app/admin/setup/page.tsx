@@ -466,7 +466,6 @@ function AdminSetupPageInner() {
               <div className="progressFill" style={{ width: `${(completedSteps / 4) * 100}%` }} />
             </div>
             <div className="summaryMeta" aria-label="현재 등록 수">
-              <span>진행률 {completedSteps}/4</span>
               <span>카테고리 {counts.categories}개</span>
               <span>옵션항목 {counts.optionItems}개</span>
               <span>판매메뉴 {counts.readyMenus}개</span>
@@ -474,7 +473,7 @@ function AdminSetupPageInner() {
               <span>현재 단계 {progressStepLabel(progressStep)}</span>
             </div>
             <p className="summaryCompact">
-              진행률 {completedSteps}/4 · 카테고리 {counts.categories} · 옵션항목 {counts.optionItems} · 판매메뉴 {counts.readyMenus} · 옵션연결 {counts.optionLinkedMenus}
+              카테고리 {counts.categories} · 옵션항목 {counts.optionItems} · 판매메뉴 {counts.readyMenus} · 옵션연결 {counts.optionLinkedMenus}
             </p>
           </section>
 

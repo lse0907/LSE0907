@@ -724,7 +724,8 @@ function AdminMenuOptionConnectInner() {
 
       {!setupCompleted && storeId ? (
         <SetupProgressBanner
-          stepLabel="4/4 옵션 연결 확인"
+          stepLabel="옵션 연결 확인"
+          stepNumber={4}
           modeLabel={setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정"}
           modeDescription="메뉴별 옵션 연결 상태를 확인하는 단계입니다."
           stepGuide="옵션이 필요한 메뉴에 공통옵션이 연결되어 있는지 확인해 주세요."

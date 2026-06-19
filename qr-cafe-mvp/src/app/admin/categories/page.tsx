@@ -615,7 +615,8 @@ function CategoriesPageInner() {
       </p>
       {!setupCompleted ? (
         <SetupProgressBanner
-          stepLabel="1/4 카테고리 확인"
+          stepLabel="카테고리 확인"
+          stepNumber={1}
           modeLabel={setupModeLabel}
           modeDescription={
             setupMode === "manual"
