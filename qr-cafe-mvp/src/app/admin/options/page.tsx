@@ -1041,7 +1041,7 @@ function AdminOptionsPageInner() {
       return;
     }
     setMsgTone("success");
-    setMsg("초기설정 2단계(옵션 설정)를 완료 처리했습니다.");
+    setMsg("초기설정 2단계(공통옵션 설정)를 완료 처리했습니다.");
   };
 
   return (
@@ -2001,7 +2001,7 @@ function AdminOptionsPageInner() {
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
               <SetupProgressBanner
-                stepLabel="초기 설정 진행 중 (2/3)"
+                stepLabel="초기 설정 진행 중 (2/4)"
                 modeLabel={setupModeLabel}
                 modeDescription={
                   setupMode === "manual"
@@ -2011,7 +2011,7 @@ function AdminOptionsPageInner() {
                       : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."
                 }
                 stepGuide="옵션 그룹과 항목을 확인한 뒤 완료 버튼을 눌러주세요."
-                completeLabel="옵션 설정 완료"
+                completeLabel="공통옵션 설정 완료"
                 completeDisabled={loading || actionBusy || !hasOptionSetupReady}
                 disabledReason="옵션 그룹과 항목을 1개 이상 등록하면 완료할 수 있습니다."
                 noticeText={

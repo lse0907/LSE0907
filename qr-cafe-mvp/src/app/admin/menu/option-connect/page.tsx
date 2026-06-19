@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
 
 type OptionGroup = {
   id: string;
@@ -62,6 +63,7 @@ function AdminMenuOptionConnectInner() {
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState(false);
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"neutral" | "success" | "error">("neutral");
   const [confirmState, setConfirmState] = useState<ConfirmState>({ open: false, title: "", description: "", action: null });
@@ -97,7 +99,7 @@ function AdminMenuOptionConnectInner() {
           .select("id, name, option_group_ids")
           .eq("store_id", storeId)
           .order("created_at", { ascending: false }),
-        supabase.from("stores").select("store_name").eq("store_id", storeId).maybeSingle(),
+        supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle(),
       ]);
 
       if (gRes.error) throw gRes.error;
@@ -108,12 +110,13 @@ function AdminMenuOptionConnectInner() {
       const nextGroups = ((gRes.data || []) as OptionGroup[]).filter((group) => (group.scope || "common") !== "exclusive");
       const nextItems = (iRes.data || []) as OptionItem[];
       const nextMenus = (mRes.data || []) as MenuSummary[];
-      const storeRow = sRes.data as { store_name?: string | null } | null;
+      const storeRow = sRes.data as { setup_completed?: boolean | null; store_name?: string | null } | null;
 
       setGroups(nextGroups);
       setItems(nextItems);
       setMenus(nextMenus);
       setStoreName(String(storeRow?.store_name || ""));
+      setSetupCompleted(Boolean(storeRow?.setup_completed));
       setSelectedGroupId((prev) => (prev && nextGroups.some((group) => group.id === prev) ? prev : nextGroups[0]?.id || ""));
     } catch (e: unknown) {
       console.error("[admin/menu/option-connect] refresh:", toErrMsg(e));
@@ -243,6 +246,31 @@ function AdminMenuOptionConnectInner() {
       return;
     }
     await run();
+  };
+
+  const onCompleteConnectionStep = async () => {
+    if (!storeId || loading || groups.length === 0 || menus.length === 0) return;
+    try {
+      setSaving(true);
+      setMsg("");
+      const { error } = await supabase
+        .from("stores")
+        .update({
+          setup_last_step: 4,
+          setup_completed: false,
+          setup_completed_at: null,
+        })
+        .eq("store_id", storeId);
+      if (error) throw error;
+      setSetupCompleted(false);
+      setMsgTone("success");
+      setMsg("주문 옵션 연결 확인을 완료했습니다. 초기설정 페이지에서 최종 완료를 눌러주세요.");
+    } catch (e: unknown) {
+      setMsgTone("error");
+      setMsg(`주문 옵션 연결 확인 저장 실패: ${toErrMsg(e)}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const setupBackHref = `/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
@@ -607,6 +635,21 @@ function AdminMenuOptionConnectInner() {
           </div>
         </div>
       </header>
+
+      {!setupCompleted && storeId ? (
+        <SetupProgressBanner
+          stepLabel="초기 설정 진행 중 (4/4)"
+          modeLabel={setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정"}
+          modeDescription="주문 옵션 연결 확인 단계입니다."
+          stepGuide="옵션이 필요한 메뉴에만 공통옵션을 연결하고 확인 완료 버튼을 눌러주세요."
+          completeLabel="주문 옵션 연결 확인 완료"
+          completeDisabled={loading || saving || groups.length === 0 || menus.length === 0}
+          disabledReason="공통옵션과 메뉴를 등록한 뒤 확인할 수 있습니다."
+          noticeText="옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다."
+          setupHref={setupBackHref}
+          onComplete={() => void onCompleteConnectionStep()}
+        />
+      ) : null}
 
       {msg ? (
         <div className={`msgBox ${msgTone === "success" ? "msgBoxSuccess" : msgTone === "error" ? "msgBoxError" : ""}`}>

@@ -26,6 +26,15 @@ type StoreBillingSummary = {
   lastPaidAt: string | null;
 };
 
+type OrderSummaryRow = {
+  order_date?: string | null;
+  total_price?: number | string | null;
+};
+
+function toErrorMessage(e: unknown) {
+  return e instanceof Error ? e.message : String(e);
+}
+
 const FREE_TRIAL_DAYS = 30;
 
 function calcRemainingDays(createdAt?: string | null) {
@@ -42,8 +51,6 @@ function AdminPageInner() {
   const sp = useSearchParams();
 
   const [booting, setBooting] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [storesLoaded, setStoresLoaded] = useState(false);
@@ -189,45 +196,22 @@ function AdminPageInner() {
 
       if (error) throw error;
 
-      const rows = Array.isArray(data) ? data : [];
-      const sum = (list: any[]) => list.reduce((acc, cur) => acc + Math.max(0, Number(cur?.total_price || 0)), 0);
+      const rows = (Array.isArray(data) ? data : []) as OrderSummaryRow[];
+      const sum = (list: OrderSummaryRow[]) => list.reduce((acc, cur) => acc + Math.max(0, Number(cur.total_price || 0)), 0);
 
       const daily = sum(rows.filter((r) => String(r?.order_date || "") === todayKey));
       const weekly = sum(rows.filter((r) => String(r?.order_date || "") >= weekStart && String(r?.order_date || "") <= weekEnd));
       const monthly = sum(rows.filter((r) => String(r?.order_date || "").startsWith(month)));
 
       setStatsSummary({ daily, weekly, monthly });
-    } catch (e: any) {
-      console.error("[admin] stats summary error:", e?.message || e);
-      setStatsErr(String(e?.message || e));
+    } catch (e: unknown) {
+      const message = toErrorMessage(e);
+      console.error("[admin] stats summary error:", message);
+      setStatsErr(message);
       setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
     } finally {
       setStatsLoading(false);
     }
-  };
-
-  const promoteLegacyConfiguredStore = async (storeId: string) => {
-    const [catRes, optRes, menuRes] = await Promise.all([
-      supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", storeId),
-      supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", storeId),
-      supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", storeId),
-    ]);
-    if (catRes.error || optRes.error || menuRes.error) return false;
-    const categories = Number(catRes.count || 0);
-    const options = Number(optRes.count || 0);
-    const menus = Number(menuRes.count || 0);
-    if (categories < 1 || options < 1 || menus < 1) return false;
-    const { error } = await supabase
-      .from("stores")
-      .update({
-        setup_completed: true,
-        setup_last_step: 4,
-        setup_completed_at: new Date().toISOString(),
-      })
-      .eq("store_id", storeId);
-    if (error) return false;
-    setStores((prev) => prev.map((s) => (s.store_id === storeId ? { ...s, setup_completed: true } : s)));
-    return true;
   };
 
   useEffect(() => {
@@ -249,8 +233,6 @@ function AdminPageInner() {
         return;
       }
 
-      setUserId(u.id);
-
       try {
         await loadMyStores(u.id);
 
@@ -260,9 +242,10 @@ function AdminPageInner() {
         if (preferred) {
           setSelectedStoreId(preferred);
         }
-      } catch (e: any) {
-        console.error("[admin] load stores error:", e?.message || e);
-        setMsg(`매장 목록 로드 실패: ${String(e?.message || e)}`);
+      } catch (e: unknown) {
+        const message = toErrorMessage(e);
+        console.error("[admin] load stores error:", message);
+        setMsg(`매장 목록 로드 실패: ${message}`);
         setStoresLoaded(true);
       } finally {
         setBooting(false);
@@ -300,13 +283,6 @@ function AdminPageInner() {
     setHideSetupBannerForCurrentSelection(false);
   }, [selectedStoreId]);
 
-  useEffect(() => {
-    if (!selectedStoreId) return;
-    const store = stores.find((s) => s.store_id === selectedStoreId);
-    if (!store || store.setup_completed !== false) return;
-    promoteLegacyConfiguredStore(selectedStoreId);
-  }, [selectedStoreId, stores]);
-
   const go = (path: string) => {
     if (!selectedStoreId) {
       setMsg("먼저 매장을 선택하거나 생성해주세요.");
@@ -333,11 +309,12 @@ function AdminPageInner() {
     }
     router.push(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
   };
-  const selectedStoreIncomplete = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed === false);
+  const selectedStoreIncomplete = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed !== true);
   const selectedStoreNeedsSetupByData = selectedStoreCounts != null && (selectedStoreCounts.categories < 1 || selectedStoreCounts.options < 1 || selectedStoreCounts.menus < 1);
   const selectedStoreShouldShowSetup = selectedStoreIncomplete || selectedStoreNeedsSetupByData;
+  const selectedStoreSetupCompleted = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed === true);
   const selectedStoreCompletedSteps = selectedStoreCounts
-    ? (selectedStoreCounts.categories > 0 ? 1 : 0) + (selectedStoreCounts.options > 0 ? 1 : 0) + (selectedStoreCounts.menus > 0 ? 1 : 0)
+    ? (selectedStoreCounts.categories > 0 ? 1 : 0) + (selectedStoreCounts.options > 0 ? 1 : 0) + (selectedStoreCounts.menus > 0 ? 1 : 0) + (selectedStoreSetupCompleted ? 1 : 0)
     : 0;
   const showSetupBanner = selectedStoreShouldShowSetup && !hideSetupBannerForCurrentSelection;
   const dismissSetupBanner = () => {
@@ -405,13 +382,13 @@ function AdminPageInner() {
         <div className="setupBanner" role="status" aria-live="polite">
           <div>
             <strong>이 매장은 초기 설정이 완료되지 않았습니다.</strong>
-            <div className="muted">메뉴/옵션/카테고리 설정을 계속 진행해 주세요.</div>
+            <div className="muted">카테고리/공통옵션/메뉴 등록과 주문 옵션 연결 확인을 마무리해 주세요.</div>
             {selectedStoreCounts ? (
-              <div className="muted">현재 진행 단계: {selectedStoreCompletedSteps}/3</div>
+              <div className="muted">현재 진행 단계: {selectedStoreCompletedSteps}/4</div>
             ) : null}
           </div>
           <div className="setupBannerActions">
-            <button className="btn btnPrimary btnSmall" onClick={goSetup}>
+            <button className="btn btnSetup btnSmall" onClick={goSetup}>
               초기 설정 계속하기
             </button>
             <button className="btn btnSmall" onClick={dismissSetupBanner}>
@@ -471,12 +448,12 @@ function AdminPageInner() {
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                         {on ? <div className="pill pillOn">선택됨</div> : null}
                         {on && selectedStoreShouldShowSetup ? (
-                          <button className="btn btnPrimary btnSmall" onClick={goSetup}>
+                          <button className="btn btnSetup btnSmall" onClick={goSetup}>
                             초기설정
                           </button>
                         ) : null}
                         {on && !selectedStoreShouldShowSetup ? (
-                          <button className="btn btnPrimary btnSmall" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
+                          <button className="btn btnBilling btnSmall" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
                             구독결제
                           </button>
                         ) : null}
@@ -787,6 +764,16 @@ body {
   background:var(--brand);
   color:#fff;
   border-color:var(--brand);
+}
+.btnSetup{
+  background:#eff6ff;
+  color:#1d4ed8;
+  border-color:#93c5fd;
+}
+.btnBilling{
+  background:#047857;
+  color:#fff;
+  border-color:#047857;
 }
 .btnSmall{
   padding:8px 11px;

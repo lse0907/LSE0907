@@ -609,7 +609,7 @@ function CategoriesPageInner() {
       </p>
       {!setupCompleted ? (
         <SetupProgressBanner
-          stepLabel="초기 설정 진행 중 (1/3)"
+          stepLabel="초기 설정 진행 중 (1/4)"
           modeLabel={setupModeLabel}
           modeDescription={
             setupMode === "manual"

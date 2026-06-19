@@ -744,7 +744,7 @@ function AdminMenuPageInner() {
       setStatus("error", "단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       return;
     }
-    setStatus("success", "초기설정 3단계(메뉴 설정)를 완료 처리했습니다.");
+    setStatus("success", "초기설정 3단계(메뉴 등록)를 완료 처리했습니다.");
   };
 
   const toggleGroup = (id: string) => {
@@ -2299,7 +2299,7 @@ function AdminMenuPageInner() {
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
               <SetupProgressBanner
-                stepLabel="초기 설정 진행 중 (3/3)"
+                stepLabel="초기 설정 진행 중 (3/4)"
                 modeLabel={setupModeLabel}
                 modeDescription={
                   setupMode === "manual"
@@ -2309,7 +2309,7 @@ function AdminMenuPageInner() {
                       : "일괄 등록 파일 업로드로 메뉴를 한 번에 등록할 수 있습니다."
                 }
                 stepGuide="판매 가능한 메뉴를 확인한 뒤 완료 버튼을 눌러주세요."
-                completeLabel="메뉴 설정 완료"
+                completeLabel="메뉴 등록 완료"
                 completeDisabled={loading || saving || readyMenuCount < 1}
                 disabledReason="가격이 있는 판매 메뉴를 카테고리에 연결하면 완료할 수 있습니다."
                 noticeText={
