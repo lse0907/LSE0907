@@ -5,7 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
-import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
+import { getSetupProgress, setSetupStepConfirmed } from "@/app/lib/setupProgress";
 import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
 
 type OptionGroup = {
@@ -275,6 +275,7 @@ function AdminOptionsPageInner() {
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState(false);
+  const [stepConfirmed, setStepConfirmed] = useState(false);
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"neutral" | "success" | "error">("neutral");
   const actionBusy = saving || copying;
@@ -290,6 +291,7 @@ function AdminOptionsPageInner() {
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [showTemplateNextStep, setShowTemplateNextStep] = useState(false);
+  const [linkedMenusExpanded, setLinkedMenusExpanded] = useState(false);
 
   const toErrMsg = (e: unknown) => {
     if (e instanceof Error) return e.message;
@@ -422,10 +424,14 @@ function AdminOptionsPageInner() {
     }
     let mounted = true;
     (async () => {
-      const { data } = await supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle();
+      const [{ data }, progress] = await Promise.all([
+        supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle(),
+        getSetupProgress(storeId),
+      ]);
       if (!mounted) return;
       const row = data as { setup_completed?: boolean | null; store_name?: string | null } | null;
       setSetupCompleted(Boolean(row?.setup_completed));
+      setStepConfirmed(progress.step2);
       setStoreName(String(row?.store_name || ""));
     })();
     return () => {
@@ -508,6 +514,7 @@ function AdminOptionsPageInner() {
       setGroupDraft({ name: "", required: false, min: "0", max: "1", sortOrder: "", scope: "common", linkedMenuId: "" });
       setShowCreateItemForm(false);
       setNewItemDraft({ name: "", price: "" });
+      setLinkedMenusExpanded(false);
       return;
     }
     setGroupDraft({
@@ -519,6 +526,7 @@ function AdminOptionsPageInner() {
       scope: selectedGroup.scope === "exclusive" ? "exclusive" : "common",
       linkedMenuId: selectedGroup.linked_menu_id || "",
     });
+    setLinkedMenusExpanded(false);
   }, [selectedGroup, items]);
 
   const groupItems = useMemo(
@@ -563,7 +571,9 @@ function AdminOptionsPageInner() {
   const groupIdsWithItems = new Set(items.map((item) => item.group_id));
   const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
   const showCopyHiddenNotice = isCopyMode && hasOptionData;
+  const isExclusiveSelected = (selectedGroup?.scope || "common") === "exclusive";
 
+  // 빠른 옵션 연결 검색/필터 상태는 /admin/menu/option-connect 전용 페이지에서만 관리합니다.
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
     return menus.filter((m) =>
@@ -580,7 +590,6 @@ function AdminOptionsPageInner() {
     return map;
   }, [groups, menus]);
 
-  const isExclusiveSelected = (selectedGroup?.scope || "common") === "exclusive";
   const selectedRuleSummary = selectedGroup
     ? (() => {
         const max = Math.max(toInt(groupDraft.max, selectedGroup.max || 1), 1);
@@ -590,7 +599,6 @@ function AdminOptionsPageInner() {
         return max === 1 ? "선택 옵션 · 최대 1개" : `선택 옵션 · 최대 ${max}개 선택/추가`;
       })()
     : "";
-
   // 공통: 뱃지 처리
   const markSaved = () => {
     setBadge("saved");
@@ -606,7 +614,6 @@ function AdminOptionsPageInner() {
   const closeConfirm = () => {
     setConfirmState({ open: false, title: "", description: "", action: null });
   };
-
   // ===== 그룹 CRUD =====
   const addGroup = async () => {
     if (!storeId) {
@@ -1019,8 +1026,9 @@ function AdminOptionsPageInner() {
       setMsg("단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       return;
     }
+    setStepConfirmed(true);
     setMsgTone("success");
-    setMsg("초기설정 2단계(옵션 설정)를 완료 처리했습니다.");
+    setMsg("공통옵션 확인이 완료되었습니다.");
   };
 
   return (
@@ -1288,16 +1296,22 @@ function AdminOptionsPageInner() {
           font-size: 15px;
         }
         .rowMain {
-          display: flex;
-          justify-content: space-between;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
           align-items: center;
           gap: 10px;
-          flex-wrap: wrap;
+        }
+        .rowMain .name {
+          min-width: 0;
+          line-height: 1.3;
+          overflow-wrap: anywhere;
         }
         .rowMeta {
           display: inline-flex;
           gap: 6px;
           align-items: center;
+          justify-content: flex-end;
+          justify-self: end;
           white-space: nowrap;
         }
         .statusBadge {
@@ -1419,33 +1433,9 @@ function AdminOptionsPageInner() {
         }
         .groupTopRow {
           display: grid;
-          grid-template-columns: minmax(0, 1.6fr) auto minmax(88px, 110px);
+          grid-template-columns: minmax(0, 1.6fr) minmax(88px, 110px) auto;
           gap: 10px;
           align-items: end;
-        }
-        .idValue {
-          font-weight: 500;
-          background: #f8fafc;
-          border: 1px dashed var(--line);
-          border-radius: 10px;
-          padding: 7px 10px;
-          display: flex;
-          align-items: center;
-        }
-        .idInlineRow {
-          display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto;
-          gap: 8px;
-          align-items: center;
-          margin-top: 8px;
-        }
-        .idInlineRow .label {
-          white-space: nowrap;
-        }
-        .idFull {
-          font-size: 12px;
-          line-height: 1.35;
-          word-break: break-all;
         }
         .requiredInline {
           display: inline-flex;
@@ -1602,16 +1592,30 @@ function AdminOptionsPageInner() {
         .createGroupActions {
           margin-top: 4px;
         }
+        .requiredRuleStack {
+          display: grid;
+          gap: 6px;
+          align-self: end;
+        }
         .ruleSummary {
-          margin-top: 8px;
           border: 1px solid #dbeafe;
           background: #eff6ff;
           color: #1e40af;
-          border-radius: 12px;
-          padding: 9px 11px;
-          font-size: 12px;
+          border-radius: 999px;
+          padding: 5px 9px;
+          font-size: 11px;
           font-weight: 900;
-          line-height: 1.35;
+          line-height: 1.25;
+          width: fit-content;
+          max-width: 100%;
+          white-space: nowrap;
+        }
+        .groupActionRow {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+          margin-top: 10px;
         }
         .emptyItemCard,
         .emptyLinkBox {
@@ -1651,9 +1655,15 @@ function AdminOptionsPageInner() {
           gap: 8px;
           align-items: end;
         }
-        .itemSaveBtn {
+        .itemFormActions {
           grid-column: 1 / -1;
-          justify-self: end;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .itemSaveBtn {
+          width: 100%;
+          justify-self: stretch;
         }
         .savedItemRow {
           border: 1px solid var(--line);
@@ -1684,6 +1694,7 @@ function AdminOptionsPageInner() {
         .itemActions {
           display: inline-flex;
           gap: 8px;
+          flex-wrap: nowrap;
         }
         .itemActionBtn {
           font-size: 12px;
@@ -1708,6 +1719,7 @@ function AdminOptionsPageInner() {
           display: inline-flex;
           gap: 4px;
           margin-left: 2px;
+          flex: 0 0 auto;
         }
         .orderBtn {
           border: 1px solid #dbe2ea;
@@ -1741,6 +1753,45 @@ function AdminOptionsPageInner() {
           fill: none;
           stroke-linecap: round;
           stroke-linejoin: round;
+        }
+
+        .linkedMenuSummary {
+          margin-top: 12px;
+          border-top: 1px solid var(--line);
+          padding-top: 12px;
+        }
+        .linkedMenuHeader {
+          width: 100%;
+          border: 0;
+          background: transparent;
+          color: var(--text);
+          padding: 0;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 10px;
+          align-items: center;
+          text-align: left;
+          cursor: pointer;
+        }
+        .linkedMenuTitleRow {
+          min-width: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .linkedMenuToggle {
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 999px;
+          padding: 5px 9px;
+          color: #334155;
+          font-size: 11px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+        .linkedMenuBody {
+          margin-top: 10px;
         }
 
         .itemCard {
@@ -1790,6 +1841,23 @@ function AdminOptionsPageInner() {
           .templatePreviewRow > .pill {
             justify-self: start;
           }
+          .rowMain {
+            align-items: start;
+          }
+          .rowMeta {
+            gap: 4px;
+          }
+          .rowMeta .muted {
+            font-size: 11px;
+          }
+          .orderBtn {
+            width: 26px;
+            height: 24px;
+          }
+          .ruleSummary {
+            white-space: normal;
+            border-radius: 10px;
+          }
         }
 
         @media (min-width: 561px) and (max-width: 768px) {
@@ -1814,9 +1882,6 @@ function AdminOptionsPageInner() {
             grid-template-columns: 1fr minmax(86px, 110px);
             align-items: end;
           }
-          .idInlineRow {
-            grid-template-columns: auto minmax(0, 1fr) auto;
-          }
           .name {
             font-size: 14px;
           }
@@ -1840,6 +1905,22 @@ function AdminOptionsPageInner() {
           .itemSaveBtn {
             width: 100%;
             justify-self: stretch;
+          }
+          .menuConnectionTools {
+            grid-template-columns: 1fr;
+          }
+          .menuConnectionFilters {
+            justify-content: flex-start;
+          }
+          .menuConnectionRow {
+            grid-template-columns: 1fr;
+          }
+          .menuConnectionSummary,
+          .menuConnectionButtons {
+            width: 100%;
+          }
+          .menuConnectionButtons .btn {
+            flex: 1 1 140px;
           }
         }
       `}</style>
@@ -1869,7 +1950,8 @@ function AdminOptionsPageInner() {
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
               <SetupProgressBanner
-                stepLabel="초기 설정 진행 중 (2/3)"
+                stepLabel="공통옵션 확인"
+                stepNumber={2}
                 modeLabel={setupModeLabel}
                 modeDescription={
                   setupMode === "manual"
@@ -1878,8 +1960,11 @@ function AdminOptionsPageInner() {
                       ? "원본 매장의 옵션을 복사해 빠르게 시작할 수 있습니다."
                       : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."
                 }
-                stepGuide="옵션 그룹과 항목을 확인한 뒤 완료 버튼을 눌러주세요."
-                completeLabel="옵션 설정 완료"
+                stepGuide="여러 메뉴에서 함께 사용할 옵션 그룹과 항목을 확인해 주세요."
+                completeLabel="공통옵션 확인 완료"
+                isCompleted={stepConfirmed}
+                completedLabel="공통옵션 확인 완료"
+                completedDescription="공통으로 사용할 옵션이 준비되었습니다. 수정했다면 다시 확인해 주세요."
                 completeDisabled={loading || actionBusy || !hasOptionSetupReady}
                 disabledReason="옵션 그룹과 항목을 1개 이상 등록하면 완료할 수 있습니다."
                 noticeText={
@@ -1903,11 +1988,11 @@ function AdminOptionsPageInner() {
             <div className="nextStepCard">
               <div>
                 <div className="nextStepTitle">다음 단계</div>
-                <div className="muted">가격 확인 후 메뉴에 옵션을 연결해 주세요.</div>
+                <div className="muted">항목 확인 후 빠른 옵션 연결에서 메뉴에 연결해 주세요.</div>
               </div>
               <div className="btnRow nextStepActions">
-                <a className="btn btnPrimary" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                  메뉴관리로 이동
+                <a className="btn btnPrimary" href="#option-connections">
+                  빠른 옵션 연결 보기
                 </a>
                 <button className="btn" type="button" onClick={() => setShowTemplateNextStep(false)}>
                   닫기
@@ -1939,7 +2024,7 @@ function AdminOptionsPageInner() {
           <h2 className="cardTitle">선행 단계 필요</h2>
           <p className="sub" style={{ marginTop: 6 }}>카테고리를 1개 이상 등록해 주세요.</p>
           <div className="btnRow" style={{ marginTop: 8 }}>
-            <a className="btn btnPrimary" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>카테고리 설정으로 이동</a>
+            <a className="btn btnPrimary" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>카테고리 확인으로 이동</a>
           </div>
         </section>
       ) : null}
@@ -2176,7 +2261,7 @@ function AdminOptionsPageInner() {
                   onClick={() => setSelectedGroupId(g.id)}
                 >
                   <div className="rowMain">
-                    <div className="name">{g.name}</div>
+                    <div className="name" title={g.name}>{g.name}</div>
                     <div className="rowMeta">
                       <span className="pill">항목 {itemCountByGroupId.get(g.id) || 0}개</span>
                       <span className={`statusBadge ${g.required ? "statusRequired" : "statusOptional"}`}>
@@ -2287,29 +2372,23 @@ function AdminOptionsPageInner() {
                       disabled={actionBusy || loading || isExclusiveSelected}
                     />
                   </div>
-                </div>
-
-                <div className="idInlineRow">
-                  <div className="label">그룹 ID</div>
-                  <div className="idValue idFull" title={selectedGroup.id}>
-                    {selectedGroup.id}
+                  <div className="requiredRuleStack">
+                    <label className="requiredInline">
+                      <input
+                        type="checkbox"
+                        checked={groupDraft.required}
+                        onChange={(e) =>
+                          setGroupDraft((prev) => ({ ...prev, required: e.target.checked, min: e.target.checked ? "1" : "0" }))
+                        }
+                        disabled={actionBusy || loading || isExclusiveSelected}
+                      />
+                      필수 여부
+                    </label>
+                    <span className="ruleSummary">{selectedRuleSummary}</span>
                   </div>
-                  <label className="requiredInline">
-                    <input
-                      type="checkbox"
-                      checked={groupDraft.required}
-                      onChange={(e) =>
-                        setGroupDraft((prev) => ({ ...prev, required: e.target.checked, min: e.target.checked ? "1" : "0" }))
-                      }
-                      disabled={actionBusy || loading || isExclusiveSelected}
-                    />
-                    필수 여부
-                  </label>
                 </div>
 
-                <div className="ruleSummary">{selectedRuleSummary}</div>
-
-                <div className="btnRow">
+                <div className="groupActionRow">
                   {!isExclusiveSelected ? (
                     <button
                       className="btn"
@@ -2423,47 +2502,63 @@ function AdminOptionsPageInner() {
                               placeholder="추가금액(원)"
                               disabled={actionBusy || loading}
                             />
-                            <button className="btn itemSaveBtn" onClick={addItem} disabled={actionBusy || loading}>
-                              항목 저장
-                            </button>
-                            <button
-                              className="btn itemSaveBtn"
-                              type="button"
-                              onClick={() => {
-                                setShowCreateItemForm(false);
-                                setNewItemDraft({ name: "", price: "" });
-                              }}
-                              disabled={actionBusy || loading}
-                            >
-                              취소
-                            </button>
+                            <div className="itemFormActions">
+                              <button className="btn itemSaveBtn" onClick={addItem} disabled={actionBusy || loading}>
+                                저장
+                              </button>
+                              <button
+                                className="btn itemSaveBtn"
+                                type="button"
+                                onClick={() => {
+                                  setShowCreateItemForm(false);
+                                  setNewItemDraft({ name: "", price: "" });
+                                }}
+                                disabled={actionBusy || loading}
+                              >
+                                취소
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ) : null}
                     </div>
                   </div>
 
-                <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-                  <div className="label">연결된 메뉴</div>
-                  {linkedMenus.length === 0 ? (
-                    <div className="emptyLinkBox">
-                      <div className="emptyLinkText">
-                        <span className="statusBadge statusUnlinked">미연결</span>
-                        <div className="muted">메뉴에 연결해야 주문 화면에 표시됩니다.</div>
-                      </div>
-                      <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                        메뉴관리로 이동
-                      </a>
+                <div className="linkedMenuSummary">
+                  <button
+                    className="linkedMenuHeader"
+                    type="button"
+                    onClick={() => setLinkedMenusExpanded((prev) => !prev)}
+                    aria-expanded={linkedMenusExpanded}
+                  >
+                    <span className="linkedMenuTitleRow">
+                      <span className="label">연결된 메뉴</span>
+                      <span className={`statusBadge ${linkedMenus.length > 0 ? "statusLinked" : "statusUnlinked"}`}>
+                        {linkedMenus.length > 0 ? `총 ${linkedMenus.length}개 연결` : "미연결"}
+                      </span>
+                    </span>
+                    <span className="linkedMenuToggle">{linkedMenusExpanded ? "접기" : "펼치기"}</span>
+                  </button>
+                  {linkedMenusExpanded ? (
+                    <div className="linkedMenuBody">
+                      {linkedMenus.length === 0 ? (
+                        <div className="emptyLinkBox">
+                          <div className="emptyLinkText">
+                            <div className="muted">메뉴관리에서 필요한 메뉴에 공통옵션을 연결할 수 있습니다.</div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="scopeRow">
+                          {linkedMenus.slice(0, 8).map((m) => (
+                            <span key={m.id} className="pill">
+                              {m.name}
+                            </span>
+                          ))}
+                          {linkedMenus.length > 8 ? <span className="pill">외 {linkedMenus.length - 8}개</span> : null}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="scopeRow">
-                      {linkedMenus.map((m) => (
-                        <span key={m.id} className="pill">
-                          {m.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  ) : null}
                 </div>
               </>
             )}
