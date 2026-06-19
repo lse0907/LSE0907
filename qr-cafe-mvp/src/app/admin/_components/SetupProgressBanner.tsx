@@ -31,7 +31,7 @@ export default function SetupProgressBanner({
   completedLabel = "확인 완료",
   completedDescription = "이 단계는 확인 완료되었습니다. 수정했다면 다시 완료 확인해 주세요.",
 }: SetupProgressBannerProps) {
-  const displayTitle = isCompleted ? `✓ ${completedLabel}` : stepLabel;
+  const displayTitle = stepLabel;
   const displayGuide = isCompleted ? completedDescription : stepGuide;
   const actionLabel = isCompleted ? "다시 완료 확인" : completeLabel;
 
@@ -72,9 +72,6 @@ export default function SetupProgressBanner({
           color: #0f172a;
           font-weight: 950;
         }
-        .setupBannerDone .stepTitle {
-          color: #14532d;
-        }
         .modeLine {
           margin: 0;
           display: flex;
@@ -86,9 +83,6 @@ export default function SetupProgressBanner({
           font-size: 13px;
           color: #1e3a8a;
           font-weight: 900;
-        }
-        .setupBannerDone .modeLabel {
-          color: #166534;
         }
         .doneBadge {
           border: 1px solid #bbf7d0;
@@ -228,7 +222,7 @@ export default function SetupProgressBanner({
           <h2 className="stepTitle">{displayTitle}</h2>
           <p className="modeLine">
             <span className="modeLabel">현재 설정 방식: <b>{modeLabel}</b></span>
-            {isCompleted ? <span className="doneBadge">완료 확인됨</span> : null}
+            {isCompleted ? <span className="doneBadge" title={completedLabel}>완료 확인됨</span> : null}
           </p>
           <p className="modeDesc">{modeDescription}</p>
           <p className="guide">{displayGuide}</p>

@@ -374,7 +374,7 @@ function AdminMenuOptionConnectInner() {
         }
         .msgBox {
           border-radius: 12px;
-          padding: 10px 12px;
+          padding: 9px 10px;
           font-weight: 900;
           border: 1px solid #e5e7eb;
           background: #f8fafc;
@@ -412,16 +412,16 @@ function AdminMenuOptionConnectInner() {
           border: 1px solid #dbeafe;
           background: #eff6ff;
           color: #1e40af;
-          border-radius: 14px;
-          padding: 10px 12px;
+          border-radius: 12px;
+          padding: 8px 10px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 900;
-          line-height: 1.4;
+          line-height: 1.35;
         }
         .flowSteps {
           display: inline-flex;
@@ -446,31 +446,52 @@ function AdminMenuOptionConnectInner() {
         }
         .list {
           display: grid;
-          gap: 10px;
-          margin-top: 12px;
+          gap: 6px;
+          margin-top: 10px;
+          max-height: 360px;
+          overflow-y: auto;
+          padding-right: 2px;
+        }
+        .groupMeta {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          min-width: 0;
+          font-size: 12px;
+          color: var(--muted);
+          font-weight: 850;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .groupBtn {
           text-align: left;
           border: 1px solid var(--line);
           background: #fff;
-          border-radius: 14px;
-          padding: 12px;
+          border-radius: 12px;
+          padding: 9px 10px;
           cursor: pointer;
           display: grid;
-          gap: 7px;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+          align-items: center;
         }
         .groupBtnOn {
           border: 2px solid var(--brand);
         }
         .rowTop {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
+          display: inline-flex;
+          gap: 6px;
           align-items: center;
+          min-width: 0;
         }
         .name {
           font-weight: 950;
-          font-size: 15px;
+          font-size: 14px;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .pill,
         .statusBadge {
@@ -568,7 +589,7 @@ function AdminMenuOptionConnectInner() {
         }
         .menuList {
           display: grid;
-          gap: 8px;
+          gap: 6px;
           max-height: 460px;
           overflow-y: auto;
           padding-right: 2px;
@@ -590,8 +611,8 @@ function AdminMenuOptionConnectInner() {
         }
         .menuMeta {
           min-width: 0;
-          display: grid;
-          gap: 4px;
+          display: flex;
+          align-items: center;
         }
         .menuName {
           font-size: 14px;
@@ -601,21 +622,21 @@ function AdminMenuOptionConnectInner() {
           white-space: nowrap;
         }
         .actions {
-          display: grid;
-          gap: 10px;
-          border: 1px solid #dbeafe;
-          background: #f8fbff;
-          border-radius: 14px;
-          padding: 12px;
-          margin-top: 12px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          border-top: 1px dashed var(--line);
+          padding-top: 10px;
+          margin-top: 10px;
         }
         .actionSummary {
-          display: grid;
-          gap: 5px;
           color: #334155;
           font-size: 13px;
-          font-weight: 850;
-          line-height: 1.4;
+          font-weight: 900;
+          line-height: 1.35;
+          min-width: 0;
         }
         .dangerBtn {
           border-color: #fecaca;
@@ -664,7 +685,19 @@ function AdminMenuOptionConnectInner() {
             justify-content: flex-start;
           }
           .menuRow {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr) auto;
+          }
+          .list {
+            max-height: 220px;
+          }
+          .flowGuide {
+            padding: 7px 9px;
+          }
+          .flowStep {
+            padding: 3px 7px;
+          }
+          .card {
+            padding: 12px;
           }
           .actionBtns,
           .actionBtns .btn {
@@ -712,7 +745,7 @@ function AdminMenuOptionConnectInner() {
         <span className="flowSteps">
           <span className="flowStep">① 옵션 선택</span>
           <span className="flowStep">② 메뉴 선택</span>
-          <span className="flowStep">③ 연결 확인</span>
+          <span className="flowStep">연결 적용</span>
         </span>
       </section>
 
@@ -758,11 +791,11 @@ function AdminMenuOptionConnectInner() {
                   >
                     <span className="rowTop">
                       <span className="name">{group.name}</span>
-                      <span className={`statusBadge ${linkedCount > 0 ? "statusLinked" : "statusUnlinked"}`}>
-                        {linkedCount > 0 ? `연결 ${linkedCount}개` : "미연결"}
-                      </span>
+                      <span className="groupMeta">항목 {itemCount}개 · {getPolicyText(group)}</span>
                     </span>
-                    <span className="muted">항목 {itemCount}개 · {getPolicyText(group)}</span>
+                    <span className={`statusBadge ${linkedCount > 0 ? "statusLinked" : "statusUnlinked"}`}>
+                      {linkedCount > 0 ? `연결 ${linkedCount}` : "미연결"}
+                    </span>
                   </button>
                 );
               })}
@@ -848,7 +881,6 @@ function AdminMenuOptionConnectInner() {
                             />
                             <span className="menuMeta">
                               <span className="menuName">{menu.name}</span>
-                              <span className="muted">고객 주문 화면에 이 옵션을 표시할 메뉴입니다.</span>
                             </span>
                           </span>
                           <span className={`statusBadge ${isLinked ? "statusLinked" : "statusUnlinked"}`}>
@@ -861,12 +893,8 @@ function AdminMenuOptionConnectInner() {
                 )}
 
                 <div className="actions">
-                  <h3 className="cardTitle">③ 연결 내용 확인</h3>
                   <div className="actionSummary">
-                    <span>선택한 옵션: <b>{selectedGroup.name}</b></span>
-                    <span>선택한 메뉴: <b>{selectedMenuIds.length}개</b></span>
-                    <span>변경 결과: 선택한 메뉴에 이 공통옵션이 고객 주문 화면에 표시됩니다.</span>
-                    <span className="muted">빠른 연결은 공통옵션만 일괄 변경합니다. 전용옵션은 메뉴 상세에서 개별 설정해 주세요.</span>
+                    {selectedGroup.name} · 선택 메뉴 {selectedMenuIds.length}개
                   </div>
                   <div className="actionBtns">
                     <button
