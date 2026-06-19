@@ -44,6 +44,8 @@ type ConfirmState = {
   action: null | (() => void);
 };
 
+type MenuLinkStatusFilter = "all" | "linked" | "unlinked";
+
 type OptionTemplateItem = {
   name: string;
   priceDelta: number;
@@ -292,7 +294,7 @@ function AdminOptionsPageInner() {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [showTemplateNextStep, setShowTemplateNextStep] = useState(false);
   const [menuLinkQuery, setMenuLinkQuery] = useState("");
-  const [menuLinkStatusFilter, setMenuLinkStatusFilter] = useState<"all" | "linked" | "unlinked">("all");
+  const [menuLinkStatusFilter, setMenuLinkStatusFilter] = useState<MenuLinkStatusFilter>("all");
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([]);
 
   const toErrMsg = (e: unknown) => {
