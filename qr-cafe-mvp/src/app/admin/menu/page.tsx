@@ -213,6 +213,7 @@ function AdminMenuPageInner() {
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
+  const isEditing = Boolean(selectedId);
   const optionTabs: Array<{ key: "common" | "exclusive"; label: string }> = [
     { key: "common", label: "공통옵션" },
     { key: "exclusive", label: "전용옵션" },
@@ -2063,6 +2064,24 @@ function AdminMenuPageInner() {
           background: #eff6ff;
           color: #1e40af;
           padding: 9px 10px;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.4;
+        }
+        .optionBulkGuide {
+          margin-top: 8px;
+          border: 1px dashed #bfdbfe;
+          border-radius: 12px;
+          background: #ffffff;
+          padding: 9px 10px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .optionBulkGuideText {
+          color: var(--muted);
           font-size: 12px;
           font-weight: 850;
           line-height: 1.4;

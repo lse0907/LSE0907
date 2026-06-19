@@ -49,6 +49,8 @@ type ConfirmState = {
   action: null | (() => void);
 };
 
+type MenuLinkStatusFilter = "all" | "linked" | "unlinked";
+
 type OptionTemplateItem = {
   name: string;
   priceDelta: number;
@@ -583,6 +585,7 @@ function AdminOptionsPageInner() {
     if (!selectedGroup) return [];
     return menus.filter((m) => menuHasOptionGroup(m, selectedGroup.id));
   }, [menus, selectedGroup]);
+
   const linkedMenuNamesByGroupId = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const g of groups) {
@@ -1617,6 +1620,128 @@ function AdminOptionsPageInner() {
           align-items: center;
           flex-wrap: wrap;
           margin-top: 10px;
+        }
+        .menuConnectionCard {
+          margin-top: 12px;
+          border-top: 1px solid var(--line);
+          padding-top: 12px;
+          display: grid;
+          gap: 10px;
+        }
+        .menuConnectionHead {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .menuConnectionTitle {
+          margin: 0;
+          font-size: 14px;
+          font-weight: 950;
+        }
+        .menuConnectionSummary {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .menuConnectionTools {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+          align-items: center;
+        }
+        .menuConnectionFilters {
+          display: inline-flex;
+          gap: 6px;
+          align-items: center;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .filterChip {
+          border: 1px solid var(--line);
+          background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
+          border-radius: 999px;
+          padding: 7px 10px;
+          font-size: 12px;
+          font-weight: 950;
+          cursor: pointer;
+        }
+        .filterChipOn {
+          border-color: #111827;
+          background: #111827;
+          color: #fff;
+        }
+        .menuSelectBar {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #f8fafc;
+          padding: 9px 10px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .menuCheckLabel {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 950;
+          color: #111827;
+          cursor: pointer;
+        }
+        .menuConnectionList {
+          display: grid;
+          gap: 8px;
+          max-height: 320px;
+          overflow-y: auto;
+          padding-right: 2px;
+        }
+        .menuConnectionRow {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px 12px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 10px;
+          align-items: center;
+        }
+        .menuConnectionRowOn {
+          border-color: #bfdbfe;
+          background: #eff6ff;
+        }
+        .menuConnectionMeta {
+          min-width: 0;
+          display: grid;
+          gap: 4px;
+        }
+        .menuConnectionName {
+          font-size: 14px;
+          font-weight: 950;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .menuConnectionActions {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          border-top: 1px dashed var(--line);
+          padding-top: 10px;
+        }
+        .menuConnectionButtons {
+          display: inline-flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
         }
         .emptyItemCard,
         .emptyLinkBox {
