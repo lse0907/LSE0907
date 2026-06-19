@@ -743,7 +743,7 @@ function AdminMenuPageInner() {
       setStatus("error", "단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       return;
     }
-    setStatus("success", "초기설정 3단계(메뉴 설정)를 완료 처리했습니다.");
+    setStatus("success", "초기설정 3단계(메뉴 등록)를 완료 처리했습니다.");
   };
 
   const toggleGroup = (id: string) => {
@@ -1507,6 +1507,18 @@ function AdminMenuPageInner() {
           flex-wrap: wrap;
           margin-top: 12px;
         }
+        .menuListToolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-top: 12px;
+        }
+        .menuListActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
         .optionActionRow {
           display: flex;
           gap: 8px;
@@ -1576,10 +1588,23 @@ function AdminMenuPageInner() {
         }
         .filterRow {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 150px auto;
+          grid-template-columns: minmax(0, 1fr) minmax(118px, 150px);
           gap: 8px;
           margin-top: 10px;
           align-items: center;
+        }
+        .soldOutFilterToggle {
+          border: 1px solid var(--danger-line);
+          border-radius: 999px;
+          background: var(--danger-bg);
+          color: var(--danger-text);
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 950;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
         }
         .list {
           display: grid;
@@ -1639,6 +1664,13 @@ function AdminMenuPageInner() {
           fill: none;
           stroke-linecap: round;
           stroke-linejoin: round;
+        }
+        .menuNameLine {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
         }
         .name {
           font-weight: 900;
@@ -1708,46 +1740,22 @@ function AdminMenuPageInner() {
           font-weight: 900;
           font-size: 12px;
         }
-        .soldOutOnlyLabel {
-          font-size: 12px;
-          font-weight: 700;
-        }
-        .statusControlRow {
-          border: 1px solid var(--line);
-          border-radius: 12px;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
-          padding: 8px 10px;
-=======
-          padding: 10px;
->>>>>>> main
-          background: var(--surface-muted);
+        .soldOutCompactRow {
           display: flex;
-          justify-content: space-between;
+          justify-content: flex-end;
           align-items: center;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
-          gap: 10px;
-=======
-          gap: 12px;
->>>>>>> main
+          margin-top: 10px;
         }
         .soldOutToggle {
           display: inline-flex;
           align-items: center;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           gap: 6px;
-=======
-          gap: 7px;
->>>>>>> main
           border: 1px solid var(--danger-line);
           background: var(--danger-bg);
           color: var(--danger-text);
           border-radius: 999px;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           padding: 5px 9px;
           font-size: 12px;
-=======
-          padding: 7px 10px;
->>>>>>> main
           font-weight: 950;
           white-space: nowrap;
         }
@@ -2008,43 +2016,28 @@ function AdminMenuPageInner() {
           background: var(--surface-soft);
         }
         .sectionDivider { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-        .advancedBox {
-          margin-top: 12px;
-          padding: 12px;
-          border: 1px solid var(--line);
-          border-radius: 12px;
-          background: var(--surface-muted);
-        }
-        .advancedInput {
-          background: #fff;
-        }
         .optionSectionBox {
           margin-top: 14px;
           border: 1px solid #dbe1ea;
           border-radius: 14px;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           padding: 10px;
-=======
-          padding: 12px;
->>>>>>> main
           background: linear-gradient(180deg, #f8fafc, #ffffff);
         }
         .optionSectionHead {
           display: flex;
           justify-content: space-between;
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
           align-items: center;
           gap: 10px;
         }
-        .optionClosedBox {
-          margin-top: 6px;
+        .optionPanelToggleBtn {
+          border-color: #2563eb;
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+        .optionPanelToggleBtnOpen {
+          border-color: #cbd5e1;
+          background: #ffffff;
           color: var(--muted);
-          font-size: 12px;
-          font-weight: 800;
-          line-height: 1.4;
-=======
-          align-items: flex-start;
-          gap: 10px;
         }
         .optionClosedBox {
           margin-top: 10px;
@@ -2056,7 +2049,6 @@ function AdminMenuPageInner() {
           font-size: 12px;
           font-weight: 850;
           line-height: 1.45;
->>>>>>> main
         }
         .optionSaveGuide {
           margin-top: 8px;
@@ -2173,8 +2165,11 @@ function AdminMenuPageInner() {
           .inlineSelectRow {
             grid-template-columns: 1fr;
           }
+          .menuListToolbar {
+            align-items: flex-start;
+          }
           .filterRow {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr) minmax(112px, 140px);
           }
           .summaryGrid {
             gap: 6px;
@@ -2185,25 +2180,25 @@ function AdminMenuPageInner() {
           }
           .summaryLabel { font-size: 11px; }
           .summaryValue { font-size: 15px; }
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
-          .statusControlRow {
-            padding: 7px 8px;
-            gap: 8px;
+          .soldOutCompactRow {
+            justify-content: flex-start;
           }
           .soldOutToggle {
+            width: fit-content;
+            max-width: 100%;
             padding: 4px 8px;
-          }
-          .optionSectionHead {
-            gap: 8px;
-=======
-          .statusControlRow,
-          .optionSectionHead {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          .soldOutToggle {
             justify-content: center;
->>>>>>> main
+          }
+          .optionSectionHead {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: start;
+          }
+          .optionPanelToggleBtn {
+            justify-self: end;
+            width: fit-content;
+            max-width: 100%;
           }
           .listScroll {
             max-height: 45vh;
@@ -2249,6 +2244,11 @@ function AdminMenuPageInner() {
             height: 80px;
           }
         }
+        @media (max-width: 360px) {
+          .filterRow {
+            grid-template-columns: 1fr;
+          }
+        }
         @media (min-width: 900px) {
           .exclusiveWorkspace {
             grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.1fr);
@@ -2280,7 +2280,7 @@ function AdminMenuPageInner() {
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
               <SetupProgressBanner
-                stepLabel="초기 설정 진행 중 (3/3)"
+                stepLabel="초기 설정 진행 중 (3/4)"
                 modeLabel={setupModeLabel}
                 modeDescription={
                   setupMode === "manual"
@@ -2290,7 +2290,7 @@ function AdminMenuPageInner() {
                       : "일괄 등록 파일 업로드로 메뉴를 한 번에 등록할 수 있습니다."
                 }
                 stepGuide="판매 가능한 메뉴를 확인한 뒤 완료 버튼을 눌러주세요."
-                completeLabel="메뉴 설정 완료"
+                completeLabel="메뉴 등록 완료"
                 completeDisabled={loading || saving || readyMenuCount < 1}
                 disabledReason="가격이 있는 판매 메뉴를 카테고리에 연결하면 완료할 수 있습니다."
                 noticeText={
@@ -2436,16 +2436,30 @@ function AdminMenuPageInner() {
           <div className="card">
             <h2 className="cardTitle">메뉴 목록 ({items.length})</h2>
 
-            <div className="btnRow">
-              <button className="btn btnPrimary" onClick={onNew} disabled={saving || loading}>
-                + 새 메뉴
-              </button>
-              <button className="btn" onClick={refresh} disabled={saving || loading}>
-                새로고침
-              </button>
-              <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
-                순서 저장
-              </button>
+            <div className="menuListToolbar">
+              <div className="menuListActions">
+                <button className="btn btnPrimary" onClick={onNew} disabled={saving || loading}>
+                  + 새 메뉴
+                </button>
+                <button className="btn" onClick={refresh} disabled={saving || loading}>
+                  새로고침
+                </button>
+                <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
+                  순서 저장
+                </button>
+                <a className="btn" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                  빠른 옵션 연결
+                </a>
+              </div>
+              <label className="soldOutFilterToggle">
+                <input
+                  type="checkbox"
+                  checked={soldOutOnly}
+                  onChange={(e) => setSoldOutOnly(e.target.checked)}
+                  disabled={saving || loading}
+                />
+                품절만
+              </label>
             </div>
             <div className="filterRow">
               <input
@@ -2467,15 +2481,6 @@ function AdminMenuPageInner() {
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
-              <label className="optionRow soldOutOnlyLabel" style={{ justifyContent: "flex-end" }}>
-                <input
-                  type="checkbox"
-                  checked={soldOutOnly}
-                  onChange={(e) => setSoldOutOnly(e.target.checked)}
-                  disabled={saving || loading}
-                />
-                품절만
-              </label>
             </div>
             <p className="muted" style={{ marginTop: 8 }}>
               메뉴 항목을 개별 입력하여 등록합니다.
@@ -2513,8 +2518,9 @@ function AdminMenuPageInner() {
                     tabIndex={0}
                   >
                     <div className="menuRowHeader">
-                      <div className="name">
-                        {m.name}
+                      <div className="menuNameLine">
+                        <span className="name">{m.name}</span>
+                        <span className={`categoryChip ${m.category_id ? "" : "categoryChipWarn"}`.trim()}>{categoryName}</span>
                         {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
                       </div>
                       <span className="orderActionRow">
@@ -2552,7 +2558,6 @@ function AdminMenuPageInner() {
                     </div>
                     <div className="muted" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                       <span>{Number(m.price || 0).toLocaleString()}원</span>
-                      <span className={`categoryChip ${m.category_id ? "" : "categoryChipWarn"}`.trim()}>{categoryName}</span>
                       <span>공통 {commonCount}개 · 전용 {exclusiveCount}개</span>
                     </div>
                   </div>
@@ -2570,8 +2575,6 @@ function AdminMenuPageInner() {
           <div className="detailColumn">
             <div className="card detailFormCard">
               <h2 className="cardTitle">메뉴 상세</h2>
-              <h3 className="sectionTitle">기본정보</h3>
-
               <div className="detailTopRow">
                 <div className="field" style={{ marginTop: 0 }}>
                 <div className="label">메뉴명</div>
@@ -2610,28 +2613,19 @@ function AdminMenuPageInner() {
                 </div>
               </div>
 
-              <div className="statusControlRow" style={{ marginTop: 10 }}>
-                <div>
-                  <div className="label">판매 상태</div>
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
-                  <div className="hint">주문 화면에 품절로 표시됩니다.</div>
-=======
-                  <div className="hint">품절 선택 시 고객 주문 화면에서 품절로 표시됩니다.</div>
->>>>>>> main
-                </div>
+              <div className="soldOutCompactRow">
                 <label className="soldOutToggle">
-                  <span>품절</span>
                   <input
                     type="checkbox"
                     checked={draft.isSoldOut}
                     onChange={(e) => setDraft((prev) => ({ ...prev, isSoldOut: e.target.checked }))}
                     disabled={saving || loading}
                   />
+                  <span>품절</span>
                 </label>
               </div>
 
               <div className="field sectionDivider">
-                <h3 className="sectionTitle">이미지</h3>
                 <div className="label">메뉴 이미지</div>
                 <div className="imageUploadRow" style={{ marginTop: 4 }}>
                 {draft.image ? (
@@ -2658,19 +2652,6 @@ function AdminMenuPageInner() {
               </div>
             </div>
 
-            <div className="field advancedBox">
-              <h3 className="sectionTitle">고급 정보</h3>
-              <div className="label">메뉴 ID</div>
-              <input
-                className="input advancedInput"
-                value={draft.id}
-                onChange={(e) => setDraft((prev) => ({ ...prev, id: e.target.value }))}
-                placeholder="예: testximen-menu-0001"
-                disabled={saving || loading || isEditing}
-              />
-              <div className="hint">메뉴 ID는 자동으로 생성되며 저장 후에는 변경할 수 없습니다.</div>
-            </div>
-
             <div className="btnRow">
               <button className="btn btnPrimary" onClick={onSave} disabled={saving || loading}>
                 {saving ? "저장 중..." : "기본정보 저장"}
@@ -2691,29 +2672,21 @@ function AdminMenuPageInner() {
                 <p className="sub" style={{ marginTop: 4 }}>선택사항입니다. 메뉴 저장 후 연결해도 됩니다.</p>
               </div>
               <button
-                className="btn btnMini"
+                className={`btn btnMini optionPanelToggleBtn ${optionPanelOpen ? "optionPanelToggleBtnOpen" : ""}`}
                 type="button"
                 onClick={toggleOptionPanel}
                 disabled={saving || loading}
                 aria-expanded={optionPanelOpen}
               >
-<<<<<<< codex/investigate-vercel-error-during-updates-4mbhe0
                 {optionPanelOpen ? "옵션 닫기" : "옵션 열기"}
               </button>
             </div>
             {!optionPanelOpen ? (
-              <div className="optionClosedBox">필요할 때 공통옵션 또는 전용옵션을 연결할 수 있습니다.</div>
-=======
-                {optionPanelOpen ? "옵션 설정 닫기" : "옵션 설정 열기"}
-              </button>
-            </div>
-            {!optionPanelOpen ? (
               <div className="optionClosedBox">옵션은 메뉴별 추가 선택지입니다. 필요할 때 열어서 공통옵션 또는 전용옵션을 연결해 주세요.</div>
->>>>>>> main
             ) : null}
             {optionPanelOpen ? (
               <>
-            <div className="optionSaveGuide">옵션 변경사항은 기본정보와 별도로 저장됩니다.</div>
+            <div className="optionSaveGuide">옵션 변경사항은 기본정보와 별도로 저장됩니다. 여러 메뉴에 같은 공통옵션을 한 번에 적용하려면 메뉴 목록의 빠른 옵션 연결을 사용해 주세요.</div>
             <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
               {optionTabs.map((tab) => (
                 <button
