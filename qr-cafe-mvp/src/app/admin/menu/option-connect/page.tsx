@@ -64,6 +64,7 @@ function AdminMenuOptionConnectInner() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState(false);
+  const [connectionStepConfirmed, setConnectionStepConfirmed] = useState(false);
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"neutral" | "success" | "error">("neutral");
   const [confirmState, setConfirmState] = useState<ConfirmState>({ open: false, title: "", description: "", action: null });
@@ -99,7 +100,7 @@ function AdminMenuOptionConnectInner() {
           .select("id, name, option_group_ids")
           .eq("store_id", storeId)
           .order("created_at", { ascending: false }),
-        supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle(),
+        supabase.from("stores").select("setup_completed,setup_last_step,store_name").eq("store_id", storeId).maybeSingle(),
       ]);
 
       if (gRes.error) throw gRes.error;
@@ -110,13 +111,14 @@ function AdminMenuOptionConnectInner() {
       const nextGroups = ((gRes.data || []) as OptionGroup[]).filter((group) => (group.scope || "common") !== "exclusive");
       const nextItems = (iRes.data || []) as OptionItem[];
       const nextMenus = (mRes.data || []) as MenuSummary[];
-      const storeRow = sRes.data as { setup_completed?: boolean | null; store_name?: string | null } | null;
+      const storeRow = sRes.data as { setup_completed?: boolean | null; setup_last_step?: number | null; store_name?: string | null } | null;
 
       setGroups(nextGroups);
       setItems(nextItems);
       setMenus(nextMenus);
       setStoreName(String(storeRow?.store_name || ""));
       setSetupCompleted(Boolean(storeRow?.setup_completed));
+      setConnectionStepConfirmed(Number(storeRow?.setup_last_step || 0) >= 4 || Boolean(storeRow?.setup_completed));
       setSelectedGroupId((prev) => (prev && nextGroups.some((group) => group.id === prev) ? prev : nextGroups[0]?.id || ""));
     } catch (e: unknown) {
       console.error("[admin/menu/option-connect] refresh:", toErrMsg(e));
@@ -263,11 +265,12 @@ function AdminMenuOptionConnectInner() {
         .eq("store_id", storeId);
       if (error) throw error;
       setSetupCompleted(false);
+      setConnectionStepConfirmed(true);
       setMsgTone("success");
-      setMsg("주문 옵션 연결 확인을 완료했습니다. 초기설정 페이지에서 최종 완료를 눌러주세요.");
+      setMsg("옵션 연결 확인이 완료되었습니다. 초기설정 페이지에서 최종 완료를 진행해 주세요.");
     } catch (e: unknown) {
       setMsgTone("error");
-      setMsg(`주문 옵션 연결 확인 저장 실패: ${toErrMsg(e)}`);
+      setMsg(`옵션 연결 확인 저장 실패: ${toErrMsg(e)}`);
     } finally {
       setSaving(false);
     }
@@ -397,6 +400,44 @@ function AdminMenuOptionConnectInner() {
           margin: 0;
           font-size: 16px;
           font-weight: 950;
+        }
+        .cardIntro {
+          margin: 6px 0 0;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.45;
+        }
+        .flowGuide {
+          border: 1px solid #dbeafe;
+          background: #eff6ff;
+          color: #1e40af;
+          border-radius: 14px;
+          padding: 10px 12px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+          font-size: 13px;
+          font-weight: 900;
+          line-height: 1.4;
+        }
+        .flowSteps {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .flowStep {
+          border: 1px solid #bfdbfe;
+          background: #fff;
+          color: #1d4ed8;
+          border-radius: 999px;
+          padding: 4px 8px;
+          font-size: 12px;
+          font-weight: 950;
+          white-space: nowrap;
         }
         .muted {
           color: var(--muted);
@@ -560,14 +601,26 @@ function AdminMenuOptionConnectInner() {
           white-space: nowrap;
         }
         .actions {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 8px;
-          flex-wrap: wrap;
-          border-top: 1px dashed var(--line);
-          padding-top: 10px;
+          display: grid;
+          gap: 10px;
+          border: 1px solid #dbeafe;
+          background: #f8fbff;
+          border-radius: 14px;
+          padding: 12px;
           margin-top: 12px;
+        }
+        .actionSummary {
+          display: grid;
+          gap: 5px;
+          color: #334155;
+          font-size: 13px;
+          font-weight: 850;
+          line-height: 1.4;
+        }
+        .dangerBtn {
+          border-color: #fecaca;
+          color: #b91c1c;
+          background: #fff;
         }
         .actionBtns {
           display: inline-flex;
@@ -625,7 +678,7 @@ function AdminMenuOptionConnectInner() {
           <div>
             <h1 className="h1">빠른 옵션 연결</h1>
             <p className="sub">
-              {storeName ? `${storeName} 매장 · ` : ""}여러 메뉴에 공통옵션을 한 번에 연결합니다. 옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다.
+              {storeName ? `${storeName} 매장 · ` : ""}같은 공통옵션을 여러 메뉴에 한 번에 연결합니다. 옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다.
             </p>
           </div>
           <div className="headerActionRow">
@@ -638,11 +691,14 @@ function AdminMenuOptionConnectInner() {
 
       {!setupCompleted && storeId ? (
         <SetupProgressBanner
-          stepLabel="초기 설정 진행 중 (4/4)"
+          stepLabel="4/4 옵션 연결 확인"
           modeLabel={setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정"}
-          modeDescription="주문 옵션 연결 확인 단계입니다."
-          stepGuide="옵션이 필요한 메뉴에만 공통옵션을 연결하고 확인 완료 버튼을 눌러주세요."
-          completeLabel="주문 옵션 연결 확인 완료"
+          modeDescription="메뉴별 옵션 연결 상태를 확인하는 단계입니다."
+          stepGuide="옵션이 필요한 메뉴에 공통옵션이 연결되어 있는지 확인해 주세요."
+          completeLabel="옵션 연결 확인 완료"
+          isCompleted={connectionStepConfirmed}
+          completedLabel="옵션 연결 확인 완료"
+          completedDescription="메뉴별 옵션 연결 상태를 확인했습니다."
           completeDisabled={loading || saving || groups.length === 0 || menus.length === 0}
           disabledReason="공통옵션과 메뉴를 등록한 뒤 확인할 수 있습니다."
           noticeText="옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다."
@@ -650,6 +706,15 @@ function AdminMenuOptionConnectInner() {
           onComplete={() => void onCompleteConnectionStep()}
         />
       ) : null}
+
+      <section className="flowGuide" aria-label="빠른 옵션 연결 사용 순서">
+        <span>사용 순서</span>
+        <span className="flowSteps">
+          <span className="flowStep">① 옵션 선택</span>
+          <span className="flowStep">② 메뉴 선택</span>
+          <span className="flowStep">③ 연결 확인</span>
+        </span>
+      </section>
 
       {msg ? (
         <div className={`msgBox ${msgTone === "success" ? "msgBoxSuccess" : msgTone === "error" ? "msgBoxError" : ""}`}>
@@ -668,7 +733,8 @@ function AdminMenuOptionConnectInner() {
       ) : (
         <section className="grid">
           <div className="card">
-            <h2 className="cardTitle">공통옵션 선택 ({groups.length})</h2>
+            <h2 className="cardTitle">① 연결할 공통옵션 선택 ({groups.length})</h2>
+            <p className="cardIntro">메뉴에 함께 보여줄 공통옵션을 하나 선택하세요.</p>
             {loading ? <p className="muted" style={{ marginTop: 10 }}>옵션을 불러오는 중...</p> : null}
             {!loading && groups.length === 0 ? (
               <div className="emptyBox">
@@ -704,7 +770,7 @@ function AdminMenuOptionConnectInner() {
           </div>
 
           <div className="card">
-            <h2 className="cardTitle">메뉴 선택</h2>
+            <h2 className="cardTitle">② 적용할 메뉴 선택</h2>
             {!selectedGroup ? (
               <p className="muted" style={{ marginTop: 10 }}>공통옵션을 선택해 주세요.</p>
             ) : (
@@ -795,7 +861,13 @@ function AdminMenuOptionConnectInner() {
                 )}
 
                 <div className="actions">
-                  <div className="muted">빠른 연결은 공통옵션만 일괄 변경합니다. 전용옵션은 메뉴 상세에서 개별 설정해 주세요.</div>
+                  <h3 className="cardTitle">③ 연결 내용 확인</h3>
+                  <div className="actionSummary">
+                    <span>선택한 옵션: <b>{selectedGroup.name}</b></span>
+                    <span>선택한 메뉴: <b>{selectedMenuIds.length}개</b></span>
+                    <span>변경 결과: 선택한 메뉴에 이 공통옵션이 고객 주문 화면에 표시됩니다.</span>
+                    <span className="muted">빠른 연결은 공통옵션만 일괄 변경합니다. 전용옵션은 메뉴 상세에서 개별 설정해 주세요.</span>
+                  </div>
                   <div className="actionBtns">
                     <button
                       className="btn btnPrimary"
@@ -803,15 +875,15 @@ function AdminMenuOptionConnectInner() {
                       onClick={() => void applyConnection("connect")}
                       disabled={saving || loading || selectedMenuIds.length === 0 || groupItems.length === 0}
                     >
-                      선택 메뉴에 연결
+                      선택 메뉴에 연결하기
                     </button>
                     <button
-                      className="btn"
+                      className="btn dangerBtn"
                       type="button"
                       onClick={() => void applyConnection("disconnect")}
                       disabled={saving || loading || selectedMenuIds.length === 0}
                     >
-                      선택 메뉴 연결 해제
+                      선택 메뉴에서 이 옵션 제거
                     </button>
                   </div>
                 </div>

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
-import { setSetupStepConfirmed } from "@/app/lib/setupProgress";
+import { getSetupProgress, setSetupStepConfirmed } from "@/app/lib/setupProgress";
 import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
 
 type MenuCategory = {
@@ -47,6 +47,7 @@ function CategoriesPageInner() {
   const [copySourceStoreId, setCopySourceStoreId] = useState("");
   const [copying, setCopying] = useState(false);
   const [setupCompleted, setSetupCompleted] = useState(false);
+  const [stepConfirmed, setStepConfirmed] = useState(false);
   const [copyConfirmOpen, setCopyConfirmOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ category: MenuCategory; linkedMenuCount: number; targetCategoryId: string } | null>(null);
 
@@ -109,10 +110,14 @@ function CategoriesPageInner() {
     }
     let mounted = true;
     (async () => {
-      const { data } = await supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle();
+      const [{ data }, progress] = await Promise.all([
+        supabase.from("stores").select("setup_completed,store_name").eq("store_id", storeId).maybeSingle(),
+        getSetupProgress(storeId),
+      ]);
       if (!mounted) return;
       const row = data as { setup_completed?: boolean | null; store_name?: string | null } | null;
       setSetupCompleted(Boolean(row?.setup_completed));
+      setStepConfirmed(progress.step1);
       setStoreName(String(row?.store_name || ""));
     })();
     return () => {
@@ -471,8 +476,9 @@ function CategoriesPageInner() {
       setMsg("단계 완료 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       return;
     }
+    setStepConfirmed(true);
     setMsgTone("success");
-    setMsg("초기설정 1단계(카테고리 설정)를 완료 처리했습니다.");
+    setMsg("카테고리 확인이 완료되었습니다.");
   };
 
   return (
@@ -609,7 +615,7 @@ function CategoriesPageInner() {
       </p>
       {!setupCompleted ? (
         <SetupProgressBanner
-          stepLabel="초기 설정 진행 중 (1/4)"
+          stepLabel="1/4 카테고리 확인"
           modeLabel={setupModeLabel}
           modeDescription={
             setupMode === "manual"
@@ -618,8 +624,11 @@ function CategoriesPageInner() {
                 ? "다른 매장의 카테고리를 복사해 빠르게 시작할 수 있습니다."
                 : "일괄 등록 파일 업로드로 카테고리를 한 번에 등록할 수 있습니다."
           }
-          stepGuide="카테고리를 등록한 뒤 완료 버튼을 눌러주세요."
-          completeLabel="카테고리 설정 완료"
+          stepGuide="고객에게 보여줄 메뉴 분류를 확인해 주세요."
+          completeLabel="카테고리 확인 완료"
+          isCompleted={stepConfirmed}
+          completedLabel="카테고리 확인 완료"
+          completedDescription="메뉴 분류가 준비되었습니다. 수정했다면 다시 확인해 주세요."
           completeDisabled={loading || !hasActiveCategory || actionBusy}
           disabledReason="활성 카테고리를 1개 이상 등록하면 완료할 수 있습니다."
           noticeText={

@@ -42,10 +42,10 @@ type StepView = {
 };
 
 const stepOrder: Array<{ step: ActiveSetupStep; title: string; desc: string; href: string; noun: string }> = [
-  { step: 1, title: "카테고리 설정", desc: "메뉴를 나눌 분류를 만듭니다.", href: "/admin/categories", noun: "카테고리" },
-  { step: 2, title: "공통옵션 설정", desc: "사이즈, 온도 등 공통옵션 그룹과 항목을 만듭니다.", href: "/admin/options", noun: "옵션 항목" },
-  { step: 3, title: "메뉴 등록", desc: "판매 메뉴의 이름, 가격, 카테고리를 등록합니다.", href: "/admin/menu", noun: "판매 메뉴" },
-  { step: 4, title: "주문 옵션 연결 확인", desc: "메뉴에 필요한 공통옵션이 연결되어 있는지 확인합니다.", href: "/admin/menu/option-connect", noun: "연결 메뉴" },
+  { step: 1, title: "카테고리 확인", desc: "고객에게 보여줄 메뉴 분류를 확인합니다.", href: "/admin/categories", noun: "카테고리" },
+  { step: 2, title: "공통옵션 확인", desc: "여러 메뉴에서 함께 사용할 옵션 그룹과 항목을 확인합니다.", href: "/admin/options", noun: "옵션 항목" },
+  { step: 3, title: "메뉴 확인", desc: "판매 메뉴의 이름, 가격, 카테고리를 확인합니다.", href: "/admin/menu", noun: "판매 메뉴" },
+  { step: 4, title: "옵션 연결 확인", desc: "메뉴에 필요한 공통옵션이 연결되어 있는지 확인합니다.", href: "/admin/menu/option-connect", noun: "연결 메뉴" },
 ];
 
 const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: string; note: string }> = [
@@ -54,7 +54,7 @@ const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: 
     title: "직접 설정",
     badge: "추천",
     desc: "처음 설정할 때 추천합니다.",
-    note: "카테고리 → 공통옵션 → 메뉴 → 주문 옵션 연결 확인 순서로 마무리합니다.",
+    note: "카테고리 → 공통옵션 → 메뉴 → 옵션 연결 확인 순서로 마무리합니다.",
   },
   {
     mode: "copy",
@@ -101,10 +101,10 @@ function computeCompletedSteps(counts: SetupCounts) {
 }
 
 function progressStepLabel(step: ActiveSetupStep) {
-  if (step === 1) return "카테고리 설정";
-  if (step === 2) return "공통옵션 설정";
-  if (step === 3) return "메뉴 등록";
-  return "주문 옵션 연결 확인";
+  if (step === 1) return "카테고리 확인";
+  if (step === 2) return "공통옵션 확인";
+  if (step === 3) return "메뉴 확인";
+  return "옵션 연결 확인";
 }
 
 function getCountForStep(step: ActiveSetupStep, counts: SetupCounts) {
@@ -322,7 +322,7 @@ function AdminSetupPageInner() {
         : row.step === 3
           ? "카테고리와 옵션 항목 등록 후 진행할 수 있습니다."
           : row.step === 4
-            ? "메뉴 등록 후 옵션 연결을 확인할 수 있습니다."
+            ? "메뉴 확인 후 옵션 연결을 확인할 수 있습니다."
             : "";
     const statusLabel = row.step === 4
       ? locked
@@ -346,9 +346,9 @@ function AdminSetupPageInner() {
       : locked
         ? "대기 중"
         : confirmed
-          ? "수정/확인"
+          ? "다시 확인"
           : dataReady
-            ? "확인/완료"
+            ? "확인하기"
             : "등록하기";
     const statusClass = locked ? "locked" : confirmed ? "done" : "need";
     return { ...row, count, dataReady, confirmed, locked, lockReason, statusLabel, statusClass, buttonLabel };
@@ -358,10 +358,10 @@ function AdminSetupPageInner() {
   if (counts.categories < 1) missingRequirements.push("카테고리를 1개 이상 등록해 주세요.");
   if (!hasOptionSetupReady(counts)) missingRequirements.push("옵션 그룹과 항목을 1개 이상 등록해 주세요.");
   if (!hasMenuSetupReady(counts)) missingRequirements.push("가격이 있는 판매 메뉴를 카테고리에 연결해 주세요.");
-  if (counts.categories >= 1 && !progressConfirm.step1) missingRequirements.push("카테고리 설정 완료 버튼을 눌러주세요.");
-  if (hasOptionSetupReady(counts) && !progressConfirm.step2) missingRequirements.push("공통옵션 설정 완료 버튼을 눌러주세요.");
-  if (hasMenuSetupReady(counts) && !progressConfirm.step3) missingRequirements.push("메뉴 등록 완료 버튼을 눌러주세요.");
-  if (hasMenuSetupReady(counts) && !optionConnectionReviewed) missingRequirements.push("주문 옵션 연결 확인 단계를 확인해 주세요.");
+  if (counts.categories >= 1 && !progressConfirm.step1) missingRequirements.push("카테고리 확인을 완료해 주세요.");
+  if (hasOptionSetupReady(counts) && !progressConfirm.step2) missingRequirements.push("공통옵션 확인을 완료해 주세요.");
+  if (hasMenuSetupReady(counts) && !progressConfirm.step3) missingRequirements.push("메뉴 확인을 완료해 주세요.");
+  if (hasMenuSetupReady(counts) && !optionConnectionReviewed) missingRequirements.push("옵션 연결 확인을 완료해 주세요.");
   const canFinalize = missingRequirements.length === 0;
 
   const nextStep = stepViews.find((step) => !step.locked && (!step.dataReady || !step.confirmed)) || stepViews[3];
@@ -372,14 +372,14 @@ function AdminSetupPageInner() {
         ? "옵션 그룹을 1개 이상 등록해 주세요."
         : nextStep.step === 3
           ? "메뉴를 1개 이상 등록해 주세요."
-          : "메뉴별 주문 옵션 연결 상태를 확인해 주세요.";
+          : "메뉴별 옵션 연결 상태를 확인해 주세요.";
   const nextActionText = isCompleted
     ? "초기 설정이 완료되었습니다. 이후에도 수정할 수 있습니다."
     : !nextStep.dataReady
       ? nextRegisterPrompt
       : !nextStep.confirmed
-        ? `${nextStep.title}에서 확인 후 완료 버튼을 눌러주세요.`
-        : "모든 데이터가 준비되었습니다. 최종 완료해 주세요.";
+        ? `${nextStep.title}을 완료해 주세요.`
+        : "모든 단계 확인이 끝났습니다. 초기설정을 완료해 주세요.";
 
   const onSkipForNow = async () => {
     if (!storeId) return router.push("/admin");
@@ -535,7 +535,7 @@ function AdminSetupPageInner() {
                     {row.locked ? <p className="warnText">{row.lockReason}</p> : null}
                     {!row.locked && row.dataReady && !row.confirmed ? (
                       <p className="warnText">
-                        {row.step === 4 ? "옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다. 연결 상태만 확인해 주세요." : "등록 후 완료 버튼을 눌러주세요."}
+                        {row.step === 4 ? "옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다. 연결 상태만 확인해 주세요." : "확인을 완료해 주세요."}
                       </p>
                     ) : null}
                   </div>
@@ -561,14 +561,14 @@ function AdminSetupPageInner() {
                 ))}
               </div>
             ) : (
-              <div className="successBox" role="status">모든 설정이 확인되었습니다. 완료 후 관리자 홈으로 이동합니다.</div>
+              <div className="successBox" role="status">모든 설정이 확인되었습니다. 초기설정을 완료하면 관리자 홈으로 이동합니다.</div>
             )}
             <div className="actions">
               <button className="ghostBtn" disabled={saving} onClick={onSkipForNow}>
                 관리자 홈으로 나가기
               </button>
               <button className="primaryBtn" disabled={saving || isCompleted || !canFinalize} onClick={() => setConfirmOpen(true)}>
-                {isCompleted ? "초기 설정 완료됨" : "초기 설정 완료"}
+                {isCompleted ? "초기 설정 완료됨" : "초기설정 완료하기"}
               </button>
             </div>
           </section>
@@ -579,7 +579,7 @@ function AdminSetupPageInner() {
                 <div>
                   <p className="eyebrow">최종 완료</p>
                   <h3 id="setup-confirm-title">초기 설정을 완료할까요?</h3>
-                  <p className="muted">완료 후 관리자 홈으로 이동합니다. 메뉴 설정은 나중에도 수정할 수 있습니다.</p>
+                  <p className="muted">완료 후 관리자 홈으로 이동합니다. 설정 내용은 나중에도 수정할 수 있습니다.</p>
                 </div>
                 <div className="countGrid">
                   <div><span>카테고리</span><strong>{counts.categories}개</strong></div>
@@ -596,7 +596,7 @@ function AdminSetupPageInner() {
                 <div className="actions modalActions">
                   <button className="ghostBtn" disabled={saving} onClick={closeConfirm}>계속 수정하기</button>
                   <button className="primaryBtn" disabled={saving || !canFinalize} onClick={onComplete}>
-                    {saving ? "완료 처리 중..." : "완료하고 이동"}
+                    {saving ? "완료 중..." : "초기설정 완료하기"}
                   </button>
                 </div>
               </div>

@@ -382,7 +382,7 @@ function AdminPageInner() {
         <div className="setupBanner" role="status" aria-live="polite">
           <div>
             <strong>이 매장은 초기 설정이 완료되지 않았습니다.</strong>
-            <div className="muted">카테고리/공통옵션/메뉴 등록과 주문 옵션 연결 확인을 마무리해 주세요.</div>
+            <div className="muted">카테고리/공통옵션/메뉴 확인과 옵션 연결 확인을 마무리해 주세요.</div>
             {selectedStoreCounts ? (
               <div className="muted">현재 진행 단계: {selectedStoreCompletedSteps}/4</div>
             ) : null}
@@ -771,9 +771,9 @@ body {
   border-color:#93c5fd;
 }
 .btnBilling{
-  background:#047857;
+  background:#1f2937;
   color:#fff;
-  border-color:#047857;
+  border-color:#1f2937;
 }
 .btnSmall{
   padding:8px 11px;
