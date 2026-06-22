@@ -185,7 +185,7 @@ function AdminMenuPageInner() {
   const [pendingOptionTab, setPendingOptionTab] = useState<"common" | "exclusive" | null>(null);
   const [optionPanelOpen, setOptionPanelOpen] = useState(false);
   const [pendingOptionPanelClose, setPendingOptionPanelClose] = useState(false);
-  const [commonGroupToAdd, setCommonGroupToAdd] = useState("");
+  const [commonGroupIdsToAdd, setCommonGroupIdsToAdd] = useState<string[]>([]);
   const [newExclusiveGroup, setNewExclusiveGroup] = useState({
     name: "",
     max: "1",
@@ -460,6 +460,7 @@ function AdminMenuPageInner() {
       setCommonDirty(false);
       setExclusiveDirty(false);
       setPendingOptionTab(null);
+      setCommonGroupIdsToAdd([]);
       setOptionTab("common");
       return;
     }
@@ -487,6 +488,7 @@ function AdminMenuPageInner() {
     setCommonDirty(false);
     setExclusiveDirty(false);
     setPendingOptionTab(null);
+    setCommonGroupIdsToAdd([]);
     setOptionTab("common");
   }, [items, selectedId, optionPrices, optionExclusions]);
 
@@ -522,6 +524,7 @@ function AdminMenuPageInner() {
     setCommonDirty(false);
     setExclusiveDirty(false);
     setPendingOptionTab(null);
+    setCommonGroupIdsToAdd([]);
   };
 
   const onSave = async () => {
@@ -1297,14 +1300,21 @@ function AdminMenuPageInner() {
     });
   };
 
-  const addCommonGroup = () => {
-    if (!commonGroupToAdd) return;
+  const toggleCommonGroupToAdd = (groupId: string) => {
+    setCommonGroupIdsToAdd((prev) =>
+      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId]
+    );
+  };
+
+  const addCommonGroups = () => {
+    const idsToAdd = commonGroupIdsToAdd.filter((id) => unselectedCommonGroups.some((group) => group.id === id));
+    if (idsToAdd.length === 0) return;
     setCommonDirty(true);
-    setDraft((prev) => {
-      if (prev.optionGroupIds.includes(commonGroupToAdd)) return prev;
-      return { ...prev, optionGroupIds: [...prev.optionGroupIds, commonGroupToAdd] };
-    });
-    setCommonGroupToAdd("");
+    setDraft((prev) => ({
+      ...prev,
+      optionGroupIds: Array.from(new Set([...prev.optionGroupIds, ...idsToAdd])),
+    }));
+    setCommonGroupIdsToAdd([]);
   };
 
   const onUploadMenuImage = async (file: File | null) => {
@@ -1836,6 +1846,40 @@ function AdminMenuPageInner() {
           display: grid;
           gap: 8px;
         }
+        .commonGroupPickerHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .commonGroupPicker {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .commonGroupChoice {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 44px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          padding: 9px 10px;
+          background: var(--surface);
+          cursor: pointer;
+        }
+        .commonGroupChoice input {
+          width: 18px;
+          height: 18px;
+          accent-color: var(--primary);
+          flex: 0 0 auto;
+        }
+        .commonGroupChoiceText {
+          display: grid;
+          gap: 2px;
+          min-width: 0;
+        }
         .groupOptionDetail {
           border: 1px dashed var(--line);
           border-radius: 10px;
@@ -2229,6 +2273,9 @@ function AdminMenuPageInner() {
             grid-template-columns: 1fr;
           }
           .inlineSelectRow {
+            grid-template-columns: 1fr;
+          }
+          .commonGroupPicker {
             grid-template-columns: 1fr;
           }
           .menuListToolbar {
@@ -2791,25 +2838,37 @@ function AdminMenuPageInner() {
               <div className="field">
                 <div className="label">공통옵션</div>
                 <div className="optionConnectCard">
-                <div className="inlineSelectRow">
-                  <select
-                    className="input"
-                    style={{ minWidth: 220, maxWidth: 420 }}
-                    value={commonGroupToAdd}
-                    onChange={(e) => setCommonGroupToAdd(e.target.value)}
-                    disabled={saving || loading || unselectedCommonGroups.length === 0}
+                <div className="commonGroupPickerHead">
+                  <span className="muted">추가할 공통옵션을 선택해 주세요.</span>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={addCommonGroups}
+                    disabled={saving || loading || commonGroupIdsToAdd.length === 0}
                   >
-                    <option value="">추가할 공통옵션 그룹 선택</option>
-                    {unselectedCommonGroups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name} · {getGroupPolicyText(g)}
-                      </option>
-                    ))}
-                  </select>
-                  <button className="btn" type="button" onClick={addCommonGroup} disabled={saving || loading || !commonGroupToAdd}>
-                    옵션 연결
+                    선택 연결
                   </button>
                 </div>
+                {unselectedCommonGroups.length === 0 ? (
+                  <div className="muted">추가할 공통옵션이 없습니다.</div>
+                ) : (
+                  <div className="commonGroupPicker" role="group" aria-label="추가할 공통옵션 그룹 선택">
+                    {unselectedCommonGroups.map((g) => (
+                      <label key={g.id} className="commonGroupChoice">
+                        <input
+                          type="checkbox"
+                          checked={commonGroupIdsToAdd.includes(g.id)}
+                          onChange={() => toggleCommonGroupToAdd(g.id)}
+                          disabled={saving || loading}
+                        />
+                        <span className="commonGroupChoiceText">
+                          <span className="name">{g.name}</span>
+                          <span className="muted">{getGroupPolicyText(g)}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
 
                 {selectedCommonGroups.length === 0 ? (
                   <div className="muted">아직 연결된 공통옵션이 없습니다.</div>
