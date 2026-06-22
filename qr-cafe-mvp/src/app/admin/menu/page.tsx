@@ -2894,80 +2894,78 @@ function AdminMenuPageInner() {
                 {selectedCommonGroups.length === 0 ? (
                   <div className="muted">아직 연결된 공통옵션이 없습니다.</div>
                 ) : (
-                  <>
-                    <div className="optionGrid">
-                      {selectedCommonGroups.map((group) => {
-                        const groupOptions = itemsByGroup.get(group.id) || [];
-                        return (
-                          <div className="groupOptionDetail" key={group.id}>
-                            <div className="groupOptionItem">
-                              <div className="name" style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                                <span>{group.name}</span>
-                                <span className={`policyBadge ${group.required ? "policyBadgeRequired" : ""}`.trim()}>{getGroupPolicyText(group)}</span>
-                              </div>
-                              <button className="btn btnDanger btnMini" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
-                                연결해제
-                              </button>
+                  <div className="optionGrid">
+                    {selectedCommonGroups.map((group) => {
+                      const groupOptions = itemsByGroup.get(group.id) || [];
+                      return (
+                        <div className="groupOptionDetail" key={group.id}>
+                          <div className="groupOptionItem">
+                            <div className="name" style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                              <span>{group.name}</span>
+                              <span className={`policyBadge ${group.required ? "policyBadgeRequired" : ""}`.trim()}>{getGroupPolicyText(group)}</span>
                             </div>
-                            {groupOptions.length === 0 ? (
-                              <div className="muted">옵션 항목이 없습니다.</div>
-                            ) : (
-                              groupOptions.map((item) => (
-                                <div key={item.id} className="groupOptionItem groupOptionValueRow">
-                                  <span className="optionItemLeft">
-                                    <span className="optionItemText">{item.name}</span>
-                                  </span>
-                                  <span className="optionItemControlRow">
-                                    <input
-                                      className="input"
-                                      style={{ maxWidth: 120 }}
-                                      inputMode="numeric"
-                                      value={getOptionPrice(item)}
-                                      onChange={(e) =>
-                                        {
-                                          setCommonDirty(true);
-                                          setDraft((prev) => ({
-                                            ...prev,
-                                            optionPriceByItem: {
-                                              ...prev.optionPriceByItem,
-                                              [item.id]: e.target.value,
-                                            },
-                                          }));
-                                        }
-                                      }
-                                      disabled={saving || loading}
-                                    />
-                                    <label className="optionRow optionExcludeLabel" style={{ gap: 4 }}>
-                                      <input
-                                        type="checkbox"
-                                        checked={isExcludedCommonItem(item.id)}
-                                        onChange={() => {
-                                          setCommonDirty(true);
-                                          toggleExcludeCommonItem(item.id);
-                                        }}
-                                        disabled={saving || loading || !hasExclusionTable}
-                                      />
-                                      제외
-                                    </label>
-                                  </span>
-                                </div>
-                              ))
-                            )}
+                            <button className="btn btnDanger btnMini" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
+                              연결해제
+                            </button>
                           </div>
-                        );
-                      })}
-                    </div>
-                    <div className="optionActionRow">
-                      <button className="btn btnPrimary" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading}>
-                        공통옵션 저장
-                      </button>
-                    </div>
-                    {!hasExclusionTable ? (
-                      <div className="hint">제외 기능은 DB SQL 적용 후 활성화됩니다.</div>
-                    ) : (
-                      <div className="hint">체크한 항목은 이 메뉴에서만 숨김 처리됩니다.</div>
-                    )}
-                  </>
+                          {groupOptions.length === 0 ? (
+                            <div className="muted">옵션 항목이 없습니다.</div>
+                          ) : (
+                            groupOptions.map((item) => (
+                              <div key={item.id} className="groupOptionItem groupOptionValueRow">
+                                <span className="optionItemLeft">
+                                  <span className="optionItemText">{item.name}</span>
+                                </span>
+                                <span className="optionItemControlRow">
+                                  <input
+                                    className="input"
+                                    style={{ maxWidth: 120 }}
+                                    inputMode="numeric"
+                                    value={getOptionPrice(item)}
+                                    onChange={(e) =>
+                                      {
+                                        setCommonDirty(true);
+                                        setDraft((prev) => ({
+                                          ...prev,
+                                          optionPriceByItem: {
+                                            ...prev.optionPriceByItem,
+                                            [item.id]: e.target.value,
+                                          },
+                                        }));
+                                      }
+                                    }
+                                    disabled={saving || loading}
+                                  />
+                                  <label className="optionRow optionExcludeLabel" style={{ gap: 4 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isExcludedCommonItem(item.id)}
+                                      onChange={() => {
+                                        setCommonDirty(true);
+                                        toggleExcludeCommonItem(item.id);
+                                      }}
+                                      disabled={saving || loading || !hasExclusionTable}
+                                    />
+                                    제외
+                                  </label>
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="optionActionRow">
+                  <button className="btn btnPrimary" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading || !commonDirty}>
+                    공통옵션 저장
+                  </button>
+                </div>
+                {!hasExclusionTable ? (
+                  <div className="hint">제외 기능은 DB SQL 적용 후 활성화됩니다.</div>
+                ) : (
+                  <div className="hint">체크한 항목은 이 메뉴에서만 숨김 처리됩니다.</div>
                 )}
                 </div>
               </div>
