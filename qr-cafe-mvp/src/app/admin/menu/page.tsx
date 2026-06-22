@@ -398,6 +398,7 @@ function AdminMenuPageInner() {
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}&target=menus` : "?target=menus"}`;
   const categoryNameById = new Map(categories.map((cat) => [cat.id, cat.name]));
   const uncategorizedMenuCount = items.filter((item) => !item.category_id).length;
+  const unlinkedOptionMenuCount = items.filter((item) => !Array.isArray(item.option_group_ids) || item.option_group_ids.length === 0).length;
   const soldOutMenuCount = items.filter((item) => Boolean(item.is_sold_out)).length;
 
   const onCopyMenus = async () => {
@@ -1447,6 +1448,10 @@ function AdminMenuPageInner() {
           border-color: #fde68a;
           background: linear-gradient(180deg, #fffbeb, #ffffff);
         }
+        .summaryItemInfo {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        }
         .summaryLabel {
           color: var(--muted);
           font-size: 12px;
@@ -1464,11 +1469,18 @@ function AdminMenuPageInner() {
           border-color: #fde68a;
           background: linear-gradient(180deg, #fffbeb, #ffffff);
         }
+        .optionUnlinkedNotice {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        }
         .noticeTitle {
           margin: 0;
           color: #92400e;
           font-size: 15px;
           font-weight: 950;
+        }
+        .optionUnlinkedNotice .noticeTitle {
+          color: #1d4ed8;
         }
         .grid {
           display: grid;
@@ -1712,6 +1724,18 @@ function AdminMenuPageInner() {
           border-color: #fde68a;
           background: #fffbeb;
           color: #92400e;
+        }
+        .optionEmptyChip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2px 8px;
+          border-radius: 999px;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+          font-size: 11px;
+          font-weight: 950;
         }
         .field {
           display: grid;
@@ -2447,6 +2471,10 @@ function AdminMenuPageInner() {
                 <span className="summaryLabel">미분류</span>
                 <strong className="summaryValue">{uncategorizedMenuCount}</strong>
               </div>
+              <div className={`summaryItem ${unlinkedOptionMenuCount > 0 ? "summaryItemInfo" : ""}`.trim()}>
+                <span className="summaryLabel">옵션 미연결</span>
+                <strong className="summaryValue">{unlinkedOptionMenuCount}</strong>
+              </div>
               <div className="summaryItem">
                 <span className="summaryLabel">품절</span>
                 <strong className="summaryValue">{soldOutMenuCount}</strong>
@@ -2458,6 +2486,18 @@ function AdminMenuPageInner() {
             <section className="card uncategorizedNotice">
               <h2 className="noticeTitle">카테고리 연결이 필요한 메뉴가 있습니다.</h2>
               <p className="sub" style={{ marginTop: 6 }}>미분류 메뉴를 선택해 카테고리를 지정해 주세요.</p>
+            </section>
+          ) : null}
+
+          {unlinkedOptionMenuCount > 0 ? (
+            <section className="card optionUnlinkedNotice">
+              <h2 className="noticeTitle">옵션 미연결 메뉴가 있습니다.</h2>
+              <p className="sub" style={{ marginTop: 6 }}>공통옵션은 빠른 옵션 연결에서 한 번에 설정할 수 있습니다.</p>
+              <div className="btnRow" style={{ marginTop: 10 }}>
+                <a className="btn" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                  빠른 옵션 연결
+                </a>
+              </div>
             </section>
           ) : null}
 
@@ -2476,9 +2516,6 @@ function AdminMenuPageInner() {
                 <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
                   순서 저장
                 </button>
-                <a className="btn" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                  빠른 옵션 연결
-                </a>
               </div>
               <label className="soldOutFilterToggle">
                 <input
@@ -2550,6 +2587,7 @@ function AdminMenuPageInner() {
                       <div className="menuNameLine">
                         <span className="name">{m.name}</span>
                         <span className={`categoryChip ${m.category_id ? "" : "categoryChipWarn"}`.trim()}>{categoryName}</span>
+                        {groupIds.length === 0 ? <span className="optionEmptyChip">옵션 없음</span> : null}
                         {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
                       </div>
                       <span className="orderActionRow">
@@ -2715,7 +2753,7 @@ function AdminMenuPageInner() {
             ) : null}
             {optionPanelOpen ? (
               <>
-            <div className="optionSaveGuide">옵션 변경사항은 기본정보와 별도로 저장됩니다. 여러 메뉴에 같은 공통옵션을 한 번에 적용하려면 메뉴 목록의 빠른 옵션 연결을 사용해 주세요.</div>
+            <div className="optionSaveGuide">옵션은 별도로 저장됩니다. 공통옵션은 빠른 옵션 연결에서 한 번에 설정할 수 있습니다.</div>
             <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
               {optionTabs.map((tab) => (
                 <button
