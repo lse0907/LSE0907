@@ -994,17 +994,17 @@ function AdminMenuPageInner() {
     if (!storeId) return false;
     const menuId = draft.id.trim();
     if (!menuId) {
-      setStatus("error", "메뉴를 먼저 저장한 뒤 단가를 수정해주세요.");
+      setStatus("error", "메뉴 기본정보를 먼저 저장해 주세요.");
+      return false;
+    }
+    if (!items.some((item) => item.id === menuId)) {
+      setStatus("error", "메뉴 기본정보를 먼저 저장해 주세요.");
       return false;
     }
 
     const commonItemIds = selectedCommonGroups.flatMap((group) =>
       (itemsByGroup.get(group.id) || []).map((item) => item.id)
     );
-    if (commonItemIds.length === 0) {
-      setStatus("neutral", "저장할 공통옵션 항목이 없습니다.");
-      return false;
-    }
     const invalidCommonItem = commonItemIds.find((optionItemId) => {
       const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
       return !isWholeNumberString(raw);
@@ -1022,40 +1022,57 @@ function AdminMenuPageInner() {
     setSaving(true);
     clearStatus();
     try {
-      const rows = commonItemIds.map((optionItemId) => ({
-        store_id: storeId,
-        menu_id: menuId,
-        option_item_id: optionItemId,
-        price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
-      }));
+      const filteredGroups = draft.optionGroupIds.filter((gid) => {
+        const group = groups.find((g) => g.id === gid);
+        if (!group) return false;
+        if (group.scope !== "exclusive") return true;
+        return !group.linked_menu_id || group.linked_menu_id === menuId;
+      });
 
-      const { error } = await supabase
-        .from("menu_option_prices")
-        .upsert(rows, { onConflict: "store_id,menu_id,option_item_id" });
-      if (error) throw error;
+      const menuUpdate = await supabase
+        .from("menu_items")
+        .update({ option_group_ids: filteredGroups })
+        .eq("store_id", storeId)
+        .eq("id", menuId);
+      if (menuUpdate.error) throw menuUpdate.error;
 
-      if (hasExclusionTable) {
-        const delRes = await supabase
-          .from("menu_option_item_exclusions")
-          .delete()
-          .eq("store_id", storeId)
-          .eq("menu_id", menuId)
-          .in("option_item_id", commonItemIds);
-        if (delRes.error) throw delRes.error;
+      if (commonItemIds.length > 0) {
+        const rows = commonItemIds.map((optionItemId) => ({
+          store_id: storeId,
+          menu_id: menuId,
+          option_item_id: optionItemId,
+          price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
+        }));
 
-        if (selectedExcluded.length > 0) {
-          const insertRows = selectedExcluded.map((optionItemId) => ({
-            store_id: storeId,
-            menu_id: menuId,
-            option_item_id: optionItemId,
-          }));
-          const insRes = await supabase.from("menu_option_item_exclusions").insert(insertRows);
-          if (insRes.error) throw insRes.error;
+        const { error } = await supabase
+          .from("menu_option_prices")
+          .upsert(rows, { onConflict: "store_id,menu_id,option_item_id" });
+        if (error) throw error;
+
+        if (hasExclusionTable) {
+          const delRes = await supabase
+            .from("menu_option_item_exclusions")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("menu_id", menuId)
+            .in("option_item_id", commonItemIds);
+          if (delRes.error) throw delRes.error;
+
+          if (selectedExcluded.length > 0) {
+            const insertRows = selectedExcluded.map((optionItemId) => ({
+              store_id: storeId,
+              menu_id: menuId,
+              option_item_id: optionItemId,
+            }));
+            const insRes = await supabase.from("menu_option_item_exclusions").insert(insertRows);
+            if (insRes.error) throw insRes.error;
+          }
         }
       }
 
       await refresh();
-      setStatus("success", "공통옵션 단가/제외 항목을 저장했습니다.");
+      setDraft((prev) => ({ ...prev, optionGroupIds: filteredGroups }));
+      setStatus("success", "공통옵션 연결을 저장했습니다.");
       setCommonDirty(false);
       return true;
     } catch (e: unknown) {
@@ -2516,9 +2533,6 @@ function AdminMenuPageInner() {
                 <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
                   순서 저장
                 </button>
-                <a className="btn" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                  빠른 옵션 연결
-                </a>
               </div>
               <label className="soldOutFilterToggle">
                 <input
@@ -2590,6 +2604,7 @@ function AdminMenuPageInner() {
                       <div className="menuNameLine">
                         <span className="name">{m.name}</span>
                         <span className={`categoryChip ${m.category_id ? "" : "categoryChipWarn"}`.trim()}>{categoryName}</span>
+                        {groupIds.length === 0 ? <span className="optionEmptyChip">옵션 없음</span> : null}
                         {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
                       </div>
                       <span className="orderActionRow">
@@ -2755,7 +2770,7 @@ function AdminMenuPageInner() {
             ) : null}
             {optionPanelOpen ? (
               <>
-            <div className="optionSaveGuide">옵션 변경사항은 기본정보와 별도로 저장됩니다. 여러 메뉴에 같은 공통옵션을 한 번에 적용하려면 메뉴 목록의 빠른 옵션 연결을 사용해 주세요.</div>
+            <div className="optionSaveGuide">옵션은 별도로 저장됩니다. 공통옵션은 빠른 옵션 연결에서 한 번에 설정할 수 있습니다.</div>
             <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
               {optionTabs.map((tab) => (
                 <button
