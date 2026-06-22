@@ -45,7 +45,7 @@ const stepOrder: Array<{ step: ActiveSetupStep; title: string; desc: string; hre
   { step: 1, title: "카테고리 확인", desc: "고객에게 보여줄 메뉴 분류를 확인합니다.", href: "/admin/categories", noun: "카테고리" },
   { step: 2, title: "공통옵션 확인", desc: "여러 메뉴에서 함께 사용할 옵션 그룹과 항목을 확인합니다.", href: "/admin/options", noun: "옵션 항목" },
   { step: 3, title: "메뉴 확인", desc: "판매 메뉴의 이름, 가격, 카테고리를 확인합니다.", href: "/admin/menu", noun: "판매 메뉴" },
-  { step: 4, title: "옵션 연결 확인", desc: "메뉴에 필요한 공통옵션이 연결되어 있는지 확인합니다.", href: "/admin/menu/option-connect", noun: "연결 메뉴" },
+  { step: 4, title: "옵션 연결 확인", desc: "필요한 메뉴에 공통옵션이 연결되어 있는지 확인합니다.", href: "/admin/menu/option-connect", noun: "연결 메뉴" },
 ];
 
 const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: string; note: string }> = [
@@ -172,7 +172,7 @@ function AdminSetupPageInner() {
       setDbCompleted(!!row.setup_completed);
       if (row.setup_completed) {
         setLastStep(4);
-      } else if (step >= 1 && step <= 3) {
+      } else if (step >= 1 && step <= 4) {
         setLastStep(step as SetupStep);
       } else {
         setLastStep(0);

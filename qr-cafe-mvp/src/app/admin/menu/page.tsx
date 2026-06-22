@@ -2577,10 +2577,10 @@ function AdminMenuPageInner() {
           {unlinkedOptionMenuCount > 0 ? (
             <section className="card optionUnlinkedNotice">
               <h2 className="noticeTitle">옵션 미연결 메뉴가 있습니다.</h2>
-              <p className="sub" style={{ marginTop: 6 }}>공통옵션은 빠른 옵션 연결에서 한 번에 설정할 수 있습니다.</p>
+              <p className="sub" style={{ marginTop: 6 }}>공통옵션은 옵션 연결 확인에서 한 번에 설정할 수 있습니다.</p>
               <div className="btnRow" style={{ marginTop: 10 }}>
                 <a className="btn" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                  빠른 옵션 연결
+                  옵션 연결 확인
                 </a>
               </div>
             </section>
@@ -2838,7 +2838,7 @@ function AdminMenuPageInner() {
             ) : null}
             {optionPanelOpen ? (
               <>
-            <div className="optionSaveGuide">옵션은 별도로 저장됩니다. 공통옵션은 빠른 옵션 연결에서 한 번에 설정할 수 있습니다.</div>
+            <div className="optionSaveGuide">옵션은 별도로 저장됩니다. 공통옵션은 옵션 연결 확인에서 한 번에 설정할 수 있습니다.</div>
             <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
               {optionTabs.map((tab) => (
                 <button
