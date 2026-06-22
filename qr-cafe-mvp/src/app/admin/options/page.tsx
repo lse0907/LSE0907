@@ -49,6 +49,8 @@ type ConfirmState = {
   action: null | (() => void);
 };
 
+type MenuLinkStatusFilter = "all" | "linked" | "unlinked";
+
 type OptionTemplateItem = {
   name: string;
   priceDelta: number;
@@ -583,6 +585,7 @@ function AdminOptionsPageInner() {
     if (!selectedGroup) return [];
     return menus.filter((m) => menuHasOptionGroup(m, selectedGroup.id));
   }, [menus, selectedGroup]);
+
   const linkedMenuNamesByGroupId = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const g of groups) {

@@ -138,6 +138,9 @@ export default function SetupProgressBanner({
           color: #0f172a;
           font-weight: 900;
         }
+        .setupBannerDone .guide {
+          color: #14532d;
+        }
         .btnCol {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
