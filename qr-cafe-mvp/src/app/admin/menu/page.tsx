@@ -2516,6 +2516,9 @@ function AdminMenuPageInner() {
                 <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
                   순서 저장
                 </button>
+                <a className="btn" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                  빠른 옵션 연결
+                </a>
               </div>
               <label className="soldOutFilterToggle">
                 <input
@@ -2587,7 +2590,6 @@ function AdminMenuPageInner() {
                       <div className="menuNameLine">
                         <span className="name">{m.name}</span>
                         <span className={`categoryChip ${m.category_id ? "" : "categoryChipWarn"}`.trim()}>{categoryName}</span>
-                        {groupIds.length === 0 ? <span className="optionEmptyChip">옵션 없음</span> : null}
                         {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
                       </div>
                       <span className="orderActionRow">
@@ -2753,7 +2755,7 @@ function AdminMenuPageInner() {
             ) : null}
             {optionPanelOpen ? (
               <>
-            <div className="optionSaveGuide">옵션은 별도로 저장됩니다. 공통옵션은 빠른 옵션 연결에서 한 번에 설정할 수 있습니다.</div>
+            <div className="optionSaveGuide">옵션 변경사항은 기본정보와 별도로 저장됩니다. 여러 메뉴에 같은 공통옵션을 한 번에 적용하려면 메뉴 목록의 빠른 옵션 연결을 사용해 주세요.</div>
             <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
               {optionTabs.map((tab) => (
                 <button
