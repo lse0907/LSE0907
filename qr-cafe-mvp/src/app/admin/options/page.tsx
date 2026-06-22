@@ -33,6 +33,11 @@ type MenuSummary = {
   name: string;
   option_group_ids?: string[] | null;
 };
+
+function menuHasOptionGroup(menu: MenuSummary, groupId: string) {
+  return Array.isArray(menu.option_group_ids) && menu.option_group_ids.includes(groupId);
+}
+
 type MyStore = {
   store_id: string;
   store_name: string | null;
@@ -43,6 +48,8 @@ type ConfirmState = {
   description: string;
   action: null | (() => void);
 };
+
+type MenuLinkStatusFilter = "all" | "linked" | "unlinked";
 
 type OptionTemplateItem = {
   name: string;
@@ -576,16 +583,13 @@ function AdminOptionsPageInner() {
   // 빠른 옵션 연결 검색/필터 상태는 /admin/menu/option-connect 전용 페이지에서만 관리합니다.
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
-    return menus.filter((m) =>
-      Array.isArray(m.option_group_ids) ? m.option_group_ids.includes(selectedGroup.id) : false
-    );
+    return menus.filter((m) => menuHasOptionGroup(m, selectedGroup.id));
   }, [menus, selectedGroup]);
+
   const linkedMenuNamesByGroupId = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const g of groups) {
-      map[g.id] = menus
-        .filter((m) => (Array.isArray(m.option_group_ids) ? m.option_group_ids.includes(g.id) : false))
-        .map((m) => m.name);
+      map[g.id] = menus.filter((m) => menuHasOptionGroup(m, g.id)).map((m) => m.name);
     }
     return map;
   }, [groups, menus]);
