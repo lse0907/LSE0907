@@ -1855,17 +1855,21 @@ function AdminMenuPageInner() {
         }
         .commonGroupPicker {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 8px;
+          max-height: 320px;
+          overflow-y: auto;
+          padding-right: 2px;
+          overscroll-behavior: contain;
         }
         .commonGroupChoice {
           display: flex;
           align-items: center;
           gap: 8px;
-          min-height: 44px;
+          min-height: 40px;
           border: 1px solid var(--line);
           border-radius: 12px;
-          padding: 9px 10px;
+          padding: 8px 10px;
           background: var(--surface);
           cursor: pointer;
         }
@@ -1876,9 +1880,21 @@ function AdminMenuPageInner() {
           flex: 0 0 auto;
         }
         .commonGroupChoiceText {
-          display: grid;
-          gap: 2px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
           min-width: 0;
+          white-space: nowrap;
+        }
+        .commonGroupChoiceText .name {
+          display: block;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .commonGroupPolicy {
+          flex: 0 0 auto;
+          font-size: 12px;
         }
         .groupOptionDetail {
           border: 1px dashed var(--line);
@@ -2276,7 +2292,7 @@ function AdminMenuPageInner() {
             grid-template-columns: 1fr;
           }
           .commonGroupPicker {
-            grid-template-columns: 1fr;
+            max-height: 240px;
           }
           .menuListToolbar {
             align-items: flex-start;
@@ -2355,6 +2371,11 @@ function AdminMenuPageInner() {
           .previewPlaceholder {
             width: 80px;
             height: 80px;
+          }
+        }
+        @media (max-width: 560px) {
+          .commonGroupPicker {
+            max-height: 200px;
           }
         }
         @media (max-width: 360px) {
@@ -2863,7 +2884,7 @@ function AdminMenuPageInner() {
                         />
                         <span className="commonGroupChoiceText">
                           <span className="name">{g.name}</span>
-                          <span className="muted">{getGroupPolicyText(g)}</span>
+                          <span className="muted commonGroupPolicy">· {getGroupPolicyText(g)}</span>
                         </span>
                       </label>
                     ))}
