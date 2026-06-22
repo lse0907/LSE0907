@@ -85,26 +85,12 @@ function hasMenuSetupReady(counts: SetupCounts) {
   return counts.readyMenus > 0;
 }
 
-function computeProgressStep(counts: SetupCounts): ActiveSetupStep {
-  if (counts.categories < 1) return 1;
-  if (!hasOptionSetupReady(counts)) return 2;
-  if (!hasMenuSetupReady(counts)) return 3;
-  return 4;
-}
-
 function computeCompletedSteps(counts: SetupCounts) {
   let done = 0;
   if (counts.categories > 0) done += 1;
   if (hasOptionSetupReady(counts)) done += 1;
   if (hasMenuSetupReady(counts)) done += 1;
   return done;
-}
-
-function progressStepLabel(step: ActiveSetupStep) {
-  if (step === 1) return "카테고리 확인";
-  if (step === 2) return "공통옵션 확인";
-  if (step === 3) return "메뉴 확인";
-  return "옵션 연결 확인";
 }
 
 function getCountForStep(step: ActiveSetupStep, counts: SetupCounts) {
@@ -294,7 +280,6 @@ function AdminSetupPageInner() {
     router.push(`/admin?store=${encodeURIComponent(storeId)}`);
   };
 
-  const progressStep = computeProgressStep(counts);
   const optionConnectionReviewed = lastStep >= 4 || dbCompleted;
   const completedSteps = Math.min(computeCompletedSteps(counts) + (optionConnectionReviewed ? 1 : 0), 4);
   const isReady = completedSteps === 4;
@@ -470,7 +455,6 @@ function AdminSetupPageInner() {
               <span>옵션항목 {counts.optionItems}개</span>
               <span>판매메뉴 {counts.readyMenus}개</span>
               <span>옵션연결 {counts.optionLinkedMenus}개</span>
-              <span>현재 단계 {progressStepLabel(progressStep)}</span>
             </div>
             <p className="summaryCompact">
               카테고리 {counts.categories} · 옵션항목 {counts.optionItems} · 판매메뉴 {counts.readyMenus} · 옵션연결 {counts.optionLinkedMenus}
