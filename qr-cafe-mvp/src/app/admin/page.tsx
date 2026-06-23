@@ -366,10 +366,10 @@ function AdminPageInner() {
 
         <div className="topActions">
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
-            고객화면
+            고객화면 보기
           </button>
           <button className="btn" onClick={() => goPublic("/staff")} disabled={!selectedStoreId}>
-            직원화면
+            직원화면 보기
           </button>
           <a className="btn" href="/logout">
             로그아웃
@@ -381,8 +381,8 @@ function AdminPageInner() {
       {showSetupBanner ? (
         <div className="setupBanner" role="status" aria-live="polite">
           <div>
-            <strong>이 매장은 초기 설정이 완료되지 않았습니다.</strong>
-            <div className="muted">카테고리/공통옵션/메뉴 확인과 옵션 연결 확인을 마무리해 주세요.</div>
+            <strong>운영 전 필수 설정을 마무리해 주세요.</strong>
+            <div className="muted">남은 단계를 완료하면 주문 운영을 시작할 수 있습니다.</div>
             {selectedStoreCounts ? (
               <div className="muted">현재 진행 단계: {selectedStoreCompletedSteps}/4</div>
             ) : null}
@@ -464,7 +464,7 @@ function AdminPageInner() {
               </div>
               <p className="hint" style={{ marginTop: 6 }}>
                 남은사용기간이 만료 되면 기능 사용이 제한 됩니다.<br />
-                만료 전에 결재를 진행해 주세요.
+                만료 전에 결제를 진행해 주세요.
               </p>
             </>
           )}
@@ -519,7 +519,7 @@ function AdminPageInner() {
               매장정보
             </button>
             <button className="subBtn" onClick={() => go("/admin/billing")}>
-              PG 설정(선결재)
+              결제 설정
             </button>
             <button className="subBtn" onClick={() => go("/admin/qr")}>
               매장 QR 생성
@@ -541,8 +541,11 @@ function AdminPageInner() {
             <button className="subBtn" onClick={() => go("/admin/menu")}>
               메뉴관리
             </button>
+            <button className="subBtn" onClick={() => go("/admin/menu/option-connect")}>
+              옵션 연결 확인
+            </button>
             <button className="subBtn" onClick={() => go("/admin/import")}>
-              일괄 데이터 업로드(선택)
+              일괄 데이터 업로드
             </button>
           </div>
         ) : null}
@@ -915,7 +918,7 @@ body {
   .wrap{ padding:12px; }
   .topbar{ align-items:center; }
   .topActions{
-    flex-wrap:nowrap;
+    flex-wrap:wrap;
     gap:4px;
   }
   .topActions .btn{
@@ -925,8 +928,8 @@ body {
   }
   .cardBtnTitle{ font-size:12px; }
   .btnGroup{
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap:4px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap:6px;
   }
   .storeList{
     max-height: min(42vh, 360px);
