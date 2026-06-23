@@ -123,7 +123,7 @@ function AdminMenuOptionConnectInner() {
     } catch (e: unknown) {
       console.error("[admin/menu/option-connect] refresh:", toErrMsg(e));
       setMsgTone("error");
-      setMsg(`빠른 옵션 연결 데이터 로드 실패: ${toErrMsg(e)}`);
+      setMsg(`옵션 연결 확인 데이터 로드 실패: ${toErrMsg(e)}`);
     } finally {
       setLoading(false);
     }
@@ -147,6 +147,11 @@ function AdminMenuOptionConnectInner() {
     return menus.filter((menu) => (Array.isArray(menu.option_group_ids) ? menu.option_group_ids.includes(selectedGroup.id) : false));
   }, [menus, selectedGroup]);
   const linkedMenuIdSet = useMemo(() => new Set(linkedMenus.map((menu) => menu.id)), [linkedMenus]);
+  const optionLinkedMenuCount = useMemo(
+    () => menus.filter((menu) => Array.isArray(menu.option_group_ids) && menu.option_group_ids.length > 0).length,
+    [menus]
+  );
+  const optionUnlinkedMenuCount = Math.max(menus.length - optionLinkedMenuCount, 0);
   const filteredMenus = useMemo(() => {
     const q = menuQuery.trim().toLowerCase();
     return menus.filter((menu) => {
@@ -346,6 +351,42 @@ function AdminMenuOptionConnectInner() {
           border-radius: var(--radius);
           padding: 14px;
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+        }
+        .summaryGrid {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .summaryItem {
+          border: 1px solid #dbe1ea;
+          border-radius: 999px;
+          padding: 7px 10px;
+          background: linear-gradient(180deg, #ffffff, #f8fafc);
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-height: 34px;
+        }
+        .summaryItemInfo {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        }
+        .summaryItemWarn {
+          border-color: #fed7aa;
+          background: linear-gradient(180deg, #fff7ed, #ffffff);
+        }
+        .summaryLabel {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+        .summaryValue {
+          color: var(--text);
+          font-size: 16px;
+          font-weight: 950;
+          letter-spacing: -0.03em;
+          line-height: 1;
         }
         .btn {
           border: 1px solid var(--line);
@@ -699,6 +740,15 @@ function AdminMenuOptionConnectInner() {
           .card {
             padding: 12px;
           }
+          .summaryGrid {
+            gap: 6px;
+          }
+          .summaryItem {
+            padding: 6px 8px;
+            min-height: 30px;
+          }
+          .summaryLabel { font-size: 11px; }
+          .summaryValue { font-size: 15px; }
           .actionBtns,
           .actionBtns .btn {
             width: 100%;
@@ -709,9 +759,9 @@ function AdminMenuOptionConnectInner() {
       <header className="topbar">
         <div className="titleRow">
           <div>
-            <h1 className="h1">빠른 옵션 연결</h1>
+            <h1 className="h1">옵션 연결 확인</h1>
             <p className="sub">
-              {storeName ? `${storeName} 매장 · ` : ""}같은 공통옵션을 여러 메뉴에 한 번에 연결합니다. 옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다.
+              {storeName ? `${storeName} 매장 · ` : ""}메뉴별 공통옵션 연결 상태를 확인하고, 필요한 경우 한 번에 연결합니다.
             </p>
           </div>
           <div className="headerActionRow">
@@ -741,9 +791,35 @@ function AdminMenuOptionConnectInner() {
         />
       ) : null}
 
-      <section className="flowGuide" aria-label="빠른 옵션 연결 사용 순서">
+      {storeId ? (
+        <section className="card" aria-label="옵션 연결 상태 요약">
+          <h2 className="cardTitle">옵션 연결 현황</h2>
+          <div className="summaryGrid" style={{ marginTop: 10 }}>
+            <div className="summaryItem">
+              <span className="summaryLabel">등록 메뉴</span>
+              <strong className="summaryValue">{menus.length}</strong>
+            </div>
+            <div className={`summaryItem ${optionLinkedMenuCount > 0 ? "summaryItemInfo" : ""}`.trim()}>
+              <span className="summaryLabel">옵션 연결</span>
+              <strong className="summaryValue">{optionLinkedMenuCount}</strong>
+            </div>
+            <div className={`summaryItem ${optionUnlinkedMenuCount > 0 ? "summaryItemWarn" : ""}`.trim()}>
+              <span className="summaryLabel">옵션 미연결</span>
+              <strong className="summaryValue">{optionUnlinkedMenuCount}</strong>
+            </div>
+            <div className="summaryItem">
+              <span className="summaryLabel">공통옵션</span>
+              <strong className="summaryValue">{groups.length}</strong>
+            </div>
+          </div>
+          <p className="cardIntro">옵션이 필요 없는 메뉴는 미연결 상태로 두어도 됩니다.</p>
+        </section>
+      ) : null}
+
+      <section className="flowGuide" aria-label="옵션 연결 확인 사용 순서">
         <span>사용 순서</span>
         <span className="flowSteps">
+          <span className="flowStep">상태 확인</span>
           <span className="flowStep">① 옵션 선택</span>
           <span className="flowStep">② 메뉴 선택</span>
           <span className="flowStep">연결 적용</span>
