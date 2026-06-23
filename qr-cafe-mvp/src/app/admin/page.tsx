@@ -1,7 +1,7 @@
 // src/app/admin/page.tsx
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app/lib/currentStore";
@@ -52,28 +52,23 @@ function AdminPageInner() {
 
   const [booting, setBooting] = useState(true);
   const [stores, setStores] = useState<StoreRow[]>([]);
-  const [members, setMembers] = useState<MemberRow[]>([]);
   const [storesLoaded, setStoresLoaded] = useState(false);
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [msg, setMsg] = useState<string>("");
-  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | "support" | null>("stats");
+  const [activeSection, setActiveSection] = useState<"store" | "ops" | "support" | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
   const [billingByStore, setBillingByStore] = useState<Record<string, StoreBillingSummary>>({});
   const [hideSetupBannerForCurrentSelection, setHideSetupBannerForCurrentSelection] = useState(false);
   const [selectedStoreCounts, setSelectedStoreCounts] = useState<{ categories: number; options: number; menus: number } | null>(null);
+  const subPanelRef = useRef<HTMLDivElement | null>(null);
 
   const selectedStore = useMemo(() => {
     if (!selectedStoreId) return null;
     return stores.find((s) => s.store_id === selectedStoreId) || null;
   }, [stores, selectedStoreId]);
-
-  const selectedRole = useMemo(() => {
-    if (!selectedStoreId) return null;
-    return members.find((m) => m.store_id === selectedStoreId)?.role || null;
-  }, [members, selectedStoreId]);
 
   const setSelectedStoreId = (storeId: string) => {
     setSelectedStoreIdState(storeId);
@@ -113,10 +108,9 @@ function AdminPageInner() {
 
     if (memRes.error) throw memRes.error;
 
-    const memRows = (memRes.data || []) as MemberRow[];
-    setMembers(memRows);
+	    const memRows = (memRes.data || []) as MemberRow[];
 
-    const ids = memRows.map((m) => m.store_id).filter(Boolean);
+	    const ids = memRows.map((m) => m.store_id).filter(Boolean);
     if (!ids.length) {
       setStores([]);
       setBillingByStore({});
@@ -283,6 +277,14 @@ function AdminPageInner() {
     setHideSetupBannerForCurrentSelection(false);
   }, [selectedStoreId]);
 
+  useEffect(() => {
+    if (!activeSection || !subPanelRef.current) return;
+    if (!window.matchMedia("(max-width: 720px)").matches) return;
+    window.setTimeout(() => {
+      subPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 80);
+  }, [activeSection]);
+
   const go = (path: string) => {
     if (!selectedStoreId) {
       setMsg("먼저 매장을 선택하거나 생성해주세요.");
@@ -317,6 +319,12 @@ function AdminPageInner() {
     ? (selectedStoreCounts.categories > 0 ? 1 : 0) + (selectedStoreCounts.options > 0 ? 1 : 0) + (selectedStoreCounts.menus > 0 ? 1 : 0) + (selectedStoreSetupCompleted ? 1 : 0)
     : 0;
   const showSetupBanner = selectedStoreShouldShowSetup && !hideSetupBannerForCurrentSelection;
+  const selectedBilling = selectedStoreId ? billingByStore[selectedStoreId] : null;
+  const selectedFreeRemaining = selectedStore ? calcRemainingDays(selectedStore.created_at) : null;
+  const selectedPaidRemaining = calcPaidRemainingDays(selectedBilling?.paidUntil || null);
+  const selectedSubscriptionStatus = selectedBilling?.basePlanStatus === "active" ? "유료" : "무료";
+  const selectedRemainingPeriod = selectedBilling?.basePlanStatus === "active" ? selectedPaidRemaining : selectedFreeRemaining;
+  const selectedRemainingText = selectedRemainingPeriod == null ? "-" : `${selectedRemainingPeriod}일`;
   const dismissSetupBanner = () => {
     setHideSetupBannerForCurrentSelection(true);
   };
@@ -366,10 +374,10 @@ function AdminPageInner() {
 
         <div className="topActions">
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
-            고객화면
+            고객화면 보기
           </button>
           <button className="btn" onClick={() => goPublic("/staff")} disabled={!selectedStoreId}>
-            직원화면
+            직원화면 보기
           </button>
           <a className="btn" href="/logout">
             로그아웃
@@ -381,8 +389,8 @@ function AdminPageInner() {
       {showSetupBanner ? (
         <div className="setupBanner" role="status" aria-live="polite">
           <div>
-            <strong>이 매장은 초기 설정이 완료되지 않았습니다.</strong>
-            <div className="muted">카테고리/공통옵션/메뉴 확인과 옵션 연결 확인을 마무리해 주세요.</div>
+            <strong>운영 전 필수 설정을 마무리해 주세요.</strong>
+            <div className="muted">남은 단계를 완료하면 주문 운영을 시작할 수 있습니다.</div>
             {selectedStoreCounts ? (
               <div className="muted">현재 진행 단계: {selectedStoreCompletedSteps}/4</div>
             ) : null}
@@ -419,32 +427,29 @@ function AdminPageInner() {
           ) : (
             <>
               {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
-              <div className="storeList">
-                {stores.map((s) => {
-                  const on = s.store_id === selectedStoreId;
-                  const role = members.find((m) => m.store_id === s.store_id)?.role || "-";
-                  const remaining = calcRemainingDays(s.created_at);
-                  const billing = billingByStore[s.store_id];
-                  const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
-                  const remainingText = (days: number | null) => (days == null ? "-" : `${days}일`);
-                  const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
-                  const remainingPeriod =
-                    billing?.basePlanStatus === "active" ? remainingText(paidRemaining) : remainingText(remaining);
+	              <div className="storeList">
+	                {stores.map((s) => {
+	                  const on = s.store_id === selectedStoreId;
+	                  const remaining = calcRemainingDays(s.created_at);
+	                  const billing = billingByStore[s.store_id];
+	                  const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
+	                  const remainingText = (days: number | null) => (days == null ? "-" : `${days}일`);
+	                  const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
+	                  const remainingPeriod =
+	                    billing?.basePlanStatus === "active" ? remainingText(paidRemaining) : remainingText(remaining);
                   return (
                     <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         setSelectedStoreId(s.store_id);
                       }
-                    }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div className="storeName">
-                          {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
-                        </div>
-                        <div className="muted">권한: {role}</div>
-                        <div className="muted">구독 상태: {subscriptionStatus}</div>
-                        <div className="muted">남은 기간: {remainingPeriod}</div>
-                      </div>
+	                    }}>
+	                      <div style={{ minWidth: 0 }}>
+	                        <div className="storeName">
+	                          {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
+	                        </div>
+	                        <div className="muted">{subscriptionStatus} · {remainingPeriod} 남음</div>
+	                      </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                         {on ? <div className="pill pillOn">선택됨</div> : null}
                         {on && selectedStoreShouldShowSetup ? (
@@ -464,119 +469,124 @@ function AdminPageInner() {
               </div>
               <p className="hint" style={{ marginTop: 6 }}>
                 남은사용기간이 만료 되면 기능 사용이 제한 됩니다.<br />
-                만료 전에 결재를 진행해 주세요.
+                만료 전에 결제를 진행해 주세요.
               </p>
             </>
           )}
         </section>
 
-        {/* ===== 관리자 메뉴 ===== */}
-        <section className="card menuCard">
-        <div className="tabMeta">
-          <span className="pill">
-            {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
-            {selectedRole ? ` · ${selectedRole}` : ""}
-          </span>
-        </div>
+	        {/* ===== 관리자 메뉴 ===== */}
+	        <section className="card menuCard">
+	          <div className="currentStorePanel">
+	            <span className="currentStoreLabel">현재 매장</span>
+	            <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
+	          </div>
 
-        <div className="btnGroup">
-          <button
-            className={`cardBtn ${activeSection === "store" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "store" ? null : "store"))}
-            disabled={!selectedStoreId}
-          >
-            <div className="cardBtnTitle">매장설정</div>
-          </button>
+	          {selectedStoreId ? (
+	            <div className="dashboardGrid" aria-label="관리자 홈 요약">
+	              <section className="overviewCard">
+	                <div className="overviewHead">
+	                  <h2 className="overviewTitle">매장 현황</h2>
+	                  <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
+	                    매출보기
+	                  </button>
+	                </div>
+	                <div className="statsSummary statsSummaryCompact">
+	                  <div className="statsRow">
+	                    <span className="statsLabel">일간 매출</span>
+	                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
+	                  </div>
+	                  <div className="statsRow">
+	                    <span className="statsLabel">주간 매출</span>
+	                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
+	                  </div>
+	                  <div className="statsRow">
+	                    <span className="statsLabel">월간 매출</span>
+	                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
+	                  </div>
+	                  <div className="statsRow">
+	                    <span className="statsLabel">구독 상태</span>
+	                    <span className="statsValue">{selectedSubscriptionStatus} · {selectedRemainingText}</span>
+	                  </div>
+	                  {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
+	                </div>
+	              </section>
+	            </div>
+	          ) : null}
 
-          <button
-            className={`cardBtn ${activeSection === "ops" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "ops" ? null : "ops"))}
-            disabled={!selectedStoreId}
-          >
-            <div className="cardBtnTitle">메뉴설정</div>
-          </button>
+	          <div className="btnGroup">
+	            <button
+	              className={`cardBtn ${activeSection === "store" ? "cardBtnOn" : ""}`}
+	              onClick={() => setActiveSection((prev) => (prev === "store" ? null : "store"))}
+	              disabled={!selectedStoreId}
+	            >
+	              <div className="cardBtnTitle">매장설정</div>
+	            </button>
 
-          <button
-            className={`cardBtn ${activeSection === "stats" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "stats" ? null : "stats"))}
-            disabled={!selectedStoreId}
-          >
-            <div className="cardBtnTitle">매출통계</div>
-          </button>
+	            <button
+	              className={`cardBtn ${activeSection === "ops" ? "cardBtnOn" : ""}`}
+	              onClick={() => setActiveSection((prev) => (prev === "ops" ? null : "ops"))}
+	              disabled={!selectedStoreId}
+	            >
+	              <div className="cardBtnTitle">메뉴설정</div>
+	            </button>
 
-          <button
-            className={`cardBtn ${activeSection === "support" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "support" ? null : "support"))}
-            disabled={!selectedStoreId}
-          >
-            <div className="cardBtnTitle">지원센터</div>
-          </button>
-        </div>
+	            <button
+	              className={`cardBtn ${activeSection === "support" ? "cardBtnOn" : ""}`}
+	              onClick={() => setActiveSection((prev) => (prev === "support" ? null : "support"))}
+	              disabled={!selectedStoreId}
+	            >
+	              <div className="cardBtnTitle">지원센터</div>
+	            </button>
+	          </div>
 
-        {activeSection === "store" ? (
-          <div className="subPanel">
-            <button className="subBtn" onClick={() => go("/admin/store")}>
-              매장정보
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/billing")}>
-              PG 설정(선결재)
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/qr")}>
-              매장 QR 생성
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/loyalty")}>
-              포인트/쿠폰 설정
-            </button>
-          </div>
-        ) : null}
+	          {activeSection === "store" ? (
+	            <div className="subPanel" ref={subPanelRef}>
+	              <div className="subPanelTitle">매장설정 바로가기</div>
+	              <button className="subBtn" onClick={() => go("/admin/store")}>
+	                매장정보
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/billing")}>
+	                결제 설정
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/qr")}>
+	                매장 QR 생성
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/loyalty")}>
+	                포인트/쿠폰 설정
+	              </button>
+	            </div>
+	          ) : null}
 
-        {activeSection === "ops" ? (
-          <div className="subPanel">
-            <button className="subBtn" onClick={() => go("/admin/categories")}>
-              카테고리 관리
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/options")}>
-              옵션관리
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/menu")}>
-              메뉴관리
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/import")}>
-              일괄 데이터 업로드(선택)
-            </button>
-          </div>
-        ) : null}
+	          {activeSection === "ops" ? (
+	            <div className="subPanel" ref={subPanelRef}>
+	              <div className="subPanelTitle">메뉴설정 바로가기</div>
+	              <button className="subBtn" onClick={() => go("/admin/categories")}>
+	                카테고리 관리
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/options")}>
+	                옵션관리
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/menu")}>
+	                메뉴관리
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/menu/option-connect")}>
+	                옵션 연결 확인
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/import")}>
+	                일괄 데이터 업로드
+	              </button>
+	            </div>
+	          ) : null}
 
-        {activeSection === "stats" ? (
-          <div className="subPanel">
-            <div className="statsSummary">
-              <div className="statsRow">
-                <span className="statsLabel">일간 매출</span>
-                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
-              </div>
-              <div className="statsRow">
-                <span className="statsLabel">주간 매출</span>
-                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
-              </div>
-              <div className="statsRow">
-                <span className="statsLabel">월간 매출</span>
-                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
-              </div>
-              {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
-            </div>
-            <button className="subBtn subBtnPrimary" onClick={() => go("/admin/stats")}>
-              자세히보기
-            </button>
-          </div>
-        ) : null}
-
-        {activeSection === "support" ? (
-          <div className="subPanel">
-            <button className="subBtn subBtnPrimary" onClick={() => go("/admin/support")}>
-              문의하기
-            </button>
-          </div>
-        ) : null}
+	          {activeSection === "support" ? (
+	            <div className="subPanel" ref={subPanelRef}>
+	              <div className="subPanelTitle">지원센터 바로가기</div>
+	              <button className="subBtn" onClick={() => go("/admin/support")}>
+	                문의하기
+	              </button>
+	            </div>
+	          ) : null}
 
         {!selectedStoreId ? (
           <div className="alert" style={{ marginTop: 12 }}>
@@ -723,6 +733,58 @@ body {
   margin-top:12px;
   flex-wrap:wrap;
 }
+.currentStorePanel{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:12px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  background:#f9fafb;
+  border-radius:14px;
+}
+.currentStoreLabel{
+  color:var(--muted);
+  font-size:12px;
+  font-weight:950;
+}
+.currentStorePill{
+  min-width:0;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  border-radius:999px;
+  border:1px solid #d1d5db;
+  background:#fff;
+  color:var(--text);
+  padding:7px 12px;
+  font-size:13px;
+  font-weight:950;
+}
+.dashboardGrid{
+  display:grid;
+  gap:10px;
+  margin-top:12px;
+}
+.overviewCard{
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:14px;
+  padding:12px;
+}
+.overviewHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.overviewTitle{
+  margin:0;
+  font-size:14px;
+  font-weight:950;
+}
 .hint{
   color:var(--muted);
   font-size:12px;
@@ -756,7 +818,7 @@ body {
 }
 .btnGroup{
   display:grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap:6px;
   margin-top:12px;
 }
@@ -860,6 +922,16 @@ body {
   margin-top:12px;
   display:grid;
   gap:8px;
+  border:1px solid var(--line);
+  background:#f9fafb;
+  border-radius:14px;
+  padding:10px;
+}
+.subPanelTitle{
+  color:var(--muted);
+  font-size:12px;
+  font-weight:950;
+  padding:0 2px 2px;
 }
 .subBtn{
   border:1px solid var(--line);
@@ -872,11 +944,6 @@ body {
   font-weight:900;
   text-align:left;
 }
-.subBtnPrimary{
-  background:var(--brand);
-  border-color:var(--brand);
-  color:#fff;
-}
 .subBtnDisabled{
   opacity:.6;
   cursor:not-allowed;
@@ -888,6 +955,12 @@ body {
   background:#f9fafb;
   display:grid;
   gap:8px;
+}
+.statsSummaryCompact{
+  margin-top:10px;
+  border:0;
+  padding:0;
+  background:transparent;
 }
 .statsRow{
   display:flex;
@@ -915,7 +988,7 @@ body {
   .wrap{ padding:12px; }
   .topbar{ align-items:center; }
   .topActions{
-    flex-wrap:nowrap;
+    flex-wrap:wrap;
     gap:4px;
   }
   .topActions .btn{
@@ -925,8 +998,8 @@ body {
   }
   .cardBtnTitle{ font-size:12px; }
   .btnGroup{
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap:4px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap:6px;
   }
   .storeList{
     max-height: min(42vh, 360px);
