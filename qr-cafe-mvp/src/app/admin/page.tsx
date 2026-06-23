@@ -477,16 +477,14 @@ function AdminPageInner() {
 
 	        {/* ===== 관리자 메뉴 ===== */}
 	        <section className="card menuCard">
-	          <div className="currentStorePanel">
-	            <span className="currentStoreLabel">현재 매장</span>
-	            <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
-	          </div>
-
 	          {selectedStoreId ? (
 	            <div className="dashboardGrid" aria-label="관리자 홈 요약">
 	              <section className="overviewCard">
 	                <div className="overviewHead">
-	                  <h2 className="overviewTitle">매장 현황</h2>
+	                  <div className="overviewTitleRow">
+	                    <h2 className="overviewTitle">매장 현황</h2>
+	                    <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
+	                  </div>
 	                  <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
 	                    매출보기
 	                  </button>
@@ -542,7 +540,6 @@ function AdminPageInner() {
 
 	          {activeSection === "store" ? (
 	            <div className="subPanel" ref={subPanelRef}>
-	              <div className="subPanelTitle">매장설정 바로가기</div>
 	              <button className="subBtn" onClick={() => go("/admin/store")}>
 	                매장정보
 	              </button>
@@ -560,7 +557,6 @@ function AdminPageInner() {
 
 	          {activeSection === "ops" ? (
 	            <div className="subPanel" ref={subPanelRef}>
-	              <div className="subPanelTitle">메뉴설정 바로가기</div>
 	              <button className="subBtn" onClick={() => go("/admin/categories")}>
 	                카테고리 관리
 	              </button>
@@ -581,7 +577,6 @@ function AdminPageInner() {
 
 	          {activeSection === "support" ? (
 	            <div className="subPanel" ref={subPanelRef}>
-	              <div className="subPanelTitle">지원센터 바로가기</div>
 	              <button className="subBtn" onClick={() => go("/admin/support")}>
 	                문의하기
 	              </button>
@@ -733,22 +728,6 @@ body {
   margin-top:12px;
   flex-wrap:wrap;
 }
-.currentStorePanel{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  margin-top:12px;
-  padding:10px 12px;
-  border:1px solid var(--line);
-  background:#f9fafb;
-  border-radius:14px;
-}
-.currentStoreLabel{
-  color:var(--muted);
-  font-size:12px;
-  font-weight:950;
-}
 .currentStorePill{
   min-width:0;
   max-width:100%;
@@ -779,6 +758,14 @@ body {
   align-items:center;
   justify-content:space-between;
   gap:10px;
+  flex-wrap:wrap;
+}
+.overviewTitleRow{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
 }
 .overviewTitle{
   margin:0;
@@ -926,12 +913,6 @@ body {
   background:#f9fafb;
   border-radius:14px;
   padding:10px;
-}
-.subPanelTitle{
-  color:var(--muted);
-  font-size:12px;
-  font-weight:950;
-  padding:0 2px 2px;
 }
 .subBtn{
   border:1px solid var(--line);
