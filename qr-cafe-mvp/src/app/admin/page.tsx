@@ -57,7 +57,7 @@ function AdminPageInner() {
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [msg, setMsg] = useState<string>("");
-  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | "support" | null>("stats");
+  const [activeSection, setActiveSection] = useState<"store" | "ops" | "support" | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
@@ -69,11 +69,6 @@ function AdminPageInner() {
     if (!selectedStoreId) return null;
     return stores.find((s) => s.store_id === selectedStoreId) || null;
   }, [stores, selectedStoreId]);
-
-  const selectedRole = useMemo(() => {
-    if (!selectedStoreId) return null;
-    return members.find((m) => m.store_id === selectedStoreId)?.role || null;
-  }, [members, selectedStoreId]);
 
   const setSelectedStoreId = (storeId: string) => {
     setSelectedStoreIdState(storeId);
@@ -317,6 +312,12 @@ function AdminPageInner() {
     ? (selectedStoreCounts.categories > 0 ? 1 : 0) + (selectedStoreCounts.options > 0 ? 1 : 0) + (selectedStoreCounts.menus > 0 ? 1 : 0) + (selectedStoreSetupCompleted ? 1 : 0)
     : 0;
   const showSetupBanner = selectedStoreShouldShowSetup && !hideSetupBannerForCurrentSelection;
+  const selectedBilling = selectedStoreId ? billingByStore[selectedStoreId] : null;
+  const selectedFreeRemaining = selectedStore ? calcRemainingDays(selectedStore.created_at) : null;
+  const selectedPaidRemaining = calcPaidRemainingDays(selectedBilling?.paidUntil || null);
+  const selectedSubscriptionStatus = selectedBilling?.basePlanStatus === "active" ? "유료" : "무료";
+  const selectedRemainingPeriod = selectedBilling?.basePlanStatus === "active" ? selectedPaidRemaining : selectedFreeRemaining;
+  const selectedRemainingText = selectedRemainingPeriod == null ? "-" : `${selectedRemainingPeriod}일`;
   const dismissSetupBanner = () => {
     setHideSetupBannerForCurrentSelection(true);
   };
@@ -472,12 +473,62 @@ function AdminPageInner() {
 
         {/* ===== 관리자 메뉴 ===== */}
         <section className="card menuCard">
-        <div className="tabMeta">
-          <span className="pill">
-            {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
-            {selectedRole ? ` · ${selectedRole}` : ""}
-          </span>
+        <div className="currentStorePanel">
+          <span className="currentStoreLabel">현재 매장</span>
+          <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
         </div>
+
+        {selectedStoreId ? (
+          <div className="dashboardGrid" aria-label="관리자 홈 요약">
+            <section className="overviewCard">
+              <div className="overviewHead">
+                <h2 className="overviewTitle">오늘 운영 요약</h2>
+                <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
+                  매출보기
+                </button>
+              </div>
+              <div className="statsSummary statsSummaryCompact">
+                <div className="statsRow">
+                  <span className="statsLabel">일간 매출</span>
+                  <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
+                </div>
+                <div className="statsRow">
+                  <span className="statsLabel">주간 매출</span>
+                  <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
+                </div>
+                <div className="statsRow">
+                  <span className="statsLabel">월간 매출</span>
+                  <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
+                </div>
+                <div className="statsRow">
+                  <span className="statsLabel">구독 상태</span>
+                  <span className="statsValue">{selectedSubscriptionStatus} · {selectedRemainingText}</span>
+                </div>
+                {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
+              </div>
+            </section>
+
+            <section className={`overviewCard ${selectedStoreShouldShowSetup ? "overviewCardWarn" : ""}`.trim()}>
+              <div className="overviewHead">
+                <h2 className="overviewTitle">설정 점검</h2>
+                {selectedStoreShouldShowSetup ? (
+                  <button className="btn btnSmall btnSetup" onClick={goSetup}>
+                    초기 설정 계속하기
+                  </button>
+                ) : (
+                  <button className="btn btnSmall" onClick={() => go("/admin/menu/option-connect")}>
+                    옵션 연결 확인
+                  </button>
+                )}
+              </div>
+              <p className="overviewText">
+                {selectedStoreShouldShowSetup
+                  ? `운영 전 필수 설정이 남아 있습니다. 현재 ${selectedStoreCompletedSteps}/4단계입니다.`
+                  : "설정 확인이 완료되었습니다."}
+              </p>
+            </section>
+          </div>
+        ) : null}
 
         <div className="btnGroup">
           <button
@@ -494,14 +545,6 @@ function AdminPageInner() {
             disabled={!selectedStoreId}
           >
             <div className="cardBtnTitle">메뉴설정</div>
-          </button>
-
-          <button
-            className={`cardBtn ${activeSection === "stats" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "stats" ? null : "stats"))}
-            disabled={!selectedStoreId}
-          >
-            <div className="cardBtnTitle">매출통계</div>
           </button>
 
           <button
@@ -546,29 +589,6 @@ function AdminPageInner() {
             </button>
             <button className="subBtn" onClick={() => go("/admin/import")}>
               일괄 데이터 업로드
-            </button>
-          </div>
-        ) : null}
-
-        {activeSection === "stats" ? (
-          <div className="subPanel">
-            <div className="statsSummary">
-              <div className="statsRow">
-                <span className="statsLabel">일간 매출</span>
-                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
-              </div>
-              <div className="statsRow">
-                <span className="statsLabel">주간 매출</span>
-                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
-              </div>
-              <div className="statsRow">
-                <span className="statsLabel">월간 매출</span>
-                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
-              </div>
-              {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
-            </div>
-            <button className="subBtn subBtnPrimary" onClick={() => go("/admin/stats")}>
-              자세히보기
             </button>
           </div>
         ) : null}
@@ -726,6 +746,69 @@ body {
   margin-top:12px;
   flex-wrap:wrap;
 }
+.currentStorePanel{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:12px;
+  padding:10px 12px;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  border-radius:14px;
+}
+.currentStoreLabel{
+  color:#1d4ed8;
+  font-size:12px;
+  font-weight:950;
+}
+.currentStorePill{
+  min-width:0;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  border-radius:999px;
+  background:#1d4ed8;
+  color:#fff;
+  padding:7px 12px;
+  font-size:13px;
+  font-weight:950;
+}
+.dashboardGrid{
+  display:grid;
+  gap:10px;
+  margin-top:12px;
+}
+.overviewCard{
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:14px;
+  padding:12px;
+}
+.overviewCardWarn{
+  border-color:#fde68a;
+  background:#fffbeb;
+}
+.overviewHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.overviewTitle{
+  margin:0;
+  font-size:14px;
+  font-weight:950;
+}
+.overviewText{
+  margin:8px 0 0;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:850;
+  line-height:1.35;
+  word-break:keep-all;
+}
 .hint{
   color:var(--muted);
   font-size:12px;
@@ -759,7 +842,7 @@ body {
 }
 .btnGroup{
   display:grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap:6px;
   margin-top:12px;
 }
@@ -891,6 +974,12 @@ body {
   background:#f9fafb;
   display:grid;
   gap:8px;
+}
+.statsSummaryCompact{
+  margin-top:10px;
+  border:0;
+  padding:0;
+  background:transparent;
 }
 .statsRow{
   display:flex;
