@@ -52,7 +52,6 @@ function AdminPageInner() {
 
   const [booting, setBooting] = useState(true);
   const [stores, setStores] = useState<StoreRow[]>([]);
-  const [members, setMembers] = useState<MemberRow[]>([]);
   const [storesLoaded, setStoresLoaded] = useState(false);
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
@@ -108,10 +107,9 @@ function AdminPageInner() {
 
     if (memRes.error) throw memRes.error;
 
-    const memRows = (memRes.data || []) as MemberRow[];
-    setMembers(memRows);
+	    const memRows = (memRes.data || []) as MemberRow[];
 
-    const ids = memRows.map((m) => m.store_id).filter(Boolean);
+	    const ids = memRows.map((m) => m.store_id).filter(Boolean);
     if (!ids.length) {
       setStores([]);
       setBillingByStore({});
@@ -421,12 +419,11 @@ function AdminPageInner() {
             <>
               {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
               <div className="storeList">
-                {stores.map((s) => {
-                  const on = s.store_id === selectedStoreId;
-                  const role = members.find((m) => m.store_id === s.store_id)?.role || "-";
-                  const remaining = calcRemainingDays(s.created_at);
-                  const billing = billingByStore[s.store_id];
-                  const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
+	                {stores.map((s) => {
+	                  const on = s.store_id === selectedStoreId;
+	                  const remaining = calcRemainingDays(s.created_at);
+	                  const billing = billingByStore[s.store_id];
+	                  const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
                   const remainingText = (days: number | null) => (days == null ? "-" : `${days}일`);
                   const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
                   const remainingPeriod =
@@ -439,13 +436,11 @@ function AdminPageInner() {
                       }
                     }}>
                       <div style={{ minWidth: 0 }}>
-                        <div className="storeName">
-                          {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
-                        </div>
-                        <div className="muted">권한: {role}</div>
-                        <div className="muted">구독 상태: {subscriptionStatus}</div>
-                        <div className="muted">남은 기간: {remainingPeriod}</div>
-                      </div>
+	                        <div className="storeName">
+	                          {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
+	                        </div>
+	                        <div className="muted">{subscriptionStatus} · {remainingPeriod} 남음</div>
+	                      </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
                         {on ? <div className="pill pillOn">선택됨</div> : null}
                         {on && selectedStoreShouldShowSetup ? (
@@ -482,7 +477,7 @@ function AdminPageInner() {
           <div className="dashboardGrid" aria-label="관리자 홈 요약">
             <section className="overviewCard">
               <div className="overviewHead">
-                <h2 className="overviewTitle">오늘 운영 요약</h2>
+	                <h2 className="overviewTitle">매장 현황</h2>
                 <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
                   매출보기
                 </button>
@@ -508,27 +503,8 @@ function AdminPageInner() {
               </div>
             </section>
 
-            <section className={`overviewCard ${selectedStoreShouldShowSetup ? "overviewCardWarn" : ""}`.trim()}>
-              <div className="overviewHead">
-                <h2 className="overviewTitle">설정 점검</h2>
-                {selectedStoreShouldShowSetup ? (
-                  <button className="btn btnSmall btnSetup" onClick={goSetup}>
-                    초기 설정 계속하기
-                  </button>
-                ) : (
-                  <button className="btn btnSmall" onClick={() => go("/admin/menu/option-connect")}>
-                    옵션 연결 확인
-                  </button>
-                )}
-              </div>
-              <p className="overviewText">
-                {selectedStoreShouldShowSetup
-                  ? `운영 전 필수 설정이 남아 있습니다. 현재 ${selectedStoreCompletedSteps}/4단계입니다.`
-                  : "설정 확인이 완료되었습니다."}
-              </p>
-            </section>
-          </div>
-        ) : null}
+	          </div>
+	        ) : null}
 
         <div className="btnGroup">
           <button
@@ -786,10 +762,6 @@ body {
   border-radius:14px;
   padding:12px;
 }
-.overviewCardWarn{
-  border-color:#fde68a;
-  background:#fffbeb;
-}
 .overviewHead{
   display:flex;
   align-items:center;
@@ -800,14 +772,6 @@ body {
   margin:0;
   font-size:14px;
   font-weight:950;
-}
-.overviewText{
-  margin:8px 0 0;
-  color:var(--muted);
-  font-size:12px;
-  font-weight:850;
-  line-height:1.35;
-  word-break:keep-all;
 }
 .hint{
   color:var(--muted);
