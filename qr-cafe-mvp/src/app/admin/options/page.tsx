@@ -1597,12 +1597,9 @@ function AdminOptionsPageInner() {
           margin-top: 4px;
         }
         .requiredRuleStack {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-wrap: nowrap;
+          display: grid;
+          gap: 6px;
           align-self: end;
-          min-width: 0;
         }
         .ruleSummary {
           border: 1px solid #dbeafe;
@@ -1615,7 +1612,6 @@ function AdminOptionsPageInner() {
           line-height: 1.25;
           width: fit-content;
           max-width: 100%;
-          flex: 0 1 auto;
           white-space: nowrap;
         }
         .groupActionRow {
