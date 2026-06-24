@@ -427,31 +427,30 @@ function AdminPageInner() {
           ) : (
             <>
               {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
-	              <div className="storeList">
-	                {stores.map((s) => {
-	                  const on = s.store_id === selectedStoreId;
-	                  const remaining = calcRemainingDays(s.created_at);
-	                  const billing = billingByStore[s.store_id];
-	                  const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
-	                  const remainingText = (days: number | null) => (days == null ? "-" : `${days}일`);
-	                  const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
-	                  const remainingPeriod =
-	                    billing?.basePlanStatus === "active" ? remainingText(paidRemaining) : remainingText(remaining);
+              {/* 2차 관리자 홈 보완: 선택 카드 높이를 안정적으로 유지하기 위해 선택 뱃지와 액션 버튼을 한 줄 영역에 묶습니다. */}
+              <div className="storeList">
+                {stores.map((s) => {
+                  const on = s.store_id === selectedStoreId;
+                  const remaining = calcRemainingDays(s.created_at);
+                  const billing = billingByStore[s.store_id];
+                  const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
+                  const remainingText = (days: number | null) => (days == null ? "-" : `${days}일`);
+                  const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
+                  const remainingPeriod =
+                    billing?.basePlanStatus === "active" ? remainingText(paidRemaining) : remainingText(remaining);
                   return (
                     <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         setSelectedStoreId(s.store_id);
                       }
-	                    }}>
-	                      <div style={{ minWidth: 0 }}>
-	                        <div className="storeName">
-	                          {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
-	                        </div>
-	                        <div className="muted">{subscriptionStatus} · {remainingPeriod} 남음</div>
-	                      </div>
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="storeName">{s.store_name || "(이름 없음)"}</div>
+                        <div className="muted">{subscriptionStatus} · {remainingPeriod} 남음</div>
+                      </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
-                        {on ? <div className="pill pillOn">선택됨</div> : null}
+                        {on ? <div className="pill pillOn">선택</div> : null}
                         {on && selectedStoreShouldShowSetup ? (
                           <button className="btn btnSetup btnSmall" onClick={goSetup}>
                             초기설정
@@ -475,42 +474,43 @@ function AdminPageInner() {
           )}
         </section>
 
-	        {/* ===== 관리자 메뉴 ===== */}
-	        <section className="card menuCard">
-	          {selectedStoreId ? (
-	            <div className="dashboardGrid" aria-label="관리자 홈 요약">
-	              <section className="overviewCard">
-	                <div className="overviewHead">
-	                  <div className="overviewTitleRow">
-	                    <h2 className="overviewTitle">매장 현황</h2>
-	                    <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
-	                  </div>
-	                  <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
-	                    매출보기
-	                  </button>
-	                </div>
-	                <div className="statsSummary statsSummaryCompact">
-	                  <div className="statsRow">
-	                    <span className="statsLabel">일간 매출</span>
-	                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
-	                  </div>
-	                  <div className="statsRow">
-	                    <span className="statsLabel">주간 매출</span>
-	                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
-	                  </div>
-	                  <div className="statsRow">
-	                    <span className="statsLabel">월간 매출</span>
-	                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
-	                  </div>
-	                  <div className="statsRow">
-	                    <span className="statsLabel">구독 상태</span>
-	                    <span className="statsValue">{selectedSubscriptionStatus} · {selectedRemainingText}</span>
-	                  </div>
-	                  {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
-	                </div>
-	              </section>
-	            </div>
-	          ) : null}
+        {/* ===== 관리자 메뉴 ===== */}
+        <section className="card menuCard">
+          {selectedStoreId ? (
+            /* 2차 관리자 홈 보완: 별도 현재 매장 박스 대신 매장 현황 카드 안에서 선택 매장을 함께 표시합니다. */
+            <div className="dashboardGrid" aria-label="관리자 홈 요약">
+              <section className="overviewCard overviewCardSelected">
+                <div className="overviewHead">
+                  <h2 className="overviewTitle">매장 현황</h2>
+                  <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
+                    매출보기
+                  </button>
+                </div>
+                <div className="overviewStoreLine">
+                  <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
+                </div>
+                <div className="statsSummary statsSummaryCompact">
+                  <div className="statsRow">
+                    <span className="statsLabel">일간 매출</span>
+                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
+                  </div>
+                  <div className="statsRow">
+                    <span className="statsLabel">주간 매출</span>
+                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
+                  </div>
+                  <div className="statsRow">
+                    <span className="statsLabel">월간 매출</span>
+                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
+                  </div>
+                  <div className="statsRow">
+                    <span className="statsLabel">구독 상태</span>
+                    <span className="statsValue">{selectedSubscriptionStatus} · {selectedRemainingText}</span>
+                  </div>
+                  {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
+                </div>
+              </section>
+            </div>
+          ) : null}
 
 	          <div className="btnGroup">
 	            <button
@@ -735,9 +735,9 @@ body {
   text-overflow:ellipsis;
   white-space:nowrap;
   border-radius:999px;
-  border:1px solid #d1d5db;
-  background:#fff;
-  color:var(--text);
+  border:1px solid #bfdbfe;
+  background:#dbeafe;
+  color:#1d4ed8;
   padding:7px 12px;
   font-size:13px;
   font-weight:950;
@@ -753,6 +753,10 @@ body {
   border-radius:14px;
   padding:12px;
 }
+.overviewCardSelected{
+  border-color:#bfdbfe;
+  background:#eef4ff;
+}
 .overviewHead{
   display:flex;
   align-items:center;
@@ -760,12 +764,10 @@ body {
   gap:10px;
   flex-wrap:wrap;
 }
-.overviewTitleRow{
-  min-width:0;
+.overviewStoreLine{
   display:flex;
   align-items:center;
-  gap:8px;
-  flex-wrap:wrap;
+  margin-top:8px;
 }
 .overviewTitle{
   margin:0;
@@ -863,9 +865,10 @@ body {
 }
 .storeActions{
   display:flex;
-  flex-direction:column;
-  align-items:flex-end;
-  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  flex-wrap:wrap;
 }
 .pillOn{
   background:#dbeafe;
@@ -979,8 +982,11 @@ body {
   }
   .cardBtnTitle{ font-size:12px; }
   .btnGroup{
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap:6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap:4px;
+  }
+  .cardBtn{
+    padding:8px 4px;
   }
   .storeList{
     max-height: min(42vh, 360px);
@@ -988,6 +994,11 @@ body {
   .setupBanner{
     display:grid;
     gap:10px;
+  }
+}
+@media (max-width: 360px){
+  .btnGroup{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 `;
