@@ -268,7 +268,9 @@ function AdminSetupPageInner() {
   };
 
   const onGoStep = async (step: SetupStep, href?: string) => {
-    await saveStep(step);
+    if (step !== 4) {
+      await saveStep(step);
+    }
     if (!href) return;
     const qs = new URLSearchParams({ store: storeId, mode: setupMode });
     router.push(`${href}?${qs.toString()}`);
@@ -604,6 +606,15 @@ function AdminSetupPageInner() {
         </>
       ) : null}
 
+      <style jsx global>{`
+        :root {
+          color-scheme: light;
+        }
+        body {
+          background: #f6f7f9;
+          color: #0f172a;
+        }
+      `}</style>
       <style jsx>{`
         .wrap { max-width: 980px; margin: 0 auto; padding: 22px 16px 34px; color: #0f172a; }
         .hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
