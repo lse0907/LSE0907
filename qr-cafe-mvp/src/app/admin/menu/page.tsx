@@ -17,6 +17,7 @@ type MenuItem = {
   image?: string | null;
   is_sold_out?: boolean | null;
   option_group_ids?: string[] | null;
+  option_not_required?: boolean | null;
   sort_order?: number | null;
   category_id?: string | null;
 };
@@ -77,6 +78,7 @@ type MenuDraft = {
   image: string;
   isSoldOut: boolean;
   optionGroupIds: string[];
+  optionNotRequired: boolean;
   categoryId: string;
   optionPriceByItem: Record<string, string>;
   excludedCommonItemIds: string[];
@@ -120,6 +122,7 @@ const emptyDraft: MenuDraft = {
   image: "",
   isSoldOut: false,
   optionGroupIds: [],
+  optionNotRequired: false,
   categoryId: "",
   optionPriceByItem: {},
   excludedCommonItemIds: [],
@@ -185,7 +188,7 @@ function AdminMenuPageInner() {
   const [pendingOptionTab, setPendingOptionTab] = useState<"common" | "exclusive" | null>(null);
   const [optionPanelOpen, setOptionPanelOpen] = useState(false);
   const [pendingOptionPanelClose, setPendingOptionPanelClose] = useState(false);
-  const [commonGroupToAdd, setCommonGroupToAdd] = useState("");
+  const [commonGroupIdsToAdd, setCommonGroupIdsToAdd] = useState<string[]>([]);
   const [newExclusiveGroup, setNewExclusiveGroup] = useState({
     name: "",
     max: "1",
@@ -213,7 +216,6 @@ function AdminMenuPageInner() {
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
-  const isEditing = Boolean(selectedId);
   const optionTabs: Array<{ key: "common" | "exclusive"; label: string }> = [
     { key: "common", label: "공통옵션" },
     { key: "exclusive", label: "전용옵션" },
@@ -261,7 +263,7 @@ function AdminMenuPageInner() {
 
       const menuRes = await supabase
         .from("menu_items")
-        .select("id,store_id,name,price,image,is_sold_out,option_group_ids,sort_order,category_id")
+        .select("id,store_id,name,price,image,is_sold_out,option_group_ids,option_not_required,sort_order,category_id")
         .eq("store_id", storeId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
@@ -398,6 +400,10 @@ function AdminMenuPageInner() {
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}&target=menus` : "?target=menus"}`;
   const categoryNameById = new Map(categories.map((cat) => [cat.id, cat.name]));
   const uncategorizedMenuCount = items.filter((item) => !item.category_id).length;
+  const optionReviewNeededMenuCount = items.filter((item) => {
+    const groupIds = Array.isArray(item.option_group_ids) ? item.option_group_ids : [];
+    return groupIds.length === 0 && !item.option_not_required;
+  }).length;
   const soldOutMenuCount = items.filter((item) => Boolean(item.is_sold_out)).length;
 
   const onCopyMenus = async () => {
@@ -459,6 +465,7 @@ function AdminMenuPageInner() {
       setCommonDirty(false);
       setExclusiveDirty(false);
       setPendingOptionTab(null);
+      setCommonGroupIdsToAdd([]);
       setOptionTab("common");
       return;
     }
@@ -472,6 +479,7 @@ function AdminMenuPageInner() {
       image: found.image || "",
       isSoldOut: Boolean(found.is_sold_out),
       optionGroupIds: Array.isArray(found.option_group_ids) ? found.option_group_ids : [],
+      optionNotRequired: Boolean(found.option_not_required),
       categoryId: String(found.category_id || ""),
       optionPriceByItem: optionPrices
         .filter((row) => row.menu_id === found.id)
@@ -486,6 +494,7 @@ function AdminMenuPageInner() {
     setCommonDirty(false);
     setExclusiveDirty(false);
     setPendingOptionTab(null);
+    setCommonGroupIdsToAdd([]);
     setOptionTab("common");
   }, [items, selectedId, optionPrices, optionExclusions]);
 
@@ -521,6 +530,7 @@ function AdminMenuPageInner() {
     setCommonDirty(false);
     setExclusiveDirty(false);
     setPendingOptionTab(null);
+    setCommonGroupIdsToAdd([]);
   };
 
   const onSave = async () => {
@@ -610,6 +620,7 @@ function AdminMenuPageInner() {
         image: draft.image.trim(),
         is_sold_out: draft.isSoldOut,
         option_group_ids: filteredGroups,
+        option_not_required: filteredGroups.length > 0 ? false : draft.optionNotRequired,
         category_id: draft.categoryId || null,
       };
 
@@ -758,7 +769,7 @@ function AdminMenuPageInner() {
     setDraft((prev) => {
       const has = prev.optionGroupIds.includes(id);
       const next = has ? prev.optionGroupIds.filter((g) => g !== id) : [...prev.optionGroupIds, id];
-      if (!has) return { ...prev, optionGroupIds: next };
+      if (!has) return { ...prev, optionGroupIds: next, optionNotRequired: false };
 
       const nextPrices = { ...prev.optionPriceByItem };
       const nextExcluded = [...prev.excludedCommonItemIds];
@@ -993,17 +1004,17 @@ function AdminMenuPageInner() {
     if (!storeId) return false;
     const menuId = draft.id.trim();
     if (!menuId) {
-      setStatus("error", "메뉴를 먼저 저장한 뒤 단가를 수정해주세요.");
+      setStatus("error", "메뉴 기본정보를 먼저 저장해 주세요.");
+      return false;
+    }
+    if (!items.some((item) => item.id === menuId)) {
+      setStatus("error", "메뉴 기본정보를 먼저 저장해 주세요.");
       return false;
     }
 
     const commonItemIds = selectedCommonGroups.flatMap((group) =>
       (itemsByGroup.get(group.id) || []).map((item) => item.id)
     );
-    if (commonItemIds.length === 0) {
-      setStatus("neutral", "저장할 공통옵션 항목이 없습니다.");
-      return false;
-    }
     const invalidCommonItem = commonItemIds.find((optionItemId) => {
       const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
       return !isWholeNumberString(raw);
@@ -1021,40 +1032,57 @@ function AdminMenuPageInner() {
     setSaving(true);
     clearStatus();
     try {
-      const rows = commonItemIds.map((optionItemId) => ({
-        store_id: storeId,
-        menu_id: menuId,
-        option_item_id: optionItemId,
-        price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
-      }));
+      const filteredGroups = draft.optionGroupIds.filter((gid) => {
+        const group = groups.find((g) => g.id === gid);
+        if (!group) return false;
+        if (group.scope !== "exclusive") return true;
+        return !group.linked_menu_id || group.linked_menu_id === menuId;
+      });
 
-      const { error } = await supabase
-        .from("menu_option_prices")
-        .upsert(rows, { onConflict: "store_id,menu_id,option_item_id" });
-      if (error) throw error;
+      const menuUpdate = await supabase
+        .from("menu_items")
+        .update({ option_group_ids: filteredGroups, option_not_required: false })
+        .eq("store_id", storeId)
+        .eq("id", menuId);
+      if (menuUpdate.error) throw menuUpdate.error;
 
-      if (hasExclusionTable) {
-        const delRes = await supabase
-          .from("menu_option_item_exclusions")
-          .delete()
-          .eq("store_id", storeId)
-          .eq("menu_id", menuId)
-          .in("option_item_id", commonItemIds);
-        if (delRes.error) throw delRes.error;
+      if (commonItemIds.length > 0) {
+        const rows = commonItemIds.map((optionItemId) => ({
+          store_id: storeId,
+          menu_id: menuId,
+          option_item_id: optionItemId,
+          price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
+        }));
 
-        if (selectedExcluded.length > 0) {
-          const insertRows = selectedExcluded.map((optionItemId) => ({
-            store_id: storeId,
-            menu_id: menuId,
-            option_item_id: optionItemId,
-          }));
-          const insRes = await supabase.from("menu_option_item_exclusions").insert(insertRows);
-          if (insRes.error) throw insRes.error;
+        const { error } = await supabase
+          .from("menu_option_prices")
+          .upsert(rows, { onConflict: "store_id,menu_id,option_item_id" });
+        if (error) throw error;
+
+        if (hasExclusionTable) {
+          const delRes = await supabase
+            .from("menu_option_item_exclusions")
+            .delete()
+            .eq("store_id", storeId)
+            .eq("menu_id", menuId)
+            .in("option_item_id", commonItemIds);
+          if (delRes.error) throw delRes.error;
+
+          if (selectedExcluded.length > 0) {
+            const insertRows = selectedExcluded.map((optionItemId) => ({
+              store_id: storeId,
+              menu_id: menuId,
+              option_item_id: optionItemId,
+            }));
+            const insRes = await supabase.from("menu_option_item_exclusions").insert(insertRows);
+            if (insRes.error) throw insRes.error;
+          }
         }
       }
 
       await refresh();
-      setStatus("success", "공통옵션 단가/제외 항목을 저장했습니다.");
+      setDraft((prev) => ({ ...prev, optionGroupIds: filteredGroups, optionNotRequired: false }));
+      setStatus("success", "공통옵션 연결을 저장했습니다.");
       setCommonDirty(false);
       return true;
     } catch (e: unknown) {
@@ -1063,6 +1091,70 @@ function AdminMenuPageInner() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveOptionNotRequiredInMenu = async () => {
+    if (!storeId) return false;
+    const menuId = draft.id.trim();
+    if (!menuId) {
+      setStatus("error", "메뉴 기본정보를 먼저 저장해 주세요.");
+      return false;
+    }
+    if (!items.some((item) => item.id === menuId)) {
+      setStatus("error", "메뉴 기본정보를 먼저 저장해 주세요.");
+      return false;
+    }
+
+    const run = async () => {
+      closeConfirm();
+      setSaving(true);
+      clearStatus();
+      try {
+        const menuUpdate = await supabase
+          .from("menu_items")
+          .update({ option_group_ids: [], option_not_required: true })
+          .eq("store_id", storeId)
+          .eq("id", menuId);
+        if (menuUpdate.error) throw menuUpdate.error;
+
+        const delPrices = await supabase.from("menu_option_prices").delete().eq("store_id", storeId).eq("menu_id", menuId);
+        if (delPrices.error) throw delPrices.error;
+
+        if (hasExclusionTable) {
+          const delExclusions = await supabase.from("menu_option_item_exclusions").delete().eq("store_id", storeId).eq("menu_id", menuId);
+          if (delExclusions.error) throw delExclusions.error;
+        }
+
+        await refresh();
+        setDraft((prev) => ({
+          ...prev,
+          optionGroupIds: [],
+          optionNotRequired: true,
+          optionPriceByItem: {},
+          excludedCommonItemIds: [],
+        }));
+        setCommonGroupIdsToAdd([]);
+        setCommonDirty(false);
+        setStatus("success", "옵션 없음으로 저장했습니다.");
+        return true;
+      } catch (e: unknown) {
+        setStatus("error", `옵션 없음 저장 실패: ${toErrMsg(e)}`);
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    if (draft.optionGroupIds.length > 0) {
+      openConfirm(
+        "옵션 없음으로 저장",
+        "연결된 옵션이 모두 해제됩니다. 이 메뉴를 옵션 없이 판매할까요?",
+        () => void run()
+      );
+      return false;
+    }
+
+    return run();
   };
 
   const deleteExclusiveGroupInMenu = async (groupId: string) => {
@@ -1181,7 +1273,7 @@ function AdminMenuPageInner() {
       const nextGroupIds = Array.from(new Set([...(draft.optionGroupIds || []), groupId]));
       const menuUpdate = await supabase
         .from("menu_items")
-        .update({ option_group_ids: nextGroupIds })
+        .update({ option_group_ids: nextGroupIds, option_not_required: false })
         .eq("store_id", storeId)
         .eq("id", menuId);
       if (menuUpdate.error) throw menuUpdate.error;
@@ -1189,6 +1281,7 @@ function AdminMenuPageInner() {
       setDraft((prev) => ({
         ...prev,
         optionGroupIds: nextGroupIds,
+        optionNotRequired: false,
       }));
       setSelectedExclusiveGroupId(groupId);
       setNewExclusiveGroup({ name: "", max: "1" });
@@ -1279,14 +1372,22 @@ function AdminMenuPageInner() {
     });
   };
 
-  const addCommonGroup = () => {
-    if (!commonGroupToAdd) return;
+  const toggleCommonGroupToAdd = (groupId: string) => {
+    setCommonGroupIdsToAdd((prev) =>
+      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId]
+    );
+  };
+
+  const addCommonGroups = () => {
+    const idsToAdd = commonGroupIdsToAdd.filter((id) => unselectedCommonGroups.some((group) => group.id === id));
+    if (idsToAdd.length === 0) return;
     setCommonDirty(true);
-    setDraft((prev) => {
-      if (prev.optionGroupIds.includes(commonGroupToAdd)) return prev;
-      return { ...prev, optionGroupIds: [...prev.optionGroupIds, commonGroupToAdd] };
-    });
-    setCommonGroupToAdd("");
+    setDraft((prev) => ({
+      ...prev,
+      optionGroupIds: Array.from(new Set([...prev.optionGroupIds, ...idsToAdd])),
+      optionNotRequired: false,
+    }));
+    setCommonGroupIdsToAdd([]);
   };
 
   const onUploadMenuImage = async (file: File | null) => {
@@ -1447,6 +1548,10 @@ function AdminMenuPageInner() {
           border-color: #fde68a;
           background: linear-gradient(180deg, #fffbeb, #ffffff);
         }
+        .summaryItemInfo {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        }
         .summaryLabel {
           color: var(--muted);
           font-size: 12px;
@@ -1464,11 +1569,18 @@ function AdminMenuPageInner() {
           border-color: #fde68a;
           background: linear-gradient(180deg, #fffbeb, #ffffff);
         }
+        .optionUnlinkedNotice {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        }
         .noticeTitle {
           margin: 0;
           color: #92400e;
           font-size: 15px;
           font-weight: 950;
+        }
+        .optionUnlinkedNotice .noticeTitle {
+          color: #1d4ed8;
         }
         .grid {
           display: grid;
@@ -1713,6 +1825,49 @@ function AdminMenuPageInner() {
           background: #fffbeb;
           color: #92400e;
         }
+        .optionEmptyChip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2px 8px;
+          border-radius: 999px;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+          font-size: 11px;
+          font-weight: 950;
+        }
+        .optionLinkedChip {
+          border-color: #bbf7d0;
+          background: #f0fdf4;
+          color: #166534;
+        }
+        .optionReviewChip {
+          border-color: #fde68a;
+          background: #fffbeb;
+          color: #92400e;
+        }
+        .optionNoneCard,
+        .optionNoneSaveBox {
+          border: 1px solid #dbe1ea;
+          background: #f8fafc;
+          border-radius: 14px;
+          padding: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-top: 8px;
+        }
+        .optionNoneCardOn {
+          border-color: #bfdbfe;
+          background: #eff6ff;
+        }
+        .optionNoneSaveBox {
+          display: grid;
+          justify-items: start;
+        }
         .field {
           display: grid;
           gap: 6px;
@@ -1794,6 +1949,56 @@ function AdminMenuPageInner() {
           background: var(--surface-soft);
           display: grid;
           gap: 8px;
+        }
+        .commonGroupPickerHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .commonGroupPicker {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 8px;
+          max-height: 320px;
+          overflow-y: auto;
+          padding-right: 2px;
+          overscroll-behavior: contain;
+        }
+        .commonGroupChoice {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 40px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          padding: 8px 10px;
+          background: var(--surface);
+          cursor: pointer;
+        }
+        .commonGroupChoice input {
+          width: 18px;
+          height: 18px;
+          accent-color: var(--primary);
+          flex: 0 0 auto;
+        }
+        .commonGroupChoiceText {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          min-width: 0;
+          white-space: nowrap;
+        }
+        .commonGroupChoiceText .name {
+          display: block;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .commonGroupPolicy {
+          flex: 0 0 auto;
+          font-size: 12px;
         }
         .groupOptionDetail {
           border: 1px dashed var(--line);
@@ -2190,6 +2395,9 @@ function AdminMenuPageInner() {
           .inlineSelectRow {
             grid-template-columns: 1fr;
           }
+          .commonGroupPicker {
+            max-height: 240px;
+          }
           .menuListToolbar {
             align-items: flex-start;
           }
@@ -2267,6 +2475,11 @@ function AdminMenuPageInner() {
           .previewPlaceholder {
             width: 80px;
             height: 80px;
+          }
+        }
+        @media (max-width: 560px) {
+          .commonGroupPicker {
+            max-height: 200px;
           }
         }
         @media (max-width: 360px) {
@@ -2447,6 +2660,10 @@ function AdminMenuPageInner() {
                 <span className="summaryLabel">미분류</span>
                 <strong className="summaryValue">{uncategorizedMenuCount}</strong>
               </div>
+              <div className={`summaryItem ${optionReviewNeededMenuCount > 0 ? "summaryItemInfo" : ""}`.trim()}>
+                <span className="summaryLabel">확인 필요</span>
+                <strong className="summaryValue">{optionReviewNeededMenuCount}</strong>
+              </div>
               <div className="summaryItem">
                 <span className="summaryLabel">품절</span>
                 <strong className="summaryValue">{soldOutMenuCount}</strong>
@@ -2458,6 +2675,18 @@ function AdminMenuPageInner() {
             <section className="card uncategorizedNotice">
               <h2 className="noticeTitle">카테고리 연결이 필요한 메뉴가 있습니다.</h2>
               <p className="sub" style={{ marginTop: 6 }}>미분류 메뉴를 선택해 카테고리를 지정해 주세요.</p>
+            </section>
+          ) : null}
+
+          {optionReviewNeededMenuCount > 0 ? (
+            <section className="card optionUnlinkedNotice">
+              <h2 className="noticeTitle">옵션 확인이 필요한 메뉴가 있습니다.</h2>
+              <p className="sub" style={{ marginTop: 6 }}>옵션을 연결하거나 옵션 없음으로 표시해 주세요.</p>
+              <div className="btnRow" style={{ marginTop: 10 }}>
+                <a className="btn" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                  옵션 연결 확인
+                </a>
+              </div>
             </section>
           ) : null}
 
@@ -2476,9 +2705,6 @@ function AdminMenuPageInner() {
                 <button className="btn" onClick={saveMenuOrder} disabled={saving || loading || !orderDirty}>
                   순서 저장
                 </button>
-                <a className="btn" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                  빠른 옵션 연결
-                </a>
               </div>
               <label className="soldOutFilterToggle">
                 <input
@@ -2550,6 +2776,9 @@ function AdminMenuPageInner() {
                       <div className="menuNameLine">
                         <span className="name">{m.name}</span>
                         <span className={`categoryChip ${m.category_id ? "" : "categoryChipWarn"}`.trim()}>{categoryName}</span>
+                        {groupIds.length > 0 ? <span className="optionEmptyChip optionLinkedChip">옵션 연결</span> : null}
+                        {groupIds.length === 0 && m.option_not_required ? <span className="optionEmptyChip">옵션 없음</span> : null}
+                        {groupIds.length === 0 && !m.option_not_required ? <span className="optionEmptyChip optionReviewChip">확인 필요</span> : null}
                         {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
                       </div>
                       <span className="orderActionRow">
@@ -2715,7 +2944,49 @@ function AdminMenuPageInner() {
             ) : null}
             {optionPanelOpen ? (
               <>
-            <div className="optionSaveGuide">옵션 변경사항은 기본정보와 별도로 저장됩니다. 여러 메뉴에 같은 공통옵션을 한 번에 적용하려면 메뉴 목록의 빠른 옵션 연결을 사용해 주세요.</div>
+            <div className="optionSaveGuide">옵션은 별도로 저장됩니다. 옵션이 없으면 옵션 없음으로 저장해 주세요.</div>
+            <div className={`optionNoneCard ${draft.optionNotRequired ? "optionNoneCardOn" : ""}`.trim()}>
+              <div>
+                <strong>{draft.optionNotRequired ? "이 메뉴는 옵션 없이 판매됩니다." : "옵션이 필요 없나요?"}</strong>
+                <p className="muted" style={{ marginTop: 4 }}>
+                  {draft.optionNotRequired ? "저장하면 옵션 연결 내용이 해제됩니다." : "옵션이 필요 없다면 옵션 없음으로 설정하세요."}
+                </p>
+              </div>
+              {draft.optionNotRequired ? (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setCommonDirty(true);
+                    setDraft((prev) => ({ ...prev, optionNotRequired: false }));
+                  }}
+                  disabled={saving || loading}
+                >
+                  옵션 연결로 변경
+                </button>
+              ) : (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setCommonDirty(true);
+                    setDraft((prev) => ({ ...prev, optionNotRequired: true }));
+                  }}
+                  disabled={saving || loading}
+                >
+                  옵션 없음으로 설정
+                </button>
+              )}
+            </div>
+            {draft.optionNotRequired ? (
+              <div className="optionNoneSaveBox">
+                <p className="muted">저장하면 연결된 옵션이 모두 해제됩니다.</p>
+                <button className="btn btnPrimary" type="button" onClick={saveOptionNotRequiredInMenu} disabled={saving || loading || !commonDirty}>
+                  옵션 없음 저장
+                </button>
+              </div>
+            ) : (
+              <>
             <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
               {optionTabs.map((tab) => (
                 <button
@@ -2736,103 +3007,113 @@ function AdminMenuPageInner() {
               <div className="field">
                 <div className="label">공통옵션</div>
                 <div className="optionConnectCard">
-                <div className="inlineSelectRow">
-                  <select
-                    className="input"
-                    style={{ minWidth: 220, maxWidth: 420 }}
-                    value={commonGroupToAdd}
-                    onChange={(e) => setCommonGroupToAdd(e.target.value)}
-                    disabled={saving || loading || unselectedCommonGroups.length === 0}
+                <div className="commonGroupPickerHead">
+                  <span className="muted">추가할 공통옵션을 선택해 주세요.</span>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={addCommonGroups}
+                    disabled={saving || loading || commonGroupIdsToAdd.length === 0}
                   >
-                    <option value="">추가할 공통옵션 그룹 선택</option>
-                    {unselectedCommonGroups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name} · {getGroupPolicyText(g)}
-                      </option>
-                    ))}
-                  </select>
-                  <button className="btn" type="button" onClick={addCommonGroup} disabled={saving || loading || !commonGroupToAdd}>
-                    옵션 연결
+                    선택 연결
                   </button>
                 </div>
+                {unselectedCommonGroups.length === 0 ? (
+                  <div className="muted">추가할 공통옵션이 없습니다.</div>
+                ) : (
+                  <div className="commonGroupPicker" role="group" aria-label="추가할 공통옵션 그룹 선택">
+                    {unselectedCommonGroups.map((g) => (
+                      <label key={g.id} className="commonGroupChoice">
+                        <input
+                          type="checkbox"
+                          checked={commonGroupIdsToAdd.includes(g.id)}
+                          onChange={() => toggleCommonGroupToAdd(g.id)}
+                          disabled={saving || loading}
+                        />
+                        <span className="commonGroupChoiceText">
+                          <span className="name">{g.name}</span>
+                          <span className="muted commonGroupPolicy">· {getGroupPolicyText(g)}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
 
                 {selectedCommonGroups.length === 0 ? (
                   <div className="muted">아직 연결된 공통옵션이 없습니다.</div>
                 ) : (
-                  <>
-                    <div className="optionGrid">
-                      {selectedCommonGroups.map((group) => {
-                        const groupOptions = itemsByGroup.get(group.id) || [];
-                        return (
-                          <div className="groupOptionDetail" key={group.id}>
-                            <div className="groupOptionItem">
-                              <div className="name" style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                                <span>{group.name}</span>
-                                <span className={`policyBadge ${group.required ? "policyBadgeRequired" : ""}`.trim()}>{getGroupPolicyText(group)}</span>
-                              </div>
-                              <button className="btn btnDanger btnMini" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
-                                연결해제
-                              </button>
+                  <div className="optionGrid">
+                    {selectedCommonGroups.map((group) => {
+                      const groupOptions = itemsByGroup.get(group.id) || [];
+                      return (
+                        <div className="groupOptionDetail" key={group.id}>
+                          <div className="groupOptionItem">
+                            <div className="name" style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                              <span>{group.name}</span>
+                              <span className={`policyBadge ${group.required ? "policyBadgeRequired" : ""}`.trim()}>{getGroupPolicyText(group)}</span>
                             </div>
-                            {groupOptions.length === 0 ? (
-                              <div className="muted">옵션 항목이 없습니다.</div>
-                            ) : (
-                              groupOptions.map((item) => (
-                                <div key={item.id} className="groupOptionItem groupOptionValueRow">
-                                  <span className="optionItemLeft">
-                                    <span className="optionItemText">{item.name}</span>
-                                  </span>
-                                  <span className="optionItemControlRow">
-                                    <input
-                                      className="input"
-                                      style={{ maxWidth: 120 }}
-                                      inputMode="numeric"
-                                      value={getOptionPrice(item)}
-                                      onChange={(e) =>
-                                        {
-                                          setCommonDirty(true);
-                                          setDraft((prev) => ({
-                                            ...prev,
-                                            optionPriceByItem: {
-                                              ...prev.optionPriceByItem,
-                                              [item.id]: e.target.value,
-                                            },
-                                          }));
-                                        }
-                                      }
-                                      disabled={saving || loading}
-                                    />
-                                    <label className="optionRow optionExcludeLabel" style={{ gap: 4 }}>
-                                      <input
-                                        type="checkbox"
-                                        checked={isExcludedCommonItem(item.id)}
-                                        onChange={() => {
-                                          setCommonDirty(true);
-                                          toggleExcludeCommonItem(item.id);
-                                        }}
-                                        disabled={saving || loading || !hasExclusionTable}
-                                      />
-                                      제외
-                                    </label>
-                                  </span>
-                                </div>
-                              ))
-                            )}
+                            <button className="btn btnDanger btnMini" type="button" onClick={() => toggleGroup(group.id)} disabled={saving || loading}>
+                              연결해제
+                            </button>
                           </div>
-                        );
-                      })}
-                    </div>
-                    <div className="optionActionRow">
-                      <button className="btn btnPrimary" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading}>
-                        공통옵션 저장
-                      </button>
-                    </div>
-                    {!hasExclusionTable ? (
-                      <div className="hint">제외 기능은 DB SQL 적용 후 활성화됩니다.</div>
-                    ) : (
-                      <div className="hint">체크한 항목은 이 메뉴에서만 숨김 처리됩니다.</div>
-                    )}
-                  </>
+                          {groupOptions.length === 0 ? (
+                            <div className="muted">옵션 항목이 없습니다.</div>
+                          ) : (
+                            groupOptions.map((item) => (
+                              <div key={item.id} className="groupOptionItem groupOptionValueRow">
+                                <span className="optionItemLeft">
+                                  <span className="optionItemText">{item.name}</span>
+                                </span>
+                                <span className="optionItemControlRow">
+                                  <input
+                                    className="input"
+                                    style={{ maxWidth: 120 }}
+                                    inputMode="numeric"
+                                    value={getOptionPrice(item)}
+                                    onChange={(e) =>
+                                      {
+                                        setCommonDirty(true);
+                                        setDraft((prev) => ({
+                                          ...prev,
+                                          optionPriceByItem: {
+                                            ...prev.optionPriceByItem,
+                                            [item.id]: e.target.value,
+                                          },
+                                        }));
+                                      }
+                                    }
+                                    disabled={saving || loading}
+                                  />
+                                  <label className="optionRow optionExcludeLabel" style={{ gap: 4 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isExcludedCommonItem(item.id)}
+                                      onChange={() => {
+                                        setCommonDirty(true);
+                                        toggleExcludeCommonItem(item.id);
+                                      }}
+                                      disabled={saving || loading || !hasExclusionTable}
+                                    />
+                                    제외
+                                  </label>
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="optionActionRow">
+                  <button className="btn btnPrimary" type="button" onClick={saveCommonPricesInMenu} disabled={saving || loading || !commonDirty}>
+                    공통옵션 저장
+                  </button>
+                </div>
+                {!hasExclusionTable ? (
+                  <div className="hint">제외 기능은 DB SQL 적용 후 활성화됩니다.</div>
+                ) : (
+                  <div className="hint">체크한 항목은 이 메뉴에서만 숨김 처리됩니다.</div>
                 )}
                 </div>
               </div>
@@ -3061,6 +3342,8 @@ function AdminMenuPageInner() {
                 </div>
               </div>
             ) : null}
+              </>
+            )}
               </>
             ) : null}
 
