@@ -282,6 +282,7 @@ function AdminMenuOptionConnectInner() {
   };
 
   const setupBackHref = `/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
+  const adminHomeHref = `/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
   const menuHref = `/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
   const optionsHref = `/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
 
@@ -765,9 +766,9 @@ function AdminMenuOptionConnectInner() {
             </p>
           </div>
           <div className="headerActionRow">
+            <a className="btn" href={adminHomeHref}>관리자 홈</a>
             <a className="btn" href={optionsHref}>옵션관리</a>
             <a className="btn" href={menuHref}>메뉴관리</a>
-            <a className="btn" href={setupBackHref}>초기설정</a>
           </div>
         </div>
       </header>
