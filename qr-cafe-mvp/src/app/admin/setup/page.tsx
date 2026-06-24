@@ -45,7 +45,7 @@ const stepOrder: Array<{ step: ActiveSetupStep; title: string; desc: string; hre
   { step: 1, title: "카테고리 확인", desc: "고객에게 보여줄 메뉴 분류를 확인합니다.", href: "/admin/categories", noun: "카테고리" },
   { step: 2, title: "공통옵션 확인", desc: "여러 메뉴에서 함께 사용할 옵션 그룹과 항목을 확인합니다.", href: "/admin/options", noun: "옵션 항목" },
   { step: 3, title: "메뉴 확인", desc: "판매 메뉴의 이름, 가격, 카테고리를 확인합니다.", href: "/admin/menu", noun: "판매 메뉴" },
-  { step: 4, title: "옵션 연결 확인", desc: "필요한 메뉴에 공통옵션이 연결되어 있는지 확인합니다.", href: "/admin/menu/option-connect", noun: "연결 메뉴" },
+  { step: 4, title: "옵션 연결 확인", desc: "메뉴별 옵션 필요 여부를 확인합니다.", href: "/admin/menu/option-connect", noun: "확인 메뉴" },
 ];
 
 const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: string; note: string }> = [
@@ -212,7 +212,7 @@ function AdminSetupPageInner() {
       supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", sid).eq("is_active", true),
       supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", sid),
       supabase.from("option_items").select("id", { count: "exact", head: true }).eq("store_id", sid),
-      supabase.from("menu_items").select("id,price,is_sold_out,category_id,option_group_ids").eq("store_id", sid),
+      supabase.from("menu_items").select("id,price,is_sold_out,category_id,option_group_ids,option_not_required").eq("store_id", sid),
     ]);
     if (catRes.error || optRes.error || itemRes.error || menuRes.error) return null;
     const menuRows = Array.isArray(menuRes.data) ? menuRes.data : [];
@@ -222,7 +222,10 @@ function AdminSetupPageInner() {
       optionItems: Number(itemRes.count || 0),
       menus: menuRows.length,
       readyMenus: menuRows.filter((menu) => Number(menu.price || 0) > 0 && !menu.is_sold_out && Boolean(menu.category_id)).length,
-      optionLinkedMenus: menuRows.filter((menu) => Array.isArray(menu.option_group_ids) && menu.option_group_ids.length > 0).length,
+      optionLinkedMenus: menuRows.filter((menu) => {
+        const groupIds = Array.isArray(menu.option_group_ids) ? menu.option_group_ids : [];
+        return groupIds.length > 0 || Boolean(menu.option_not_required);
+      }).length,
     };
     setCounts(next);
     return next;
@@ -536,7 +539,7 @@ function AdminSetupPageInner() {
                     {row.locked ? <p className="warnText">{row.lockReason}</p> : null}
                     {!row.locked && row.dataReady && !row.confirmed ? (
                       <p className="warnText">
-                        {row.step === 4 ? "옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다. 연결 상태만 확인해 주세요." : "확인을 완료해 주세요."}
+	                        {row.step === 4 ? "옵션을 연결하거나 옵션 없음으로 표시해 주세요." : "확인을 완료해 주세요."}
                       </p>
                     ) : null}
                   </div>

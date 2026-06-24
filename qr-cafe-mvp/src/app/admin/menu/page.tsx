@@ -17,6 +17,7 @@ type MenuItem = {
   image?: string | null;
   is_sold_out?: boolean | null;
   option_group_ids?: string[] | null;
+  option_not_required?: boolean | null;
   sort_order?: number | null;
   category_id?: string | null;
 };
@@ -77,6 +78,7 @@ type MenuDraft = {
   image: string;
   isSoldOut: boolean;
   optionGroupIds: string[];
+  optionNotRequired: boolean;
   categoryId: string;
   optionPriceByItem: Record<string, string>;
   excludedCommonItemIds: string[];
@@ -120,6 +122,7 @@ const emptyDraft: MenuDraft = {
   image: "",
   isSoldOut: false,
   optionGroupIds: [],
+  optionNotRequired: false,
   categoryId: "",
   optionPriceByItem: {},
   excludedCommonItemIds: [],
@@ -213,7 +216,6 @@ function AdminMenuPageInner() {
 
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
-  const isEditing = Boolean(selectedId);
   const optionTabs: Array<{ key: "common" | "exclusive"; label: string }> = [
     { key: "common", label: "공통옵션" },
     { key: "exclusive", label: "전용옵션" },
@@ -261,7 +263,7 @@ function AdminMenuPageInner() {
 
       const menuRes = await supabase
         .from("menu_items")
-        .select("id,store_id,name,price,image,is_sold_out,option_group_ids,sort_order,category_id")
+        .select("id,store_id,name,price,image,is_sold_out,option_group_ids,option_not_required,sort_order,category_id")
         .eq("store_id", storeId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
@@ -398,7 +400,10 @@ function AdminMenuPageInner() {
   const importHref = `/admin/import${storeId ? `?store=${encodeURIComponent(storeId)}&target=menus` : "?target=menus"}`;
   const categoryNameById = new Map(categories.map((cat) => [cat.id, cat.name]));
   const uncategorizedMenuCount = items.filter((item) => !item.category_id).length;
-  const unlinkedOptionMenuCount = items.filter((item) => !Array.isArray(item.option_group_ids) || item.option_group_ids.length === 0).length;
+  const optionReviewNeededMenuCount = items.filter((item) => {
+    const groupIds = Array.isArray(item.option_group_ids) ? item.option_group_ids : [];
+    return groupIds.length === 0 && !item.option_not_required;
+  }).length;
   const soldOutMenuCount = items.filter((item) => Boolean(item.is_sold_out)).length;
 
   const onCopyMenus = async () => {
@@ -474,6 +479,7 @@ function AdminMenuPageInner() {
       image: found.image || "",
       isSoldOut: Boolean(found.is_sold_out),
       optionGroupIds: Array.isArray(found.option_group_ids) ? found.option_group_ids : [],
+      optionNotRequired: Boolean(found.option_not_required),
       categoryId: String(found.category_id || ""),
       optionPriceByItem: optionPrices
         .filter((row) => row.menu_id === found.id)
@@ -614,6 +620,7 @@ function AdminMenuPageInner() {
         image: draft.image.trim(),
         is_sold_out: draft.isSoldOut,
         option_group_ids: filteredGroups,
+        option_not_required: filteredGroups.length > 0 ? false : draft.optionNotRequired,
         category_id: draft.categoryId || null,
       };
 
@@ -762,7 +769,7 @@ function AdminMenuPageInner() {
     setDraft((prev) => {
       const has = prev.optionGroupIds.includes(id);
       const next = has ? prev.optionGroupIds.filter((g) => g !== id) : [...prev.optionGroupIds, id];
-      if (!has) return { ...prev, optionGroupIds: next };
+      if (!has) return { ...prev, optionGroupIds: next, optionNotRequired: false };
 
       const nextPrices = { ...prev.optionPriceByItem };
       const nextExcluded = [...prev.excludedCommonItemIds];
@@ -1034,7 +1041,7 @@ function AdminMenuPageInner() {
 
       const menuUpdate = await supabase
         .from("menu_items")
-        .update({ option_group_ids: filteredGroups })
+        .update({ option_group_ids: filteredGroups, option_not_required: false })
         .eq("store_id", storeId)
         .eq("id", menuId);
       if (menuUpdate.error) throw menuUpdate.error;
@@ -1074,7 +1081,7 @@ function AdminMenuPageInner() {
       }
 
       await refresh();
-      setDraft((prev) => ({ ...prev, optionGroupIds: filteredGroups }));
+      setDraft((prev) => ({ ...prev, optionGroupIds: filteredGroups, optionNotRequired: false }));
       setStatus("success", "공통옵션 연결을 저장했습니다.");
       setCommonDirty(false);
       return true;
@@ -1084,6 +1091,70 @@ function AdminMenuPageInner() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveOptionNotRequiredInMenu = async () => {
+    if (!storeId) return false;
+    const menuId = draft.id.trim();
+    if (!menuId) {
+      setStatus("error", "메뉴 기본정보를 먼저 저장해 주세요.");
+      return false;
+    }
+    if (!items.some((item) => item.id === menuId)) {
+      setStatus("error", "메뉴 기본정보를 먼저 저장해 주세요.");
+      return false;
+    }
+
+    const run = async () => {
+      closeConfirm();
+      setSaving(true);
+      clearStatus();
+      try {
+        const menuUpdate = await supabase
+          .from("menu_items")
+          .update({ option_group_ids: [], option_not_required: true })
+          .eq("store_id", storeId)
+          .eq("id", menuId);
+        if (menuUpdate.error) throw menuUpdate.error;
+
+        const delPrices = await supabase.from("menu_option_prices").delete().eq("store_id", storeId).eq("menu_id", menuId);
+        if (delPrices.error) throw delPrices.error;
+
+        if (hasExclusionTable) {
+          const delExclusions = await supabase.from("menu_option_item_exclusions").delete().eq("store_id", storeId).eq("menu_id", menuId);
+          if (delExclusions.error) throw delExclusions.error;
+        }
+
+        await refresh();
+        setDraft((prev) => ({
+          ...prev,
+          optionGroupIds: [],
+          optionNotRequired: true,
+          optionPriceByItem: {},
+          excludedCommonItemIds: [],
+        }));
+        setCommonGroupIdsToAdd([]);
+        setCommonDirty(false);
+        setStatus("success", "옵션 없음으로 저장했습니다.");
+        return true;
+      } catch (e: unknown) {
+        setStatus("error", `옵션 없음 저장 실패: ${toErrMsg(e)}`);
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    if (draft.optionGroupIds.length > 0) {
+      openConfirm(
+        "옵션 없음으로 저장",
+        "연결된 옵션이 모두 해제됩니다. 이 메뉴를 옵션 없이 판매할까요?",
+        () => void run()
+      );
+      return false;
+    }
+
+    return run();
   };
 
   const deleteExclusiveGroupInMenu = async (groupId: string) => {
@@ -1202,7 +1273,7 @@ function AdminMenuPageInner() {
       const nextGroupIds = Array.from(new Set([...(draft.optionGroupIds || []), groupId]));
       const menuUpdate = await supabase
         .from("menu_items")
-        .update({ option_group_ids: nextGroupIds })
+        .update({ option_group_ids: nextGroupIds, option_not_required: false })
         .eq("store_id", storeId)
         .eq("id", menuId);
       if (menuUpdate.error) throw menuUpdate.error;
@@ -1210,6 +1281,7 @@ function AdminMenuPageInner() {
       setDraft((prev) => ({
         ...prev,
         optionGroupIds: nextGroupIds,
+        optionNotRequired: false,
       }));
       setSelectedExclusiveGroupId(groupId);
       setNewExclusiveGroup({ name: "", max: "1" });
@@ -1313,6 +1385,7 @@ function AdminMenuPageInner() {
     setDraft((prev) => ({
       ...prev,
       optionGroupIds: Array.from(new Set([...prev.optionGroupIds, ...idsToAdd])),
+      optionNotRequired: false,
     }));
     setCommonGroupIdsToAdd([]);
   };
@@ -1763,6 +1836,37 @@ function AdminMenuPageInner() {
           color: #1d4ed8;
           font-size: 11px;
           font-weight: 950;
+        }
+        .optionLinkedChip {
+          border-color: #bbf7d0;
+          background: #f0fdf4;
+          color: #166534;
+        }
+        .optionReviewChip {
+          border-color: #fde68a;
+          background: #fffbeb;
+          color: #92400e;
+        }
+        .optionNoneCard,
+        .optionNoneSaveBox {
+          border: 1px solid #dbe1ea;
+          background: #f8fafc;
+          border-radius: 14px;
+          padding: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-top: 8px;
+        }
+        .optionNoneCardOn {
+          border-color: #bfdbfe;
+          background: #eff6ff;
+        }
+        .optionNoneSaveBox {
+          display: grid;
+          justify-items: start;
         }
         .field {
           display: grid;
@@ -2556,9 +2660,9 @@ function AdminMenuPageInner() {
                 <span className="summaryLabel">미분류</span>
                 <strong className="summaryValue">{uncategorizedMenuCount}</strong>
               </div>
-              <div className={`summaryItem ${unlinkedOptionMenuCount > 0 ? "summaryItemInfo" : ""}`.trim()}>
-                <span className="summaryLabel">옵션 미연결</span>
-                <strong className="summaryValue">{unlinkedOptionMenuCount}</strong>
+              <div className={`summaryItem ${optionReviewNeededMenuCount > 0 ? "summaryItemInfo" : ""}`.trim()}>
+                <span className="summaryLabel">확인 필요</span>
+                <strong className="summaryValue">{optionReviewNeededMenuCount}</strong>
               </div>
               <div className="summaryItem">
                 <span className="summaryLabel">품절</span>
@@ -2574,10 +2678,10 @@ function AdminMenuPageInner() {
             </section>
           ) : null}
 
-          {unlinkedOptionMenuCount > 0 ? (
+          {optionReviewNeededMenuCount > 0 ? (
             <section className="card optionUnlinkedNotice">
-              <h2 className="noticeTitle">옵션 미연결 메뉴가 있습니다.</h2>
-              <p className="sub" style={{ marginTop: 6 }}>공통옵션은 옵션 연결 확인에서 한 번에 설정할 수 있습니다.</p>
+              <h2 className="noticeTitle">옵션 확인이 필요한 메뉴가 있습니다.</h2>
+              <p className="sub" style={{ marginTop: 6 }}>옵션을 연결하거나 옵션 없음으로 표시해 주세요.</p>
               <div className="btnRow" style={{ marginTop: 10 }}>
                 <a className="btn" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
                   옵션 연결 확인
@@ -2672,7 +2776,9 @@ function AdminMenuPageInner() {
                       <div className="menuNameLine">
                         <span className="name">{m.name}</span>
                         <span className={`categoryChip ${m.category_id ? "" : "categoryChipWarn"}`.trim()}>{categoryName}</span>
-                        {groupIds.length === 0 ? <span className="optionEmptyChip">옵션 없음</span> : null}
+                        {groupIds.length > 0 ? <span className="optionEmptyChip optionLinkedChip">옵션 연결</span> : null}
+                        {groupIds.length === 0 && m.option_not_required ? <span className="optionEmptyChip">옵션 없음</span> : null}
+                        {groupIds.length === 0 && !m.option_not_required ? <span className="optionEmptyChip optionReviewChip">확인 필요</span> : null}
                         {m.is_sold_out ? <span className="soldOutChip">품절</span> : null}
                       </div>
                       <span className="orderActionRow">
@@ -2838,7 +2944,49 @@ function AdminMenuPageInner() {
             ) : null}
             {optionPanelOpen ? (
               <>
-            <div className="optionSaveGuide">옵션은 별도로 저장됩니다. 공통옵션은 옵션 연결 확인에서 한 번에 설정할 수 있습니다.</div>
+            <div className="optionSaveGuide">옵션은 별도로 저장됩니다. 옵션이 없으면 옵션 없음으로 저장해 주세요.</div>
+            <div className={`optionNoneCard ${draft.optionNotRequired ? "optionNoneCardOn" : ""}`.trim()}>
+              <div>
+                <strong>{draft.optionNotRequired ? "이 메뉴는 옵션 없이 판매됩니다." : "옵션이 필요 없나요?"}</strong>
+                <p className="muted" style={{ marginTop: 4 }}>
+                  {draft.optionNotRequired ? "저장하면 옵션 연결 내용이 해제됩니다." : "옵션이 필요 없다면 옵션 없음으로 설정하세요."}
+                </p>
+              </div>
+              {draft.optionNotRequired ? (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setCommonDirty(true);
+                    setDraft((prev) => ({ ...prev, optionNotRequired: false }));
+                  }}
+                  disabled={saving || loading}
+                >
+                  옵션 연결로 변경
+                </button>
+              ) : (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setCommonDirty(true);
+                    setDraft((prev) => ({ ...prev, optionNotRequired: true }));
+                  }}
+                  disabled={saving || loading}
+                >
+                  옵션 없음으로 설정
+                </button>
+              )}
+            </div>
+            {draft.optionNotRequired ? (
+              <div className="optionNoneSaveBox">
+                <p className="muted">저장하면 연결된 옵션이 모두 해제됩니다.</p>
+                <button className="btn btnPrimary" type="button" onClick={saveOptionNotRequiredInMenu} disabled={saving || loading || !commonDirty}>
+                  옵션 없음 저장
+                </button>
+              </div>
+            ) : (
+              <>
             <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
               {optionTabs.map((tab) => (
                 <button
@@ -3194,6 +3342,8 @@ function AdminMenuPageInner() {
                 </div>
               </div>
             ) : null}
+              </>
+            )}
               </>
             ) : null}
 
