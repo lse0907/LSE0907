@@ -470,6 +470,11 @@ function AdminMenuOptionConnectInner() {
           color: #fff;
           border-color: var(--brand);
         }
+        .btnOptionNone {
+          border-color: #0f766e;
+          background: #0f766e;
+          color: #fff;
+        }
         .btn:disabled {
           opacity: 0.6;
           cursor: not-allowed;
@@ -758,8 +763,9 @@ function AdminMenuOptionConnectInner() {
           max-height: 270px;
         }
         .optionNonePanel {
-          border: 1px solid #dbeafe;
-          background: #eff6ff;
+          border: 1px solid #a5f3fc;
+          background: #ecfeff;
+          color: #155e75;
           border-radius: 12px;
           padding: 12px;
           margin-top: 10px;
@@ -1014,12 +1020,12 @@ function AdminMenuOptionConnectInner() {
                 공통옵션 연결
               </button>
               <button
-                className={`btn ${actionMode === "none" ? "btnPrimary" : ""}`.trim()}
+                className={`btn ${actionMode === "none" ? "btnOptionNone" : ""}`.trim()}
                 type="button"
                 onClick={() => setActionMode("none")}
                 disabled={saving || loading}
               >
-                옵션 없음으로 설정
+                옵션 없음 설정
               </button>
             </div>
             <div className="actionSummary" style={{ marginTop: 10 }}>선택 메뉴 {selectedMenuIds.length}개</div>
@@ -1064,7 +1070,7 @@ function AdminMenuOptionConnectInner() {
                 <div className="actions">
                   <div className="actionBtns">
                     <button
-                      className="btn btnPrimary"
+                      className="btn btnOptionNone"
                       type="button"
                       onClick={() => void applyConnection("connect")}
                       disabled={saving || loading || selectedMenuIds.length === 0 || !selectedGroup || groupItems.length === 0}
@@ -1087,7 +1093,7 @@ function AdminMenuOptionConnectInner() {
                 <p className="muted">선택한 메뉴는 옵션 없이 판매됩니다.</p>
                 <div className="actionBtns">
                   <button
-                    className="btn btnPrimary"
+                    className="btn btnOptionNone"
                     type="button"
                     onClick={() => void applyOptionNone("mark")}
                     disabled={saving || loading || selectedMenuIds.length === 0}

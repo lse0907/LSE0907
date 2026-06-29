@@ -661,7 +661,7 @@ function AdminMenuPageInner() {
           store_id: storeId,
           menu_id: id,
           option_item_id: optionItemId,
-          price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
+          price_delta: toInt(getOptionPriceValue(optionItemId), 0),
         }));
         const up = await supabase
           .from("menu_option_prices")
@@ -782,6 +782,12 @@ function AdminMenuPageInner() {
         });
       return { ...prev, optionGroupIds: next, optionPriceByItem: nextPrices, excludedCommonItemIds: nextExcluded };
     });
+  };
+
+  const getOptionPriceValue = (optionItemId: string) => {
+    if (draft.optionPriceByItem[optionItemId] != null) return draft.optionPriceByItem[optionItemId];
+    const item = optionItems.find((it) => it.id === optionItemId);
+    return String(item?.price_delta ?? 0);
   };
 
   const requestOptionTabChange = (next: "common" | "exclusive") => {
@@ -1016,7 +1022,7 @@ function AdminMenuPageInner() {
       (itemsByGroup.get(group.id) || []).map((item) => item.id)
     );
     const invalidCommonItem = commonItemIds.find((optionItemId) => {
-      const raw = String(draft.optionPriceByItem[optionItemId] ?? "0").trim();
+      const raw = String(getOptionPriceValue(optionItemId)).trim();
       return !isWholeNumberString(raw);
     });
     if (invalidCommonItem) {
@@ -1051,7 +1057,7 @@ function AdminMenuPageInner() {
           store_id: storeId,
           menu_id: menuId,
           option_item_id: optionItemId,
-          price_delta: toInt(draft.optionPriceByItem[optionItemId] ?? "0", 0),
+          price_delta: toInt(getOptionPriceValue(optionItemId), 0),
         }));
 
         const { error } = await supabase
@@ -1355,10 +1361,7 @@ function AdminMenuPageInner() {
     return map;
   }, [optionItems]);
 
-  const getOptionPrice = (item: OptionItem) => {
-    if (draft.optionPriceByItem[item.id] != null) return draft.optionPriceByItem[item.id];
-    return String(item.price_delta ?? 0);
-  };
+  const getOptionPrice = (item: OptionItem) => getOptionPriceValue(item.id);
   const isExcludedCommonItem = (itemId: string) => draft.excludedCommonItemIds.includes(itemId);
   const toggleExcludeCommonItem = (itemId: string) => {
     setDraft((prev) => {
@@ -1545,8 +1548,16 @@ function AdminMenuPageInner() {
           min-height: 34px;
         }
         .summaryItemWarn {
-          border-color: #fde68a;
-          background: linear-gradient(180deg, #fffbeb, #ffffff);
+          border-color: #fed7aa;
+          background: linear-gradient(180deg, #fff7ed, #ffffff);
+        }
+        .summaryItemInfo {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        }
+        .summaryItemDanger {
+          border-color: #fecaca;
+          background: linear-gradient(180deg, #fef2f2, #ffffff);
         }
         .summaryItemInfo {
           border-color: #bfdbfe;
@@ -1861,8 +1872,14 @@ function AdminMenuPageInner() {
           margin-top: 8px;
         }
         .optionNoneCardOn {
-          border-color: #bfdbfe;
-          background: #eff6ff;
+          border-color: #a5f3fc;
+          background: #ecfeff;
+          color: #155e75;
+        }
+        .btnOptionNone {
+          border-color: #0f766e;
+          background: #0f766e;
+          color: #fff;
         }
         .optionNoneSaveBox {
           display: grid;
@@ -2649,10 +2666,10 @@ function AdminMenuPageInner() {
             <h2 className="cardTitle">메뉴 등록 현황</h2>
             <div className="summaryGrid" style={{ marginTop: 10 }}>
               <div className="summaryItem">
-                <span className="summaryLabel">전체 메뉴</span>
+                <span className="summaryLabel">전체</span>
                 <strong className="summaryValue">{items.length}</strong>
               </div>
-              <div className="summaryItem">
+              <div className={`summaryItem ${readyMenuCount > 0 ? "summaryItemInfo" : ""}`.trim()}>
                 <span className="summaryLabel">판매 가능</span>
                 <strong className="summaryValue">{readyMenuCount}</strong>
               </div>
@@ -2660,11 +2677,11 @@ function AdminMenuPageInner() {
                 <span className="summaryLabel">미분류</span>
                 <strong className="summaryValue">{uncategorizedMenuCount}</strong>
               </div>
-              <div className={`summaryItem ${optionReviewNeededMenuCount > 0 ? "summaryItemInfo" : ""}`.trim()}>
+              <div className={`summaryItem ${optionReviewNeededMenuCount > 0 ? "summaryItemWarn" : ""}`.trim()}>
                 <span className="summaryLabel">확인 필요</span>
                 <strong className="summaryValue">{optionReviewNeededMenuCount}</strong>
               </div>
-              <div className="summaryItem">
+              <div className={`summaryItem ${soldOutMenuCount > 0 ? "summaryItemDanger" : ""}`.trim()}>
                 <span className="summaryLabel">품절</span>
                 <strong className="summaryValue">{soldOutMenuCount}</strong>
               </div>
@@ -2944,12 +2961,12 @@ function AdminMenuPageInner() {
             ) : null}
             {optionPanelOpen ? (
               <>
-            <div className="optionSaveGuide">옵션은 별도로 저장됩니다. 옵션이 없으면 옵션 없음으로 저장해 주세요.</div>
+            <div className="optionSaveGuide">옵션은 별도로 저장됩니다.</div>
             <div className={`optionNoneCard ${draft.optionNotRequired ? "optionNoneCardOn" : ""}`.trim()}>
               <div>
-                <strong>{draft.optionNotRequired ? "이 메뉴는 옵션 없이 판매됩니다." : "옵션이 필요 없나요?"}</strong>
+                <strong>{draft.optionNotRequired ? "옵션 없음 선택됨" : "옵션 없음"}</strong>
                 <p className="muted" style={{ marginTop: 4 }}>
-                  {draft.optionNotRequired ? "저장하면 옵션 연결 내용이 해제됩니다." : "옵션이 필요 없다면 옵션 없음으로 설정하세요."}
+                  {draft.optionNotRequired ? "저장하면 기존 옵션 연결이 해제됩니다." : "추가 옵션 없이 판매할 메뉴에 사용하세요."}
                 </p>
               </div>
               {draft.optionNotRequired ? (
@@ -2966,7 +2983,7 @@ function AdminMenuPageInner() {
                 </button>
               ) : (
                 <button
-                  className="btn"
+                  className="btn btnOptionNone"
                   type="button"
                   onClick={() => {
                     setCommonDirty(true);
@@ -2974,14 +2991,14 @@ function AdminMenuPageInner() {
                   }}
                   disabled={saving || loading}
                 >
-                  옵션 없음으로 설정
+                  옵션 없음 설정
                 </button>
               )}
             </div>
             {draft.optionNotRequired ? (
-              <div className="optionNoneSaveBox">
-                <p className="muted">저장하면 연결된 옵션이 모두 해제됩니다.</p>
-                <button className="btn btnPrimary" type="button" onClick={saveOptionNotRequiredInMenu} disabled={saving || loading || !commonDirty}>
+              <div className="optionNoneSaveBox optionNoneCardOn">
+                <p className="muted">저장하면 기존 옵션 연결이 해제됩니다.</p>
+                <button className="btn btnOptionNone" type="button" onClick={saveOptionNotRequiredInMenu} disabled={saving || loading || !commonDirty}>
                   옵션 없음 저장
                 </button>
               </div>
