@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,6 +9,18 @@ import { loadStoreProfile, saveStoreProfile, useStoreProfile } from "@/app/lib/s
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 
 const STORE_IMAGE_BUCKET = "store-assets";
+type StoreStatus = "active" | "inactive" | "deleted";
+
+function normalizeStoreStatus(status?: string | null): StoreStatus {
+  if (status === "inactive" || status === "deleted") return status;
+  return "active";
+}
+
+function getStatusLabel(status: StoreStatus) {
+  if (status === "inactive") return "비활성";
+  if (status === "deleted") return "삭제됨";
+  return "운영중";
+}
 
 function clampOverlay(v: number) {
   if (!Number.isFinite(v)) return 0;
@@ -58,6 +71,8 @@ function AdminstorePageInner() {
   const [storeId, setStoreId] = useState<string>("");
   const { profile, setProfile } = useStoreProfile(storeId);
   const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
+  const [storeStatus, setStoreStatus] = useState<StoreStatus>("active");
+  const [statusSaving, setStatusSaving] = useState(false);
   const [showAddr, setShowAddr] = useState(false);
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -91,18 +106,28 @@ function AdminstorePageInner() {
     if (!storeId) return;
     let mounted = true;
     (async () => {
-      const { data, error } = await supabase
+      // `status` can be unavailable before docs/sql/supabase-store-lifecycle-v1.sql is applied.
+      let res: any = await supabase
         .from("stores")
-        .select("created_at")
+        .select("created_at,status")
         .eq("store_id", storeId)
         .maybeSingle();
+      if (res.error && /status/i.test(res.error.message || "")) {
+        res = await supabase
+          .from("stores")
+          .select("created_at")
+          .eq("store_id", storeId)
+          .maybeSingle();
+      }
       if (!mounted) return;
-      if (error) {
-        console.error("[admin/store] load created_at error:", error.message);
+      if (res.error) {
+        console.error("[admin/store] load store status error:", res.error.message);
         setStoreCreatedAt(null);
+        setStoreStatus("active");
         return;
       }
-      setStoreCreatedAt(data?.created_at || null);
+      setStoreCreatedAt(res.data?.created_at || null);
+      setStoreStatus(normalizeStoreStatus(res.data?.status));
     })();
     return () => {
       mounted = false;
@@ -132,6 +157,45 @@ function AdminstorePageInner() {
       rgba(0,0,0,${aBot}) 100%
     )`;
   }, [strength]);
+
+  const updateStoreStatus = async (nextStatus: StoreStatus) => {
+    if (!storeId || statusSaving) return;
+    const nextLabel = getStatusLabel(nextStatus);
+    const ok = window.confirm(
+      nextStatus === "inactive"
+        ? "매장을 비활성화할까요? 고객 주문 페이지와 운영 진입이 제한될 수 있습니다."
+        : "매장을 다시 활성화할까요?"
+    );
+    if (!ok) return;
+
+    setStatusSaving(true);
+    setUploadMsg("");
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id || null;
+      const payload =
+        nextStatus === "inactive"
+          ? {
+              status: "inactive",
+              deactivated_at: new Date().toISOString(),
+              deactivated_by: userId,
+            }
+          : {
+              status: "active",
+              deactivated_at: null,
+              deactivated_by: null,
+            };
+      const { error } = await supabase.from("stores").update(payload).eq("store_id", storeId);
+      if (error) throw error;
+      setStoreStatus(nextStatus);
+      setUploadMsg(`매장 상태를 ${nextLabel}(으)로 변경했습니다.`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setUploadMsg(`매장 상태 변경 실패: ${message}`);
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   const onSave = async () => {
     if (!storeId) {
@@ -355,6 +419,47 @@ function AdminstorePageInner() {
           margin: 0;
           font-size: 16px;
           font-weight: 950;
+        }
+
+        .statusCard {
+          display: grid;
+          gap: 10px;
+          margin-bottom: 10px;
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        }
+        .statusCardInactive {
+          border-color: #cbd5e1;
+          background: linear-gradient(180deg, #f8fafc, #ffffff);
+        }
+        .statusHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .statusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          padding: 5px 9px;
+          font-size: 12px;
+          font-weight: 950;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+        .statusBadgeInactive {
+          border-color: #cbd5e1;
+          background: #f1f5f9;
+          color: #475569;
+        }
+        .btnMuted {
+          border-color: #cbd5e1;
+          background: #f8fafc;
+          color: #334155;
         }
 
         .field {
@@ -646,7 +751,7 @@ function AdminstorePageInner() {
             font-size: 15px;
           }
 
-          .field {
+        .field {
             margin-top: 9px;
             gap: 5px;
           }
@@ -803,7 +908,33 @@ function AdminstorePageInner() {
         </div>
 
         {/* 설정 */}
-        <div className="card settingsCard">
+        <div className="settingsCard">
+          <section className={`card statusCard ${storeStatus !== "active" ? "statusCardInactive" : ""}`.trim()}>
+            <div className="statusHead">
+              <div>
+                <h2 className="cardTitle">운영 상태</h2>
+                <p className="sub">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "현재 매장은 운영 가능한 상태입니다."}</p>
+              </div>
+              <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
+            </div>
+            <div className="btnRow" style={{ marginTop: 0 }}>
+              {storeStatus === "deleted" ? (
+                <button className="btn btnMuted" type="button" disabled>
+                  삭제된 매장
+                </button>
+              ) : storeStatus === "inactive" ? (
+                <button className="btn btnPrimary" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
+                  다시 활성화
+                </button>
+              ) : (
+                <button className="btn btnMuted" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
+                  비활성화하기
+                </button>
+              )}
+            </div>
+          </section>
+
+          <section className="card">
           <h2 className="cardTitle">기본 정보</h2>
 
           <div className="field">
@@ -1053,6 +1184,7 @@ function AdminstorePageInner() {
 
           {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
 
+          </section>
         </div>
       </section>
 

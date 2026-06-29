@@ -557,13 +557,15 @@ function AdminPageInner() {
               <section className="overviewCard overviewCardSelected">
                 <div className="overviewHead">
                   <h2 className="overviewTitle">매장 현황</h2>
-                  <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
-                    매출보기
-                  </button>
+                  <div className="overviewActionStack">
+                    <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
+                      매출보기
+                    </button>
+                    {selectedStore ? <span className={`storeStatusBadge storeStatus${getStoreDisplayStatus(selectedStore)[0].toUpperCase()}${getStoreDisplayStatus(selectedStore).slice(1)}`}>{getStoreStatusLabel(selectedStore)}</span> : null}
+                  </div>
                 </div>
                 <div className="overviewStoreLine">
                   <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
-                  {selectedStore ? <span className={`storeStatusBadge storeStatus${getStoreDisplayStatus(selectedStore)[0].toUpperCase()}${getStoreDisplayStatus(selectedStore).slice(1)}`}>{getStoreStatusLabel(selectedStore)}</span> : null}
                 </div>
                 <div className="statsSummary statsSummaryCompact">
                   <div className="statsRow">
@@ -839,6 +841,11 @@ body {
   justify-content:space-between;
   gap:10px;
   flex-wrap:wrap;
+}
+.overviewActionStack{
+  display:grid;
+  justify-items:end;
+  gap:6px;
 }
 .overviewStoreLine{
   display:flex;
