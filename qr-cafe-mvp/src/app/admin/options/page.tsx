@@ -580,7 +580,7 @@ function AdminOptionsPageInner() {
   const showCopyHiddenNotice = isCopyMode && hasOptionData;
   const isExclusiveSelected = (selectedGroup?.scope || "common") === "exclusive";
 
-  // 빠른 옵션 연결 검색/필터 상태는 /admin/menu/option-connect 전용 페이지에서만 관리합니다.
+  // 옵션 연결 확인 검색/필터 상태는 /admin/menu/option-connect 전용 페이지에서만 관리합니다.
   const linkedMenus = useMemo(() => {
     if (!selectedGroup) return [];
     return menus.filter((m) => menuHasOptionGroup(m, selectedGroup.id));
@@ -1996,11 +1996,11 @@ function AdminOptionsPageInner() {
             <div className="nextStepCard">
               <div>
                 <div className="nextStepTitle">다음 단계</div>
-                <div className="muted">항목 확인 후 빠른 옵션 연결에서 메뉴에 연결해 주세요.</div>
+                <div className="muted">옵션 연결 확인에서 메뉴 연결 상태를 확인해 주세요.</div>
               </div>
               <div className="btnRow nextStepActions">
-                <a className="btn btnPrimary" href="#option-connections">
-                  빠른 옵션 연결 보기
+                <a className="btn btnPrimary" href={`/admin/menu/option-connect${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
+                  옵션 연결 확인
                 </a>
                 <button className="btn" type="button" onClick={() => setShowTemplateNextStep(false)}>
                   닫기
