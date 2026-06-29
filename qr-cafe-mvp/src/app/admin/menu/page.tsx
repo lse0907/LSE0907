@@ -764,12 +764,29 @@ function AdminMenuPageInner() {
     setStatus("success", "메뉴 확인이 완료되었습니다.");
   };
 
+  const withDefaultOptionPrices = (basePrices: Record<string, string>, groupIds: string[]) => {
+    const nextPrices = { ...basePrices };
+    optionItems
+      .filter((item) => groupIds.includes(item.group_id))
+      .forEach((item) => {
+        if (nextPrices[item.id] == null) nextPrices[item.id] = String(item.price_delta ?? 0);
+      });
+    return nextPrices;
+  };
+
   const toggleGroup = (id: string) => {
     setCommonDirty(true);
     setDraft((prev) => {
       const has = prev.optionGroupIds.includes(id);
       const next = has ? prev.optionGroupIds.filter((g) => g !== id) : [...prev.optionGroupIds, id];
-      if (!has) return { ...prev, optionGroupIds: next, optionNotRequired: false };
+      if (!has) {
+        return {
+          ...prev,
+          optionGroupIds: next,
+          optionPriceByItem: withDefaultOptionPrices(prev.optionPriceByItem, [id]),
+          optionNotRequired: false,
+        };
+      }
 
       const nextPrices = { ...prev.optionPriceByItem };
       const nextExcluded = [...prev.excludedCommonItemIds];
@@ -1388,6 +1405,7 @@ function AdminMenuPageInner() {
     setDraft((prev) => ({
       ...prev,
       optionGroupIds: Array.from(new Set([...prev.optionGroupIds, ...idsToAdd])),
+      optionPriceByItem: withDefaultOptionPrices(prev.optionPriceByItem, idsToAdd),
       optionNotRequired: false,
     }));
     setCommonGroupIdsToAdd([]);
@@ -1558,10 +1576,6 @@ function AdminMenuPageInner() {
         .summaryItemDanger {
           border-color: #fecaca;
           background: linear-gradient(180deg, #fef2f2, #ffffff);
-        }
-        .summaryItemInfo {
-          border-color: #bfdbfe;
-          background: linear-gradient(180deg, #eff6ff, #ffffff);
         }
         .summaryLabel {
           color: var(--muted);
