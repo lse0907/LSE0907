@@ -134,7 +134,7 @@ function AdminstorePageInner() {
     };
   }, [storeId]);
 
-  // ✅ 변경 여부: 핵심 필드만 비교 (extra는 저장도 안 하니 제외)
+  // ✅ 변경 여부: 저장 대상 핵심 필드만 비교
   const isDirty = useMemo(() => {
     const a = pickCore(draft);
     const b = pickCore(profile);
@@ -335,7 +335,7 @@ function AdminstorePageInner() {
 
       <style jsx>{`
         .wrap {
-          max-width: 920px;
+          max-width: 1120px;
           margin: 0 auto;
           padding: 14px;
           display: grid;
@@ -407,9 +407,28 @@ function AdminstorePageInner() {
 
         .grid {
           display: grid;
-          grid-template-columns: 1.2fr 1fr;
+          grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
+          gap: 12px;
+          align-items: start;
+        }
+        .sideStack,
+        .formStack {
+          display: grid;
+          gap: 10px;
+          align-content: start;
+        }
+        .advancedGrid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 10px;
           align-items: start;
+        }
+        .sectionLead {
+          margin: 4px 0 0;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.35;
         }
 
         .card {
@@ -612,6 +631,15 @@ function AdminstorePageInner() {
           padding-top: 10px;
           border-top: 1px dashed var(--line);
         }
+        .primarySaveBar {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          align-items: center;
+          margin-top: 14px;
+          padding-top: 12px;
+          border-top: 1px solid var(--line);
+        }
 
         .hero {
           position: relative;
@@ -747,8 +775,9 @@ function AdminstorePageInner() {
           gap: 10px;
         }
 
-        @media (max-width: 860px) {
-          .grid {
+        @media (max-width: 980px) {
+          .grid,
+          .advancedGrid {
             grid-template-columns: 1fr;
           }
         }
@@ -866,6 +895,14 @@ function AdminstorePageInner() {
             padding-top: 8px;
           }
 
+          .primarySaveBar {
+            gap: 8px;
+          }
+
+          .primarySaveBar .btn {
+            flex: 1 1 auto;
+          }
+
           .hero {
             height: 172px;
           }
@@ -928,225 +965,145 @@ function AdminstorePageInner() {
       {uploadMsg ? <div className="alert">{uploadMsg}</div> : null}
 
       <section className="grid">
-        {/* ✅ 미리보기(위쪽) */}
-        <div className="card previewWrap">
-          <h2 className="cardTitle">미리보기</h2>
+        <div className="sideStack">
+          <section className="card previewWrap">
+            <div>
+              <h2 className="cardTitle">미리보기</h2>
+              <p className="sectionLead">고객 주문 화면에 보이는 대표 정보입니다.</p>
+            </div>
 
-          <div className="hero">
-            {(draft as any).mainImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="heroImg" src={(draft as any).mainImage} alt="main" />
-            ) : (
-              <div className="heroFallback">대표 이미지를 등록하세요</div>
-            )}
-            <div className="overlay" style={{ background: overlayBg }} />
+            <div className="hero">
+              {(draft as any).mainImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="heroImg" src={(draft as any).mainImage} alt="main" />
+              ) : (
+                <div className="heroFallback">대표 이미지를 등록하세요</div>
+              )}
+              <div className="overlay" style={{ background: overlayBg }} />
 
-            <div className="heroInner">
-              <div className="logoRow">
-                {(draft as any).logoImage ? (
-                  <div className="logo">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={(draft as any).logoImage} alt="logo" />
+              <div className="heroInner">
+                <div className="logoRow">
+                  {(draft as any).logoImage ? (
+                    <div className="logo">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={(draft as any).logoImage} alt="logo" />
+                    </div>
+                  ) : (
+                    <div className="logo" aria-hidden="true">
+                      <span style={{ color: "white", fontWeight: 900, fontSize: 12 }}>logo</span>
+                    </div>
+                  )}
+                  <div style={{ minWidth: 0 }}>
+                    <h3 className="storeName">{(draft as any).storeName || "매장명"}</h3>
                   </div>
-                ) : (
-                  <div className="logo" aria-hidden="true">
-                    <span style={{ color: "white", fontWeight: 900, fontSize: 12 }}>logo</span>
-                  </div>
-                )}
-                <div style={{ minWidth: 0 }}>
-                  <h3 className="storeName">{(draft as any).storeName || "매장명"}</h3>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="previewCard">
-            <p className="descText">{(draft as any).storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
-          </div>
+            <div className="previewCard">
+              <p className="descText">{(draft as any).storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
+            </div>
+          </section>
 
+          <section className="card">
+            <h2 className="cardTitle">이미지 / 브랜딩</h2>
+            <p className="sectionLead">대표 이미지와 로고는 고객 화면의 첫인상을 결정합니다.</p>
+
+            <div className="field">
+              <div className="label">대표 이미지 업로드</div>
+              <input
+                className="input"
+                type="file"
+                accept="image/*"
+                onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
+                disabled={uploadingMain}
+              />
+              <div className="hint">
+                {uploadingMain
+                  ? "업로드 중..."
+                  : (draft as any).mainImage
+                    ? "대표 이미지 등록됨"
+                    : "아직 등록된 이미지가 없습니다."}
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">로고 이미지 업로드 (선택)</div>
+              <input
+                className="input"
+                type="file"
+                accept="image/*"
+                onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
+                disabled={uploadingLogo}
+              />
+              <div className="hint">
+                {uploadingLogo
+                  ? "업로드 중..."
+                  : (draft as any).logoImage
+                    ? "로고 이미지 등록됨"
+                    : "아직 등록된 이미지가 없습니다."}
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">대표이미지 오버레이 강도 (0~100)</div>
+              <div className="sliderRow">
+                <input
+                  className="range"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={strength}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
+                    }))
+                  }
+                />
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  value={String(strength)}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          </section>
         </div>
 
-        {/* 설정 */}
-        <div className="settingsCard">
+        <div className="formStack">
           <section className="card">
-          <div className="basicHead">
-            <div>
-              <h2 className="cardTitle">기본 정보</h2>
-              <p className="sub">매장 운영에 필요한 핵심 정보를 관리합니다.</p>
+            <div className="basicHead">
+              <div>
+                <h2 className="cardTitle">기본 정보</h2>
+                <p className="sectionLead">고객 안내와 주문 운영에 바로 쓰이는 핵심 정보입니다.</p>
+              </div>
+              <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
             </div>
-            <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
-          </div>
-
-          <div className="operationStrip">
-            <div className="operationText">
-              <span className="operationTitle">운영 관리</span>
-              <span className="operationDesc">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}</span>
-            </div>
-            {storeStatus === "deleted" ? (
-              <button className="btn btnMuted btnCompact" type="button" disabled>
-                삭제된 매장
-              </button>
-            ) : storeStatus === "inactive" ? (
-              <button className="btn btnPrimary btnCompact" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
-                다시 활성화
-              </button>
-            ) : (
-              <button className="btn btnMuted btnCompact" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
-                매장 비활성화
-              </button>
-            )}
-          </div>
-
-          <div className="field">
-            <div className="label">매장명</div>
-            <input
-              className="input"
-              value={(draft as any).storeName}
-              onChange={(e) => setDraft((p: any) => ({ ...p, storeName: e.target.value }))}
-              placeholder="예: XIMEN 순천점"
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">
-              매장 ID <span className="pill">수정 불가</span>
-            </div>
-            <input className="input" value={storeId} disabled placeholder="예: ximen" />
-          </div>
-
-          <div className="field">
-            <div className="label">매장 설명</div>
-            <textarea
-              className="textarea"
-              value={(draft as any).storeDesc}
-              onChange={(e) => setDraft((p: any) => ({ ...p, storeDesc: e.target.value }))}
-              placeholder="예) QR로 간편하게 주문하고 기다리세요..."
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">직원 화면 모드</div>
-            <select
-              className="input"
-              value={(draft as any).staffViewMode === "station" ? "station" : "simple"}
-              onChange={(e) =>
-                setDraft((p: any) => ({
-                  ...p,
-                  staffViewMode: e.target.value === "station" ? "station" : "simple",
-                }))
-              }
-            >
-              <option value="simple">Simple Mode (통합형)</option>
-              <option value="station">Station Mode (분리형)</option>
-            </select>
-            <div className="hint">
-              Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비 역할 분리에 적합
-            </div>
-          </div>
-
-          <div className="field">
-            <div className="label">대표 이미지 업로드</div>
-            <input
-              className="input"
-              type="file"
-              accept="image/*"
-              onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
-              disabled={uploadingMain}
-            />
-            <div className="hint">
-              {uploadingMain
-                ? "업로드 중..."
-                : (draft as any).mainImage
-                  ? "대표 이미지 등록됨"
-                  : "아직 등록된 이미지가 없습니다."}
-            </div>
-          </div>
-
-          <div className="field">
-            <div className="label">로고 이미지 업로드 (선택)</div>
-            <input
-              className="input"
-              type="file"
-              accept="image/*"
-              onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
-              disabled={uploadingLogo}
-            />
-            <div className="hint">
-              {uploadingLogo
-                ? "업로드 중..."
-                : (draft as any).logoImage
-                  ? "로고 이미지 등록됨"
-                  : "아직 등록된 이미지가 없습니다."}
-            </div>
-          </div>
-
-          <div className="field">
-            <div className="label">대표이미지 오버레이 강도 (0~100)</div>
-
-            <div className="sliderRow">
-              <input
-                className="range"
-                type="range"
-                min={0}
-                max={100}
-                value={strength}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
-                  }))
-                }
-              />
-
-              <input
-                className="input"
-                inputMode="numeric"
-                value={String(strength)}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
-                  }))
-                }
-              />
-            </div>
-
-          </div>
-
-          <div className="detailBlock">
-            <h3 className="cardTitle">매장 상세 정보</h3>
 
             <div className="field">
-              <div className="label">
-                사업자등록번호 <span className="pill">필수</span>
-              </div>
+              <div className="label">매장명</div>
               <input
                 className="input"
-                value={(draft as any)?.extra?.bizNo || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), bizNo: e.target.value },
-                  }))
-                }
-                placeholder="예: 000-00-00000"
+                value={(draft as any).storeName}
+                onChange={(e) => setDraft((p: any) => ({ ...p, storeName: e.target.value }))}
+                placeholder="예: XIMEN 순천점"
               />
             </div>
 
             <div className="field">
-              <div className="label">
-                업종 <span className="pill">필수</span>
-              </div>
-              <input
-                className="input"
-                value={(draft as any)?.extra?.industry || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), industry: e.target.value },
-                  }))
-                }
-                placeholder="예: 카페, 음식점"
+              <div className="label">매장 설명</div>
+              <textarea
+                className="textarea"
+                value={(draft as any).storeDesc}
+                onChange={(e) => setDraft((p: any) => ({ ...p, storeDesc: e.target.value }))}
+                placeholder="예) QR로 간편하게 주문하고 기다리세요..."
               />
             </div>
 
@@ -1214,38 +1171,132 @@ function AdminstorePageInner() {
               />
             </div>
 
-            <div className="field">
-              <div className="label">SNS 링크 (선택)</div>
-              <input
-                className="input"
-                value={(draft as any)?.extra?.sns || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), sns: e.target.value },
-                  }))
-                }
-                placeholder="예: instagram.com/..."
-              />
+            <div className="primarySaveBar">
+              <button className="btn btnPrimary" onClick={onSave} disabled={!isDirty || saving}>
+                {saving ? "저장 중..." : "저장"}
+              </button>
+              <button className="btn" onClick={onReset} disabled={!isDirty || saving}>
+                변경 취소
+              </button>
+              {isDirty ? <span className="badge badgeDirty">저장 필요</span> : null}
             </div>
-          </div>
 
-          <div className="btnRow">
-            <button className="btn btnPrimary" onClick={onSave} disabled={!isDirty || saving}>
-              {saving ? "저장 중..." : "저장"}
-            </button>
-
-            <button className="btn" onClick={onReset} disabled={!isDirty || saving}>
-              변경 취소
-            </button>
-
-            {isDirty ? <span className="badge">변경됨</span> : <span className="badge">변경 없음</span>}
-          </div>
-
-          {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
-
+            {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
           </section>
         </div>
+      </section>
+
+      <section className="advancedGrid" aria-label="매장 세부 설정">
+        <section className="card">
+          <h2 className="cardTitle">운영 설정</h2>
+          <p className="sectionLead">직원 화면과 내부 운영 방식을 설정합니다.</p>
+
+          <div className="field">
+            <div className="label">직원 화면 모드</div>
+            <select
+              className="input"
+              value={(draft as any).staffViewMode === "station" ? "station" : "simple"}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  staffViewMode: e.target.value === "station" ? "station" : "simple",
+                }))
+              }
+            >
+              <option value="simple">Simple Mode (통합형)</option>
+              <option value="station">Station Mode (분리형)</option>
+            </select>
+            <div className="hint">
+              Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비 역할 분리에 적합
+            </div>
+          </div>
+        </section>
+
+        <section className="card">
+          <h2 className="cardTitle">사업자 / 추가 정보</h2>
+          <p className="sectionLead">정산·안내에 필요한 세부 정보를 관리합니다.</p>
+
+          <div className="field">
+            <div className="label">
+              사업자등록번호 <span className="pill">필수</span>
+            </div>
+            <input
+              className="input"
+              value={(draft as any)?.extra?.bizNo || ""}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  extra: { ...(p?.extra || {}), bizNo: e.target.value },
+                }))
+              }
+              placeholder="예: 000-00-00000"
+            />
+          </div>
+
+          <div className="field">
+            <div className="label">
+              업종 <span className="pill">필수</span>
+            </div>
+            <input
+              className="input"
+              value={(draft as any)?.extra?.industry || ""}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  extra: { ...(p?.extra || {}), industry: e.target.value },
+                }))
+              }
+              placeholder="예: 카페, 음식점"
+            />
+          </div>
+
+          <div className="field">
+            <div className="label">SNS 링크 (선택)</div>
+            <input
+              className="input"
+              value={(draft as any)?.extra?.sns || ""}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  extra: { ...(p?.extra || {}), sns: e.target.value },
+                }))
+              }
+              placeholder="예: instagram.com/..."
+            />
+          </div>
+
+          <div className="field">
+            <div className="label">
+              매장 ID <span className="pill">수정 불가</span>
+            </div>
+            <input className="input" value={storeId} disabled placeholder="예: ximen" />
+          </div>
+        </section>
+
+        <section className="card">
+          <h2 className="cardTitle">운영 상태 관리</h2>
+          <p className="sectionLead">상태 확인은 상단에서, 변경은 이 관리 영역에서 진행합니다.</p>
+
+          <div className="operationStrip">
+            <div className="operationText">
+              <span className="operationTitle">현재 상태: {getStatusLabel(storeStatus)}</span>
+              <span className="operationDesc">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}</span>
+            </div>
+            {storeStatus === "deleted" ? (
+              <button className="btn btnMuted btnCompact" type="button" disabled>
+                삭제된 매장
+              </button>
+            ) : storeStatus === "inactive" ? (
+              <button className="btn btnPrimary btnCompact" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
+                다시 활성화
+              </button>
+            ) : (
+              <button className="btn btnMuted btnCompact" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
+                매장 비활성화
+              </button>
+            )}
+          </div>
+        </section>
       </section>
 
       {showAddr ? (
