@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,6 +9,18 @@ import { loadStoreProfile, saveStoreProfile, useStoreProfile } from "@/app/lib/s
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 
 const STORE_IMAGE_BUCKET = "store-assets";
+type StoreStatus = "active" | "inactive" | "deleted";
+
+function normalizeStoreStatus(status?: string | null): StoreStatus {
+  if (status === "inactive" || status === "deleted") return status;
+  return "active";
+}
+
+function getStatusLabel(status: StoreStatus) {
+  if (status === "inactive") return "비활성";
+  if (status === "deleted") return "삭제됨";
+  return "운영중";
+}
 
 function clampOverlay(v: number) {
   if (!Number.isFinite(v)) return 0;
@@ -58,6 +71,8 @@ function AdminstorePageInner() {
   const [storeId, setStoreId] = useState<string>("");
   const { profile, setProfile } = useStoreProfile(storeId);
   const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
+  const [storeStatus, setStoreStatus] = useState<StoreStatus>("active");
+  const [statusSaving, setStatusSaving] = useState(false);
   const [showAddr, setShowAddr] = useState(false);
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -91,18 +106,28 @@ function AdminstorePageInner() {
     if (!storeId) return;
     let mounted = true;
     (async () => {
-      const { data, error } = await supabase
+      // `status` can be unavailable before docs/sql/supabase-store-lifecycle-v1.sql is applied.
+      let res: any = await supabase
         .from("stores")
-        .select("created_at")
+        .select("created_at,status")
         .eq("store_id", storeId)
         .maybeSingle();
+      if (res.error && /status/i.test(res.error.message || "")) {
+        res = await supabase
+          .from("stores")
+          .select("created_at")
+          .eq("store_id", storeId)
+          .maybeSingle();
+      }
       if (!mounted) return;
-      if (error) {
-        console.error("[admin/store] load created_at error:", error.message);
+      if (res.error) {
+        console.error("[admin/store] load store status error:", res.error.message);
         setStoreCreatedAt(null);
+        setStoreStatus("active");
         return;
       }
-      setStoreCreatedAt(data?.created_at || null);
+      setStoreCreatedAt(res.data?.created_at || null);
+      setStoreStatus(normalizeStoreStatus(res.data?.status));
     })();
     return () => {
       mounted = false;
@@ -132,6 +157,45 @@ function AdminstorePageInner() {
       rgba(0,0,0,${aBot}) 100%
     )`;
   }, [strength]);
+
+  const updateStoreStatus = async (nextStatus: StoreStatus) => {
+    if (!storeId || statusSaving) return;
+    const nextLabel = getStatusLabel(nextStatus);
+    const ok = window.confirm(
+      nextStatus === "inactive"
+        ? "매장을 비활성화할까요? 고객 주문 페이지와 운영 진입이 제한될 수 있습니다."
+        : "매장을 다시 활성화할까요?"
+    );
+    if (!ok) return;
+
+    setStatusSaving(true);
+    setUploadMsg("");
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id || null;
+      const payload =
+        nextStatus === "inactive"
+          ? {
+              status: "inactive",
+              deactivated_at: new Date().toISOString(),
+              deactivated_by: userId,
+            }
+          : {
+              status: "active",
+              deactivated_at: null,
+              deactivated_by: null,
+            };
+      const { error } = await supabase.from("stores").update(payload).eq("store_id", storeId);
+      if (error) throw error;
+      setStoreStatus(nextStatus);
+      setUploadMsg(`매장 상태를 ${nextLabel}(으)로 변경했습니다.`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setUploadMsg(`매장 상태 변경 실패: ${message}`);
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   const onSave = async () => {
     if (!storeId) {
@@ -327,6 +391,11 @@ function AdminstorePageInner() {
           border-color: #fecaca;
           background: #fef2f2;
         }
+        .badgeDirty {
+          border-color: #fed7aa;
+          background: #fff7ed;
+          color: #9a3412;
+        }
         .alert {
           border: 1px solid #fecaca;
           background: #fef2f2;
@@ -355,6 +424,80 @@ function AdminstorePageInner() {
           margin: 0;
           font-size: 16px;
           font-weight: 950;
+        }
+
+        .pageMeta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+          padding: 10px 12px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #fff;
+        }
+        .metaText {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.3;
+        }
+        .basicHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .operationStrip {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-top: 12px;
+          padding: 10px 12px;
+          border: 1px solid #dbeafe;
+          border-radius: 14px;
+          background: #f8fbff;
+        }
+        .operationText {
+          display: grid;
+          gap: 2px;
+          min-width: 0;
+        }
+        .operationTitle {
+          font-size: 13px;
+          font-weight: 950;
+          color: var(--text);
+        }
+        .operationDesc {
+          color: var(--muted);
+          font-size: 11px;
+          font-weight: 800;
+          line-height: 1.35;
+        }
+        .statusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          padding: 5px 9px;
+          font-size: 12px;
+          font-weight: 950;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+        .statusBadgeInactive {
+          border-color: #cbd5e1;
+          background: #f1f5f9;
+          color: #475569;
+        }
+        .btnMuted {
+          border-color: #cbd5e1;
+          background: #f8fafc;
+          color: #334155;
         }
 
         .field {
@@ -431,6 +574,12 @@ function AdminstorePageInner() {
           background: var(--brand);
           color: #fff;
           border-color: var(--brand);
+        }
+        .btnCompact {
+          padding: 8px 11px;
+          border-radius: 10px;
+          font-size: 12px;
+          white-space: nowrap;
         }
 
         .btn:disabled,
@@ -623,14 +772,30 @@ function AdminstorePageInner() {
           }
 
           .badgeRow {
-            gap: 6px;
-            display: grid;
-            grid-template-columns: 1fr;
+            gap: 5px;
+          }
+
+          .pageMeta {
+            align-items: flex-start;
+            padding: 9px 10px;
+          }
+
+          .metaText {
+            font-size: 11px;
           }
 
           .badge {
             font-size: 11px;
-            padding: 7px 9px;
+            padding: 6px 8px;
+          }
+
+          .operationStrip {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .operationStrip .btn {
+            width: 100%;
           }
 
           .card {
@@ -646,7 +811,7 @@ function AdminstorePageInner() {
             font-size: 15px;
           }
 
-          .field {
+        .field {
             margin-top: 9px;
             gap: 5px;
           }
@@ -742,23 +907,22 @@ function AdminstorePageInner() {
         </div>
       </header>
 
-      <div className="badgeRow">
-        {saveState === "saved" ? (
-          <span className="badge badgeSaved">저장됨 ✅</span>
-        ) : saveState === "error" ? (
-          <span className="badge badgeError">저장 실패 ❗</span>
-        ) : lastSavedAt ? (
-          <span className="badge">마지막 저장: {new Date(lastSavedAt).toLocaleTimeString()}</span>
-        ) : (
-          <span className="badge">미저장</span>
-        )}
-        {remainingDays !== null ? (
-          <span className="badge">
-            무료 사용기간 {FREE_TRIAL_DAYS}일 · 잔여 {remainingDays}일
+      <div className="pageMeta">
+        <div className="badgeRow">
+          <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
+          <span className="metaText">
+            {remainingDays !== null ? `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remainingDays}일` : `무료 사용기간 ${FREE_TRIAL_DAYS}일`}
           </span>
-        ) : (
-          <span className="badge">무료 사용기간 {FREE_TRIAL_DAYS}일</span>
-        )}
+        </div>
+        {isDirty ? (
+          <span className="badge badgeDirty">저장 필요</span>
+        ) : saveState === "saved" ? (
+          <span className="badge badgeSaved">저장 완료</span>
+        ) : saveState === "error" ? (
+          <span className="badge badgeError">저장 실패</span>
+        ) : lastSavedAt ? (
+          <span className="metaText">마지막 저장 {new Date(lastSavedAt).toLocaleTimeString()}</span>
+        ) : null}
       </div>
 
       {uploadMsg ? <div className="alert">{uploadMsg}</div> : null}
@@ -803,8 +967,35 @@ function AdminstorePageInner() {
         </div>
 
         {/* 설정 */}
-        <div className="card settingsCard">
-          <h2 className="cardTitle">기본 정보</h2>
+        <div className="settingsCard">
+          <section className="card">
+          <div className="basicHead">
+            <div>
+              <h2 className="cardTitle">기본 정보</h2>
+              <p className="sub">매장 운영에 필요한 핵심 정보를 관리합니다.</p>
+            </div>
+            <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
+          </div>
+
+          <div className="operationStrip">
+            <div className="operationText">
+              <span className="operationTitle">운영 관리</span>
+              <span className="operationDesc">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}</span>
+            </div>
+            {storeStatus === "deleted" ? (
+              <button className="btn btnMuted btnCompact" type="button" disabled>
+                삭제된 매장
+              </button>
+            ) : storeStatus === "inactive" ? (
+              <button className="btn btnPrimary btnCompact" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
+                다시 활성화
+              </button>
+            ) : (
+              <button className="btn btnMuted btnCompact" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
+                매장 비활성화
+              </button>
+            )}
+          </div>
 
           <div className="field">
             <div className="label">매장명</div>
@@ -1053,6 +1244,7 @@ function AdminstorePageInner() {
 
           {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
 
+          </section>
         </div>
       </section>
 
