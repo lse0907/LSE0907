@@ -6,14 +6,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app/lib/currentStore";
 
+type StoreStatus = "active" | "inactive" | "deleted";
+
 type StoreRow = {
   store_id: string;
   store_name: string | null;
   setup_completed?: boolean | null;
   setup_last_step?: number | null;
+  status?: StoreStatus | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+type StoreStatusFilter = "all" | "active" | "setup" | "inactive";
 
 type MemberRow = {
   store_id: string;
@@ -37,6 +42,26 @@ function toErrorMessage(e: unknown) {
 
 const FREE_TRIAL_DAYS = 30;
 
+function getStoreLifecycleStatus(store: StoreRow): StoreStatus {
+  const raw = String(store.status || "active").trim();
+  if (raw === "inactive" || raw === "deleted") return raw;
+  return "active";
+}
+
+function getStoreDisplayStatus(store: StoreRow): StoreStatusFilter {
+  const lifecycleStatus = getStoreLifecycleStatus(store);
+  if (lifecycleStatus === "inactive") return "inactive";
+  if (store.setup_completed !== true) return "setup";
+  return "active";
+}
+
+function getStoreStatusLabel(store: StoreRow) {
+  const displayStatus = getStoreDisplayStatus(store);
+  if (displayStatus === "inactive") return "비활성";
+  if (displayStatus === "setup") return "설정중";
+  return "운영중";
+}
+
 function calcRemainingDays(createdAt?: string | null) {
   if (!createdAt) return null;
   const created = new Date(createdAt).getTime();
@@ -57,6 +82,7 @@ function AdminPageInner() {
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [msg, setMsg] = useState<string>("");
   const [activeSection, setActiveSection] = useState<"store" | "ops" | "support" | null>(null);
+  const [storeStatusFilter, setStoreStatusFilter] = useState<StoreStatusFilter>("all");
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
@@ -69,6 +95,12 @@ function AdminPageInner() {
     if (!selectedStoreId) return null;
     return stores.find((s) => s.store_id === selectedStoreId) || null;
   }, [stores, selectedStoreId]);
+
+  const visibleStores = useMemo(() => {
+    return stores
+      .filter((store) => getStoreLifecycleStatus(store) !== "deleted")
+      .filter((store) => storeStatusFilter === "all" || getStoreDisplayStatus(store) === storeStatusFilter);
+  }, [stores, storeStatusFilter]);
 
   const setSelectedStoreId = (storeId: string) => {
     setSelectedStoreIdState(storeId);
@@ -118,8 +150,20 @@ function AdminPageInner() {
       return;
     }
 
-    const [storeRes, billingRes, paymentRes] = await Promise.all([
-      supabase.from("stores").select("store_id, store_name, setup_completed, setup_last_step, created_at, updated_at").in("store_id", ids),
+    // `status` may not exist before the lifecycle SQL is applied, so this response can have either shape.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let storeRes: any = await supabase
+      .from("stores")
+      .select("store_id, store_name, setup_completed, setup_last_step, status, created_at, updated_at")
+      .in("store_id", ids);
+    if (storeRes.error && /status/i.test(storeRes.error.message || "")) {
+      storeRes = await supabase
+        .from("stores")
+        .select("store_id, store_name, setup_completed, setup_last_step, created_at, updated_at")
+        .in("store_id", ids);
+    }
+
+    const [billingRes, paymentRes] = await Promise.all([
       supabase.from("store_billing").select("store_id, base_plan_status, paid_until").in("store_id", ids),
       supabase.from("billing_payments").select("store_id, paid_at, status").in("store_id", ids).eq("status", "paid").order("paid_at", { ascending: false }),
     ]);
@@ -250,17 +294,18 @@ function AdminPageInner() {
 
   useEffect(() => {
     if (!storesLoaded) return;
-    if (!stores.length) {
+    const selectableStores = stores.filter((store) => getStoreLifecycleStatus(store) !== "deleted");
+    if (!selectableStores.length) {
       setSelectedStoreIdState(null);
       clearCurrentStoreId();
       return;
     }
-    if (selectedStoreId && stores.some((s) => s.store_id === selectedStoreId)) {
+    if (selectedStoreId && selectableStores.some((s) => s.store_id === selectedStoreId)) {
       return;
     }
     setSelectedStoreIdState(null);
     clearCurrentStoreId();
-  }, [stores, selectedStoreId]);
+  }, [stores, selectedStoreId, storesLoaded]);
 
   useEffect(() => {
     if (!selectedStoreId) {
@@ -270,6 +315,7 @@ function AdminPageInner() {
       return;
     }
     fetchStatsSummaryForStore(selectedStoreId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStoreId]);
 
   useEffect(() => {
@@ -411,7 +457,7 @@ function AdminPageInner() {
           <div className="cardHead">
             <h2 className="cardTitle">매장 리스트</h2>
             <div className="row" style={{ gap: 8 }}>
-              <span className="pill">{stores.length}개</span>
+              <span className="pill">{visibleStores.length}개</span>
               <button className="btn" onClick={goCreate}>
                 {stores.length > 0 ? "매장 추가" : "매장 만들기"}
               </button>
@@ -419,6 +465,25 @@ function AdminPageInner() {
           </div>
 
           <p className="muted">매장을 선택해 주세요.</p>
+          {stores.length > 0 ? (
+            <div className="storeFilterRow" role="tablist" aria-label="매장 상태 필터">
+              {[
+                { key: "all", label: "전체" },
+                { key: "active", label: "운영중" },
+                { key: "setup", label: "설정중" },
+                { key: "inactive", label: "비활성" },
+              ].map((filter) => (
+                <button
+                  key={filter.key}
+                  className={`filterChip ${storeStatusFilter === filter.key ? "filterChipOn" : ""}`.trim()}
+                  type="button"
+                  onClick={() => setStoreStatusFilter(filter.key as StoreStatusFilter)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {stores.length === 0 ? (
             <div className="emptyBox">
@@ -429,7 +494,12 @@ function AdminPageInner() {
               {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
               {/* 2차 관리자 홈 보완: 선택 카드 높이를 안정적으로 유지하기 위해 선택 뱃지와 액션 버튼을 한 줄 영역에 묶습니다. */}
               <div className="storeList">
-                {stores.map((s) => {
+                {visibleStores.length === 0 ? (
+                  <div className="emptyBox">
+                    <p className="muted">선택한 상태의 매장이 없습니다.</p>
+                  </div>
+                ) : null}
+                {visibleStores.map((s) => {
                   const on = s.store_id === selectedStoreId;
                   const remaining = calcRemainingDays(s.created_at);
                   const billing = billingByStore[s.store_id];
@@ -438,15 +508,20 @@ function AdminPageInner() {
                   const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
                   const remainingPeriod =
                     billing?.basePlanStatus === "active" ? remainingText(paidRemaining) : remainingText(remaining);
+                  const displayStatus = getStoreDisplayStatus(s);
+                  const statusLabel = getStoreStatusLabel(s);
                   return (
-                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
+                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""} ${displayStatus === "inactive" ? "storeRowInactive" : ""}`.trim()} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         setSelectedStoreId(s.store_id);
                       }
                     }}>
                       <div style={{ minWidth: 0 }}>
-                        <div className="storeName">{s.store_name || "(이름 없음)"}</div>
+                        <div className="storeNameLine">
+                          <div className="storeName">{s.store_name || "(이름 없음)"}</div>
+                          <span className={`storeStatusBadge storeStatus${displayStatus[0].toUpperCase()}${displayStatus.slice(1)}`}>{statusLabel}</span>
+                        </div>
                         <div className="muted">{subscriptionStatus} · {remainingPeriod} 남음</div>
                       </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
@@ -488,6 +563,7 @@ function AdminPageInner() {
                 </div>
                 <div className="overviewStoreLine">
                   <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
+                  {selectedStore ? <span className={`storeStatusBadge storeStatus${getStoreDisplayStatus(selectedStore)[0].toUpperCase()}${getStoreDisplayStatus(selectedStore).slice(1)}`}>{getStoreStatusLabel(selectedStore)}</span> : null}
                 </div>
                 <div className="statsSummary statsSummaryCompact">
                   <div className="statsRow">
@@ -835,6 +911,27 @@ body {
   opacity:.5;
   cursor:not-allowed;
 }
+.storeFilterRow{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.filterChip{
+  border:1px solid var(--line);
+  background:#fff;
+  color:var(--text);
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:12px;
+  font-weight:950;
+  cursor:pointer;
+}
+.filterChipOn{
+  border-color:#111827;
+  background:#111827;
+  color:#fff;
+}
 .storeList{
   display:grid;
   gap:10px;
@@ -859,6 +956,9 @@ body {
   border:2px solid var(--brand);
   background:#eef4ff;
 }
+.storeRowInactive{
+  background:#f8fafc;
+}
 .storeRow:focus-visible{
   outline:2px solid #93c5fd;
   outline-offset:2px;
@@ -875,9 +975,38 @@ body {
   border-color:#bfdbfe;
   color:#1d4ed8;
 }
+.storeNameLine{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
 .storeName{
   font-weight:950;
   font-size:14px;
+}
+.storeStatusBadge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  padding:3px 7px;
+  font-size:11px;
+  font-weight:950;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  color:#1d4ed8;
+}
+.storeStatusSetup{
+  border-color:#fed7aa;
+  background:#fff7ed;
+  color:#c2410c;
+}
+.storeStatusInactive{
+  border-color:#cbd5e1;
+  background:#f1f5f9;
+  color:#475569;
 }
 .cardBtn{
   text-align:center;
@@ -988,7 +1117,28 @@ body {
   .cardBtn{
     padding:8px 4px;
   }
-  .storeList{
+  .storeFilterRow{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.filterChip{
+  border:1px solid var(--line);
+  background:#fff;
+  color:var(--text);
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:12px;
+  font-weight:950;
+  cursor:pointer;
+}
+.filterChipOn{
+  border-color:#111827;
+  background:#111827;
+  color:#fff;
+}
+.storeList{
     max-height: min(42vh, 360px);
   }
   .setupBanner{
