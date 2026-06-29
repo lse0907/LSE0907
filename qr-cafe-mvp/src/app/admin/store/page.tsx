@@ -391,6 +391,11 @@ function AdminstorePageInner() {
           border-color: #fecaca;
           background: #fef2f2;
         }
+        .badgeDirty {
+          border-color: #fed7aa;
+          background: #fff7ed;
+          color: #9a3412;
+        }
         .alert {
           border: 1px solid #fecaca;
           background: #fef2f2;
@@ -421,23 +426,56 @@ function AdminstorePageInner() {
           font-weight: 950;
         }
 
-        .statusCard {
-          display: grid;
-          gap: 10px;
-          margin-bottom: 10px;
-          border-color: #bfdbfe;
-          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        .pageMeta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+          padding: 10px 12px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #fff;
         }
-        .statusCardInactive {
-          border-color: #cbd5e1;
-          background: linear-gradient(180deg, #f8fafc, #ffffff);
+        .metaText {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.3;
         }
-        .statusHead {
+        .basicHead {
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: flex-start;
           gap: 10px;
           flex-wrap: wrap;
+        }
+        .operationStrip {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-top: 12px;
+          padding: 10px 12px;
+          border: 1px solid #dbeafe;
+          border-radius: 14px;
+          background: #f8fbff;
+        }
+        .operationText {
+          display: grid;
+          gap: 2px;
+          min-width: 0;
+        }
+        .operationTitle {
+          font-size: 13px;
+          font-weight: 950;
+          color: var(--text);
+        }
+        .operationDesc {
+          color: var(--muted);
+          font-size: 11px;
+          font-weight: 800;
+          line-height: 1.35;
         }
         .statusBadge {
           display: inline-flex;
@@ -536,6 +574,12 @@ function AdminstorePageInner() {
           background: var(--brand);
           color: #fff;
           border-color: var(--brand);
+        }
+        .btnCompact {
+          padding: 8px 11px;
+          border-radius: 10px;
+          font-size: 12px;
+          white-space: nowrap;
         }
 
         .btn:disabled,
@@ -728,14 +772,30 @@ function AdminstorePageInner() {
           }
 
           .badgeRow {
-            gap: 6px;
-            display: grid;
-            grid-template-columns: 1fr;
+            gap: 5px;
+          }
+
+          .pageMeta {
+            align-items: flex-start;
+            padding: 9px 10px;
+          }
+
+          .metaText {
+            font-size: 11px;
           }
 
           .badge {
             font-size: 11px;
-            padding: 7px 9px;
+            padding: 6px 8px;
+          }
+
+          .operationStrip {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .operationStrip .btn {
+            width: 100%;
           }
 
           .card {
@@ -847,23 +907,22 @@ function AdminstorePageInner() {
         </div>
       </header>
 
-      <div className="badgeRow">
-        {saveState === "saved" ? (
-          <span className="badge badgeSaved">저장됨 ✅</span>
-        ) : saveState === "error" ? (
-          <span className="badge badgeError">저장 실패 ❗</span>
-        ) : lastSavedAt ? (
-          <span className="badge">마지막 저장: {new Date(lastSavedAt).toLocaleTimeString()}</span>
-        ) : (
-          <span className="badge">미저장</span>
-        )}
-        {remainingDays !== null ? (
-          <span className="badge">
-            무료 사용기간 {FREE_TRIAL_DAYS}일 · 잔여 {remainingDays}일
+      <div className="pageMeta">
+        <div className="badgeRow">
+          <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
+          <span className="metaText">
+            {remainingDays !== null ? `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remainingDays}일` : `무료 사용기간 ${FREE_TRIAL_DAYS}일`}
           </span>
-        ) : (
-          <span className="badge">무료 사용기간 {FREE_TRIAL_DAYS}일</span>
-        )}
+        </div>
+        {isDirty ? (
+          <span className="badge badgeDirty">저장 필요</span>
+        ) : saveState === "saved" ? (
+          <span className="badge badgeSaved">저장 완료</span>
+        ) : saveState === "error" ? (
+          <span className="badge badgeError">저장 실패</span>
+        ) : lastSavedAt ? (
+          <span className="metaText">마지막 저장 {new Date(lastSavedAt).toLocaleTimeString()}</span>
+        ) : null}
       </div>
 
       {uploadMsg ? <div className="alert">{uploadMsg}</div> : null}
@@ -909,33 +968,34 @@ function AdminstorePageInner() {
 
         {/* 설정 */}
         <div className="settingsCard">
-          <section className={`card statusCard ${storeStatus !== "active" ? "statusCardInactive" : ""}`.trim()}>
-            <div className="statusHead">
-              <div>
-                <h2 className="cardTitle">운영 상태</h2>
-                <p className="sub">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "현재 매장은 운영 가능한 상태입니다."}</p>
-              </div>
-              <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
-            </div>
-            <div className="btnRow" style={{ marginTop: 0 }}>
-              {storeStatus === "deleted" ? (
-                <button className="btn btnMuted" type="button" disabled>
-                  삭제된 매장
-                </button>
-              ) : storeStatus === "inactive" ? (
-                <button className="btn btnPrimary" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
-                  다시 활성화
-                </button>
-              ) : (
-                <button className="btn btnMuted" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
-                  비활성화하기
-                </button>
-              )}
-            </div>
-          </section>
-
           <section className="card">
-          <h2 className="cardTitle">기본 정보</h2>
+          <div className="basicHead">
+            <div>
+              <h2 className="cardTitle">기본 정보</h2>
+              <p className="sub">매장 운영에 필요한 핵심 정보를 관리합니다.</p>
+            </div>
+            <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
+          </div>
+
+          <div className="operationStrip">
+            <div className="operationText">
+              <span className="operationTitle">운영 관리</span>
+              <span className="operationDesc">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}</span>
+            </div>
+            {storeStatus === "deleted" ? (
+              <button className="btn btnMuted btnCompact" type="button" disabled>
+                삭제된 매장
+              </button>
+            ) : storeStatus === "inactive" ? (
+              <button className="btn btnPrimary btnCompact" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
+                다시 활성화
+              </button>
+            ) : (
+              <button className="btn btnMuted btnCompact" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
+                매장 비활성화
+              </button>
+            )}
+          </div>
 
           <div className="field">
             <div className="label">매장명</div>
