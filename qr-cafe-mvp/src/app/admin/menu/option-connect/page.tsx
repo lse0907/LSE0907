@@ -29,6 +29,7 @@ type MenuSummary = {
   id: string;
   name: string;
   option_group_ids?: string[] | null;
+  option_not_required?: boolean | null;
 };
 
 type ConfirmState = {
@@ -59,7 +60,8 @@ function AdminMenuOptionConnectInner() {
   const [menus, setMenus] = useState<MenuSummary[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [menuQuery, setMenuQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "linked" | "unlinked">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "linked" | "needs_review" | "none">("all");
+  const [actionMode, setActionMode] = useState<"connect" | "none">("connect");
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,7 +99,7 @@ function AdminMenuOptionConnectInner() {
           .order("created_at", { ascending: true }),
         supabase
           .from("menu_items")
-          .select("id, name, option_group_ids")
+          .select("id, name, option_group_ids, option_not_required")
           .eq("store_id", storeId)
           .order("created_at", { ascending: false }),
         supabase.from("stores").select("setup_completed,setup_last_step,store_name").eq("store_id", storeId).maybeSingle(),
@@ -123,7 +125,7 @@ function AdminMenuOptionConnectInner() {
     } catch (e: unknown) {
       console.error("[admin/menu/option-connect] refresh:", toErrMsg(e));
       setMsgTone("error");
-      setMsg(`빠른 옵션 연결 데이터 로드 실패: ${toErrMsg(e)}`);
+      setMsg(`옵션 연결 확인 데이터 로드 실패: ${toErrMsg(e)}`);
     } finally {
       setLoading(false);
     }
@@ -142,32 +144,34 @@ function AdminMenuOptionConnectInner() {
     () => items.filter((item) => item.group_id === selectedGroupId),
     [items, selectedGroupId]
   );
-  const linkedMenus = useMemo(() => {
-    if (!selectedGroup) return [];
-    return menus.filter((menu) => (Array.isArray(menu.option_group_ids) ? menu.option_group_ids.includes(selectedGroup.id) : false));
-  }, [menus, selectedGroup]);
-  const linkedMenuIdSet = useMemo(() => new Set(linkedMenus.map((menu) => menu.id)), [linkedMenus]);
+  const optionLinkedMenuCount = useMemo(
+    () => menus.filter((menu) => Array.isArray(menu.option_group_ids) && menu.option_group_ids.length > 0).length,
+    [menus]
+  );
+  const optionNoneMenuCount = useMemo(
+    () => menus.filter((menu) => (!Array.isArray(menu.option_group_ids) || menu.option_group_ids.length === 0) && Boolean(menu.option_not_required)).length,
+    [menus]
+  );
+  const optionReviewNeededMenuCount = Math.max(menus.length - optionLinkedMenuCount - optionNoneMenuCount, 0);
   const filteredMenus = useMemo(() => {
     const q = menuQuery.trim().toLowerCase();
     return menus.filter((menu) => {
-      const linked = linkedMenuIdSet.has(menu.id);
+      const groupIds = Array.isArray(menu.option_group_ids) ? menu.option_group_ids : [];
+      const linked = groupIds.length > 0;
+      const noOption = groupIds.length === 0 && Boolean(menu.option_not_required);
+      const needsReview = groupIds.length === 0 && !menu.option_not_required;
       const matchesQuery = !q || menu.name.toLowerCase().includes(q);
       const matchesStatus =
         statusFilter === "all" ||
         (statusFilter === "linked" && linked) ||
-        (statusFilter === "unlinked" && !linked);
+        (statusFilter === "none" && noOption) ||
+        (statusFilter === "needs_review" && needsReview);
       return matchesQuery && matchesStatus;
     });
-  }, [linkedMenuIdSet, menuQuery, menus, statusFilter]);
+  }, [menuQuery, menus, statusFilter]);
   const visibleMenuIds = useMemo(() => filteredMenus.map((menu) => menu.id), [filteredMenus]);
   const allVisibleSelected = visibleMenuIds.length > 0 && visibleMenuIds.every((id) => selectedMenuIds.includes(id));
   const groupItemLabel = groupItems.map((item) => item.name).join(" / ");
-
-  useEffect(() => {
-    setSelectedMenuIds([]);
-    setMenuQuery("");
-    setStatusFilter("all");
-  }, [selectedGroupId]);
 
   const openConfirm = (title: string, description: string, action: () => void | Promise<void>) => {
     setConfirmState({ open: true, title, description, action });
@@ -210,13 +214,13 @@ function AdminMenuOptionConnectInner() {
             mode === "connect"
               ? Array.from(new Set([...currentIds, selectedGroup.id]))
               : currentIds.filter((id) => id !== selectedGroup.id);
-          return { ...menu, option_group_ids: optionGroupIds };
+          return { ...menu, option_group_ids: optionGroupIds, option_not_required: false };
         });
 
         for (const menu of nextMenus.filter((menu) => targetIds.includes(menu.id))) {
           const { error } = await supabase
             .from("menu_items")
-            .update({ option_group_ids: menu.option_group_ids || [] })
+            .update({ option_group_ids: menu.option_group_ids || [], option_not_required: false })
             .eq("store_id", storeId)
             .eq("id", menu.id);
           if (error) throw error;
@@ -250,8 +254,69 @@ function AdminMenuOptionConnectInner() {
     await run();
   };
 
+  const applyOptionNone = async (mode: "mark" | "clear") => {
+    if (saving || loading) return;
+    const targetIds = selectedMenuIds.filter((id) => menus.some((menu) => menu.id === id));
+    if (targetIds.length === 0) {
+      setMsgTone("error");
+      setMsg("변경할 메뉴를 선택해 주세요.");
+      return;
+    }
+
+    const run = async () => {
+      closeConfirm();
+      try {
+        setSaving(true);
+        setMsg("");
+
+        const nextMenus = menus.map((menu) => {
+          if (!targetIds.includes(menu.id)) return menu;
+          return {
+            ...menu,
+            option_group_ids: [],
+            option_not_required: mode === "mark",
+          };
+        });
+
+        for (const menu of nextMenus.filter((menu) => targetIds.includes(menu.id))) {
+          const { error } = await supabase
+            .from("menu_items")
+            .update({ option_group_ids: [], option_not_required: mode === "mark" })
+            .eq("store_id", storeId)
+            .eq("id", menu.id);
+          if (error) throw error;
+
+          const delPrices = await supabase.from("menu_option_prices").delete().eq("store_id", storeId).eq("menu_id", menu.id);
+          if (delPrices.error) throw delPrices.error;
+        }
+
+        setMenus(nextMenus);
+        setSelectedMenuIds([]);
+        setMsgTone("success");
+        setMsg(mode === "mark" ? `${targetIds.length}개 메뉴를 옵션 없음으로 표시했습니다.` : `${targetIds.length}개 메뉴의 옵션 없음 표시를 해제했습니다.`);
+      } catch (e: unknown) {
+        console.error("[admin/menu/option-connect] applyOptionNone:", toErrMsg(e));
+        setMsgTone("error");
+        setMsg(`옵션 없음 변경 실패: ${toErrMsg(e)}`);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    if (mode === "mark") {
+      openConfirm(
+        "옵션 없음으로 표시",
+        `선택한 ${targetIds.length}개 메뉴의 연결된 옵션이 모두 해제됩니다. 옵션 없이 판매할까요?`,
+        () => void run()
+      );
+      return;
+    }
+
+    await run();
+  };
+
   const onCompleteConnectionStep = async () => {
-    if (!storeId || loading || groups.length === 0 || menus.length === 0) return;
+    if (!storeId || loading || menus.length === 0 || optionReviewNeededMenuCount > 0) return;
     try {
       setSaving(true);
       setMsg("");
@@ -277,6 +342,7 @@ function AdminMenuOptionConnectInner() {
   };
 
   const setupBackHref = `/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
+  const adminHomeHref = `/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
   const menuHref = `/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
   const optionsHref = `/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
 
@@ -347,6 +413,42 @@ function AdminMenuOptionConnectInner() {
           padding: 14px;
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
         }
+        .summaryGrid {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .summaryItem {
+          border: 1px solid #dbe1ea;
+          border-radius: 999px;
+          padding: 7px 10px;
+          background: linear-gradient(180deg, #ffffff, #f8fafc);
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-height: 34px;
+        }
+        .summaryItemInfo {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        }
+        .summaryItemWarn {
+          border-color: #fed7aa;
+          background: linear-gradient(180deg, #fff7ed, #ffffff);
+        }
+        .summaryLabel {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+        .summaryValue {
+          color: var(--text);
+          font-size: 16px;
+          font-weight: 950;
+          letter-spacing: -0.03em;
+          line-height: 1;
+        }
         .btn {
           border: 1px solid var(--line);
           background: var(--card);
@@ -367,6 +469,11 @@ function AdminMenuOptionConnectInner() {
           background: var(--brand);
           color: #fff;
           border-color: var(--brand);
+        }
+        .btnOptionNone {
+          border-color: #0f766e;
+          background: #0f766e;
+          color: #fff;
         }
         .btn:disabled {
           opacity: 0.6;
@@ -515,6 +622,10 @@ function AdminMenuOptionConnectInner() {
           background: #fff7ed;
           color: #9a3412;
         }
+        .statusNone {
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
         .ruleSummary {
           margin-top: 8px;
           border: 1px solid #dbeafe;
@@ -648,6 +759,19 @@ function AdminMenuOptionConnectInner() {
           gap: 8px;
           flex-wrap: wrap;
         }
+        .compactGroupList {
+          max-height: 270px;
+        }
+        .optionNonePanel {
+          border: 1px solid #a5f3fc;
+          background: #ecfeff;
+          color: #155e75;
+          border-radius: 12px;
+          padding: 12px;
+          margin-top: 10px;
+          display: grid;
+          gap: 10px;
+        }
         .emptyBox {
           border: 1px dashed var(--line);
           border-radius: 12px;
@@ -699,6 +823,15 @@ function AdminMenuOptionConnectInner() {
           .card {
             padding: 12px;
           }
+          .summaryGrid {
+            gap: 6px;
+          }
+          .summaryItem {
+            padding: 6px 8px;
+            min-height: 30px;
+          }
+          .summaryLabel { font-size: 11px; }
+          .summaryValue { font-size: 15px; }
           .actionBtns,
           .actionBtns .btn {
             width: 100%;
@@ -709,15 +842,15 @@ function AdminMenuOptionConnectInner() {
       <header className="topbar">
         <div className="titleRow">
           <div>
-            <h1 className="h1">빠른 옵션 연결</h1>
+            <h1 className="h1">옵션 연결 확인</h1>
             <p className="sub">
-              {storeName ? `${storeName} 매장 · ` : ""}같은 공통옵션을 여러 메뉴에 한 번에 연결합니다. 옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다.
+              {storeName ? `${storeName} 매장 · ` : ""}메뉴별 옵션 필요 여부를 확인하고, 필요한 경우 한 번에 연결합니다.
             </p>
           </div>
           <div className="headerActionRow">
+            <a className="btn" href={adminHomeHref}>관리자 홈</a>
             <a className="btn" href={optionsHref}>옵션관리</a>
             <a className="btn" href={menuHref}>메뉴관리</a>
-            <a className="btn" href={setupBackHref}>초기설정</a>
           </div>
         </div>
       </header>
@@ -727,26 +860,52 @@ function AdminMenuOptionConnectInner() {
           stepLabel="옵션 연결 확인"
           stepNumber={4}
           modeLabel={setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정"}
-          modeDescription="메뉴별 옵션 연결 상태를 확인하는 단계입니다."
-          stepGuide="옵션이 필요한 메뉴에 공통옵션이 연결되어 있는지 확인해 주세요."
+          modeDescription="메뉴별 옵션 필요 여부를 확인하는 단계입니다."
+          stepGuide="옵션을 연결하거나 옵션 없음으로 표시해 주세요."
           completeLabel="옵션 연결 확인 완료"
           isCompleted={connectionStepConfirmed}
           completedLabel="옵션 연결 확인 완료"
-          completedDescription="메뉴별 옵션 연결 상태를 확인했습니다."
-          completeDisabled={loading || saving || groups.length === 0 || menus.length === 0}
-          disabledReason="공통옵션과 메뉴를 등록한 뒤 확인할 수 있습니다."
-          noticeText="옵션이 필요 없는 메뉴는 연결하지 않아도 됩니다."
+          completedDescription="메뉴별 옵션 필요 여부를 확인했습니다."
+          completeDisabled={loading || saving || menus.length === 0 || optionReviewNeededMenuCount > 0}
+          disabledReason="메뉴를 등록하고 모든 메뉴를 옵션 연결 또는 옵션 없음으로 확인해 주세요."
+          noticeText="옵션이 필요 없는 메뉴는 옵션 없음으로 표시할 수 있습니다."
           setupHref={setupBackHref}
           onComplete={() => void onCompleteConnectionStep()}
         />
       ) : null}
 
-      <section className="flowGuide" aria-label="빠른 옵션 연결 사용 순서">
+      {storeId ? (
+        <section className="card" aria-label="옵션 연결 상태 요약">
+          <h2 className="cardTitle">옵션 연결 현황</h2>
+          <div className="summaryGrid" style={{ marginTop: 10 }}>
+            <div className="summaryItem">
+              <span className="summaryLabel">등록 메뉴</span>
+              <strong className="summaryValue">{menus.length}</strong>
+            </div>
+            <div className={`summaryItem ${optionLinkedMenuCount > 0 ? "summaryItemInfo" : ""}`.trim()}>
+              <span className="summaryLabel">옵션 연결</span>
+              <strong className="summaryValue">{optionLinkedMenuCount}</strong>
+            </div>
+            <div className={`summaryItem ${optionNoneMenuCount > 0 ? "summaryItemInfo" : ""}`.trim()}>
+              <span className="summaryLabel">옵션 없음</span>
+              <strong className="summaryValue">{optionNoneMenuCount}</strong>
+            </div>
+            <div className={`summaryItem ${optionReviewNeededMenuCount > 0 ? "summaryItemWarn" : ""}`.trim()}>
+              <span className="summaryLabel">확인 필요</span>
+              <strong className="summaryValue">{optionReviewNeededMenuCount}</strong>
+            </div>
+          </div>
+          <p className="cardIntro">옵션이 필요한 메뉴는 연결하고, 필요 없는 메뉴는 옵션 없음으로 표시하세요.</p>
+        </section>
+      ) : null}
+
+      <section className="flowGuide" aria-label="옵션 연결 확인 사용 순서">
         <span>사용 순서</span>
         <span className="flowSteps">
-          <span className="flowStep">① 옵션 선택</span>
-          <span className="flowStep">② 메뉴 선택</span>
-          <span className="flowStep">연결 적용</span>
+          <span className="flowStep">상태 확인</span>
+          <span className="flowStep">① 메뉴 선택</span>
+          <span className="flowStep">② 처리 선택</span>
+          <span className="flowStep">저장</span>
         </span>
       </section>
 
@@ -767,142 +926,154 @@ function AdminMenuOptionConnectInner() {
       ) : (
         <section className="grid">
           <div className="card">
-            <h2 className="cardTitle">① 연결할 공통옵션 선택 ({groups.length})</h2>
-            <p className="cardIntro">메뉴에 함께 보여줄 공통옵션을 하나 선택하세요.</p>
-            {loading ? <p className="muted" style={{ marginTop: 10 }}>옵션을 불러오는 중...</p> : null}
-            {!loading && groups.length === 0 ? (
-              <div className="emptyBox">
-                <div className="muted">먼저 공통옵션 그룹과 항목을 등록해 주세요.</div>
-                <a className="btn btnPrimary" href={optionsHref}>옵션관리로 이동</a>
-              </div>
-            ) : null}
-            <div className="list">
-              {groups.map((group) => {
-                const linkedCount = menus.filter((menu) =>
-                  Array.isArray(menu.option_group_ids) ? menu.option_group_ids.includes(group.id) : false
-                ).length;
-                const itemCount = items.filter((item) => item.group_id === group.id).length;
-                return (
+            <h2 className="cardTitle">① 메뉴 선택</h2>
+            <p className="cardIntro">상태를 확인할 메뉴를 먼저 선택하세요.</p>
+            <div className="tools">
+              <input
+                className="input"
+                value={menuQuery}
+                onChange={(e) => setMenuQuery(e.target.value)}
+                placeholder="메뉴명 검색"
+                disabled={saving || loading || menus.length === 0}
+              />
+              <div className="filters" role="tablist" aria-label="옵션 상태 필터">
+                {[
+                  { key: "all", label: "전체" },
+                  { key: "linked", label: "옵션 연결" },
+                  { key: "needs_review", label: "확인 필요" },
+                  { key: "none", label: "옵션 없음" },
+                ].map((filter) => (
                   <button
-                    key={group.id}
+                    key={filter.key}
+                    className={`filterChip ${statusFilter === filter.key ? "filterChipOn" : ""}`}
                     type="button"
-                    className={`groupBtn ${selectedGroupId === group.id ? "groupBtnOn" : ""}`}
-                    onClick={() => setSelectedGroupId(group.id)}
+                    onClick={() => setStatusFilter(filter.key as "all" | "linked" | "needs_review" | "none")}
                     disabled={saving || loading}
                   >
-                    <span className="rowTop">
-                      <span className="name">{group.name}</span>
-                      <span className="groupMeta">항목 {itemCount}개 · {getPolicyText(group)}</span>
-                    </span>
-                    <span className={`statusBadge ${linkedCount > 0 ? "statusLinked" : "statusUnlinked"}`}>
-                      {linkedCount > 0 ? `연결 ${linkedCount}` : "미연결"}
-                    </span>
+                    {filter.label}
                   </button>
-                );
-              })}
+                ))}
+              </div>
             </div>
+
+            <div className="selectBar">
+              <label className="checkLabel">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleVisibleMenus}
+                  disabled={saving || loading || visibleMenuIds.length === 0}
+                />
+                현재 목록 전체 선택
+              </label>
+              <span className="muted">표시 {filteredMenus.length}개 · 선택 {selectedMenuIds.length}개</span>
+            </div>
+
+            {menus.length === 0 ? (
+              <div className="emptyBox">
+                <div className="muted">메뉴를 등록한 뒤 옵션 상태를 확인할 수 있습니다.</div>
+                <a className="btn btnPrimary" href={menuHref}>메뉴관리로 이동</a>
+              </div>
+            ) : filteredMenus.length === 0 ? (
+              <div className="emptyBox">
+                <div className="muted">검색어 또는 옵션 상태 필터를 변경해 주세요.</div>
+              </div>
+            ) : (
+              <div className="menuList">
+                {filteredMenus.map((menu) => {
+                  const groupIds = Array.isArray(menu.option_group_ids) ? menu.option_group_ids : [];
+                  const status = groupIds.length > 0 ? "linked" : menu.option_not_required ? "none" : "needs_review";
+                  const isSelected = selectedMenuIds.includes(menu.id);
+                  return (
+                    <label key={menu.id} className={`menuRow ${isSelected ? "menuRowOn" : ""}`}>
+                      <span className="checkLabel">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleMenuSelection(menu.id)}
+                          disabled={saving || loading}
+                        />
+                        <span className="menuMeta">
+                          <span className="menuName">{menu.name}</span>
+                        </span>
+                      </span>
+                      <span className={`statusBadge ${status === "linked" ? "statusLinked" : status === "none" ? "statusNone" : "statusUnlinked"}`}>
+                        {status === "linked" ? "옵션 연결" : status === "none" ? "옵션 없음" : "확인 필요"}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="card">
-            <h2 className="cardTitle">② 적용할 메뉴 선택</h2>
-            {!selectedGroup ? (
-              <p className="muted" style={{ marginTop: 10 }}>공통옵션을 선택해 주세요.</p>
-            ) : (
+            <h2 className="cardTitle">② 선택 메뉴 처리</h2>
+            <p className="cardIntro">선택한 메뉴에 공통옵션을 연결하거나 옵션 없음으로 표시합니다.</p>
+            <div className="btnRow" style={{ marginTop: 8 }}>
+              <button
+                className={`btn ${actionMode === "connect" ? "btnPrimary" : ""}`.trim()}
+                type="button"
+                onClick={() => setActionMode("connect")}
+                disabled={saving || loading}
+              >
+                공통옵션 연결
+              </button>
+              <button
+                className={`btn ${actionMode === "none" ? "btnOptionNone" : ""}`.trim()}
+                type="button"
+                onClick={() => setActionMode("none")}
+                disabled={saving || loading}
+              >
+                옵션 없음 설정
+              </button>
+            </div>
+            <div className="actionSummary" style={{ marginTop: 10 }}>선택 메뉴 {selectedMenuIds.length}개</div>
+
+            {actionMode === "connect" ? (
               <>
                 <div className="ruleSummary">
-                  {selectedGroup.name} {groupItemLabel ? `· ${groupItemLabel}` : "· 옵션 항목을 먼저 추가해 주세요."}
+                  {selectedGroup ? `${selectedGroup.name}${groupItemLabel ? ` · ${groupItemLabel}` : " · 옵션 항목을 먼저 추가해 주세요."}` : "공통옵션을 선택해 주세요."}
                 </div>
-                <div className="btnRow" style={{ marginTop: 8 }}>
-                  <span className="statusBadge statusLinked">연결 {linkedMenus.length}개</span>
-                  <span className="statusBadge statusUnlinked">미연결 {Math.max(menus.length - linkedMenus.length, 0)}개</span>
-                </div>
-
-                <div className="tools">
-                  <input
-                    className="input"
-                    value={menuQuery}
-                    onChange={(e) => setMenuQuery(e.target.value)}
-                    placeholder="메뉴명 검색"
-                    disabled={saving || loading || menus.length === 0}
-                  />
-                  <div className="filters" role="tablist" aria-label="옵션 연결 상태 필터">
-                    {[
-                      { key: "all", label: "전체" },
-                      { key: "linked", label: "연결됨" },
-                      { key: "unlinked", label: "미연결" },
-                    ].map((filter) => (
+                {loading ? <p className="muted" style={{ marginTop: 10 }}>옵션을 불러오는 중...</p> : null}
+                {!loading && groups.length === 0 ? (
+                  <div className="emptyBox">
+                    <div className="muted">먼저 공통옵션 그룹과 항목을 등록해 주세요.</div>
+                    <a className="btn btnPrimary" href={optionsHref}>옵션관리로 이동</a>
+                  </div>
+                ) : null}
+                <div className="list compactGroupList">
+                  {groups.map((group) => {
+                    const linkedCount = menus.filter((menu) =>
+                      Array.isArray(menu.option_group_ids) ? menu.option_group_ids.includes(group.id) : false
+                    ).length;
+                    const itemCount = items.filter((item) => item.group_id === group.id).length;
+                    return (
                       <button
-                        key={filter.key}
-                        className={`filterChip ${statusFilter === filter.key ? "filterChipOn" : ""}`}
+                        key={group.id}
                         type="button"
-                        onClick={() => setStatusFilter(filter.key as "all" | "linked" | "unlinked")}
+                        className={`groupBtn ${selectedGroupId === group.id ? "groupBtnOn" : ""}`}
+                        onClick={() => setSelectedGroupId(group.id)}
                         disabled={saving || loading}
                       >
-                        {filter.label}
+                        <span className="rowTop">
+                          <span className="name">{group.name}</span>
+                          <span className="groupMeta">항목 {itemCount}개 · {getPolicyText(group)}</span>
+                        </span>
+                        <span className={`statusBadge ${linkedCount > 0 ? "statusLinked" : "statusUnlinked"}`}>
+                          {linkedCount > 0 ? `연결 ${linkedCount}` : "미연결"}
+                        </span>
                       </button>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-
-                <div className="selectBar">
-                  <label className="checkLabel">
-                    <input
-                      type="checkbox"
-                      checked={allVisibleSelected}
-                      onChange={toggleVisibleMenus}
-                      disabled={saving || loading || visibleMenuIds.length === 0}
-                    />
-                    현재 목록 전체 선택
-                  </label>
-                  <span className="muted">표시 {filteredMenus.length}개 · 선택 {selectedMenuIds.length}개</span>
-                </div>
-
-                {menus.length === 0 ? (
-                  <div className="emptyBox">
-                    <div className="muted">메뉴를 등록한 뒤 공통옵션을 연결할 수 있습니다.</div>
-                    <a className="btn btnPrimary" href={menuHref}>메뉴관리로 이동</a>
-                  </div>
-                ) : filteredMenus.length === 0 ? (
-                  <div className="emptyBox">
-                    <div className="muted">검색어 또는 연결 상태 필터를 변경해 주세요.</div>
-                  </div>
-                ) : (
-                  <div className="menuList">
-                    {filteredMenus.map((menu) => {
-                      const isLinked = linkedMenuIdSet.has(menu.id);
-                      const isSelected = selectedMenuIds.includes(menu.id);
-                      return (
-                        <label key={menu.id} className={`menuRow ${isSelected ? "menuRowOn" : ""}`}>
-                          <span className="checkLabel">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleMenuSelection(menu.id)}
-                              disabled={saving || loading}
-                            />
-                            <span className="menuMeta">
-                              <span className="menuName">{menu.name}</span>
-                            </span>
-                          </span>
-                          <span className={`statusBadge ${isLinked ? "statusLinked" : "statusUnlinked"}`}>
-                            {isLinked ? "연결됨" : "미연결"}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-
                 <div className="actions">
-                  <div className="actionSummary">
-                    {selectedGroup.name} · 선택 메뉴 {selectedMenuIds.length}개
-                  </div>
                   <div className="actionBtns">
                     <button
-                      className="btn btnPrimary"
+                      className="btn btnOptionNone"
                       type="button"
                       onClick={() => void applyConnection("connect")}
-                      disabled={saving || loading || selectedMenuIds.length === 0 || groupItems.length === 0}
+                      disabled={saving || loading || selectedMenuIds.length === 0 || !selectedGroup || groupItems.length === 0}
                     >
                       선택 메뉴에 연결하기
                     </button>
@@ -910,16 +1081,39 @@ function AdminMenuOptionConnectInner() {
                       className="btn dangerBtn"
                       type="button"
                       onClick={() => void applyConnection("disconnect")}
-                      disabled={saving || loading || selectedMenuIds.length === 0}
+                      disabled={saving || loading || selectedMenuIds.length === 0 || !selectedGroup}
                     >
                       선택 메뉴에서 이 옵션 제거
                     </button>
                   </div>
                 </div>
               </>
+            ) : (
+              <div className="optionNonePanel">
+                <p className="muted">선택한 메뉴는 옵션 없이 판매됩니다.</p>
+                <div className="actionBtns">
+                  <button
+                    className="btn btnOptionNone"
+                    type="button"
+                    onClick={() => void applyOptionNone("mark")}
+                    disabled={saving || loading || selectedMenuIds.length === 0}
+                  >
+                    옵션 없음 저장
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => void applyOptionNone("clear")}
+                    disabled={saving || loading || selectedMenuIds.length === 0}
+                  >
+                    옵션 없음 해제
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </section>
+
       )}
 
       {confirmState.open ? (
