@@ -1559,6 +1559,10 @@ function AdminMenuPageInner() {
           border-color: #fecaca;
           background: linear-gradient(180deg, #fef2f2, #ffffff);
         }
+        .summaryItemInfo {
+          border-color: #bfdbfe;
+          background: linear-gradient(180deg, #eff6ff, #ffffff);
+        }
         .summaryLabel {
           color: var(--muted);
           font-size: 12px;
