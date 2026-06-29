@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,6 +9,18 @@ import { loadStoreProfile, saveStoreProfile, useStoreProfile } from "@/app/lib/s
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 
 const STORE_IMAGE_BUCKET = "store-assets";
+type StoreStatus = "active" | "inactive" | "deleted";
+
+function normalizeStoreStatus(status?: string | null): StoreStatus {
+  if (status === "inactive" || status === "deleted") return status;
+  return "active";
+}
+
+function getStatusLabel(status: StoreStatus) {
+  if (status === "inactive") return "비활성";
+  if (status === "deleted") return "삭제됨";
+  return "운영중";
+}
 
 function clampOverlay(v: number) {
   if (!Number.isFinite(v)) return 0;
@@ -58,6 +71,8 @@ function AdminstorePageInner() {
   const [storeId, setStoreId] = useState<string>("");
   const { profile, setProfile } = useStoreProfile(storeId);
   const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
+  const [storeStatus, setStoreStatus] = useState<StoreStatus>("active");
+  const [statusSaving, setStatusSaving] = useState(false);
   const [showAddr, setShowAddr] = useState(false);
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -91,25 +106,35 @@ function AdminstorePageInner() {
     if (!storeId) return;
     let mounted = true;
     (async () => {
-      const { data, error } = await supabase
+      // `status` can be unavailable before docs/sql/supabase-store-lifecycle-v1.sql is applied.
+      let res: any = await supabase
         .from("stores")
-        .select("created_at")
+        .select("created_at,status")
         .eq("store_id", storeId)
         .maybeSingle();
+      if (res.error && /status/i.test(res.error.message || "")) {
+        res = await supabase
+          .from("stores")
+          .select("created_at")
+          .eq("store_id", storeId)
+          .maybeSingle();
+      }
       if (!mounted) return;
-      if (error) {
-        console.error("[admin/store] load created_at error:", error.message);
+      if (res.error) {
+        console.error("[admin/store] load store status error:", res.error.message);
         setStoreCreatedAt(null);
+        setStoreStatus("active");
         return;
       }
-      setStoreCreatedAt(data?.created_at || null);
+      setStoreCreatedAt(res.data?.created_at || null);
+      setStoreStatus(normalizeStoreStatus(res.data?.status));
     })();
     return () => {
       mounted = false;
     };
   }, [storeId]);
 
-  // ✅ 변경 여부: 핵심 필드만 비교 (extra는 저장도 안 하니 제외)
+  // ✅ 변경 여부: 저장 대상 핵심 필드만 비교
   const isDirty = useMemo(() => {
     const a = pickCore(draft);
     const b = pickCore(profile);
@@ -132,6 +157,45 @@ function AdminstorePageInner() {
       rgba(0,0,0,${aBot}) 100%
     )`;
   }, [strength]);
+
+  const updateStoreStatus = async (nextStatus: StoreStatus) => {
+    if (!storeId || statusSaving) return;
+    const nextLabel = getStatusLabel(nextStatus);
+    const ok = window.confirm(
+      nextStatus === "inactive"
+        ? "매장을 비활성화할까요? 고객 주문 페이지와 운영 진입이 제한될 수 있습니다."
+        : "매장을 다시 활성화할까요?"
+    );
+    if (!ok) return;
+
+    setStatusSaving(true);
+    setUploadMsg("");
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id || null;
+      const payload =
+        nextStatus === "inactive"
+          ? {
+              status: "inactive",
+              deactivated_at: new Date().toISOString(),
+              deactivated_by: userId,
+            }
+          : {
+              status: "active",
+              deactivated_at: null,
+              deactivated_by: null,
+            };
+      const { error } = await supabase.from("stores").update(payload).eq("store_id", storeId);
+      if (error) throw error;
+      setStoreStatus(nextStatus);
+      setUploadMsg(`매장 상태를 ${nextLabel}(으)로 변경했습니다.`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setUploadMsg(`매장 상태 변경 실패: ${message}`);
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   const onSave = async () => {
     if (!storeId) {
@@ -271,7 +335,7 @@ function AdminstorePageInner() {
 
       <style jsx>{`
         .wrap {
-          max-width: 920px;
+          max-width: 1120px;
           margin: 0 auto;
           padding: 14px;
           display: grid;
@@ -327,6 +391,11 @@ function AdminstorePageInner() {
           border-color: #fecaca;
           background: #fef2f2;
         }
+        .badgeDirty {
+          border-color: #fed7aa;
+          background: #fff7ed;
+          color: #9a3412;
+        }
         .alert {
           border: 1px solid #fecaca;
           background: #fef2f2;
@@ -338,9 +407,28 @@ function AdminstorePageInner() {
 
         .grid {
           display: grid;
-          grid-template-columns: 1.2fr 1fr;
+          grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
+          gap: 12px;
+          align-items: start;
+        }
+        .sideStack,
+        .formStack {
+          display: grid;
+          gap: 10px;
+          align-content: start;
+        }
+        .advancedGrid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 10px;
           align-items: start;
+        }
+        .sectionLead {
+          margin: 4px 0 0;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.35;
         }
 
         .card {
@@ -355,6 +443,80 @@ function AdminstorePageInner() {
           margin: 0;
           font-size: 16px;
           font-weight: 950;
+        }
+
+        .pageMeta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+          padding: 10px 12px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #fff;
+        }
+        .metaText {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.3;
+        }
+        .basicHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .operationStrip {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-top: 12px;
+          padding: 10px 12px;
+          border: 1px solid #dbeafe;
+          border-radius: 14px;
+          background: #f8fbff;
+        }
+        .operationText {
+          display: grid;
+          gap: 2px;
+          min-width: 0;
+        }
+        .operationTitle {
+          font-size: 13px;
+          font-weight: 950;
+          color: var(--text);
+        }
+        .operationDesc {
+          color: var(--muted);
+          font-size: 11px;
+          font-weight: 800;
+          line-height: 1.35;
+        }
+        .statusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          padding: 5px 9px;
+          font-size: 12px;
+          font-weight: 950;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+        .statusBadgeInactive {
+          border-color: #cbd5e1;
+          background: #f1f5f9;
+          color: #475569;
+        }
+        .btnMuted {
+          border-color: #cbd5e1;
+          background: #f8fafc;
+          color: #334155;
         }
 
         .field {
@@ -432,6 +594,12 @@ function AdminstorePageInner() {
           color: #fff;
           border-color: var(--brand);
         }
+        .btnCompact {
+          padding: 8px 11px;
+          border-radius: 10px;
+          font-size: 12px;
+          white-space: nowrap;
+        }
 
         .btn:disabled,
         .btnPrimary:disabled {
@@ -462,6 +630,15 @@ function AdminstorePageInner() {
           margin-top: 14px;
           padding-top: 10px;
           border-top: 1px dashed var(--line);
+        }
+        .primarySaveBar {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          align-items: center;
+          margin-top: 14px;
+          padding-top: 12px;
+          border-top: 1px solid var(--line);
         }
 
         .hero {
@@ -598,8 +775,9 @@ function AdminstorePageInner() {
           gap: 10px;
         }
 
-        @media (max-width: 860px) {
-          .grid {
+        @media (max-width: 980px) {
+          .grid,
+          .advancedGrid {
             grid-template-columns: 1fr;
           }
         }
@@ -623,14 +801,30 @@ function AdminstorePageInner() {
           }
 
           .badgeRow {
-            gap: 6px;
-            display: grid;
-            grid-template-columns: 1fr;
+            gap: 5px;
+          }
+
+          .pageMeta {
+            align-items: flex-start;
+            padding: 9px 10px;
+          }
+
+          .metaText {
+            font-size: 11px;
           }
 
           .badge {
             font-size: 11px;
-            padding: 7px 9px;
+            padding: 6px 8px;
+          }
+
+          .operationStrip {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .operationStrip .btn {
+            width: 100%;
           }
 
           .card {
@@ -646,7 +840,7 @@ function AdminstorePageInner() {
             font-size: 15px;
           }
 
-          .field {
+        .field {
             margin-top: 9px;
             gap: 5px;
           }
@@ -701,6 +895,14 @@ function AdminstorePageInner() {
             padding-top: 8px;
           }
 
+          .primarySaveBar {
+            gap: 8px;
+          }
+
+          .primarySaveBar .btn {
+            flex: 1 1 auto;
+          }
+
           .hero {
             height: 172px;
           }
@@ -742,220 +944,166 @@ function AdminstorePageInner() {
         </div>
       </header>
 
-      <div className="badgeRow">
-        {saveState === "saved" ? (
-          <span className="badge badgeSaved">저장됨 ✅</span>
-        ) : saveState === "error" ? (
-          <span className="badge badgeError">저장 실패 ❗</span>
-        ) : lastSavedAt ? (
-          <span className="badge">마지막 저장: {new Date(lastSavedAt).toLocaleTimeString()}</span>
-        ) : (
-          <span className="badge">미저장</span>
-        )}
-        {remainingDays !== null ? (
-          <span className="badge">
-            무료 사용기간 {FREE_TRIAL_DAYS}일 · 잔여 {remainingDays}일
+      <div className="pageMeta">
+        <div className="badgeRow">
+          <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
+          <span className="metaText">
+            {remainingDays !== null ? `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remainingDays}일` : `무료 사용기간 ${FREE_TRIAL_DAYS}일`}
           </span>
-        ) : (
-          <span className="badge">무료 사용기간 {FREE_TRIAL_DAYS}일</span>
-        )}
+        </div>
+        {isDirty ? (
+          <span className="badge badgeDirty">저장 필요</span>
+        ) : saveState === "saved" ? (
+          <span className="badge badgeSaved">저장 완료</span>
+        ) : saveState === "error" ? (
+          <span className="badge badgeError">저장 실패</span>
+        ) : lastSavedAt ? (
+          <span className="metaText">마지막 저장 {new Date(lastSavedAt).toLocaleTimeString()}</span>
+        ) : null}
       </div>
 
       {uploadMsg ? <div className="alert">{uploadMsg}</div> : null}
 
       <section className="grid">
-        {/* ✅ 미리보기(위쪽) */}
-        <div className="card previewWrap">
-          <h2 className="cardTitle">미리보기</h2>
+        <div className="sideStack">
+          <section className="card previewWrap">
+            <div>
+              <h2 className="cardTitle">미리보기</h2>
+              <p className="sectionLead">고객 주문 화면에 보이는 대표 정보입니다.</p>
+            </div>
 
-          <div className="hero">
-            {(draft as any).mainImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="heroImg" src={(draft as any).mainImage} alt="main" />
-            ) : (
-              <div className="heroFallback">대표 이미지를 등록하세요</div>
-            )}
-            <div className="overlay" style={{ background: overlayBg }} />
+            <div className="hero">
+              {(draft as any).mainImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="heroImg" src={(draft as any).mainImage} alt="main" />
+              ) : (
+                <div className="heroFallback">대표 이미지를 등록하세요</div>
+              )}
+              <div className="overlay" style={{ background: overlayBg }} />
 
-            <div className="heroInner">
-              <div className="logoRow">
-                {(draft as any).logoImage ? (
-                  <div className="logo">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={(draft as any).logoImage} alt="logo" />
+              <div className="heroInner">
+                <div className="logoRow">
+                  {(draft as any).logoImage ? (
+                    <div className="logo">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={(draft as any).logoImage} alt="logo" />
+                    </div>
+                  ) : (
+                    <div className="logo" aria-hidden="true">
+                      <span style={{ color: "white", fontWeight: 900, fontSize: 12 }}>logo</span>
+                    </div>
+                  )}
+                  <div style={{ minWidth: 0 }}>
+                    <h3 className="storeName">{(draft as any).storeName || "매장명"}</h3>
                   </div>
-                ) : (
-                  <div className="logo" aria-hidden="true">
-                    <span style={{ color: "white", fontWeight: 900, fontSize: 12 }}>logo</span>
-                  </div>
-                )}
-                <div style={{ minWidth: 0 }}>
-                  <h3 className="storeName">{(draft as any).storeName || "매장명"}</h3>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="previewCard">
-            <p className="descText">{(draft as any).storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
-          </div>
+            <div className="previewCard">
+              <p className="descText">{(draft as any).storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
+            </div>
+          </section>
 
+          <section className="card">
+            <h2 className="cardTitle">이미지 / 브랜딩</h2>
+            <p className="sectionLead">대표 이미지와 로고는 고객 화면의 첫인상을 결정합니다.</p>
+
+            <div className="field">
+              <div className="label">대표 이미지 업로드</div>
+              <input
+                className="input"
+                type="file"
+                accept="image/*"
+                onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
+                disabled={uploadingMain}
+              />
+              <div className="hint">
+                {uploadingMain
+                  ? "업로드 중..."
+                  : (draft as any).mainImage
+                    ? "대표 이미지 등록됨"
+                    : "아직 등록된 이미지가 없습니다."}
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">로고 이미지 업로드 (선택)</div>
+              <input
+                className="input"
+                type="file"
+                accept="image/*"
+                onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
+                disabled={uploadingLogo}
+              />
+              <div className="hint">
+                {uploadingLogo
+                  ? "업로드 중..."
+                  : (draft as any).logoImage
+                    ? "로고 이미지 등록됨"
+                    : "아직 등록된 이미지가 없습니다."}
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">대표이미지 오버레이 강도 (0~100)</div>
+              <div className="sliderRow">
+                <input
+                  className="range"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={strength}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
+                    }))
+                  }
+                />
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  value={String(strength)}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          </section>
         </div>
 
-        {/* 설정 */}
-        <div className="card settingsCard">
-          <h2 className="cardTitle">기본 정보</h2>
-
-          <div className="field">
-            <div className="label">매장명</div>
-            <input
-              className="input"
-              value={(draft as any).storeName}
-              onChange={(e) => setDraft((p: any) => ({ ...p, storeName: e.target.value }))}
-              placeholder="예: XIMEN 순천점"
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">
-              매장 ID <span className="pill">수정 불가</span>
+        <div className="formStack">
+          <section className="card">
+            <div className="basicHead">
+              <div>
+                <h2 className="cardTitle">기본 정보</h2>
+                <p className="sectionLead">고객 안내와 주문 운영에 바로 쓰이는 핵심 정보입니다.</p>
+              </div>
+              <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
             </div>
-            <input className="input" value={storeId} disabled placeholder="예: ximen" />
-          </div>
-
-          <div className="field">
-            <div className="label">매장 설명</div>
-            <textarea
-              className="textarea"
-              value={(draft as any).storeDesc}
-              onChange={(e) => setDraft((p: any) => ({ ...p, storeDesc: e.target.value }))}
-              placeholder="예) QR로 간편하게 주문하고 기다리세요..."
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">직원 화면 모드</div>
-            <select
-              className="input"
-              value={(draft as any).staffViewMode === "station" ? "station" : "simple"}
-              onChange={(e) =>
-                setDraft((p: any) => ({
-                  ...p,
-                  staffViewMode: e.target.value === "station" ? "station" : "simple",
-                }))
-              }
-            >
-              <option value="simple">Simple Mode (통합형)</option>
-              <option value="station">Station Mode (분리형)</option>
-            </select>
-            <div className="hint">
-              Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비 역할 분리에 적합
-            </div>
-          </div>
-
-          <div className="field">
-            <div className="label">대표 이미지 업로드</div>
-            <input
-              className="input"
-              type="file"
-              accept="image/*"
-              onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
-              disabled={uploadingMain}
-            />
-            <div className="hint">
-              {uploadingMain
-                ? "업로드 중..."
-                : (draft as any).mainImage
-                  ? "대표 이미지 등록됨"
-                  : "아직 등록된 이미지가 없습니다."}
-            </div>
-          </div>
-
-          <div className="field">
-            <div className="label">로고 이미지 업로드 (선택)</div>
-            <input
-              className="input"
-              type="file"
-              accept="image/*"
-              onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
-              disabled={uploadingLogo}
-            />
-            <div className="hint">
-              {uploadingLogo
-                ? "업로드 중..."
-                : (draft as any).logoImage
-                  ? "로고 이미지 등록됨"
-                  : "아직 등록된 이미지가 없습니다."}
-            </div>
-          </div>
-
-          <div className="field">
-            <div className="label">대표이미지 오버레이 강도 (0~100)</div>
-
-            <div className="sliderRow">
-              <input
-                className="range"
-                type="range"
-                min={0}
-                max={100}
-                value={strength}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
-                  }))
-                }
-              />
-
-              <input
-                className="input"
-                inputMode="numeric"
-                value={String(strength)}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
-                  }))
-                }
-              />
-            </div>
-
-          </div>
-
-          <div className="detailBlock">
-            <h3 className="cardTitle">매장 상세 정보</h3>
 
             <div className="field">
-              <div className="label">
-                사업자등록번호 <span className="pill">필수</span>
-              </div>
+              <div className="label">매장명</div>
               <input
                 className="input"
-                value={(draft as any)?.extra?.bizNo || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), bizNo: e.target.value },
-                  }))
-                }
-                placeholder="예: 000-00-00000"
+                value={(draft as any).storeName}
+                onChange={(e) => setDraft((p: any) => ({ ...p, storeName: e.target.value }))}
+                placeholder="예: XIMEN 순천점"
               />
             </div>
 
             <div className="field">
-              <div className="label">
-                업종 <span className="pill">필수</span>
-              </div>
-              <input
-                className="input"
-                value={(draft as any)?.extra?.industry || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), industry: e.target.value },
-                  }))
-                }
-                placeholder="예: 카페, 음식점"
+              <div className="label">매장 설명</div>
+              <textarea
+                className="textarea"
+                value={(draft as any).storeDesc}
+                onChange={(e) => setDraft((p: any) => ({ ...p, storeDesc: e.target.value }))}
+                placeholder="예) QR로 간편하게 주문하고 기다리세요..."
               />
             </div>
 
@@ -1023,37 +1171,132 @@ function AdminstorePageInner() {
               />
             </div>
 
-            <div className="field">
-              <div className="label">SNS 링크 (선택)</div>
-              <input
-                className="input"
-                value={(draft as any)?.extra?.sns || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), sns: e.target.value },
-                  }))
-                }
-                placeholder="예: instagram.com/..."
-              />
+            <div className="primarySaveBar">
+              <button className="btn btnPrimary" onClick={onSave} disabled={!isDirty || saving}>
+                {saving ? "저장 중..." : "저장"}
+              </button>
+              <button className="btn" onClick={onReset} disabled={!isDirty || saving}>
+                변경 취소
+              </button>
+              {isDirty ? <span className="badge badgeDirty">저장 필요</span> : null}
+            </div>
+
+            {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
+          </section>
+        </div>
+      </section>
+
+      <section className="advancedGrid" aria-label="매장 세부 설정">
+        <section className="card">
+          <h2 className="cardTitle">운영 설정</h2>
+          <p className="sectionLead">직원 화면과 내부 운영 방식을 설정합니다.</p>
+
+          <div className="field">
+            <div className="label">직원 화면 모드</div>
+            <select
+              className="input"
+              value={(draft as any).staffViewMode === "station" ? "station" : "simple"}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  staffViewMode: e.target.value === "station" ? "station" : "simple",
+                }))
+              }
+            >
+              <option value="simple">Simple Mode (통합형)</option>
+              <option value="station">Station Mode (분리형)</option>
+            </select>
+            <div className="hint">
+              Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비 역할 분리에 적합
             </div>
           </div>
+        </section>
 
-          <div className="btnRow">
-            <button className="btn btnPrimary" onClick={onSave} disabled={!isDirty || saving}>
-              {saving ? "저장 중..." : "저장"}
-            </button>
+        <section className="card">
+          <h2 className="cardTitle">사업자 / 추가 정보</h2>
+          <p className="sectionLead">정산·안내에 필요한 세부 정보를 관리합니다.</p>
 
-            <button className="btn" onClick={onReset} disabled={!isDirty || saving}>
-              변경 취소
-            </button>
-
-            {isDirty ? <span className="badge">변경됨</span> : <span className="badge">변경 없음</span>}
+          <div className="field">
+            <div className="label">
+              사업자등록번호 <span className="pill">필수</span>
+            </div>
+            <input
+              className="input"
+              value={(draft as any)?.extra?.bizNo || ""}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  extra: { ...(p?.extra || {}), bizNo: e.target.value },
+                }))
+              }
+              placeholder="예: 000-00-00000"
+            />
           </div>
 
-          {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
+          <div className="field">
+            <div className="label">
+              업종 <span className="pill">필수</span>
+            </div>
+            <input
+              className="input"
+              value={(draft as any)?.extra?.industry || ""}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  extra: { ...(p?.extra || {}), industry: e.target.value },
+                }))
+              }
+              placeholder="예: 카페, 음식점"
+            />
+          </div>
 
-        </div>
+          <div className="field">
+            <div className="label">SNS 링크 (선택)</div>
+            <input
+              className="input"
+              value={(draft as any)?.extra?.sns || ""}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  extra: { ...(p?.extra || {}), sns: e.target.value },
+                }))
+              }
+              placeholder="예: instagram.com/..."
+            />
+          </div>
+
+          <div className="field">
+            <div className="label">
+              매장 ID <span className="pill">수정 불가</span>
+            </div>
+            <input className="input" value={storeId} disabled placeholder="예: ximen" />
+          </div>
+        </section>
+
+        <section className="card">
+          <h2 className="cardTitle">운영 상태 관리</h2>
+          <p className="sectionLead">상태 확인은 상단에서, 변경은 이 관리 영역에서 진행합니다.</p>
+
+          <div className="operationStrip">
+            <div className="operationText">
+              <span className="operationTitle">현재 상태: {getStatusLabel(storeStatus)}</span>
+              <span className="operationDesc">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}</span>
+            </div>
+            {storeStatus === "deleted" ? (
+              <button className="btn btnMuted btnCompact" type="button" disabled>
+                삭제된 매장
+              </button>
+            ) : storeStatus === "inactive" ? (
+              <button className="btn btnPrimary btnCompact" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
+                다시 활성화
+              </button>
+            ) : (
+              <button className="btn btnMuted btnCompact" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
+                매장 비활성화
+              </button>
+            )}
+          </div>
+        </section>
       </section>
 
       {showAddr ? (
