@@ -987,6 +987,14 @@ function AdminstorePageInner() {
             padding-top: 8px;
           }
 
+          .primarySaveBar {
+            gap: 8px;
+          }
+
+          .primarySaveBar .btn {
+            flex: 1 1 auto;
+          }
+
           .hero {
             height: 172px;
           }
@@ -1308,6 +1316,49 @@ function AdminstorePageInner() {
                 }
                 placeholder="예: 10:00 ~ 22:00"
               />
+            </div>
+
+            {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
+          </section>
+
+          <section className="card">
+            <h2 className="cardTitle">매장 추가 정보</h2>
+            <p className="sectionLead">정산·안내에 필요한 세부 정보를 관리합니다.</p>
+
+            <div className="inlineGrid">
+              <div className="field">
+                <div className="label">
+                  사업자등록번호 <span className="pill">필수</span>
+                </div>
+                <input
+                  className="input"
+                  value={(draft as any)?.extra?.bizNo || ""}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      extra: { ...(p?.extra || {}), bizNo: e.target.value },
+                    }))
+                  }
+                  placeholder="예: 000-00-00000"
+                />
+              </div>
+
+              <div className="field">
+                <div className="label">
+                  업종 <span className="pill">필수</span>
+                </div>
+                <input
+                  className="input"
+                  value={(draft as any)?.extra?.industry || ""}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      extra: { ...(p?.extra || {}), industry: e.target.value },
+                    }))
+                  }
+                  placeholder="예: 카페, 음식점"
+                />
+              </div>
             </div>
 
             <div className="field">
