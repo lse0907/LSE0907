@@ -1297,6 +1297,7 @@ function AdminstorePageInner() {
               />
             </div>
           </div>
+        </section>
 
           <div className="field">
             <div className="label">SNS 링크 (선택)</div>
