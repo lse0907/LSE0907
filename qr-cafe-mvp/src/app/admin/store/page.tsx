@@ -1428,20 +1428,37 @@ function AdminstorePageInner() {
               />
             </div>
 
+            {lastSavedAt ? (
+              <div className="hint">
+                마지막 저장: {new Date(lastSavedAt).toLocaleString()}
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </section>
+
+      <section className="advancedGrid" aria-label="매장 세부 설정">
+        <section className="card">
+          <h2 className="cardTitle">매장 추가 정보</h2>
+          <p className="sectionLead">
+            정산·안내에 필요한 세부 정보를 넓은 화면에서 한 번에 관리합니다.
+          </p>
+
+          <div className="extraInfoGrid">
             <div className="field">
               <div className="label">
-                영업시간 <span className="pill">필수</span>
+                사업자등록번호 <span className="pill">필수</span>
               </div>
               <input
                 className="input"
-                value={(draft as any)?.extra?.hours || ""}
+                value={(draft as any)?.extra?.bizNo || ""}
                 onChange={(e) =>
                   setDraft((p: any) => ({
                     ...p,
-                    extra: { ...(p?.extra || {}), hours: e.target.value },
+                    extra: { ...(p?.extra || {}), bizNo: e.target.value },
                   }))
                 }
-                placeholder="예: 10:00 ~ 22:00"
+                placeholder="예: 000-00-00000"
               />
             </div>
 
