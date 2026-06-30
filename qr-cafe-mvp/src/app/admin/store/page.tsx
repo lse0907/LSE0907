@@ -949,6 +949,14 @@ function AdminstorePageInner() {
             padding-top: 8px;
           }
 
+          .primarySaveBar {
+            gap: 8px;
+          }
+
+          .primarySaveBar .btn {
+            flex: 1 1 auto;
+          }
+
           .hero {
             height: 172px;
           }
