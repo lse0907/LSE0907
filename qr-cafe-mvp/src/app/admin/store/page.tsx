@@ -1249,8 +1249,8 @@ function AdminstorePageInner() {
           </section>
         </div>
 
-        <div className="formStack">
-          <section className="card">
+        <div className="formStack" role="group" aria-label="매장 기본 및 추가 정보">
+          <section className="card" aria-labelledby="store-basic-info-title">
             <div className="basicHead">
               <div>
                 <h2 className="cardTitle">기본 정보</h2>
