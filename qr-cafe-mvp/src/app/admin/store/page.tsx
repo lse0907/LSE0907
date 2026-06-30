@@ -1137,11 +1137,11 @@ function AdminstorePageInner() {
           </section>
         </div>
 
-        <div className="formStack">
-          <section className="card">
+        <div className="formStack" role="group" aria-label="매장 기본 및 추가 정보">
+          <section className="card" aria-labelledby="store-basic-info-title">
             <div className="basicHead">
               <div>
-                <h2 className="cardTitle">기본 정보</h2>
+                <h2 id="store-basic-info-title" className="cardTitle">기본 정보</h2>
                 <p className="sectionLead">고객 안내와 주문 운영에 바로 쓰이는 핵심 정보입니다.</p>
               </div>
               <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
@@ -1242,9 +1242,9 @@ function AdminstorePageInner() {
             {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
           </section>
 
-          <section className="card">
-            <h2 className="cardTitle">매장 추가 정보</h2>
-            <p className="sectionLead">정산·안내에 필요한 세부 정보를 관리합니다.</p>
+          <section className="card" aria-labelledby="store-extra-info-title">
+            <h2 id="store-extra-info-title" className="cardTitle">매장 추가 정보</h2>
+            <p className="sectionLead">기본 정보와 함께 정산·안내에 필요한 세부 정보를 관리합니다.</p>
 
             <div className="inlineGrid">
               <div className="field">
