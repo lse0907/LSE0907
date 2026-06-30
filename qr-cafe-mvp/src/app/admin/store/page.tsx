@@ -219,9 +219,18 @@ function AdminstorePageInner() {
         .from("stores")
         .update({
           store_name: (draft as any).storeName || null,
+          store_desc: (draft as any).storeDesc || null,
           main_image_url: (draft as any).mainImage || null,
           logo_image_url: (draft as any).logoImage || null,
           staff_view_mode: (draft as any).staffViewMode === "station" ? "station" : "simple",
+          phone: (draft as any)?.extra?.phone || null,
+          address: (draft as any)?.extra?.address || null,
+          address_detail: (draft as any)?.extra?.addressDetail || null,
+          business_hours: (draft as any)?.extra?.hours || null,
+          business_number: (draft as any)?.extra?.bizNo || null,
+          industry: (draft as any)?.extra?.industry || null,
+          sns_url: (draft as any)?.extra?.sns || null,
+          main_image_overlay_strength: strength,
         })
         .eq("store_id", storeId);
 
@@ -407,7 +416,7 @@ function AdminstorePageInner() {
 
         .grid {
           display: grid;
-          grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
+          grid-template-columns: minmax(320px, 0.95fr) minmax(400px, 1.05fr);
           gap: 12px;
           align-items: start;
         }
@@ -419,9 +428,26 @@ function AdminstorePageInner() {
         }
         .advancedGrid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 10px;
           align-items: start;
+        }
+        .inlineGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .operationGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 12px;
+        }
+        .miniPanel {
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 12px;
+          background: #fff;
         }
         .sectionLead {
           margin: 4px 0 0;
@@ -474,7 +500,7 @@ function AdminstorePageInner() {
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          margin-top: 12px;
+          margin-top: 10px;
           padding: 10px 12px;
           border: 1px solid #dbeafe;
           border-radius: 14px;
@@ -639,6 +665,26 @@ function AdminstorePageInner() {
           margin-top: 14px;
           padding-top: 12px;
           border-top: 1px solid var(--line);
+        }
+        .stickySaveBar {
+          position: sticky;
+          bottom: 12px;
+          z-index: 20;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 12px;
+          border: 1px solid #fed7aa;
+          border-radius: 16px;
+          background: rgba(255, 247, 237, 0.96);
+          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+        }
+        .stickyActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
         }
 
         .hero {
@@ -818,12 +864,30 @@ function AdminstorePageInner() {
             padding: 6px 8px;
           }
 
+          .inlineGrid,
+          .operationGrid {
+            grid-template-columns: 1fr;
+          }
+
           .operationStrip {
             align-items: stretch;
             flex-direction: column;
           }
 
           .operationStrip .btn {
+            width: 100%;
+          }
+
+          .stickySaveBar {
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .stickyActions,
+          .stickyActions .btn {
             width: 100%;
           }
 
@@ -1007,41 +1071,43 @@ function AdminstorePageInner() {
 
           <section className="card">
             <h2 className="cardTitle">이미지 / 브랜딩</h2>
-            <p className="sectionLead">대표 이미지와 로고는 고객 화면의 첫인상을 결정합니다.</p>
+            <p className="sectionLead">주문 화면에 표시할 대표 이미지와 로고를 설정합니다.</p>
 
-            <div className="field">
-              <div className="label">대표 이미지 업로드</div>
-              <input
-                className="input"
-                type="file"
-                accept="image/*"
-                onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
-                disabled={uploadingMain}
-              />
-              <div className="hint">
-                {uploadingMain
-                  ? "업로드 중..."
-                  : (draft as any).mainImage
-                    ? "대표 이미지 등록됨"
-                    : "아직 등록된 이미지가 없습니다."}
+            <div className="inlineGrid">
+              <div className="field">
+                <div className="label">대표 이미지 업로드</div>
+                <input
+                  className="input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
+                  disabled={uploadingMain}
+                />
+                <div className="hint">
+                  {uploadingMain
+                    ? "업로드 중..."
+                    : (draft as any).mainImage
+                      ? "대표 이미지 등록됨"
+                      : "아직 등록된 이미지가 없습니다."}
+                </div>
               </div>
-            </div>
 
-            <div className="field">
-              <div className="label">로고 이미지 업로드 (선택)</div>
-              <input
-                className="input"
-                type="file"
-                accept="image/*"
-                onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
-                disabled={uploadingLogo}
-              />
-              <div className="hint">
-                {uploadingLogo
-                  ? "업로드 중..."
-                  : (draft as any).logoImage
-                    ? "로고 이미지 등록됨"
-                    : "아직 등록된 이미지가 없습니다."}
+              <div className="field">
+                <div className="label">로고 이미지 업로드 (선택)</div>
+                <input
+                  className="input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
+                  disabled={uploadingLogo}
+                />
+                <div className="hint">
+                  {uploadingLogo
+                    ? "업로드 중..."
+                    : (draft as any).logoImage
+                      ? "로고 이미지 등록됨"
+                      : "아직 등록된 이미지가 없습니다."}
+                </div>
               </div>
             </div>
 
@@ -1087,14 +1153,22 @@ function AdminstorePageInner() {
               <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
             </div>
 
-            <div className="field">
-              <div className="label">매장명</div>
-              <input
-                className="input"
-                value={(draft as any).storeName}
-                onChange={(e) => setDraft((p: any) => ({ ...p, storeName: e.target.value }))}
-                placeholder="예: XIMEN 순천점"
-              />
+            <div className="inlineGrid">
+              <div className="field">
+                <div className="label">매장명</div>
+                <input
+                  className="input"
+                  value={(draft as any).storeName}
+                  onChange={(e) => setDraft((p: any) => ({ ...p, storeName: e.target.value }))}
+                  placeholder="예: XIMEN 순천점"
+                />
+              </div>
+              <div className="field">
+                <div className="label">
+                  매장 ID <span className="pill">수정 불가</span>
+                </div>
+                <input className="input" value={storeId} disabled placeholder="예: ximen" />
+              </div>
             </div>
 
             <div className="field">
@@ -1183,121 +1257,134 @@ function AdminstorePageInner() {
 
             {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
           </section>
+
+          <section className="card">
+            <h2 className="cardTitle">매장 추가 정보</h2>
+            <p className="sectionLead">정산·안내에 필요한 세부 정보를 관리합니다.</p>
+
+            <div className="inlineGrid">
+              <div className="field">
+                <div className="label">
+                  사업자등록번호 <span className="pill">필수</span>
+                </div>
+                <input
+                  className="input"
+                  value={(draft as any)?.extra?.bizNo || ""}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      extra: { ...(p?.extra || {}), bizNo: e.target.value },
+                    }))
+                  }
+                  placeholder="예: 000-00-00000"
+                />
+              </div>
+
+              <div className="field">
+                <div className="label">
+                  업종 <span className="pill">필수</span>
+                </div>
+                <input
+                  className="input"
+                  value={(draft as any)?.extra?.industry || ""}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      extra: { ...(p?.extra || {}), industry: e.target.value },
+                    }))
+                  }
+                  placeholder="예: 카페, 음식점"
+                />
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">SNS 링크 (선택)</div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.sns || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), sns: e.target.value },
+                  }))
+                }
+                placeholder="예: instagram.com/..."
+              />
+            </div>
+          </section>
         </div>
       </section>
 
       <section className="advancedGrid" aria-label="매장 세부 설정">
         <section className="card">
-          <h2 className="cardTitle">운영 설정</h2>
-          <p className="sectionLead">직원 화면과 내부 운영 방식을 설정합니다.</p>
+          <h2 className="cardTitle">운영 관리</h2>
+          <p className="sectionLead">직원 화면 방식과 매장 운영 상태를 함께 관리합니다.</p>
 
-          <div className="field">
-            <div className="label">직원 화면 모드</div>
-            <select
-              className="input"
-              value={(draft as any).staffViewMode === "station" ? "station" : "simple"}
-              onChange={(e) =>
-                setDraft((p: any) => ({
-                  ...p,
-                  staffViewMode: e.target.value === "station" ? "station" : "simple",
-                }))
-              }
-            >
-              <option value="simple">Simple Mode (통합형)</option>
-              <option value="station">Station Mode (분리형)</option>
-            </select>
-            <div className="hint">
-              Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비 역할 분리에 적합
+          <div className="operationGrid">
+            <div className="miniPanel">
+              <div className="operationText">
+                <span className="operationTitle">직원 화면 모드</span>
+                <span className="operationDesc">매장 운영 방식에 맞는 직원 화면을 선택합니다.</span>
+              </div>
+              <div className="field">
+                <select
+                  className="input"
+                  value={(draft as any).staffViewMode === "station" ? "station" : "simple"}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({
+                      ...p,
+                      staffViewMode: e.target.value === "station" ? "station" : "simple",
+                    }))
+                  }
+                >
+                  <option value="simple">Simple Mode (통합형)</option>
+                  <option value="station">Station Mode (분리형)</option>
+                </select>
+                <div className="hint">
+                  Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비 역할 분리에 적합
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
 
-        <section className="card">
-          <h2 className="cardTitle">사업자 / 추가 정보</h2>
-          <p className="sectionLead">정산·안내에 필요한 세부 정보를 관리합니다.</p>
-
-          <div className="field">
-            <div className="label">
-              사업자등록번호 <span className="pill">필수</span>
+            <div className="miniPanel">
+              <div className="operationText">
+                <span className="operationTitle">현재 상태: {getStatusLabel(storeStatus)}</span>
+                <span className="operationDesc">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}</span>
+              </div>
+              <div className="operationStrip">
+                {storeStatus === "deleted" ? (
+                  <button className="btn btnMuted btnCompact" type="button" disabled>
+                    삭제된 매장
+                  </button>
+                ) : storeStatus === "inactive" ? (
+                  <button className="btn btnPrimary btnCompact" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
+                    다시 활성화
+                  </button>
+                ) : (
+                  <button className="btn btnMuted btnCompact" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
+                    매장 비활성화
+                  </button>
+                )}
+              </div>
             </div>
-            <input
-              className="input"
-              value={(draft as any)?.extra?.bizNo || ""}
-              onChange={(e) =>
-                setDraft((p: any) => ({
-                  ...p,
-                  extra: { ...(p?.extra || {}), bizNo: e.target.value },
-                }))
-              }
-              placeholder="예: 000-00-00000"
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">
-              업종 <span className="pill">필수</span>
-            </div>
-            <input
-              className="input"
-              value={(draft as any)?.extra?.industry || ""}
-              onChange={(e) =>
-                setDraft((p: any) => ({
-                  ...p,
-                  extra: { ...(p?.extra || {}), industry: e.target.value },
-                }))
-              }
-              placeholder="예: 카페, 음식점"
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">SNS 링크 (선택)</div>
-            <input
-              className="input"
-              value={(draft as any)?.extra?.sns || ""}
-              onChange={(e) =>
-                setDraft((p: any) => ({
-                  ...p,
-                  extra: { ...(p?.extra || {}), sns: e.target.value },
-                }))
-              }
-              placeholder="예: instagram.com/..."
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">
-              매장 ID <span className="pill">수정 불가</span>
-            </div>
-            <input className="input" value={storeId} disabled placeholder="예: ximen" />
-          </div>
-        </section>
-
-        <section className="card">
-          <h2 className="cardTitle">운영 상태 관리</h2>
-          <p className="sectionLead">상태 확인은 상단에서, 변경은 이 관리 영역에서 진행합니다.</p>
-
-          <div className="operationStrip">
-            <div className="operationText">
-              <span className="operationTitle">현재 상태: {getStatusLabel(storeStatus)}</span>
-              <span className="operationDesc">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}</span>
-            </div>
-            {storeStatus === "deleted" ? (
-              <button className="btn btnMuted btnCompact" type="button" disabled>
-                삭제된 매장
-              </button>
-            ) : storeStatus === "inactive" ? (
-              <button className="btn btnPrimary btnCompact" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
-                다시 활성화
-              </button>
-            ) : (
-              <button className="btn btnMuted btnCompact" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
-                매장 비활성화
-              </button>
-            )}
           </div>
         </section>
       </section>
+
+      {isDirty ? (
+        <div className="stickySaveBar" role="status" aria-live="polite">
+          <span className="badge badgeDirty">변경사항이 있습니다.</span>
+          <div className="stickyActions">
+            <button className="btn" onClick={onReset} disabled={saving}>
+              변경 취소
+            </button>
+            <button className="btn btnPrimary" onClick={onSave} disabled={saving}>
+              {saving ? "저장 중..." : "저장"}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {showAddr ? (
         <div className="modalOverlay" onClick={closeAddressSearch}>
