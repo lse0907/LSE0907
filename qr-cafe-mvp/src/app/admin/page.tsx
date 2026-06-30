@@ -1,19 +1,24 @@
 // src/app/admin/page.tsx
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app/lib/currentStore";
+
+type StoreStatus = "active" | "inactive" | "deleted";
 
 type StoreRow = {
   store_id: string;
   store_name: string | null;
   setup_completed?: boolean | null;
   setup_last_step?: number | null;
+  status?: StoreStatus | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+type StoreStatusFilter = "all" | "active" | "setup" | "inactive";
 
 type MemberRow = {
   store_id: string;
@@ -37,6 +42,26 @@ function toErrorMessage(e: unknown) {
 
 const FREE_TRIAL_DAYS = 30;
 
+function getStoreLifecycleStatus(store: StoreRow): StoreStatus {
+  const raw = String(store.status || "active").trim();
+  if (raw === "inactive" || raw === "deleted") return raw;
+  return "active";
+}
+
+function getStoreDisplayStatus(store: StoreRow): StoreStatusFilter {
+  const lifecycleStatus = getStoreLifecycleStatus(store);
+  if (lifecycleStatus === "inactive") return "inactive";
+  if (store.setup_completed !== true) return "setup";
+  return "active";
+}
+
+function getStoreStatusLabel(store: StoreRow) {
+  const displayStatus = getStoreDisplayStatus(store);
+  if (displayStatus === "inactive") return "비활성";
+  if (displayStatus === "setup") return "설정중";
+  return "운영중";
+}
+
 function calcRemainingDays(createdAt?: string | null) {
   if (!createdAt) return null;
   const created = new Date(createdAt).getTime();
@@ -52,28 +77,30 @@ function AdminPageInner() {
 
   const [booting, setBooting] = useState(true);
   const [stores, setStores] = useState<StoreRow[]>([]);
-  const [members, setMembers] = useState<MemberRow[]>([]);
   const [storesLoaded, setStoresLoaded] = useState(false);
 
   const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
   const [msg, setMsg] = useState<string>("");
-  const [activeSection, setActiveSection] = useState<"store" | "ops" | "stats" | "support" | null>("stats");
+  const [activeSection, setActiveSection] = useState<"store" | "ops" | "support" | null>(null);
+  const [storeStatusFilter, setStoreStatusFilter] = useState<StoreStatusFilter>("all");
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
   const [billingByStore, setBillingByStore] = useState<Record<string, StoreBillingSummary>>({});
   const [hideSetupBannerForCurrentSelection, setHideSetupBannerForCurrentSelection] = useState(false);
   const [selectedStoreCounts, setSelectedStoreCounts] = useState<{ categories: number; options: number; menus: number } | null>(null);
+  const subPanelRef = useRef<HTMLDivElement | null>(null);
 
   const selectedStore = useMemo(() => {
     if (!selectedStoreId) return null;
     return stores.find((s) => s.store_id === selectedStoreId) || null;
   }, [stores, selectedStoreId]);
 
-  const selectedRole = useMemo(() => {
-    if (!selectedStoreId) return null;
-    return members.find((m) => m.store_id === selectedStoreId)?.role || null;
-  }, [members, selectedStoreId]);
+  const visibleStores = useMemo(() => {
+    return stores
+      .filter((store) => getStoreLifecycleStatus(store) !== "deleted")
+      .filter((store) => storeStatusFilter === "all" || getStoreDisplayStatus(store) === storeStatusFilter);
+  }, [stores, storeStatusFilter]);
 
   const setSelectedStoreId = (storeId: string) => {
     setSelectedStoreIdState(storeId);
@@ -113,10 +140,9 @@ function AdminPageInner() {
 
     if (memRes.error) throw memRes.error;
 
-    const memRows = (memRes.data || []) as MemberRow[];
-    setMembers(memRows);
+	    const memRows = (memRes.data || []) as MemberRow[];
 
-    const ids = memRows.map((m) => m.store_id).filter(Boolean);
+	    const ids = memRows.map((m) => m.store_id).filter(Boolean);
     if (!ids.length) {
       setStores([]);
       setBillingByStore({});
@@ -124,8 +150,20 @@ function AdminPageInner() {
       return;
     }
 
-    const [storeRes, billingRes, paymentRes] = await Promise.all([
-      supabase.from("stores").select("store_id, store_name, setup_completed, setup_last_step, created_at, updated_at").in("store_id", ids),
+    // `status` may not exist before the lifecycle SQL is applied, so this response can have either shape.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let storeRes: any = await supabase
+      .from("stores")
+      .select("store_id, store_name, setup_completed, setup_last_step, status, created_at, updated_at")
+      .in("store_id", ids);
+    if (storeRes.error && /status/i.test(storeRes.error.message || "")) {
+      storeRes = await supabase
+        .from("stores")
+        .select("store_id, store_name, setup_completed, setup_last_step, created_at, updated_at")
+        .in("store_id", ids);
+    }
+
+    const [billingRes, paymentRes] = await Promise.all([
       supabase.from("store_billing").select("store_id, base_plan_status, paid_until").in("store_id", ids),
       supabase.from("billing_payments").select("store_id, paid_at, status").in("store_id", ids).eq("status", "paid").order("paid_at", { ascending: false }),
     ]);
@@ -256,17 +294,18 @@ function AdminPageInner() {
 
   useEffect(() => {
     if (!storesLoaded) return;
-    if (!stores.length) {
+    const selectableStores = stores.filter((store) => getStoreLifecycleStatus(store) !== "deleted");
+    if (!selectableStores.length) {
       setSelectedStoreIdState(null);
       clearCurrentStoreId();
       return;
     }
-    if (selectedStoreId && stores.some((s) => s.store_id === selectedStoreId)) {
+    if (selectedStoreId && selectableStores.some((s) => s.store_id === selectedStoreId)) {
       return;
     }
     setSelectedStoreIdState(null);
     clearCurrentStoreId();
-  }, [stores, selectedStoreId]);
+  }, [stores, selectedStoreId, storesLoaded]);
 
   useEffect(() => {
     if (!selectedStoreId) {
@@ -276,12 +315,21 @@ function AdminPageInner() {
       return;
     }
     fetchStatsSummaryForStore(selectedStoreId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStoreId]);
 
   useEffect(() => {
     if (!selectedStoreId) return;
     setHideSetupBannerForCurrentSelection(false);
   }, [selectedStoreId]);
+
+  useEffect(() => {
+    if (!activeSection || !subPanelRef.current) return;
+    if (!window.matchMedia("(max-width: 720px)").matches) return;
+    window.setTimeout(() => {
+      subPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 80);
+  }, [activeSection]);
 
   const go = (path: string) => {
     if (!selectedStoreId) {
@@ -317,6 +365,12 @@ function AdminPageInner() {
     ? (selectedStoreCounts.categories > 0 ? 1 : 0) + (selectedStoreCounts.options > 0 ? 1 : 0) + (selectedStoreCounts.menus > 0 ? 1 : 0) + (selectedStoreSetupCompleted ? 1 : 0)
     : 0;
   const showSetupBanner = selectedStoreShouldShowSetup && !hideSetupBannerForCurrentSelection;
+  const selectedBilling = selectedStoreId ? billingByStore[selectedStoreId] : null;
+  const selectedFreeRemaining = selectedStore ? calcRemainingDays(selectedStore.created_at) : null;
+  const selectedPaidRemaining = calcPaidRemainingDays(selectedBilling?.paidUntil || null);
+  const selectedSubscriptionStatus = selectedBilling?.basePlanStatus === "active" ? "유료" : "무료";
+  const selectedRemainingPeriod = selectedBilling?.basePlanStatus === "active" ? selectedPaidRemaining : selectedFreeRemaining;
+  const selectedRemainingText = selectedRemainingPeriod == null ? "-" : `${selectedRemainingPeriod}일`;
   const dismissSetupBanner = () => {
     setHideSetupBannerForCurrentSelection(true);
   };
@@ -366,10 +420,10 @@ function AdminPageInner() {
 
         <div className="topActions">
           <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
-            고객화면
+            고객화면 보기
           </button>
           <button className="btn" onClick={() => goPublic("/staff")} disabled={!selectedStoreId}>
-            직원화면
+            직원화면 보기
           </button>
           <a className="btn" href="/logout">
             로그아웃
@@ -381,8 +435,8 @@ function AdminPageInner() {
       {showSetupBanner ? (
         <div className="setupBanner" role="status" aria-live="polite">
           <div>
-            <strong>이 매장은 초기 설정이 완료되지 않았습니다.</strong>
-            <div className="muted">카테고리/공통옵션/메뉴 확인과 옵션 연결 확인을 마무리해 주세요.</div>
+            <strong>운영 전 필수 설정을 마무리해 주세요.</strong>
+            <div className="muted">남은 단계를 완료하면 주문 운영을 시작할 수 있습니다.</div>
             {selectedStoreCounts ? (
               <div className="muted">현재 진행 단계: {selectedStoreCompletedSteps}/4</div>
             ) : null}
@@ -403,7 +457,7 @@ function AdminPageInner() {
           <div className="cardHead">
             <h2 className="cardTitle">매장 리스트</h2>
             <div className="row" style={{ gap: 8 }}>
-              <span className="pill">{stores.length}개</span>
+              <span className="pill">{visibleStores.length}개</span>
               <button className="btn" onClick={goCreate}>
                 {stores.length > 0 ? "매장 추가" : "매장 만들기"}
               </button>
@@ -411,6 +465,25 @@ function AdminPageInner() {
           </div>
 
           <p className="muted">매장을 선택해 주세요.</p>
+          {stores.length > 0 ? (
+            <div className="storeFilterRow" role="tablist" aria-label="매장 상태 필터">
+              {[
+                { key: "all", label: "전체" },
+                { key: "active", label: "운영중" },
+                { key: "setup", label: "설정중" },
+                { key: "inactive", label: "비활성" },
+              ].map((filter) => (
+                <button
+                  key={filter.key}
+                  className={`filterChip ${storeStatusFilter === filter.key ? "filterChipOn" : ""}`.trim()}
+                  type="button"
+                  onClick={() => setStoreStatusFilter(filter.key as StoreStatusFilter)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {stores.length === 0 ? (
             <div className="emptyBox">
@@ -419,10 +492,15 @@ function AdminPageInner() {
           ) : (
             <>
               {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
+              {/* 2차 관리자 홈 보완: 선택 카드 높이를 안정적으로 유지하기 위해 선택 뱃지와 액션 버튼을 한 줄 영역에 묶습니다. */}
               <div className="storeList">
-                {stores.map((s) => {
+                {visibleStores.length === 0 ? (
+                  <div className="emptyBox">
+                    <p className="muted">선택한 상태의 매장이 없습니다.</p>
+                  </div>
+                ) : null}
+                {visibleStores.map((s) => {
                   const on = s.store_id === selectedStoreId;
-                  const role = members.find((m) => m.store_id === s.store_id)?.role || "-";
                   const remaining = calcRemainingDays(s.created_at);
                   const billing = billingByStore[s.store_id];
                   const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
@@ -430,23 +508,24 @@ function AdminPageInner() {
                   const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
                   const remainingPeriod =
                     billing?.basePlanStatus === "active" ? remainingText(paidRemaining) : remainingText(remaining);
+                  const displayStatus = getStoreDisplayStatus(s);
+                  const statusLabel = getStoreStatusLabel(s);
                   return (
-                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""}`} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
+                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""} ${displayStatus === "inactive" ? "storeRowInactive" : ""}`.trim()} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         setSelectedStoreId(s.store_id);
                       }
                     }}>
                       <div style={{ minWidth: 0 }}>
-                        <div className="storeName">
-                          {s.store_name || "(이름 없음)"} <span className="muted">· {s.store_id}</span>
+                        <div className="storeNameLine">
+                          <div className="storeName">{s.store_name || "(이름 없음)"}</div>
+                          <span className={`storeStatusBadge storeStatus${displayStatus[0].toUpperCase()}${displayStatus.slice(1)}`}>{statusLabel}</span>
                         </div>
-                        <div className="muted">권한: {role}</div>
-                        <div className="muted">구독 상태: {subscriptionStatus}</div>
-                        <div className="muted">남은 기간: {remainingPeriod}</div>
+                        <div className="muted">{subscriptionStatus} · {remainingPeriod} 남음</div>
                       </div>
                       <div className="storeActions" onClick={(e) => e.stopPropagation()}>
-                        {on ? <div className="pill pillOn">선택됨</div> : null}
+                        {on ? <div className="pill pillOn">선택</div> : null}
                         {on && selectedStoreShouldShowSetup ? (
                           <button className="btn btnSetup btnSmall" onClick={goSetup}>
                             초기설정
@@ -464,7 +543,7 @@ function AdminPageInner() {
               </div>
               <p className="hint" style={{ marginTop: 6 }}>
                 남은사용기간이 만료 되면 기능 사용이 제한 됩니다.<br />
-                만료 전에 결재를 진행해 주세요.
+                만료 전에 결제를 진행해 주세요.
               </p>
             </>
           )}
@@ -472,111 +551,113 @@ function AdminPageInner() {
 
         {/* ===== 관리자 메뉴 ===== */}
         <section className="card menuCard">
-        <div className="tabMeta">
-          <span className="pill">
-            {selectedStore ? `${selectedStore.store_name || selectedStore.store_id}` : "매장 미선택"}
-            {selectedRole ? ` · ${selectedRole}` : ""}
-          </span>
-        </div>
-
-        <div className="btnGroup">
-          <button
-            className={`cardBtn ${activeSection === "store" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "store" ? null : "store"))}
-            disabled={!selectedStoreId}
-          >
-            <div className="cardBtnTitle">매장설정</div>
-          </button>
-
-          <button
-            className={`cardBtn ${activeSection === "ops" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "ops" ? null : "ops"))}
-            disabled={!selectedStoreId}
-          >
-            <div className="cardBtnTitle">메뉴설정</div>
-          </button>
-
-          <button
-            className={`cardBtn ${activeSection === "stats" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "stats" ? null : "stats"))}
-            disabled={!selectedStoreId}
-          >
-            <div className="cardBtnTitle">매출통계</div>
-          </button>
-
-          <button
-            className={`cardBtn ${activeSection === "support" ? "cardBtnOn" : ""}`}
-            onClick={() => setActiveSection((prev) => (prev === "support" ? null : "support"))}
-            disabled={!selectedStoreId}
-          >
-            <div className="cardBtnTitle">지원센터</div>
-          </button>
-        </div>
-
-        {activeSection === "store" ? (
-          <div className="subPanel">
-            <button className="subBtn" onClick={() => go("/admin/store")}>
-              매장정보
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/billing")}>
-              PG 설정(선결재)
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/qr")}>
-              매장 QR 생성
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/loyalty")}>
-              포인트/쿠폰 설정
-            </button>
-          </div>
-        ) : null}
-
-        {activeSection === "ops" ? (
-          <div className="subPanel">
-            <button className="subBtn" onClick={() => go("/admin/categories")}>
-              카테고리 관리
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/options")}>
-              옵션관리
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/menu")}>
-              메뉴관리
-            </button>
-            <button className="subBtn" onClick={() => go("/admin/import")}>
-              일괄 데이터 업로드(선택)
-            </button>
-          </div>
-        ) : null}
-
-        {activeSection === "stats" ? (
-          <div className="subPanel">
-            <div className="statsSummary">
-              <div className="statsRow">
-                <span className="statsLabel">일간 매출</span>
-                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
-              </div>
-              <div className="statsRow">
-                <span className="statsLabel">주간 매출</span>
-                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
-              </div>
-              <div className="statsRow">
-                <span className="statsLabel">월간 매출</span>
-                <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
-              </div>
-              {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
+          {selectedStoreId ? (
+            /* 2차 관리자 홈 보완: 별도 현재 매장 박스 대신 매장 현황 카드 안에서 선택 매장을 함께 표시합니다. */
+            <div className="dashboardGrid" aria-label="관리자 홈 요약">
+              <section className="overviewCard overviewCardSelected">
+                <div className="overviewHead">
+                  <h2 className="overviewTitle">매장 현황</h2>
+                  <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
+                    매출보기
+                  </button>
+                </div>
+                <div className="overviewStoreLine">
+                  <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
+                  {selectedStore ? <span className={`storeStatusBadge storeStatus${getStoreDisplayStatus(selectedStore)[0].toUpperCase()}${getStoreDisplayStatus(selectedStore).slice(1)}`}>{getStoreStatusLabel(selectedStore)}</span> : null}
+                </div>
+                <div className="statsSummary statsSummaryCompact">
+                  <div className="statsRow">
+                    <span className="statsLabel">일간 매출</span>
+                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
+                  </div>
+                  <div className="statsRow">
+                    <span className="statsLabel">주간 매출</span>
+                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
+                  </div>
+                  <div className="statsRow">
+                    <span className="statsLabel">월간 매출</span>
+                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
+                  </div>
+                  <div className="statsRow">
+                    <span className="statsLabel">구독 상태</span>
+                    <span className="statsValue">{selectedSubscriptionStatus} · {selectedRemainingText}</span>
+                  </div>
+                  {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
+                </div>
+              </section>
             </div>
-            <button className="subBtn subBtnPrimary" onClick={() => go("/admin/stats")}>
-              자세히보기
-            </button>
-          </div>
-        ) : null}
+          ) : null}
 
-        {activeSection === "support" ? (
-          <div className="subPanel">
-            <button className="subBtn subBtnPrimary" onClick={() => go("/admin/support")}>
-              문의하기
-            </button>
-          </div>
-        ) : null}
+	          <div className="btnGroup">
+	            <button
+	              className={`cardBtn ${activeSection === "store" ? "cardBtnOn" : ""}`}
+	              onClick={() => setActiveSection((prev) => (prev === "store" ? null : "store"))}
+	              disabled={!selectedStoreId}
+	            >
+	              <div className="cardBtnTitle">매장설정</div>
+	            </button>
+
+	            <button
+	              className={`cardBtn ${activeSection === "ops" ? "cardBtnOn" : ""}`}
+	              onClick={() => setActiveSection((prev) => (prev === "ops" ? null : "ops"))}
+	              disabled={!selectedStoreId}
+	            >
+	              <div className="cardBtnTitle">메뉴설정</div>
+	            </button>
+
+	            <button
+	              className={`cardBtn ${activeSection === "support" ? "cardBtnOn" : ""}`}
+	              onClick={() => setActiveSection((prev) => (prev === "support" ? null : "support"))}
+	              disabled={!selectedStoreId}
+	            >
+	              <div className="cardBtnTitle">지원센터</div>
+	            </button>
+	          </div>
+
+	          {activeSection === "store" ? (
+	            <div className="subPanel" ref={subPanelRef}>
+	              <button className="subBtn" onClick={() => go("/admin/store")}>
+	                매장정보
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/billing")}>
+	                결제 설정
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/qr")}>
+	                매장 QR 생성
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/loyalty")}>
+	                포인트/쿠폰 설정
+	              </button>
+	            </div>
+	          ) : null}
+
+	          {activeSection === "ops" ? (
+	            <div className="subPanel" ref={subPanelRef}>
+	              <button className="subBtn" onClick={() => go("/admin/categories")}>
+	                카테고리 관리
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/options")}>
+	                옵션관리
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/menu")}>
+	                메뉴관리
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/menu/option-connect")}>
+	                옵션 연결 확인
+	              </button>
+	              <button className="subBtn" onClick={() => go("/admin/import")}>
+	                일괄 데이터 업로드
+	              </button>
+	            </div>
+	          ) : null}
+
+	          {activeSection === "support" ? (
+	            <div className="subPanel" ref={subPanelRef}>
+	              <button className="subBtn" onClick={() => go("/admin/support")}>
+	                문의하기
+	              </button>
+	            </div>
+	          ) : null}
 
         {!selectedStoreId ? (
           <div className="alert" style={{ marginTop: 12 }}>
@@ -723,6 +804,54 @@ body {
   margin-top:12px;
   flex-wrap:wrap;
 }
+.currentStorePill{
+  min-width:0;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  border-radius:999px;
+  border:1px solid #bfdbfe;
+  background:#dbeafe;
+  color:#1d4ed8;
+  padding:7px 12px;
+  font-size:13px;
+  font-weight:950;
+}
+.dashboardGrid{
+  display:grid;
+  gap:10px;
+  margin-top:12px;
+}
+.overviewCard{
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:14px;
+  padding:12px;
+}
+.overviewCardSelected{
+  border-color:#bfdbfe;
+  background:#eef4ff;
+}
+.overviewHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.overviewStoreLine{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin-top:8px;
+  flex-wrap:wrap;
+}
+.overviewTitle{
+  margin:0;
+  font-size:16px;
+  font-weight:950;
+}
 .hint{
   color:var(--muted);
   font-size:12px;
@@ -756,7 +885,7 @@ body {
 }
 .btnGroup{
   display:grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap:6px;
   margin-top:12px;
 }
@@ -784,6 +913,27 @@ body {
   opacity:.5;
   cursor:not-allowed;
 }
+.storeFilterRow{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.filterChip{
+  border:1px solid var(--line);
+  background:#fff;
+  color:var(--text);
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:12px;
+  font-weight:950;
+  cursor:pointer;
+}
+.filterChipOn{
+  border-color:#111827;
+  background:#111827;
+  color:#fff;
+}
 .storeList{
   display:grid;
   gap:10px;
@@ -808,24 +958,57 @@ body {
   border:2px solid var(--brand);
   background:#eef4ff;
 }
+.storeRowInactive{
+  background:#f8fafc;
+}
 .storeRow:focus-visible{
   outline:2px solid #93c5fd;
   outline-offset:2px;
 }
 .storeActions{
   display:flex;
-  flex-direction:column;
-  align-items:flex-end;
-  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  flex-wrap:wrap;
 }
 .pillOn{
   background:#dbeafe;
   border-color:#bfdbfe;
   color:#1d4ed8;
 }
+.storeNameLine{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
 .storeName{
   font-weight:950;
   font-size:14px;
+}
+.storeStatusBadge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  padding:3px 7px;
+  font-size:11px;
+  font-weight:950;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  color:#1d4ed8;
+}
+.storeStatusSetup{
+  border-color:#fed7aa;
+  background:#fff7ed;
+  color:#c2410c;
+}
+.storeStatusInactive{
+  border-color:#cbd5e1;
+  background:#f1f5f9;
+  color:#475569;
 }
 .cardBtn{
   text-align:center;
@@ -860,6 +1043,10 @@ body {
   margin-top:12px;
   display:grid;
   gap:8px;
+  border:1px solid var(--line);
+  background:#f9fafb;
+  border-radius:14px;
+  padding:10px;
 }
 .subBtn{
   border:1px solid var(--line);
@@ -872,11 +1059,6 @@ body {
   font-weight:900;
   text-align:left;
 }
-.subBtnPrimary{
-  background:var(--brand);
-  border-color:var(--brand);
-  color:#fff;
-}
 .subBtnDisabled{
   opacity:.6;
   cursor:not-allowed;
@@ -888,6 +1070,12 @@ body {
   background:#f9fafb;
   display:grid;
   gap:8px;
+}
+.statsSummaryCompact{
+  margin-top:10px;
+  border:0;
+  padding:0;
+  background:transparent;
 }
 .statsRow{
   display:flex;
@@ -915,7 +1103,7 @@ body {
   .wrap{ padding:12px; }
   .topbar{ align-items:center; }
   .topActions{
-    flex-wrap:nowrap;
+    flex-wrap:wrap;
     gap:4px;
   }
   .topActions .btn{
@@ -925,15 +1113,44 @@ body {
   }
   .cardBtnTitle{ font-size:12px; }
   .btnGroup{
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap:4px;
   }
-  .storeList{
+  .cardBtn{
+    padding:8px 4px;
+  }
+  .storeFilterRow{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.filterChip{
+  border:1px solid var(--line);
+  background:#fff;
+  color:var(--text);
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:12px;
+  font-weight:950;
+  cursor:pointer;
+}
+.filterChipOn{
+  border-color:#111827;
+  background:#111827;
+  color:#fff;
+}
+.storeList{
     max-height: min(42vh, 360px);
   }
   .setupBanner{
     display:grid;
     gap:10px;
+  }
+}
+@media (max-width: 360px){
+  .btnGroup{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 `;
