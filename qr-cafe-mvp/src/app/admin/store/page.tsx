@@ -5,7 +5,11 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
-import { fetchStoreProfileFromDb, saveStoreProfile, useStoreProfile } from "@/app/lib/storeProfile";
+import {
+  fetchStoreProfileFromDb,
+  saveStoreProfile,
+  useStoreProfile,
+} from "@/app/lib/storeProfile";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 
 const STORE_IMAGE_BUCKET = "store-assets";
@@ -41,7 +45,9 @@ function pickCore(p: any) {
     storeDesc: String(p?.storeDesc ?? ""),
     mainImage: String(p?.mainImage ?? ""),
     logoImage: String(p?.logoImage ?? ""),
-    mainImageOverlayStrength: clampOverlay(Number(p?.mainImageOverlayStrength ?? 55)),
+    mainImageOverlayStrength: clampOverlay(
+      Number(p?.mainImageOverlayStrength ?? 55),
+    ),
     extra: {
       bizNo: String(p?.extra?.bizNo ?? ""),
       industry: String(p?.extra?.industry ?? ""),
@@ -69,7 +75,12 @@ function AdminstorePageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const [storeId, setStoreId] = useState<string>("");
-  const { profile, setProfile, loading: profileLoading, loadError: profileLoadError } = useStoreProfile(storeId);
+  const {
+    profile,
+    setProfile,
+    loading: profileLoading,
+    loadError: profileLoadError,
+  } = useStoreProfile(storeId);
   const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
   const [storeStatus, setStoreStatus] = useState<StoreStatus>("active");
   const [statusSaving, setStatusSaving] = useState(false);
@@ -83,7 +94,9 @@ function AdminstorePageInner() {
 
   // ✅ 저장 UI 피드백
   const [saving, setSaving] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saved" | "error">(
+    "idle",
+  );
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   // ✅ profile이 외부에서 바뀌면 draft도 동기화
@@ -121,7 +134,10 @@ function AdminstorePageInner() {
       }
       if (!mounted) return;
       if (res.error) {
-        console.error("[admin/store] load store status error:", res.error.message);
+        console.error(
+          "[admin/store] load store status error:",
+          res.error.message,
+        );
         setStoreCreatedAt(null);
         setStoreStatus("active");
         return;
@@ -141,14 +157,19 @@ function AdminstorePageInner() {
     return JSON.stringify(a) !== JSON.stringify(b);
   }, [draft, profile]);
 
-  const remainingDays = useMemo(() => calcRemainingDays(storeCreatedAt), [storeCreatedAt]);
+  const remainingDays = useMemo(
+    () => calcRemainingDays(storeCreatedAt),
+    [storeCreatedAt],
+  );
 
   // ✅ 미리보기용 오버레이 계산(0~100)
-  const strength = clampOverlay(Number((draft as any).mainImageOverlayStrength ?? 55));
+  const strength = clampOverlay(
+    Number((draft as any).mainImageOverlayStrength ?? 55),
+  );
   const overlayBg = useMemo(() => {
-    const aTop = 0.10 + 0.35 * (strength / 100);
+    const aTop = 0.1 + 0.35 * (strength / 100);
     const aMid = 0.18 + 0.45 * (strength / 100);
-    const aBot = 0.25 + 0.60 * (strength / 100);
+    const aBot = 0.25 + 0.6 * (strength / 100);
 
     return `linear-gradient(
       to bottom,
@@ -164,7 +185,7 @@ function AdminstorePageInner() {
     const ok = window.confirm(
       nextStatus === "inactive"
         ? "매장을 비활성화할까요? 고객 주문 페이지와 운영 진입이 제한될 수 있습니다."
-        : "매장을 다시 활성화할까요?"
+        : "매장을 다시 활성화할까요?",
     );
     if (!ok) return;
 
@@ -185,7 +206,10 @@ function AdminstorePageInner() {
               deactivated_at: null,
               deactivated_by: null,
             };
-      const { error } = await supabase.from("stores").update(payload).eq("store_id", storeId);
+      const { error } = await supabase
+        .from("stores")
+        .update(payload)
+        .eq("store_id", storeId);
       if (error) throw error;
       setStoreStatus(nextStatus);
       setUploadMsg(`매장 상태를 ${nextLabel}(으)로 변경했습니다.`);
@@ -244,7 +268,9 @@ function AdminstorePageInner() {
       setLastSavedAt(Date.now());
     } catch (e: any) {
       console.error("[admin/store] save store profile error:", e?.message || e);
-      setUploadMsg(`매장 정보 저장 실패: ${String(e?.message || e || "잠시 후 다시 시도해주세요.")}`);
+      setUploadMsg(
+        `매장 정보 저장 실패: ${String(e?.message || e || "잠시 후 다시 시도해주세요.")}`,
+      );
       setSaveState("error");
     } finally {
       setSaving(false);
@@ -284,10 +310,14 @@ function AdminstorePageInner() {
     }
     const ext = getFileExt(file.name) || "png";
     const path = `${storeId}/${kind}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from(STORE_IMAGE_BUCKET).upload(path, file, { upsert: true });
+    const { error } = await supabase.storage
+      .from(STORE_IMAGE_BUCKET)
+      .upload(path, file, { upsert: true });
     if (error) throw error;
 
-    const { data } = supabase.storage.from(STORE_IMAGE_BUCKET).getPublicUrl(path);
+    const { data } = supabase.storage
+      .from(STORE_IMAGE_BUCKET)
+      .getPublicUrl(path);
     return data.publicUrl || "";
   };
 
@@ -345,7 +375,7 @@ function AdminstorePageInner() {
         .wrap {
           max-width: 1120px;
           margin: 0 auto;
-          padding: 14px;
+          padding: 14px 14px 116px;
           display: grid;
           gap: 10px;
         }
@@ -404,6 +434,26 @@ function AdminstorePageInner() {
           background: #fff7ed;
           color: #9a3412;
         }
+        .uploadStatusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          padding: 4px 8px;
+          font-size: 11px;
+          font-weight: 950;
+          white-space: nowrap;
+        }
+        .uploadStatusBadgeRegistered {
+          border: 1px solid #bbf7d0;
+          background: #f0fdf4;
+          color: #166534;
+        }
+        .uploadStatusBadgeEmpty {
+          border: 1px solid #d1d5db;
+          background: #f9fafb;
+          color: #4b5563;
+        }
         .alert {
           border: 1px solid #fecaca;
           background: #fef2f2;
@@ -431,7 +481,8 @@ function AdminstorePageInner() {
           gap: 10px;
           align-items: start;
         }
-        .inlineGrid {
+        .inlineGrid,
+        .extraInfoGrid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 10px;
@@ -576,9 +627,19 @@ function AdminstorePageInner() {
           padding: 10px 12px;
           border-radius: 12px;
           border: 1px solid var(--line);
-          background: #fff;
+          background: #ffffff;
+          color: #111827;
+          -webkit-text-fill-color: #111827;
+          caret-color: #111827;
           font-weight: 800;
           width: 100%;
+          color-scheme: light;
+        }
+
+        .input::placeholder,
+        .textarea::placeholder {
+          color: #9ca3af;
+          -webkit-text-fill-color: #9ca3af;
         }
 
         .textarea {
@@ -657,9 +718,11 @@ function AdminstorePageInner() {
           border-top: 1px dashed var(--line);
         }
         .stickySaveBar {
-          position: sticky;
-          bottom: 12px;
-          z-index: 20;
+          position: fixed;
+          left: max(14px, calc((100vw - 1120px) / 2 + 14px));
+          right: max(14px, calc((100vw - 1120px) / 2 + 14px));
+          bottom: 14px;
+          z-index: 60;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -667,8 +730,9 @@ function AdminstorePageInner() {
           padding: 10px 12px;
           border: 1px solid #fed7aa;
           border-radius: 16px;
-          background: rgba(255, 247, 237, 0.96);
-          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+          background: rgba(255, 247, 237, 0.98);
+          box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
+          backdrop-filter: blur(10px);
         }
         .stickyActions {
           display: flex;
@@ -783,6 +847,8 @@ function AdminstorePageInner() {
         .textarea:disabled {
           background: #f9fafb;
           color: #6b7280;
+          -webkit-text-fill-color: #6b7280;
+          opacity: 1;
         }
 
         .modalOverlay {
@@ -819,7 +885,7 @@ function AdminstorePageInner() {
         }
         @media (max-width: 640px) {
           .wrap {
-            padding: 10px;
+            padding: 10px 10px 136px;
             gap: 8px;
           }
 
@@ -855,6 +921,7 @@ function AdminstorePageInner() {
           }
 
           .inlineGrid,
+          .extraInfoGrid,
           .operationGrid {
             grid-template-columns: 1fr;
           }
@@ -894,7 +961,7 @@ function AdminstorePageInner() {
             font-size: 15px;
           }
 
-        .field {
+          .field {
             margin-top: 9px;
             gap: 5px;
           }
@@ -991,7 +1058,9 @@ function AdminstorePageInner() {
           <button
             className="btn"
             type="button"
-            onClick={() => router.push(`/admin?store=${encodeURIComponent(storeId)}`)}
+            onClick={() =>
+              router.push(`/admin?store=${encodeURIComponent(storeId)}`)
+            }
           >
             관리자 홈
           </button>
@@ -1000,9 +1069,15 @@ function AdminstorePageInner() {
 
       <div className="pageMeta">
         <div className="badgeRow">
-          <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
+          <span
+            className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}
+          >
+            {getStatusLabel(storeStatus)}
+          </span>
           <span className="metaText">
-            {remainingDays !== null ? `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remainingDays}일` : `무료 사용기간 ${FREE_TRIAL_DAYS}일`}
+            {remainingDays !== null
+              ? `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remainingDays}일`
+              : `무료 사용기간 ${FREE_TRIAL_DAYS}일`}
           </span>
         </div>
         {isDirty ? (
@@ -1012,14 +1087,21 @@ function AdminstorePageInner() {
         ) : saveState === "error" ? (
           <span className="badge badgeError">저장 실패</span>
         ) : lastSavedAt ? (
-          <span className="metaText">마지막 저장 {new Date(lastSavedAt).toLocaleTimeString()}</span>
+          <span className="metaText">
+            마지막 저장 {new Date(lastSavedAt).toLocaleTimeString()}
+          </span>
         ) : null}
       </div>
 
       {uploadMsg ? <div className="alert">{uploadMsg}</div> : null}
-      {profileLoading ? <div className="alert">Supabase에서 매장 정보를 불러오는 중입니다.</div> : null}
+      {profileLoading ? (
+        <div className="alert">Supabase에서 매장 정보를 불러오는 중입니다.</div>
+      ) : null}
       {!profileLoading && profileLoadError ? (
-        <div className="alert">Supabase 매장 정보를 불러오지 못해 이 기기의 임시 정보를 표시 중입니다. ({profileLoadError})</div>
+        <div className="alert">
+          Supabase 매장 정보를 불러오지 못해 이 기기의 임시 정보를 표시
+          중입니다. ({profileLoadError})
+        </div>
       ) : null}
 
       <section className="grid">
@@ -1027,13 +1109,19 @@ function AdminstorePageInner() {
           <section className="card previewWrap">
             <div>
               <h2 className="cardTitle">미리보기</h2>
-              <p className="sectionLead">고객 주문 화면에 보이는 대표 정보입니다.</p>
+              <p className="sectionLead">
+                고객 주문 화면에 보이는 대표 정보입니다.
+              </p>
             </div>
 
             <div className="hero">
               {(draft as any).mainImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className="heroImg" src={(draft as any).mainImage} alt="main" />
+                <img
+                  className="heroImg"
+                  src={(draft as any).mainImage}
+                  alt="main"
+                />
               ) : (
                 <div className="heroFallback">대표 이미지를 등록하세요</div>
               )}
@@ -1048,28 +1136,49 @@ function AdminstorePageInner() {
                     </div>
                   ) : (
                     <div className="logo" aria-hidden="true">
-                      <span style={{ color: "white", fontWeight: 900, fontSize: 12 }}>logo</span>
+                      <span
+                        style={{
+                          color: "white",
+                          fontWeight: 900,
+                          fontSize: 12,
+                        }}
+                      >
+                        logo
+                      </span>
                     </div>
                   )}
                   <div style={{ minWidth: 0 }}>
-                    <h3 className="storeName">{(draft as any).storeName || "매장명"}</h3>
+                    <h3 className="storeName">
+                      {(draft as any).storeName || "매장명"}
+                    </h3>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="previewCard">
-              <p className="descText">{(draft as any).storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
+              <p className="descText">
+                {(draft as any).storeDesc || "매장 설명이 여기에 표시됩니다."}
+              </p>
             </div>
           </section>
 
           <section className="card">
             <h2 className="cardTitle">이미지 / 브랜딩</h2>
-            <p className="sectionLead">주문 화면에 표시할 대표 이미지와 로고를 설정합니다.</p>
+            <p className="sectionLead">
+              주문 화면에 표시할 대표 이미지와 로고를 설정합니다.
+            </p>
 
             <div className="inlineGrid">
               <div className="field">
-                <div className="label">대표 이미지 업로드</div>
+                <div className="label">
+                  대표 이미지 업로드
+                  <span
+                    className={`uploadStatusBadge ${(draft as any).mainImage ? "uploadStatusBadgeRegistered" : "uploadStatusBadgeEmpty"}`}
+                  >
+                    {(draft as any).mainImage ? "등록" : "미등록"}
+                  </span>
+                </div>
                 <input
                   className="input"
                   type="file"
@@ -1077,17 +1186,20 @@ function AdminstorePageInner() {
                   onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
                   disabled={uploadingMain}
                 />
-                <div className="hint">
-                  {uploadingMain
-                    ? "업로드 중..."
-                    : (draft as any).mainImage
-                      ? "대표 이미지 등록됨"
-                      : "아직 등록된 이미지가 없습니다."}
-                </div>
+                {uploadingMain ? (
+                  <div className="hint">업로드 중...</div>
+                ) : null}
               </div>
 
               <div className="field">
-                <div className="label">로고 이미지 업로드 (선택)</div>
+                <div className="label">
+                  로고 이미지 업로드 (선택)
+                  <span
+                    className={`uploadStatusBadge ${(draft as any).logoImage ? "uploadStatusBadgeRegistered" : "uploadStatusBadgeEmpty"}`}
+                  >
+                    {(draft as any).logoImage ? "등록" : "미등록"}
+                  </span>
+                </div>
                 <input
                   className="input"
                   type="file"
@@ -1095,13 +1207,9 @@ function AdminstorePageInner() {
                   onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
                   disabled={uploadingLogo}
                 />
-                <div className="hint">
-                  {uploadingLogo
-                    ? "업로드 중..."
-                    : (draft as any).logoImage
-                      ? "로고 이미지 등록됨"
-                      : "아직 등록된 이미지가 없습니다."}
-                </div>
+                {uploadingLogo ? (
+                  <div className="hint">업로드 중...</div>
+                ) : null}
               </div>
             </div>
 
@@ -1117,7 +1225,9 @@ function AdminstorePageInner() {
                   onChange={(e) =>
                     setDraft((p: any) => ({
                       ...p,
-                      mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
+                      mainImageOverlayStrength: clampOverlay(
+                        Number(e.target.value),
+                      ),
                     }))
                   }
                 />
@@ -1128,7 +1238,9 @@ function AdminstorePageInner() {
                   onChange={(e) =>
                     setDraft((p: any) => ({
                       ...p,
-                      mainImageOverlayStrength: clampOverlay(Number(e.target.value)),
+                      mainImageOverlayStrength: clampOverlay(
+                        Number(e.target.value),
+                      ),
                     }))
                   }
                 />
@@ -1141,10 +1253,16 @@ function AdminstorePageInner() {
           <section className="card" aria-labelledby="store-basic-info-title">
             <div className="basicHead">
               <div>
-                <h2 id="store-basic-info-title" className="cardTitle">기본 정보</h2>
-                <p className="sectionLead">고객 안내와 주문 운영에 바로 쓰이는 핵심 정보입니다.</p>
+                <h2 className="cardTitle">기본 정보</h2>
+                <p className="sectionLead">
+                  고객 안내와 주문 운영에 바로 쓰이는 핵심 정보입니다.
+                </p>
               </div>
-              <span className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}>{getStatusLabel(storeStatus)}</span>
+              <span
+                className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}
+              >
+                {getStatusLabel(storeStatus)}
+              </span>
             </div>
 
             <div className="inlineGrid">
@@ -1153,7 +1271,9 @@ function AdminstorePageInner() {
                 <input
                   className="input"
                   value={(draft as any).storeName}
-                  onChange={(e) => setDraft((p: any) => ({ ...p, storeName: e.target.value }))}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({ ...p, storeName: e.target.value }))
+                  }
                   placeholder="예: XIMEN 순천점"
                 />
               </div>
@@ -1161,7 +1281,12 @@ function AdminstorePageInner() {
                 <div className="label">
                   매장 ID <span className="pill">수정 불가</span>
                 </div>
-                <input className="input" value={storeId} disabled placeholder="예: ximen" />
+                <input
+                  className="input"
+                  value={storeId}
+                  disabled
+                  placeholder="예: ximen"
+                />
               </div>
             </div>
 
@@ -1170,7 +1295,9 @@ function AdminstorePageInner() {
               <textarea
                 className="textarea"
                 value={(draft as any).storeDesc}
-                onChange={(e) => setDraft((p: any) => ({ ...p, storeDesc: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((p: any) => ({ ...p, storeDesc: e.target.value }))
+                }
                 placeholder="예) QR로 간편하게 주문하고 기다리세요..."
               />
             </div>
@@ -1203,7 +1330,11 @@ function AdminstorePageInner() {
                   readOnly
                   placeholder="주소 검색으로 입력"
                 />
-                <button type="button" className="btn" onClick={openAddressSearch}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={openAddressSearch}
+                >
                   주소 검색
                 </button>
               </div>
@@ -1214,11 +1345,65 @@ function AdminstorePageInner() {
                 onChange={(e) =>
                   setDraft((p: any) => ({
                     ...p,
-                    extra: { ...(p?.extra || {}), addressDetail: e.target.value },
+                    extra: {
+                      ...(p?.extra || {}),
+                      addressDetail: e.target.value,
+                    },
                   }))
                 }
                 placeholder="상세주소 (선택) 예: 101동 1203호"
                 style={{ marginTop: 8 }}
+              />
+            </div>
+
+            {lastSavedAt ? (
+              <div className="hint">
+                마지막 저장: {new Date(lastSavedAt).toLocaleString()}
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </section>
+
+      <section className="advancedGrid" aria-label="매장 세부 설정">
+        <section className="card">
+          <h2 className="cardTitle">매장 추가 정보</h2>
+          <p className="sectionLead">
+            정산·안내에 필요한 세부 정보를 넓은 화면에서 한 번에 관리합니다.
+          </p>
+
+          <div className="extraInfoGrid">
+            <div className="field">
+              <div className="label">
+                사업자등록번호 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.bizNo || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), bizNo: e.target.value },
+                  }))
+                }
+                placeholder="예: 000-00-00000"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                업종 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.industry || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), industry: e.target.value },
+                  }))
+                }
+                placeholder="예: 카페, 음식점"
               />
             </div>
 
@@ -1239,49 +1424,6 @@ function AdminstorePageInner() {
               />
             </div>
 
-            {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}
-          </section>
-
-          <section className="card" aria-labelledby="store-extra-info-title">
-            <h2 id="store-extra-info-title" className="cardTitle">매장 추가 정보</h2>
-            <p className="sectionLead">기본 정보와 함께 정산·안내에 필요한 세부 정보를 관리합니다.</p>
-
-            <div className="inlineGrid">
-              <div className="field">
-                <div className="label">
-                  사업자등록번호 <span className="pill">필수</span>
-                </div>
-                <input
-                  className="input"
-                  value={(draft as any)?.extra?.bizNo || ""}
-                  onChange={(e) =>
-                    setDraft((p: any) => ({
-                      ...p,
-                      extra: { ...(p?.extra || {}), bizNo: e.target.value },
-                    }))
-                  }
-                  placeholder="예: 000-00-00000"
-                />
-              </div>
-
-              <div className="field">
-                <div className="label">
-                  업종 <span className="pill">필수</span>
-                </div>
-                <input
-                  className="input"
-                  value={(draft as any)?.extra?.industry || ""}
-                  onChange={(e) =>
-                    setDraft((p: any) => ({
-                      ...p,
-                      extra: { ...(p?.extra || {}), industry: e.target.value },
-                    }))
-                  }
-                  placeholder="예: 카페, 음식점"
-                />
-              </div>
-            </div>
-
             <div className="field">
               <div className="label">SNS 링크 (선택)</div>
               <input
@@ -1296,29 +1438,35 @@ function AdminstorePageInner() {
                 placeholder="예: instagram.com/..."
               />
             </div>
-          </section>
-        </div>
-      </section>
-
-      <section className="advancedGrid" aria-label="매장 세부 설정">
+          </div>
+        </section>
         <section className="card">
           <h2 className="cardTitle">운영 관리</h2>
-          <p className="sectionLead">직원 화면 방식과 매장 운영 상태를 함께 관리합니다.</p>
+          <p className="sectionLead">
+            직원 화면 방식과 매장 운영 상태를 함께 관리합니다.
+          </p>
 
           <div className="operationGrid">
             <div className="miniPanel">
               <div className="operationText">
                 <span className="operationTitle">직원 화면 모드</span>
-                <span className="operationDesc">매장 운영 방식에 맞는 직원 화면을 선택합니다.</span>
+                <span className="operationDesc">
+                  매장 운영 방식에 맞는 직원 화면을 선택합니다.
+                </span>
               </div>
               <div className="field">
                 <select
                   className="input"
-                  value={(draft as any).staffViewMode === "station" ? "station" : "simple"}
+                  value={
+                    (draft as any).staffViewMode === "station"
+                      ? "station"
+                      : "simple"
+                  }
                   onChange={(e) =>
                     setDraft((p: any) => ({
                       ...p,
-                      staffViewMode: e.target.value === "station" ? "station" : "simple",
+                      staffViewMode:
+                        e.target.value === "station" ? "station" : "simple",
                     }))
                   }
                 >
@@ -1326,27 +1474,48 @@ function AdminstorePageInner() {
                   <option value="station">Station Mode (분리형)</option>
                 </select>
                 <div className="hint">
-                  Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비 역할 분리에 적합
+                  Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비
+                  역할 분리에 적합
                 </div>
               </div>
             </div>
 
             <div className="miniPanel">
               <div className="operationText">
-                <span className="operationTitle">현재 상태: {getStatusLabel(storeStatus)}</span>
-                <span className="operationDesc">{storeStatus === "inactive" ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다." : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}</span>
+                <span className="operationTitle">
+                  현재 상태: {getStatusLabel(storeStatus)}
+                </span>
+                <span className="operationDesc">
+                  {storeStatus === "inactive"
+                    ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다."
+                    : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}
+                </span>
               </div>
               <div className="operationStrip">
                 {storeStatus === "deleted" ? (
-                  <button className="btn btnMuted btnCompact" type="button" disabled>
+                  <button
+                    className="btn btnMuted btnCompact"
+                    type="button"
+                    disabled
+                  >
                     삭제된 매장
                   </button>
                 ) : storeStatus === "inactive" ? (
-                  <button className="btn btnPrimary btnCompact" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>
+                  <button
+                    className="btn btnPrimary btnCompact"
+                    type="button"
+                    onClick={() => void updateStoreStatus("active")}
+                    disabled={statusSaving}
+                  >
                     다시 활성화
                   </button>
                 ) : (
-                  <button className="btn btnMuted btnCompact" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>
+                  <button
+                    className="btn btnMuted btnCompact"
+                    type="button"
+                    onClick={() => void updateStoreStatus("inactive")}
+                    disabled={statusSaving}
+                  >
                     매장 비활성화
                   </button>
                 )}
@@ -1363,7 +1532,11 @@ function AdminstorePageInner() {
             <button className="btn" onClick={onReset} disabled={saving}>
               변경 취소
             </button>
-            <button className="btn btnPrimary" onClick={onSave} disabled={saving}>
+            <button
+              className="btn btnPrimary"
+              onClick={onSave}
+              disabled={saving}
+            >
               {saving ? "저장 중..." : "저장"}
             </button>
           </div>
@@ -1375,14 +1548,23 @@ function AdminstorePageInner() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modalHead">
               <b style={{ fontSize: 16 }}>주소 검색</b>
-              <button type="button" className="btn" onClick={closeAddressSearch}>
+              <button
+                type="button"
+                className="btn"
+                onClick={closeAddressSearch}
+              >
                 닫기
               </button>
             </div>
             <div style={{ marginTop: 12 }}>
-              <DaumPostcodeEmbed onComplete={onCompleteAddress} autoClose={false} />
+              <DaumPostcodeEmbed
+                onComplete={onCompleteAddress}
+                autoClose={false}
+              />
             </div>
-            <p className="hint" style={{ marginTop: 10 }}>도로명 주소를 검색하세요.</p>
+            <p className="hint" style={{ marginTop: 10 }}>
+              도로명 주소를 검색하세요.
+            </p>
           </div>
         </div>
       ) : null}
@@ -1391,7 +1573,13 @@ function AdminstorePageInner() {
 }
 export default function AdminstorePage() {
   return (
-    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="card">
+          <p className="muted">로딩 중...</p>
+        </div>
+      }
+    >
       <AdminstorePageInner />
     </Suspense>
   );
