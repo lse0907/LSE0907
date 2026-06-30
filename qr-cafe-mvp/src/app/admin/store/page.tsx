@@ -5,7 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
-import { loadStoreProfile, saveStoreProfile, useStoreProfile } from "@/app/lib/storeProfile";
+import { fetchStoreProfileFromDb, saveStoreProfile, useStoreProfile } from "@/app/lib/storeProfile";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 
 const STORE_IMAGE_BUCKET = "store-assets";
@@ -69,7 +69,7 @@ function AdminstorePageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const [storeId, setStoreId] = useState<string>("");
-  const { profile, setProfile } = useStoreProfile(storeId);
+  const { profile, setProfile, loading: profileLoading, loadError: profileLoadError } = useStoreProfile(storeId);
   const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
   const [storeStatus, setStoreStatus] = useState<StoreStatus>("active");
   const [statusSaving, setStatusSaving] = useState(false);
@@ -210,42 +210,41 @@ function AdminstorePageInner() {
       // ✅ 핵심 필드만 저장 의도를 고정
       const core = pickCore(draft);
 
-      saveStoreProfile(storeId, {
-        ...(draft as any),
-        ...core,
-      });
-
-      const { error: imageErr } = await supabase
+      const { error: saveErr } = await supabase
         .from("stores")
         .update({
-          store_name: (draft as any).storeName || null,
-          store_desc: (draft as any).storeDesc || null,
-          main_image_url: (draft as any).mainImage || null,
-          logo_image_url: (draft as any).logoImage || null,
-          staff_view_mode: (draft as any).staffViewMode === "station" ? "station" : "simple",
-          phone: (draft as any)?.extra?.phone || null,
-          address: (draft as any)?.extra?.address || null,
-          address_detail: (draft as any)?.extra?.addressDetail || null,
-          business_hours: (draft as any)?.extra?.hours || null,
-          business_number: (draft as any)?.extra?.bizNo || null,
-          industry: (draft as any)?.extra?.industry || null,
-          sns_url: (draft as any)?.extra?.sns || null,
-          main_image_overlay_strength: strength,
+          store_name: core.storeName || null,
+          store_desc: core.storeDesc || null,
+          main_image_url: core.mainImage || null,
+          logo_image_url: core.logoImage || null,
+          staff_view_mode: core.staffViewMode,
+          phone: core.extra.phone || null,
+          address: core.extra.address || null,
+          address_detail: core.extra.addressDetail || null,
+          business_hours: core.extra.hours || null,
+          business_number: core.extra.bizNo || null,
+          industry: core.extra.industry || null,
+          sns_url: core.extra.sns || null,
+          main_image_overlay_strength: core.mainImageOverlayStrength,
         })
         .eq("store_id", storeId);
 
-      if (imageErr) {
-        console.error("[admin/store] image update error:", imageErr.message);
-        setUploadMsg("이미지 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
-      }
+      if (saveErr) throw saveErr;
 
-      // ✅ 즉시 반영
-      const fresh = loadStoreProfile(storeId);
-      setProfile(fresh);
+      // ✅ DB 저장 성공 후 Supabase row를 다시 읽어 기준 데이터를 화면/캐시에 반영
+      const fresh = await fetchStoreProfileFromDb(storeId);
+      const resolved = fresh || {
+        ...(draft as any),
+        ...core,
+      };
+      saveStoreProfile(storeId, resolved);
+      setProfile(resolved);
 
       setSaveState("saved");
       setLastSavedAt(Date.now());
-    } catch {
+    } catch (e: any) {
+      console.error("[admin/store] save store profile error:", e?.message || e);
+      setUploadMsg(`매장 정보 저장 실패: ${String(e?.message || e || "잠시 후 다시 시도해주세요.")}`);
       setSaveState("error");
     } finally {
       setSaving(false);
@@ -657,15 +656,6 @@ function AdminstorePageInner() {
           padding-top: 10px;
           border-top: 1px dashed var(--line);
         }
-        .primarySaveBar {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          align-items: center;
-          margin-top: 14px;
-          padding-top: 12px;
-          border-top: 1px solid var(--line);
-        }
         .stickySaveBar {
           position: sticky;
           bottom: 12px;
@@ -1027,6 +1017,10 @@ function AdminstorePageInner() {
       </div>
 
       {uploadMsg ? <div className="alert">{uploadMsg}</div> : null}
+      {profileLoading ? <div className="alert">Supabase에서 매장 정보를 불러오는 중입니다.</div> : null}
+      {!profileLoading && profileLoadError ? (
+        <div className="alert">Supabase 매장 정보를 불러오지 못해 이 기기의 임시 정보를 표시 중입니다. ({profileLoadError})</div>
+      ) : null}
 
       <section className="grid">
         <div className="sideStack">
@@ -1243,16 +1237,6 @@ function AdminstorePageInner() {
                 }
                 placeholder="예: 10:00 ~ 22:00"
               />
-            </div>
-
-            <div className="primarySaveBar">
-              <button className="btn btnPrimary" onClick={onSave} disabled={!isDirty || saving}>
-                {saving ? "저장 중..." : "저장"}
-              </button>
-              <button className="btn" onClick={onReset} disabled={!isDirty || saving}>
-                변경 취소
-              </button>
-              {isDirty ? <span className="badge badgeDirty">저장 필요</span> : null}
             </div>
 
             {lastSavedAt ? <div className="hint">마지막 저장: {new Date(lastSavedAt).toLocaleString()}</div> : null}

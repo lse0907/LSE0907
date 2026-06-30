@@ -1,6 +1,6 @@
 // src/app/lib/storeProfile.ts
 "use client";
-/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
@@ -28,6 +28,9 @@ export type StoreProfile = {
 };
 
 export const STORE_PROFILE_UPDATED_EVENT = "qrCafeStoreProfileUpdated";
+const STORE_PROFILE_SELECT =
+  "store_name, store_desc, main_image_url, logo_image_url, staff_view_mode, phone, address, address_detail, business_hours, business_number, industry, sns_url, main_image_overlay_strength";
+const STORE_PROFILE_LEGACY_SELECT = "store_name, main_image_url, logo_image_url, staff_view_mode";
 
 export const DEFAULT_STORE_PROFILE: StoreProfile = {
   staffViewMode: "simple",
@@ -64,6 +67,52 @@ function clampOverlay(v: number) {
 
 function pickString(v: unknown, fallback: string) {
   return typeof v === "string" ? v : fallback;
+}
+
+function rowToStoreProfile(data: any, fallback: StoreProfile = DEFAULT_STORE_PROFILE): StoreProfile {
+  return {
+    ...fallback,
+    staffViewMode: data?.staff_view_mode === "station" ? "station" : "simple",
+    storeName: String(data?.store_name || fallback.storeName || "").trim() || fallback.storeName,
+    storeDesc: pickString(data?.store_desc, fallback.storeDesc),
+    mainImage: data?.main_image_url || fallback.mainImage,
+    logoImage: data?.logo_image_url || fallback.logoImage,
+    mainImageOverlayStrength: clampOverlay(Number(data?.main_image_overlay_strength ?? fallback.mainImageOverlayStrength)),
+    extra: {
+      ...(fallback.extra || {}),
+      phone: pickString(data?.phone, fallback.extra?.phone || ""),
+      address: pickString(data?.address, fallback.extra?.address || ""),
+      addressDetail: pickString(data?.address_detail, fallback.extra?.addressDetail || ""),
+      hours: pickString(data?.business_hours, fallback.extra?.hours || ""),
+      bizNo: pickString(data?.business_number, fallback.extra?.bizNo || ""),
+      industry: pickString(data?.industry, fallback.extra?.industry || ""),
+      sns: pickString(data?.sns_url, fallback.extra?.sns || ""),
+    },
+  };
+}
+
+export async function fetchStoreProfileFromDb(storeId?: string): Promise<StoreProfile | null> {
+  const sid = (storeId || "").trim() || envStoreId();
+  if (!sid) return null;
+
+  let res: any = await supabase
+    .from("stores")
+    .select(STORE_PROFILE_SELECT)
+    .eq("store_id", sid)
+    .maybeSingle();
+
+  // Some environments may not have docs/sql/supabase-store-profile-fields-v1.sql applied yet.
+  if (res.error && /store_desc|phone|address|business_hours|business_number|industry|sns_url|main_image_overlay_strength/i.test(res.error.message || "")) {
+    res = await supabase
+      .from("stores")
+      .select(STORE_PROFILE_LEGACY_SELECT)
+      .eq("store_id", sid)
+      .maybeSingle();
+  }
+
+  if (res.error) throw res.error;
+  if (!res.data) return null;
+  return rowToStoreProfile(res.data);
 }
 
 export function loadStoreProfile(storeId?: string): StoreProfile {
@@ -131,63 +180,33 @@ export function saveStoreProfile(storeId: string | undefined, next: StoreProfile
 export function useStoreProfile(storeId?: string) {
   const sid = useMemo(() => (storeId || "").trim() || envStoreId(), [storeId]);
   const [profile, setProfile] = useState<StoreProfile>(DEFAULT_STORE_PROFILE);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    setProfile(loadStoreProfile(sid));
+    let alive = true;
+    setLoading(true);
+    setLoadError("");
 
-    const syncFromDb = async () => {
+    const loadFromDb = async () => {
       if (!sid) return;
-      let res: any = await supabase
-        .from("stores")
-        .select("store_name, store_desc, main_image_url, logo_image_url, staff_view_mode, phone, address, address_detail, business_hours, business_number, industry, sns_url, main_image_overlay_strength")
-        .eq("store_id", sid)
-        .maybeSingle();
-
-      // Some environments may not have docs/sql/supabase-store-profile-fields-v1.sql applied yet.
-      if (res.error && /store_desc|phone|address|business_hours|business_number|industry|sns_url|main_image_overlay_strength/i.test(res.error.message || "")) {
-        res = await supabase
-          .from("stores")
-          .select("store_name, main_image_url, logo_image_url, staff_view_mode")
-          .eq("store_id", sid)
-          .maybeSingle();
-      }
-
-      if (res.error) {
-        console.error("[storeProfile] sync from db error:", res.error.message);
-        return;
-      }
-
-      const data = res.data;
-      if (!data) return;
-
-      const current = loadStoreProfile(sid);
-      const next: StoreProfile = {
-        ...current,
-        staffViewMode: data.staff_view_mode === "station" ? "station" : "simple",
-        storeName: String(data.store_name || current.storeName || "").trim() || current.storeName,
-        storeDesc: pickString(data.store_desc, current.storeDesc),
-        mainImage: data.main_image_url || current.mainImage,
-        logoImage: data.logo_image_url || current.logoImage,
-        mainImageOverlayStrength: clampOverlay(Number(data.main_image_overlay_strength ?? current.mainImageOverlayStrength)),
-        extra: {
-          ...(current.extra || {}),
-          phone: pickString(data.phone, current.extra?.phone || ""),
-          address: pickString(data.address, current.extra?.address || ""),
-          addressDetail: pickString(data.address_detail, current.extra?.addressDetail || ""),
-          hours: pickString(data.business_hours, current.extra?.hours || ""),
-          bizNo: pickString(data.business_number, current.extra?.bizNo || ""),
-          industry: pickString(data.industry, current.extra?.industry || ""),
-          sns: pickString(data.sns_url, current.extra?.sns || ""),
-        },
-      };
-
-      if (JSON.stringify(current) !== JSON.stringify(next)) {
-        saveStoreProfile(sid, next);
-        setProfile(next);
+      try {
+        const next = await fetchStoreProfileFromDb(sid);
+        if (!alive) return;
+        const resolved = next || loadStoreProfile(sid);
+        saveStoreProfile(sid, resolved);
+        setProfile(resolved);
+      } catch (e: any) {
+        if (!alive) return;
+        console.error("[storeProfile] load from db error:", e?.message || e);
+        setLoadError(String(e?.message || e || "매장 정보를 불러오지 못했습니다."));
+        setProfile(loadStoreProfile(sid));
+      } finally {
+        if (alive) setLoading(false);
       }
     };
 
-    syncFromDb();
+    loadFromDb();
 
     const onUpdate = (e: any) => {
       const target = e?.detail?.storeId;
@@ -203,10 +222,11 @@ export function useStoreProfile(storeId?: string) {
     window.addEventListener("storage", onStorage);
 
     return () => {
+      alive = false;
       window.removeEventListener(STORE_PROFILE_UPDATED_EVENT, onUpdate as any);
       window.removeEventListener("storage", onStorage);
     };
   }, [sid]);
 
-  return { profile, setProfile };
+  return { profile, setProfile, loading, loadError };
 }
