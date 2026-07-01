@@ -281,6 +281,9 @@ function AdminPageInner() {
         if (preferred) {
           setSelectedStoreId(preferred);
         }
+        if ((sp.get("deleted") || "").trim() === "1") {
+          setMsg("매장이 삭제되었습니다.");
+        }
       } catch (e: unknown) {
         const message = toErrorMessage(e);
         console.error("[admin] load stores error:", message);
