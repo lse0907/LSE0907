@@ -36,6 +36,35 @@ type AdminQrDesignSettings = {
   table_print_preset: string;
 };
 
+type StoreQrCode = {
+  id: string;
+  store_id: string;
+  qr_type: "counter" | "table" | "pickup" | "custom";
+  label: string;
+  table_no: number | null;
+  target_url: string;
+  status: "active" | "inactive" | "archived";
+  sort_order: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type StoreQrDesignSettings = {
+  store_id: string;
+  template_key: string;
+  accent_color: string;
+  counter_title: string;
+  counter_description: string;
+  table_title: string;
+  table_description: string;
+  show_logo: boolean;
+  show_main_image: boolean;
+  show_store_name: boolean;
+  show_target_url: boolean;
+  counter_print_preset: string;
+  table_print_preset: string;
+};
+
 const START_PATH = "/";
 type PrintTarget = "counter" | "table";
 type CounterPrintPreset = "a5_card" | "a4_poster" | "a3_poster" | "a4_2up";
