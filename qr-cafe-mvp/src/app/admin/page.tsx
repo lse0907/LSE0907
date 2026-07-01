@@ -90,6 +90,7 @@ function AdminPageInner() {
   const [hideSetupBannerForCurrentSelection, setHideSetupBannerForCurrentSelection] = useState(false);
   const [selectedStoreCounts, setSelectedStoreCounts] = useState<{ categories: number; options: number; menus: number } | null>(null);
   const subPanelRef = useRef<HTMLDivElement | null>(null);
+  const didOpenDefaultSectionRef = useRef(false);
 
   const selectedStore = useMemo(() => {
     if (!selectedStoreId) return null;
@@ -321,6 +322,12 @@ function AdminPageInner() {
   useEffect(() => {
     if (!selectedStoreId) return;
     setHideSetupBannerForCurrentSelection(false);
+  }, [selectedStoreId]);
+
+  useEffect(() => {
+    if (didOpenDefaultSectionRef.current || !selectedStoreId) return;
+    didOpenDefaultSectionRef.current = true;
+    setActiveSection("store");
   }, [selectedStoreId]);
 
   useEffect(() => {

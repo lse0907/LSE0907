@@ -391,6 +391,10 @@ export default function AdminStoreCreatePage() {
           font-weight: 950;
         }
 
+        .topHomeBtn {
+          white-space: nowrap;
+        }
+
         .btnPrimary {
           background: var(--brand);
           color: #fff;
@@ -595,6 +599,11 @@ export default function AdminStoreCreatePage() {
             align-items: stretch;
             flex-direction: column;
           }
+          .topHomeBtn {
+            align-self: flex-start;
+            min-width: 132px;
+            width: min(50%, 180px);
+          }
           .inlineGrid,
           .extraInfoGrid {
             grid-template-columns: 1fr;
@@ -624,7 +633,7 @@ export default function AdminStoreCreatePage() {
           <h1 className="h1">매장 만들기</h1>
           <p className="sub">필수 정보만 입력하세요.</p>
         </div>
-        <button className="btn" type="button" onClick={() => router.back()}>
+        <button className="btn topHomeBtn" type="button" onClick={() => router.back()}>
           관리자 홈
         </button>
       </header>
