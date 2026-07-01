@@ -4,6 +4,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
+import { supabase } from "@/app/lib/supabaseClient";
 import { useStoreProfile } from "@/app/lib/storeProfile";
 
 type QrItem = {
@@ -11,6 +12,35 @@ type QrItem = {
   label: string;
   url: string;
   imgSrc: string;
+};
+
+type StoreQrCode = {
+  id: string;
+  store_id: string;
+  qr_type: "counter" | "table" | "pickup" | "custom";
+  label: string;
+  table_no: number | null;
+  target_url: string;
+  status: "active" | "inactive" | "archived";
+  sort_order: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type StoreQrDesignSettings = {
+  store_id: string;
+  template_key: string;
+  accent_color: string;
+  counter_title: string;
+  counter_description: string;
+  table_title: string;
+  table_description: string;
+  show_logo: boolean;
+  show_main_image: boolean;
+  show_store_name: boolean;
+  show_target_url: boolean;
+  counter_print_preset: string;
+  table_print_preset: string;
 };
 
 const START_PATH = "/";
@@ -102,6 +132,51 @@ function withQuery(url: string, params: Record<string, string>) {
   return u.toString();
 }
 
+function newClientId(prefix: string) {
+  return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function defaultDesignSettings(storeId: string, counterDescription: string): StoreQrDesignSettings {
+  return {
+    store_id: storeId,
+    template_key: "simple",
+    accent_color: "#111827",
+    counter_title: "QR로 간편하게 주문하세요",
+    counter_description: counterDescription,
+    table_title: "테이블에서 바로 주문",
+    table_description: "QR을 찍고 메뉴를 선택해 주세요.",
+    show_logo: true,
+    show_main_image: true,
+    show_store_name: true,
+    show_target_url: false,
+    counter_print_preset: "a4_2up",
+    table_print_preset: "a4_12",
+  };
+}
+
+function normalizeQrStatus(v: unknown): StoreQrCode["status"] {
+  return v === "inactive" || v === "archived" ? v : "active";
+}
+
+function normalizeQrType(v: unknown): StoreQrCode["qr_type"] {
+  return v === "table" || v === "pickup" || v === "custom" ? v : "counter";
+}
+
+function rowToQrCode(row: Record<string, unknown>): StoreQrCode {
+  return {
+    id: String(row?.id || ""),
+    store_id: String(row?.store_id || ""),
+    qr_type: normalizeQrType(row?.qr_type),
+    label: String(row?.label || ""),
+    table_no: row.table_no === null || row.table_no === undefined ? null : Number(row.table_no),
+    target_url: String(row?.target_url || ""),
+    status: normalizeQrStatus(row?.status),
+    sort_order: row.sort_order === null || row.sort_order === undefined ? null : Number(row.sort_order),
+    created_at: typeof row.created_at === "string" ? row.created_at : null,
+    updated_at: typeof row.updated_at === "string" ? row.updated_at : null,
+  };
+}
+
 function AdminQrPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -123,6 +198,12 @@ function AdminQrPageInner() {
 
   const [showPreview, setShowPreview] = useState(false);
   const [seed, setSeed] = useState<string>("");
+  const [qrRows, setQrRows] = useState<StoreQrCode[]>([]);
+  const [designSettings, setDesignSettings] = useState<StoreQrDesignSettings | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrSaving, setQrSaving] = useState(false);
+  const [qrMsg, setQrMsg] = useState("");
+  const [qrMsgTone, setQrMsgTone] = useState<"success" | "error" | "neutral">("neutral");
 
   // ✅ 카운터 안내 문구는 QR페이지에서 별도로 관리(현재는 storeProfile 저장 대상 아님)
   const [counterDesc, setCounterDesc] = useState(
@@ -158,9 +239,7 @@ function AdminQrPageInner() {
   const mainImage = profile?.mainImage ?? "/hero.jpg";
   const logoImage = profile?.logoImage ?? "";
 
-  const tableNumbers = useMemo(() => {
-    if (!makeTables) return [];
-
+  const pendingTableNumbers = useMemo(() => {
     const a = clampInt(rangeStart, 1);
     const b = clampInt(rangeEnd, 20);
 
@@ -173,7 +252,27 @@ function AdminQrPageInner() {
     const custom = parseTableList(customTables);
 
     return uniq([...range, ...custom]).filter((n) => n > 0).sort((x, y) => x - y);
-  }, [makeTables, rangeStart, rangeEnd, customTables]);
+  }, [rangeStart, rangeEnd, customTables]);
+
+  const counterQr = useMemo(
+    () => qrRows.find((row) => row.qr_type === "counter" && row.status === "active") || null,
+    [qrRows]
+  );
+
+  const activeTableQrs = useMemo(
+    () =>
+      qrRows
+        .filter((row) => row.qr_type === "table" && row.status === "active" && Number(row.table_no) > 0)
+        .sort((a, b) => Number(a.table_no) - Number(b.table_no)),
+    [qrRows]
+  );
+
+  const tableNumbers = useMemo(
+    () => (makeTables ? activeTableQrs.map((row) => Number(row.table_no)).filter((n) => n > 0) : []),
+    [activeTableQrs, makeTables]
+  );
+
+  const inactiveCount = useMemo(() => qrRows.filter((row) => row.status !== "active").length, [qrRows]);
 
   const baseStartUrl = useMemo(() => {
     if (!origin) return "";
@@ -190,6 +289,164 @@ function AdminQrPageInner() {
     if (!baseStartUrl || !storeId) return "";
     return withQuery(baseStartUrl, { store: storeId, table: String(n) });
   };
+
+  const refreshQrData = async () => {
+    if (!storeId) return;
+    setQrLoading(true);
+    setQrMsg("");
+    setQrMsgTone("neutral");
+
+    const [qrRes, designRes] = await Promise.all([
+      supabase
+        .from("store_qr_codes")
+        .select("id,store_id,qr_type,label,table_no,target_url,status,sort_order,created_at,updated_at")
+        .eq("store_id", storeId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+      supabase.from("store_qr_design_settings").select("*").eq("store_id", storeId).maybeSingle(),
+    ]);
+
+    if (qrRes.error) {
+      setQrRows([]);
+      setQrMsgTone("error");
+      setQrMsg(
+        `QR 목록을 불러오지 못했습니다. Supabase SQL 적용 여부를 확인해 주세요. (${qrRes.error.message})`
+      );
+    } else {
+      setQrRows((Array.isArray(qrRes.data) ? qrRes.data : []).map(rowToQrCode));
+    }
+
+    if (designRes.error) {
+      setDesignSettings(defaultDesignSettings(storeId, counterDesc));
+      setQrMsgTone((prev) => (prev === "error" ? prev : "neutral"));
+    } else {
+      const row = designRes.data as Partial<StoreQrDesignSettings> | null;
+      setDesignSettings(row ? { ...defaultDesignSettings(storeId, counterDesc), ...row } : defaultDesignSettings(storeId, counterDesc));
+    }
+
+    setQrLoading(false);
+  };
+
+  useEffect(() => {
+    refreshQrData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  async function ensureDesignSettings() {
+    if (!storeId) return;
+    const payload = designSettings || defaultDesignSettings(storeId, counterDesc);
+    const { error } = await supabase.from("store_qr_design_settings").upsert(payload, { onConflict: "store_id" });
+    if (error) throw error;
+    setDesignSettings(payload);
+  }
+
+  async function ensureCounterQr() {
+    if (!origin || !storeId || !counterUrl) {
+      setQrMsgTone("error");
+      setQrMsg("선택된 매장 또는 브라우저 주소 정보를 확인할 수 없습니다.");
+      return;
+    }
+    if (counterQr) {
+      setQrMsgTone("neutral");
+      setQrMsg("이미 사용 중인 카운터 QR이 있습니다. 기존 QR을 재사용합니다.");
+      return;
+    }
+
+    setQrSaving(true);
+    setQrMsg("");
+    try {
+      await ensureDesignSettings();
+      const payload = {
+        id: newClientId("qr_counter"),
+        store_id: storeId,
+        qr_type: "counter",
+        label: "카운터 QR",
+        table_no: null,
+        target_url: counterUrl,
+        status: "active",
+        sort_order: 0,
+      };
+      const { error } = await supabase.from("store_qr_codes").insert([payload]);
+      if (error) throw error;
+      setQrMsgTone("success");
+      setQrMsg("카운터 QR을 저장했습니다. 앞으로 이 QR을 재사용할 수 있습니다.");
+      await refreshQrData();
+    } catch (e: unknown) {
+      setQrMsgTone("error");
+      setQrMsg(`카운터 QR 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
+  }
+
+  async function addTableQrs() {
+    if (!origin || !storeId || !baseStartUrl) {
+      setQrMsgTone("error");
+      setQrMsg("선택된 매장 또는 브라우저 주소 정보를 확인할 수 없습니다.");
+      return;
+    }
+    if (!pendingTableNumbers.length) {
+      setQrMsgTone("error");
+      setQrMsg("추가할 테이블 번호를 입력해 주세요.");
+      return;
+    }
+
+    const existing = new Set(activeTableQrs.map((row) => Number(row.table_no)));
+    const createNums = pendingTableNumbers.filter((n) => !existing.has(n));
+    if (!createNums.length) {
+      setQrMsgTone("neutral");
+      setQrMsg("입력한 테이블 QR은 이미 모두 등록되어 있습니다.");
+      return;
+    }
+
+    setQrSaving(true);
+    setQrMsg("");
+    try {
+      await ensureDesignSettings();
+      const payload = createNums.map((n) => ({
+        id: newClientId(`qr_t${n}`),
+        store_id: storeId,
+        qr_type: "table",
+        label: formatTableLabel(n),
+        table_no: n,
+        target_url: tableUrl(n),
+        status: "active",
+        sort_order: n,
+      }));
+      const { error } = await supabase.from("store_qr_codes").insert(payload);
+      if (error) throw error;
+      setMakeTables(true);
+      setQrMsgTone("success");
+      setQrMsg(`테이블 QR ${createNums.length}개를 추가했습니다. 기존 QR은 중복 생성하지 않았습니다.`);
+      await refreshQrData();
+    } catch (e: unknown) {
+      setQrMsgTone("error");
+      setQrMsg(`테이블 QR 추가 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
+  }
+
+  async function updateQrStatus(row: StoreQrCode, status: StoreQrCode["status"]) {
+    setQrSaving(true);
+    setQrMsg("");
+    try {
+      const { error } = await supabase
+        .from("store_qr_codes")
+        .update({ status })
+        .eq("id", row.id)
+        .eq("store_id", storeId);
+      if (error) throw error;
+      setQrMsgTone("success");
+      setQrMsg(`${row.label} 상태를 ${status === "active" ? "사용 중" : "비활성"}으로 변경했습니다.`);
+      await refreshQrData();
+    } catch (e: unknown) {
+      setQrMsgTone("error");
+      setQrMsg(`QR 상태 변경 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
+  }
 
   const previewItems = useMemo(() => {
     if (!origin || !baseStartUrl || !storeId) return [];
@@ -218,6 +475,8 @@ function AdminQrPageInner() {
     }
 
     return list;
+  // tableUrl is derived from baseStartUrl/storeId and is only used for a preview sample.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [origin, baseStartUrl, storeId, makeCounter, makeTables, tableNumbers, seed, counterUrl]);
 
   // ==========================
@@ -243,8 +502,6 @@ function AdminQrPageInner() {
     const bottomH = posterH - imgH;
 
     const cacheBust = `${Date.now()}`;
-
-    const qrSize = 260;
 
     const qrSrc = qrImgUrl(counterUrl, 720, cacheBust);
     const [qrImg] = await Promise.all([
@@ -668,6 +925,94 @@ function AdminQrPageInner() {
           font-weight: 800;
           line-height: 1.35;
         }
+        .statusGrid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          margin-top: 10px;
+        }
+        .statCard {
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 12px;
+        }
+        .statNum {
+          font-size: 24px;
+          font-weight: 950;
+          letter-spacing: -0.03em;
+        }
+        .msg {
+          margin-top: 10px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.45;
+          border: 1px solid var(--line);
+          background: #fff;
+          color: var(--muted);
+        }
+        .msg.success {
+          border-color: #bbf7d0;
+          background: #f0fdf4;
+          color: #166534;
+        }
+        .msg.error {
+          border-color: #fecaca;
+          background: #fef2f2;
+          color: #991b1b;
+        }
+        .manageGrid {
+          display: grid;
+          grid-template-columns: 0.95fr 1.05fr;
+          gap: 10px;
+          margin-top: 10px;
+        }
+        .qrList {
+          display: grid;
+          gap: 8px;
+          margin-top: 10px;
+          max-height: 360px;
+          overflow: auto;
+          padding-right: 2px;
+        }
+        .qrRow {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 10px;
+          align-items: center;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          padding: 10px;
+          background: #fff;
+        }
+        .qrMeta {
+          display: grid;
+          gap: 3px;
+          min-width: 0;
+        }
+        .qrName {
+          font-size: 13px;
+          font-weight: 950;
+        }
+        .qrSmall {
+          color: var(--muted);
+          font-size: 11px;
+          font-weight: 800;
+          line-height: 1.35;
+          word-break: break-all;
+        }
+        .badge {
+          display: inline-flex;
+          width: fit-content;
+          padding: 4px 8px;
+          border-radius: 999px;
+          background: #f3f4f6;
+          color: #4b5563;
+          font-size: 11px;
+          font-weight: 950;
+        }
         .previewHead {
           display: flex;
           justify-content: space-between;
@@ -741,6 +1086,13 @@ function AdminQrPageInner() {
           .grid {
             grid-template-columns: 1fr;
           }
+          .statusGrid,
+          .manageGrid {
+            grid-template-columns: 1fr;
+          }
+          .qrRow {
+            grid-template-columns: 1fr;
+          }
           .h1 {
             font-size: 24px;
           }
@@ -754,6 +1106,109 @@ function AdminQrPageInner() {
         </div>
         <p className="desc">체크한 항목만 PNG로 다운로드합니다. (QR URL에 store 파라미터가 포함됩니다)</p>
       </header>
+
+      <section className="statusGrid" aria-label="QR 등록 현황">
+        <div className="statCard">
+          <div className="label">카운터 QR</div>
+          <div className="statNum">{counterQr ? 1 : 0}</div>
+          <div className="hint">계산대·입구·픽업존에 붙이는 대표 QR입니다.</div>
+        </div>
+        <div className="statCard">
+          <div className="label">사용 중인 테이블 QR</div>
+          <div className="statNum">{activeTableQrs.length}</div>
+          <div className="hint">DB에 저장된 기존 QR을 재사용합니다.</div>
+        </div>
+        <div className="statCard">
+          <div className="label">비활성 QR</div>
+          <div className="statNum">{inactiveCount}</div>
+          <div className="hint">필요하면 다시 사용 중으로 바꿀 수 있습니다.</div>
+        </div>
+      </section>
+
+      {qrMsg ? <div className={`msg ${qrMsgTone}`}>{qrMsg}</div> : null}
+
+      <section className="manageGrid">
+        <div className="card">
+          <h2 className="cardTitle">QR 목록 관리</h2>
+          <p className="desc" style={{ marginTop: 8 }}>
+            QR은 한 번 만들고 끝나는 이미지가 아니라 매장 운영 자산입니다. 기존 QR은 다시 출력하고, 필요한 테이블만 추가하세요.
+          </p>
+
+          <div className="btnRow">
+            <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId || !!counterQr}>
+              {counterQr ? "카운터 QR 등록됨" : "카운터 QR 저장"}
+            </button>
+            <button className="btn" onClick={refreshQrData} disabled={qrSaving || qrLoading || !storeId}>
+              {qrLoading ? "불러오는 중..." : "목록 새로고침"}
+            </button>
+          </div>
+
+          <div className="qrList">
+            {qrLoading ? (
+              <div className="hint">QR 목록을 불러오는 중입니다.</div>
+            ) : qrRows.length === 0 ? (
+              <div className="hint">아직 저장된 QR이 없습니다. 카운터 QR을 저장하거나 테이블 QR을 추가해 주세요.</div>
+            ) : (
+              qrRows.map((row) => (
+                <div className="qrRow" key={row.id}>
+                  <div className="qrMeta">
+                    <span className="badge">{row.status === "active" ? "사용 중" : row.status === "inactive" ? "비활성" : "보관"}</span>
+                    <div className="qrName">{row.label || (row.qr_type === "table" ? formatTableLabel(Number(row.table_no)) : "카운터 QR")}</div>
+                    <div className="qrSmall">{row.target_url}</div>
+                  </div>
+                  <button
+                    className="btn"
+                    onClick={() => updateQrStatus(row, row.status === "active" ? "inactive" : "active")}
+                    disabled={qrSaving || row.status === "archived"}
+                  >
+                    {row.status === "active" ? "비활성화" : "다시 사용"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <h2 className="cardTitle">테이블 QR 추가</h2>
+          <p className="desc" style={{ marginTop: 8 }}>
+            이미 등록된 테이블 번호는 중복 생성하지 않습니다. 테이블이 늘어난 경우 추가 번호만 입력하면 됩니다.
+          </p>
+
+          <div className="formGrid">
+            <div className="row2">
+              <div className="field">
+                <div className="label">테이블 범위 시작</div>
+                <input className="input" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} inputMode="numeric" />
+              </div>
+              <div className="field">
+                <div className="label">테이블 범위 종료</div>
+                <input className="input" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} inputMode="numeric" />
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">추가 테이블(선택)</div>
+              <input
+                className="input"
+                value={customTables}
+                onChange={(e) => setCustomTables(e.target.value)}
+                placeholder='예: "21,22,30" 또는 "1~5"'
+              />
+            </div>
+
+            <div className="hint">
+              추가 대상: <b>{pendingTableNumbers.length}</b>개 · 이미 등록된 번호는 저장 시 자동으로 건너뜁니다.
+            </div>
+
+            <div className="btnRow">
+              <button className="btn btnPrimary" onClick={addTableQrs} disabled={qrSaving || qrLoading || !origin || !storeId || pendingTableNumbers.length === 0}>
+                테이블 QR 저장/추가
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="panelGrid">
         <div className="card">
