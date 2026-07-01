@@ -90,6 +90,7 @@ function AdminPageInner() {
   const [hideSetupBannerForCurrentSelection, setHideSetupBannerForCurrentSelection] = useState(false);
   const [selectedStoreCounts, setSelectedStoreCounts] = useState<{ categories: number; options: number; menus: number } | null>(null);
   const subPanelRef = useRef<HTMLDivElement | null>(null);
+  const didOpenDefaultSectionRef = useRef(false);
 
   const selectedStore = useMemo(() => {
     if (!selectedStoreId) return null;
@@ -324,6 +325,12 @@ function AdminPageInner() {
   }, [selectedStoreId]);
 
   useEffect(() => {
+    if (didOpenDefaultSectionRef.current || !selectedStoreId) return;
+    didOpenDefaultSectionRef.current = true;
+    setActiveSection("store");
+  }, [selectedStoreId]);
+
+  useEffect(() => {
     if (!activeSection || !subPanelRef.current) return;
     if (!window.matchMedia("(max-width: 720px)").matches) return;
     window.setTimeout(() => {
@@ -345,6 +352,11 @@ function AdminPageInner() {
       return;
     }
     router.push(`${path}?store=${encodeURIComponent(selectedStoreId)}`);
+  };
+
+  const handleSelectStore = (storeId: string) => {
+    setSelectedStoreId(storeId);
+    setActiveSection("store");
   };
 
   const goCreate = () => {
@@ -511,10 +523,10 @@ function AdminPageInner() {
                   const displayStatus = getStoreDisplayStatus(s);
                   const statusLabel = getStoreStatusLabel(s);
                   return (
-                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""} ${displayStatus === "inactive" ? "storeRowInactive" : ""}`.trim()} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
+                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""} ${displayStatus === "inactive" ? "storeRowInactive" : ""}`.trim()} onClick={() => handleSelectStore(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        setSelectedStoreId(s.store_id);
+                        handleSelectStore(s.store_id);
                       }
                     }}>
                       <div style={{ minWidth: 0 }}>
