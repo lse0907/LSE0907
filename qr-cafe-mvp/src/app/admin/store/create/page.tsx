@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useMemo, useState } from "react";
@@ -254,6 +255,13 @@ export default function AdminStoreCreatePage() {
           gap: 10px;
         }
 
+        .topActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
         .h1 {
           margin: 0;
           font-size: 24px;
@@ -281,6 +289,47 @@ export default function AdminStoreCreatePage() {
           grid-template-columns: 1.1fr 1fr;
           gap: 12px;
           align-items: start;
+        }
+
+        .sideStack,
+        .formStack {
+          display: grid;
+          gap: 12px;
+          align-content: start;
+        }
+
+        .inlineGrid,
+        .extraInfoGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .advancedGrid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+
+        .basicHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .statusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+          padding: 5px 9px;
+          font-size: 11px;
+          font-weight: 950;
+          white-space: nowrap;
         }
 
         .cardTitle {
@@ -349,6 +398,10 @@ export default function AdminStoreCreatePage() {
           font-weight: 950;
         }
 
+        .topHomeBtn {
+          white-space: nowrap;
+        }
+
         .btnPrimary {
           background: var(--brand);
           color: #fff;
@@ -388,6 +441,30 @@ export default function AdminStoreCreatePage() {
           grid-template-columns: 1fr 90px;
           gap: 10px;
           align-items: center;
+        }
+
+        .addressRow {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .addressSearchBtn {
+          flex: 0 0 auto;
+          white-space: nowrap;
+        }
+
+        .createActionCard {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .createActionText {
+          display: grid;
+          gap: 4px;
         }
 
         .range {
@@ -526,7 +603,34 @@ export default function AdminStoreCreatePage() {
             padding: 12px;
           }
           .topbar {
-            align-items: center;
+            align-items: flex-start;
+            flex-direction: row;
+            justify-content: space-between;
+            gap: 8px;
+          }
+          .topActions {
+            width: auto;
+            justify-content: flex-end;
+            flex-wrap: nowrap;
+          }
+          .btn {
+            font-size: 13px;
+            padding: 9px 11px;
+          }
+          .inlineGrid,
+          .extraInfoGrid {
+            grid-template-columns: 1fr;
+          }
+          .addressRow {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .addressSearchBtn,
+          .createActionCard .btn {
+            width: 100%;
+          }
+          .createActionCard {
+            align-items: stretch;
           }
           .hero {
             height: 200px;
@@ -542,189 +646,259 @@ export default function AdminStoreCreatePage() {
           <h1 className="h1">매장 만들기</h1>
           <p className="sub">필수 정보만 입력하세요.</p>
         </div>
-        <button className="btn" type="button" onClick={() => router.back()}>
-          관리자 홈
-        </button>
+        <div className="topActions">
+          <button className="btn topHomeBtn" type="button" onClick={() => router.back()}>
+            관리자 홈
+          </button>
+        </div>
       </header>
 
       {msg ? <div className="alert">{msg}</div> : null}
 
       <section className="grid">
-        <div className="card previewWrap">
-          <h2 className="cardTitle">미리보기</h2>
+        <div className="sideStack">
+          <section className="card previewWrap">
+            <h2 className="cardTitle">미리보기</h2>
 
-          <div className="hero">
-            {mainImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="heroImg" src={mainImage} alt="main" />
-            ) : (
-              <div className="heroFallback">대표 이미지를 등록하세요</div>
-            )}
-            <div className="overlay" style={{ background: overlayBg }} />
+            <div className="hero">
+              {mainImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="heroImg" src={mainImage} alt="main" />
+              ) : (
+                <div className="heroFallback">대표 이미지를 등록하세요</div>
+              )}
+              <div className="overlay" style={{ background: overlayBg }} />
 
-            <div className="heroInner">
-              <div className="logoRow">
-                {logoImage ? (
-                  <div className="logo">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={logoImage} alt="logo" />
+              <div className="heroInner">
+                <div className="logoRow">
+                  {logoImage ? (
+                    <div className="logo">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={logoImage} alt="logo" />
+                    </div>
+                  ) : (
+                    <div className="logo" aria-hidden="true">
+                      <span style={{ color: "white", fontWeight: 900, fontSize: 12 }}>logo</span>
+                    </div>
+                  )}
+                  <div style={{ minWidth: 0 }}>
+                    <h3 className="storeName">{storeName || "매장명"}</h3>
                   </div>
-                ) : (
-                  <div className="logo" aria-hidden="true">
-                    <span style={{ color: "white", fontWeight: 900, fontSize: 12 }}>logo</span>
-                  </div>
-                )}
-                <div style={{ minWidth: 0 }}>
-                  <h3 className="storeName">{storeName || "매장명"}</h3>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="previewCard">
-            <p className="descText">{storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
-          </div>
+            <div className="previewCard">
+              <p className="descText">{storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
+            </div>
+          </section>
 
+          <section className="card">
+            <h2 className="cardTitle">이미지 / 브랜딩</h2>
+
+            <div className="inlineGrid">
+              <div className="field">
+                <div className="label">
+                  대표 이미지 업로드
+                  <span className="pill">선택</span>
+                </div>
+                <input
+                  className="input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
+                  disabled={uploadingMain}
+                />
+                <div className="hint hintWrap">
+                  {uploadingMain ? "업로드 중..." : mainImage ? "대표 이미지 등록 완료" : "아직 등록된 이미지가 없습니다."}
+                </div>
+              </div>
+
+              <div className="field">
+                <div className="label">
+                  로고 이미지 업로드
+                  <span className="pill">선택</span>
+                </div>
+                <input
+                  className="input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
+                  disabled={uploadingLogo}
+                />
+                <div className="hint hintWrap">
+                  {uploadingLogo ? "업로드 중..." : logoImage ? "로고 이미지 등록 완료" : "아직 등록된 이미지가 없습니다."}
+                </div>
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">대표이미지 오버레이 강도 (0~100)</div>
+              <div className="sliderRow">
+                <input
+                  className="range"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={overlayStrength}
+                  onChange={(e) => setOverlayStrength(clampOverlay(Number(e.target.value)))}
+                />
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  value={String(overlayStrength)}
+                  onChange={(e) => setOverlayStrength(clampOverlay(Number(e.target.value)))}
+                />
+              </div>
+            </div>
+          </section>
         </div>
 
-        <div className="card">
-          <h2 className="cardTitle">기본 정보</h2>
-
-          <div className="field">
-            <div className="label">
-              매장명 <span className="pill">필수</span>
+        <div className="formStack" role="group" aria-label="매장 기본 정보">
+          <section className="card" aria-labelledby="store-create-basic-title">
+            <div className="basicHead">
+              <h2 className="cardTitle" id="store-create-basic-title">기본 정보</h2>
+              <span className="statusBadge">생성 전</span>
             </div>
-            <input className="input" value={storeName} onChange={(e) => setStoreName(e.target.value)} />
-          </div>
 
-          <div className="field">
-            <div className="label">
-              매장 ID <span className="pill">필수</span>
+            <div className="inlineGrid">
+              <div className="field">
+                <div className="label">
+                  매장명 <span className="pill">필수</span>
+                </div>
+                <input
+                  className="input"
+                  value={storeName}
+                  onChange={(e) => setStoreName(e.target.value)}
+                  placeholder="예: XIMEN 순천점"
+                />
+              </div>
+
+              <div className="field">
+                <div className="label">
+                  매장 ID <span className="pill">필수</span>
+                </div>
+                <input
+                  className="input"
+                  value={storeId}
+                  onChange={(e) => setStoreId(e.target.value)}
+                  placeholder="예: ximen"
+                />
+              </div>
             </div>
-            <input className="input" value={storeId} onChange={(e) => setStoreId(e.target.value)} />
-          </div>
 
-          <div className="field">
-            <div className="label">매장 설명 (선택)</div>
-            <textarea
-              className="textarea"
-              value={storeDesc}
-              onChange={(e) => setStoreDesc(e.target.value)}
-              placeholder="예) QR로 간편하게 주문하고 기다리세요..."
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">대표 이미지 업로드 (선택)</div>
-            <input
-              className="input"
-              type="file"
-              accept="image/*"
-              onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
-              disabled={uploadingMain}
-            />
-            <div className="hint hintWrap">
-              {uploadingMain ? "업로드 중..." : mainImage ? `등록됨: ${mainImage}` : "아직 등록된 이미지가 없습니다."}
-            </div>
-          </div>
-
-          <div className="field">
-            <div className="label">로고 이미지 업로드 (선택)</div>
-            <input
-              className="input"
-              type="file"
-              accept="image/*"
-              onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
-              disabled={uploadingLogo}
-            />
-            <div className="hint hintWrap">
-              {uploadingLogo ? "업로드 중..." : logoImage ? `등록됨: ${logoImage}` : "아직 등록된 이미지가 없습니다."}
-            </div>
-          </div>
-
-          <div className="field">
-            <div className="label">대표이미지 오버레이 강도 (선택)</div>
-            <div className="sliderRow">
-              <input
-                className="range"
-                type="range"
-                min={0}
-                max={100}
-                value={overlayStrength}
-                onChange={(e) => setOverlayStrength(clampOverlay(Number(e.target.value)))}
+            <div className="field">
+              <div className="label">매장 설명 <span className="pill">선택</span></div>
+              <textarea
+                className="textarea"
+                value={storeDesc}
+                onChange={(e) => setStoreDesc(e.target.value)}
+                placeholder="예) QR로 간편하게 주문하고 기다리세요..."
               />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                매장 전화번호 <span className="pill">필수</span>
+              </div>
               <input
                 className="input"
-                inputMode="numeric"
-                value={String(overlayStrength)}
-                onChange={(e) => setOverlayStrength(clampOverlay(Number(e.target.value)))}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="예: 010-0000-0000"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                매장 주소 <span className="pill">필수</span>
+              </div>
+              <div className="addressRow">
+                <input className="input" value={address} readOnly placeholder="주소 검색으로 입력" />
+                <button type="button" className="btn addressSearchBtn" onClick={openAddressSearch}>
+                  주소 검색
+                </button>
+              </div>
+              <div className="label" style={{ marginTop: 8 }}>
+                상세 주소 <span className="pill">선택</span>
+              </div>
+              <input
+                id="storeAddressDetailInput"
+                className="input"
+                value={addressDetail}
+                onChange={(e) => setAddressDetail(e.target.value)}
+                placeholder="예: 101동 1203호"
+                style={{ marginTop: 8 }}
+              />
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section className="advancedGrid" aria-label="매장 세부 정보">
+        <section className="card">
+          <h2 className="cardTitle">매장 추가 정보</h2>
+
+          <div className="extraInfoGrid">
+            <div className="field">
+              <div className="label">
+                사업자등록번호 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={bizNo}
+                onChange={(e) => setBizNo(e.target.value)}
+                placeholder="예: 000-00-00000"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                업종 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                placeholder="예: 카페, 음식점"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                영업시간 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={hours}
+                onChange={(e) => setHours(e.target.value)}
+                placeholder="예: 10:00 ~ 22:00"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                SNS 링크 <span className="pill">선택</span>
+              </div>
+              <input
+                className="input"
+                value={sns}
+                onChange={(e) => setSns(e.target.value)}
+                placeholder="예: instagram.com/..."
               />
             </div>
           </div>
+        </section>
 
-          <h2 className="cardTitle" style={{ marginTop: 16 }}>
-            매장 상세 정보
-          </h2>
-
-          <div className="field">
-            <div className="label">
-              사업자등록번호 <span className="pill">필수</span>
-            </div>
-            <input className="input" value={bizNo} onChange={(e) => setBizNo(e.target.value)} />
+        <section className="card createActionCard">
+          <div className="createActionText">
+            <h2 className="cardTitle">매장 생성</h2>
+            <p className="hint">필수 정보를 확인한 뒤 매장을 생성하면 초기 설정 화면으로 이동합니다.</p>
           </div>
-
-          <div className="field">
-            <div className="label">
-              업종 <span className="pill">필수</span>
-            </div>
-            <input className="input" value={industry} onChange={(e) => setIndustry(e.target.value)} />
-          </div>
-
-          <div className="field">
-            <div className="label">
-              매장 전화번호 <span className="pill">필수</span>
-            </div>
-            <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-
-          <div className="field">
-            <div className="label">
-              매장 주소 <span className="pill">필수</span>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input className="input" value={address} readOnly placeholder="주소 검색으로 입력" />
-              <button type="button" className="btn" onClick={openAddressSearch}>
-                주소 검색
-              </button>
-            </div>
-            <input
-              id="storeAddressDetailInput"
-              className="input"
-              value={addressDetail}
-              onChange={(e) => setAddressDetail(e.target.value)}
-              placeholder="상세주소 (선택) 예: 101동 1203호"
-              style={{ marginTop: 8 }}
-            />
-          </div>
-
-          <div className="field">
-            <div className="label">
-              영업시간 <span className="pill">필수</span>
-            </div>
-            <input className="input" value={hours} onChange={(e) => setHours(e.target.value)} />
-          </div>
-
-          <div className="field">
-            <div className="label">SNS 링크 (선택)</div>
-            <input className="input" value={sns} onChange={(e) => setSns(e.target.value)} />
-          </div>
-
-          <div className="btnRow">
-            <button className="btn btnPrimary" onClick={onCreate} disabled={creating}>
-              {creating ? "생성 중..." : "매장 생성"}
-            </button>
-          </div>
-        </div>
+          <button className="btn btnPrimary" onClick={onCreate} disabled={creating}>
+            {creating ? "생성 중..." : "매장 생성"}
+          </button>
+        </section>
       </section>
 
       {showAddr ? (
