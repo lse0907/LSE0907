@@ -60,6 +60,16 @@ function pickCore(p: any) {
   };
 }
 
+function validateCore(core: ReturnType<typeof pickCore>) {
+  if (!core.storeName.trim()) return "매장명을 입력해 주세요.";
+  if (!core.extra.phone.trim()) return "전화번호를 입력해 주세요.";
+  if (!core.extra.address.trim()) return "주소를 입력해 주세요.";
+  if (!core.extra.bizNo.trim()) return "사업자번호를 입력해 주세요.";
+  if (!core.extra.industry.trim()) return "업종을 입력해 주세요.";
+  if (!core.extra.hours.trim()) return "영업시간을 입력해 주세요.";
+  return "";
+}
+
 const FREE_TRIAL_DAYS = 30;
 
 function calcRemainingDays(createdAt?: string | null) {
@@ -226,14 +236,22 @@ function AdminstorePageInner() {
       setSaveState("error");
       return;
     }
+
+    // ✅ 화면의 [필수] 표시와 실제 저장 검증을 일치시킴
+    const core = pickCore(draft);
+    const validationMsg = validateCore(core);
+    if (validationMsg) {
+      setUploadMsg(validationMsg);
+      setSaveState("error");
+      setTimeout(() => setSaveState("idle"), 2000);
+      return;
+    }
+
     setSaving(true);
     setSaveState("idle");
     setUploadMsg("");
 
     try {
-      // ✅ 핵심 필드만 저장 의도를 고정
-      const core = pickCore(draft);
-
       const { error: saveErr } = await supabase
         .from("stores")
         .update({
@@ -329,6 +347,7 @@ function AdminstorePageInner() {
       const url = await uploadStoreImage(file, "main");
       if (url) {
         setDraft((p: any) => ({ ...p, mainImage: url }));
+        setUploadMsg("업로드 완료 · 저장 필요");
       }
     } catch (e: any) {
       setUploadMsg(`대표 이미지 업로드 실패: ${String(e?.message || e)}`);
@@ -345,6 +364,7 @@ function AdminstorePageInner() {
       const url = await uploadStoreImage(file, "logo");
       if (url) {
         setDraft((p: any) => ({ ...p, logoImage: url }));
+        setUploadMsg("업로드 완료 · 저장 필요");
       }
     } catch (e: any) {
       setUploadMsg(`로고 이미지 업로드 실패: ${String(e?.message || e)}`);
@@ -404,13 +424,6 @@ function AdminstorePageInner() {
           font-size: 24px;
           font-weight: 950;
           letter-spacing: -0.02em;
-        }
-
-        .sub {
-          margin: 4px 0 0 0;
-          color: var(--muted);
-          font-size: 12px;
-          font-weight: 800;
         }
 
         .badge {
@@ -499,14 +512,6 @@ function AdminstorePageInner() {
           padding: 12px;
           background: #fff;
         }
-        .sectionLead {
-          margin: 4px 0 0;
-          color: var(--muted);
-          font-size: 12px;
-          font-weight: 800;
-          line-height: 1.35;
-        }
-
         .card {
           background: var(--card);
           border: 1px solid var(--line);
@@ -610,6 +615,12 @@ function AdminstorePageInner() {
           justify-content: space-between;
           gap: 10px;
         }
+        .labelText {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-width: 0;
+        }
 
         .pill {
           font-size: 11px;
@@ -663,12 +674,16 @@ function AdminstorePageInner() {
         }
 
         .addressRow .input {
+          flex: 1 1 auto;
           min-width: 0;
         }
 
         .btn {
           border: 1px solid var(--line);
           background: var(--card);
+          color: #111827;
+          -webkit-text-fill-color: #111827;
+          color-scheme: light;
           padding: 10px 14px;
           border-radius: 12px;
           cursor: pointer;
@@ -678,7 +693,13 @@ function AdminstorePageInner() {
         .btnPrimary {
           background: var(--brand);
           color: #fff;
+          -webkit-text-fill-color: #fff;
           border-color: var(--brand);
+        }
+        .addressSearchBtn {
+          flex: 0 0 auto;
+          min-width: 92px;
+          white-space: nowrap;
         }
         .btnCompact {
           padding: 8px 11px;
@@ -877,6 +898,17 @@ function AdminstorePageInner() {
           gap: 10px;
         }
 
+        @media (min-width: 981px) {
+          .grid {
+            align-items: stretch;
+          }
+
+          .formStack,
+          .formStack > .card {
+            height: 100%;
+          }
+        }
+
         @media (max-width: 980px) {
           .grid,
           .advancedGrid {
@@ -1051,16 +1083,18 @@ function AdminstorePageInner() {
       <header className="topbar">
         <div>
           <h1 className="h1">매장 정보</h1>
-          <p className="sub">필수 정보만 입력하세요.</p>
         </div>
 
         <div className="topActions">
           <button
             className="btn"
             type="button"
-            onClick={() =>
-              router.push(`/admin?store=${encodeURIComponent(storeId)}`)
-            }
+            onClick={() => {
+              const next = storeId
+                ? `/admin?store=${encodeURIComponent(storeId)}`
+                : "/admin";
+              router.push(next);
+            }}
           >
             관리자 홈
           </button>
@@ -1109,9 +1143,6 @@ function AdminstorePageInner() {
           <section className="card previewWrap">
             <div>
               <h2 className="cardTitle">미리보기</h2>
-              <p className="sectionLead">
-                고객 주문 화면에 보이는 대표 정보입니다.
-              </p>
             </div>
 
             <div className="hero">
@@ -1165,9 +1196,6 @@ function AdminstorePageInner() {
 
           <section className="card">
             <h2 className="cardTitle">이미지 / 브랜딩</h2>
-            <p className="sectionLead">
-              주문 화면에 표시할 대표 이미지와 로고를 설정합니다.
-            </p>
 
             <div className="inlineGrid">
               <div className="field">
@@ -1193,7 +1221,9 @@ function AdminstorePageInner() {
 
               <div className="field">
                 <div className="label">
-                  로고 이미지 업로드 (선택)
+                  <span className="labelText">
+                    로고 이미지 업로드 <span className="pill">선택</span>
+                  </span>
                   <span
                     className={`uploadStatusBadge ${(draft as any).logoImage ? "uploadStatusBadgeRegistered" : "uploadStatusBadgeEmpty"}`}
                   >
@@ -1254,9 +1284,6 @@ function AdminstorePageInner() {
             <div className="basicHead">
               <div>
                 <h2 className="cardTitle">기본 정보</h2>
-                <p className="sectionLead">
-                  고객 안내와 주문 운영에 바로 쓰이는 핵심 정보입니다.
-                </p>
               </div>
               <span
                 className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}
@@ -1332,11 +1359,14 @@ function AdminstorePageInner() {
                 />
                 <button
                   type="button"
-                  className="btn"
+                  className="btn addressSearchBtn"
                   onClick={openAddressSearch}
                 >
                   주소 검색
                 </button>
+              </div>
+              <div className="label" style={{ marginTop: 8 }}>
+                상세 주소 <span className="pill">선택</span>
               </div>
               <input
                 id="storeAddressDetailInput"
@@ -1351,7 +1381,7 @@ function AdminstorePageInner() {
                     },
                   }))
                 }
-                placeholder="상세주소 (선택) 예: 101동 1203호"
+                placeholder="예: 101동 1203호"
                 style={{ marginTop: 8 }}
               />
             </div>
@@ -1368,9 +1398,6 @@ function AdminstorePageInner() {
       <section className="advancedGrid" aria-label="매장 세부 설정">
         <section className="card">
           <h2 className="cardTitle">매장 추가 정보</h2>
-          <p className="sectionLead">
-            정산·안내에 필요한 세부 정보를 넓은 화면에서 한 번에 관리합니다.
-          </p>
 
           <div className="extraInfoGrid">
             <div className="field">
@@ -1425,7 +1452,9 @@ function AdminstorePageInner() {
             </div>
 
             <div className="field">
-              <div className="label">SNS 링크 (선택)</div>
+              <div className="label">
+                SNS 링크 <span className="pill">선택</span>
+              </div>
               <input
                 className="input"
                 value={(draft as any)?.extra?.sns || ""}
@@ -1442,17 +1471,11 @@ function AdminstorePageInner() {
         </section>
         <section className="card">
           <h2 className="cardTitle">운영 관리</h2>
-          <p className="sectionLead">
-            직원 화면 방식과 매장 운영 상태를 함께 관리합니다.
-          </p>
 
           <div className="operationGrid">
             <div className="miniPanel">
               <div className="operationText">
                 <span className="operationTitle">직원 화면 모드</span>
-                <span className="operationDesc">
-                  매장 운영 방식에 맞는 직원 화면을 선택합니다.
-                </span>
               </div>
               <div className="field">
                 <select
@@ -1474,8 +1497,7 @@ function AdminstorePageInner() {
                   <option value="station">Station Mode (분리형)</option>
                 </select>
                 <div className="hint">
-                  Simple: 직원 1~2명 매장에 적합 / Station: 주문관리·제조·준비
-                  역할 분리에 적합
+                  Simple: 통합형 / Station: 역할 분리형
                 </div>
               </div>
             </div>
@@ -1487,8 +1509,10 @@ function AdminstorePageInner() {
                 </span>
                 <span className="operationDesc">
                   {storeStatus === "inactive"
-                    ? "비활성 매장은 운영 재개 전까지 별도 관리가 필요합니다."
-                    : "필요할 때 매장을 임시로 비활성화할 수 있습니다."}
+                    ? "주문이 중지된 상태입니다."
+                    : storeStatus === "deleted"
+                      ? "삭제된 매장입니다."
+                      : "주문을 잠시 막습니다."}
                 </span>
               </div>
               <div className="operationStrip">
@@ -1527,7 +1551,7 @@ function AdminstorePageInner() {
 
       {isDirty ? (
         <div className="stickySaveBar" role="status" aria-live="polite">
-          <span className="badge badgeDirty">변경사항이 있습니다.</span>
+          <span className="badge badgeDirty">저장 필요</span>
           <div className="stickyActions">
             <button className="btn" onClick={onReset} disabled={saving}>
               변경 취소
