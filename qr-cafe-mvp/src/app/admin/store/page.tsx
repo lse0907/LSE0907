@@ -4,7 +4,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { getCurrentStoreId } from "@/app/lib/currentStore";
+import { clearCurrentStoreId, getCurrentStoreId } from "@/app/lib/currentStore";
 import {
   fetchStoreProfileFromDb,
   saveStoreProfile,
@@ -14,6 +14,10 @@ import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 
 const STORE_IMAGE_BUCKET = "store-assets";
 type StoreStatus = "active" | "inactive" | "deleted";
+type DeleteEligibility = {
+  canDelete: boolean;
+  message: string;
+};
 
 function normalizeStoreStatus(status?: string | null): StoreStatus {
   if (status === "inactive" || status === "deleted") return status;
@@ -94,6 +98,12 @@ function AdminstorePageInner() {
   const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
   const [storeStatus, setStoreStatus] = useState<StoreStatus>("active");
   const [statusSaving, setStatusSaving] = useState(false);
+  const [deleteEligibility, setDeleteEligibility] = useState<DeleteEligibility | null>(null);
+  const [deleteEligibilityLoading, setDeleteEligibilityLoading] = useState(false);
+  const [deleteEligibilityError, setDeleteEligibilityError] = useState("");
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteSaving, setDeleteSaving] = useState(false);
   const [showAddr, setShowAddr] = useState(false);
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -171,6 +181,8 @@ function AdminstorePageInner() {
     () => calcRemainingDays(storeCreatedAt),
     [storeCreatedAt],
   );
+  const deleteConfirmTarget = String((draft as any)?.storeName || profile?.storeName || storeId || "").trim();
+  const canSubmitDelete = !!deleteConfirmTarget && deleteConfirmText.trim() === deleteConfirmTarget && !deleteSaving;
 
   // ✅ 미리보기용 오버레이 계산(0~100)
   const strength = clampOverlay(
@@ -228,6 +240,85 @@ function AdminstorePageInner() {
       setUploadMsg(`매장 상태 변경 실패: ${message}`);
     } finally {
       setStatusSaving(false);
+    }
+  };
+
+  const refreshDeleteEligibility = async () => {
+    if (!storeId) return;
+    if (storeStatus === "deleted") {
+      setDeleteEligibility({ canDelete: false, message: "이미 삭제된 매장입니다." });
+      setDeleteEligibilityError("");
+      setDeleteEligibilityLoading(false);
+      return;
+    }
+    setDeleteEligibilityLoading(true);
+    setDeleteEligibilityError("");
+    try {
+      const { data, error } = await supabase.rpc("admin_check_store_delete_eligibility", {
+        p_store_id: storeId,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      setDeleteEligibility({
+        canDelete: Boolean(row?.can_delete),
+        message: String(row?.message || (row?.can_delete ? "운영 이력이 없어 삭제할 수 있습니다." : "운영 이력이 있어 삭제할 수 없습니다.")),
+      });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[admin/store] delete eligibility error:", message);
+      setDeleteEligibility(null);
+      setDeleteEligibilityError("삭제 가능 여부를 확인하지 못했습니다.");
+    } finally {
+      setDeleteEligibilityLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!storeId) return;
+    void refreshDeleteEligibility();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, storeStatus]);
+
+  const openDeleteModal = () => {
+    setDeleteConfirmText("");
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleteSaving) return;
+    setDeleteModalOpen(false);
+    setDeleteConfirmText("");
+  };
+
+  const onDeleteStore = async () => {
+    if (!storeId || !canSubmitDelete) return;
+    setDeleteSaving(true);
+    setUploadMsg("");
+    try {
+      const { data, error } = await supabase.rpc("admin_soft_delete_store_if_unused", {
+        p_store_id: storeId,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.deleted) {
+        setDeleteModalOpen(false);
+        setDeleteConfirmText("");
+        setDeleteEligibility({
+          canDelete: false,
+          message: String(row?.message || "운영 이력이 있어 삭제할 수 없습니다."),
+        });
+        setUploadMsg(String(row?.message || "운영 이력이 있어 삭제할 수 없습니다. 운영 중단은 비활성화를 사용하세요."));
+        void refreshDeleteEligibility();
+        return;
+      }
+      clearCurrentStoreId();
+      router.replace("/admin?deleted=1");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[admin/store] delete store error:", message);
+      setUploadMsg(`매장 삭제 실패: ${message}`);
+    } finally {
+      setDeleteSaving(false);
     }
   };
 
@@ -599,6 +690,72 @@ function AdminstorePageInner() {
           background: #f8fafc;
           color: #334155;
         }
+        .btnDanger {
+          border-color: #dc2626;
+          background: #dc2626;
+          color: #fff;
+          -webkit-text-fill-color: #fff;
+        }
+        .deleteBlock {
+          margin-top: 12px;
+          padding-top: 12px;
+          border-top: 1px dashed var(--line);
+          display: grid;
+          gap: 8px;
+        }
+        .deleteHead {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .deleteTitle {
+          font-size: 13px;
+          font-weight: 950;
+          color: var(--text);
+        }
+        .warningBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #fecaca;
+          background: #fef2f2;
+          color: #b91c1c;
+          border-radius: 999px;
+          padding: 3px 7px;
+          font-size: 11px;
+          font-weight: 950;
+        }
+        .deleteMessage {
+          color: #4b5563;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.4;
+        }
+        .deleteState {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 900;
+          line-height: 1.4;
+        }
+        .deleteStateOk {
+          color: #166534;
+        }
+        .deleteStateWarn {
+          color: #991b1b;
+        }
+        .modalBody {
+          display: grid;
+          gap: 10px;
+          margin-top: 12px;
+        }
+        .modalActions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-top: 12px;
+        }
 
         .field {
           display: grid;
@@ -966,6 +1123,9 @@ function AdminstorePageInner() {
           .operationStrip .btn {
             width: 100%;
           }
+          .deleteBlock .btn {
+            width: 100%;
+          }
 
           .stickySaveBar {
             left: 10px;
@@ -1041,6 +1201,10 @@ function AdminstorePageInner() {
 
           .btnRow .btn {
             flex: 1 1 auto;
+          }
+          .modalActions {
+            display: grid;
+            grid-template-columns: 1fr;
           }
 
           .detailBlock {
@@ -1544,6 +1708,45 @@ function AdminstorePageInner() {
                   </button>
                 )}
               </div>
+
+              <div className="deleteBlock">
+                <div className="deleteHead">
+                  <span className="deleteTitle">매장 삭제</span>
+                  <span className="warningBadge">주의</span>
+                </div>
+                <div className="deleteMessage">
+                  주문/결제/구독 이력이 없는 매장만 삭제할 수 있습니다.
+                </div>
+                {deleteEligibilityLoading ? (
+                  <div className="deleteState">삭제 가능 여부를 확인 중입니다.</div>
+                ) : deleteEligibilityError ? (
+                  <div className="deleteState deleteStateWarn">
+                    {deleteEligibilityError}
+                    <br />
+                    잠시 후 다시 시도해 주세요.
+                  </div>
+                ) : deleteEligibility?.canDelete ? (
+                  <>
+                    <div className="deleteState deleteStateOk">
+                      {deleteEligibility.message || "운영 이력이 없어 삭제할 수 있습니다."}
+                    </div>
+                    <button
+                      className="btn btnDanger btnCompact"
+                      type="button"
+                      onClick={openDeleteModal}
+                      disabled={deleteSaving || storeStatus === "deleted"}
+                    >
+                      매장 삭제
+                    </button>
+                  </>
+                ) : (
+                  <div className="deleteState">
+                    {deleteEligibility?.message || "운영 이력이 있어 삭제할 수 없습니다."}
+                    <br />
+                    운영 중단은 비활성화를 사용하세요.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -1589,6 +1792,60 @@ function AdminstorePageInner() {
             <p className="hint" style={{ marginTop: 10 }}>
               도로명 주소를 검색하세요.
             </p>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteModalOpen ? (
+        <div className="modalOverlay" onClick={closeDeleteModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modalHead">
+              <b style={{ fontSize: 16 }}>매장을 삭제할까요?</b>
+              <button
+                type="button"
+                className="btn"
+                onClick={closeDeleteModal}
+                disabled={deleteSaving}
+              >
+                닫기
+              </button>
+            </div>
+            <div className="modalBody">
+              <div className="deleteMessage">
+                삭제 후 관리자 목록에서 사라집니다.
+                <br />
+                계속하려면 매장명을 입력하세요.
+              </div>
+              <input
+                className="input"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={deleteConfirmTarget || "매장명 입력"}
+                disabled={deleteSaving}
+                autoFocus
+              />
+              <div className="hint">
+                입력할 매장명: <b>{deleteConfirmTarget || "-"}</b>
+              </div>
+            </div>
+            <div className="modalActions">
+              <button
+                type="button"
+                className="btn"
+                onClick={closeDeleteModal}
+                disabled={deleteSaving}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="btn btnDanger"
+                onClick={() => void onDeleteStore()}
+                disabled={!canSubmitDelete}
+              >
+                {deleteSaving ? "삭제 중..." : "영구 삭제"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
