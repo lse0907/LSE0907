@@ -255,6 +255,13 @@ export default function AdminStoreCreatePage() {
           gap: 10px;
         }
 
+        .topActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
         .h1 {
           margin: 0;
           font-size: 24px;
@@ -596,13 +603,19 @@ export default function AdminStoreCreatePage() {
             padding: 12px;
           }
           .topbar {
-            align-items: stretch;
-            flex-direction: column;
+            align-items: flex-start;
+            flex-direction: row;
+            justify-content: space-between;
+            gap: 8px;
           }
-          .topHomeBtn {
-            align-self: flex-start;
-            min-width: 132px;
-            width: min(50%, 180px);
+          .topActions {
+            width: auto;
+            justify-content: flex-end;
+            flex-wrap: nowrap;
+          }
+          .btn {
+            font-size: 13px;
+            padding: 9px 11px;
           }
           .inlineGrid,
           .extraInfoGrid {
@@ -633,9 +646,11 @@ export default function AdminStoreCreatePage() {
           <h1 className="h1">매장 만들기</h1>
           <p className="sub">필수 정보만 입력하세요.</p>
         </div>
-        <button className="btn topHomeBtn" type="button" onClick={() => router.back()}>
-          관리자 홈
-        </button>
+        <div className="topActions">
+          <button className="btn topHomeBtn" type="button" onClick={() => router.back()}>
+            관리자 홈
+          </button>
+        </div>
       </header>
 
       {msg ? <div className="alert">{msg}</div> : null}
