@@ -347,6 +347,11 @@ function AdminPageInner() {
     router.push(`${path}?store=${encodeURIComponent(selectedStoreId)}`);
   };
 
+  const handleSelectStore = (storeId: string) => {
+    setSelectedStoreId(storeId);
+    setActiveSection("store");
+  };
+
   const goCreate = () => {
     router.push("/admin/store/create");
   };
@@ -511,10 +516,10 @@ function AdminPageInner() {
                   const displayStatus = getStoreDisplayStatus(s);
                   const statusLabel = getStoreStatusLabel(s);
                   return (
-                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""} ${displayStatus === "inactive" ? "storeRowInactive" : ""}`.trim()} onClick={() => setSelectedStoreId(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
+                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""} ${displayStatus === "inactive" ? "storeRowInactive" : ""}`.trim()} onClick={() => handleSelectStore(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        setSelectedStoreId(s.store_id);
+                        handleSelectStore(s.store_id);
                       }
                     }}>
                       <div style={{ minWidth: 0 }}>
