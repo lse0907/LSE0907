@@ -36,39 +36,11 @@ type AdminQrDesignSettings = {
   table_print_preset: string;
 };
 
-type StoreQrCode = {
-  id: string;
-  store_id: string;
-  qr_type: "counter" | "table" | "pickup" | "custom";
-  label: string;
-  table_no: number | null;
-  target_url: string;
-  status: "active" | "inactive" | "archived";
-  sort_order: number | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
-
-type StoreQrDesignSettings = {
-  store_id: string;
-  template_key: string;
-  accent_color: string;
-  counter_title: string;
-  counter_description: string;
-  table_title: string;
-  table_description: string;
-  show_logo: boolean;
-  show_main_image: boolean;
-  show_store_name: boolean;
-  show_target_url: boolean;
-  counter_print_preset: string;
-  table_print_preset: string;
-};
-
 const START_PATH = "/";
 type PrintTarget = "counter" | "table";
 type CounterPrintPreset = "a5_card" | "a4_poster" | "a3_poster" | "a4_2up";
 type TablePrintPreset = "a4_12" | "a4_8" | "a4_4";
+type TemplateKey = "simple" | "cafe_poster" | "premium_dark" | "soft_round";
 
 type PaperPreset = {
   label: string;
@@ -90,6 +62,15 @@ const TABLE_PRINT_PRESETS: Record<TablePrintPreset, { label: string; cols: numbe
   a4_8: { label: "A4 8분할 추천", cols: 2, rows: 4 },
   a4_4: { label: "A4 4분할", cols: 2, rows: 2 },
 };
+
+const TEMPLATE_OPTIONS: Array<{ key: TemplateKey; label: string; hint: string }> = [
+  { key: "simple", label: "심플", hint: "기본" },
+  { key: "cafe_poster", label: "카페", hint: "이미지" },
+  { key: "premium_dark", label: "다크", hint: "고급" },
+  { key: "soft_round", label: "소프트", hint: "부드럽게" },
+];
+
+const ACCENT_COLORS = ["#111827", "#7c3aed", "#b45309", "#047857", "#be123c"];
 
 const QR_VERSION_DATA = [
   { version: 1, size: 21, dataCodewords: 19, eccCodewords: 7, align: [] as number[] },
@@ -385,6 +366,39 @@ function newClientId(prefix: string) {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 10)}`;
 }
 
+function normalizeTemplateKey(v: unknown): TemplateKey {
+  return v === "cafe_poster" || v === "premium_dark" || v === "soft_round" ? v : "simple";
+}
+
+function normalizeColor(v: unknown) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return /^#[0-9a-f]{6}$/i.test(s) ? s : "#111827";
+}
+
+function normalizeBool(v: unknown, fallback: boolean) {
+  return typeof v === "boolean" ? v : fallback;
+}
+
+function designWithDefaults(storeId: string, counterDescription: string, row?: Partial<AdminQrDesignSettings> | null): AdminQrDesignSettings {
+  const fallback = defaultDesignSettings(storeId, counterDescription);
+  if (!row) return fallback;
+  return {
+    ...fallback,
+    ...row,
+    store_id: storeId,
+    template_key: normalizeTemplateKey(row.template_key),
+    accent_color: normalizeColor(row.accent_color),
+    counter_title: String(row.counter_title || fallback.counter_title),
+    counter_description: String(row.counter_description || fallback.counter_description),
+    table_title: String(row.table_title || fallback.table_title),
+    table_description: String(row.table_description || fallback.table_description),
+    show_logo: normalizeBool(row.show_logo, fallback.show_logo),
+    show_main_image: normalizeBool(row.show_main_image, fallback.show_main_image),
+    show_store_name: normalizeBool(row.show_store_name, fallback.show_store_name),
+    show_target_url: normalizeBool(row.show_target_url, fallback.show_target_url),
+  };
+}
+
 function defaultDesignSettings(storeId: string, counterDescription: string): AdminQrDesignSettings {
   return {
     store_id: storeId,
@@ -561,11 +575,17 @@ function AdminQrPageInner() {
     }
 
     if (designRes.error) {
-      setDesignSettings(defaultDesignSettings(storeId, counterDesc));
+      const next = designWithDefaults(storeId, counterDesc);
+      setDesignSettings(next);
+      setCounterPrintPreset(next.counter_print_preset as CounterPrintPreset);
+      setTablePrintPreset(next.table_print_preset as TablePrintPreset);
       setQrMsgTone((prev) => (prev === "error" ? prev : "neutral"));
     } else {
       const row = designRes.data as Partial<AdminQrDesignSettings> | null;
-      setDesignSettings(row ? { ...defaultDesignSettings(storeId, counterDesc), ...row } : defaultDesignSettings(storeId, counterDesc));
+      const next = designWithDefaults(storeId, counterDesc, row);
+      setDesignSettings(next);
+      if (next.counter_print_preset in COUNTER_PRINT_PRESETS) setCounterPrintPreset(next.counter_print_preset as CounterPrintPreset);
+      if (next.table_print_preset in TABLE_PRINT_PRESETS) setTablePrintPreset(next.table_print_preset as TablePrintPreset);
     }
 
     setQrLoading(false);
@@ -578,10 +598,39 @@ function AdminQrPageInner() {
 
   async function ensureDesignSettings() {
     if (!storeId) return;
-    const payload = designSettings || defaultDesignSettings(storeId, counterDesc);
+    const payload = {
+      ...(designSettings || defaultDesignSettings(storeId, counterDesc)),
+      store_id: storeId,
+      counter_print_preset: counterPrintPreset,
+      table_print_preset: tablePrintPreset,
+    };
     const { error } = await supabase.from("store_qr_design_settings").upsert(payload, { onConflict: "store_id" });
     if (error) throw error;
     setDesignSettings(payload);
+  }
+
+  const updateDesignSetting = <K extends keyof AdminQrDesignSettings>(key: K, value: AdminQrDesignSettings[K]) => {
+    setDesignSettings((prev) => ({
+      ...(prev || defaultDesignSettings(storeId, counterDesc)),
+      store_id: storeId,
+      [key]: value,
+    }));
+  };
+
+  async function saveDesignSettings() {
+    if (!storeId) return;
+    setQrSaving(true);
+    setQrMsg("");
+    try {
+      await ensureDesignSettings();
+      setQrMsgTone("success");
+      setQrMsg("디자인 저장됨");
+    } catch (e: unknown) {
+      setQrMsgTone("error");
+      setQrMsg(`디자인 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
   }
 
   async function ensureCounterQr() {
@@ -706,6 +755,7 @@ function AdminQrPageInner() {
       return;
     }
 
+    const ds = designSettings || defaultDesignSettings(storeId, counterDesc);
     const preset = COUNTER_PRINT_PRESETS[counterPrintPreset];
     const A4_W = preset.width;
     const A4_H = preset.height;
@@ -723,8 +773,8 @@ function AdminQrPageInner() {
       }),
     ]);
 
-    const heroImg = await loadImage(mainImage).catch(() => null);
-    const logoImg = logoImage ? await loadImage(logoImage).catch(() => null) : null;
+    const heroImg = ds.show_main_image ? await loadImage(mainImage).catch(() => null) : null;
+    const logoImg = ds.show_logo && logoImage ? await loadImage(logoImage).catch(() => null) : null;
 
     const canvas = document.createElement("canvas");
     canvas.width = A4_W;
@@ -765,13 +815,13 @@ function AdminQrPageInner() {
         ctx.drawImage(heroImg, cropX, cropY, cropW, cropH, 0, topY, targetW, targetH);
       } else {
         const g = ctx.createLinearGradient(0, topY, A4_W, topY + imgH);
-        g.addColorStop(0, "#111827");
-        g.addColorStop(1, "#374151");
+        g.addColorStop(0, ds.template_key === "soft_round" ? ds.accent_color : "#111827");
+        g.addColorStop(1, ds.template_key === "premium_dark" ? "#030712" : "#374151");
         ctx.fillStyle = g;
         ctx.fillRect(0, topY, A4_W, imgH);
       }
 
-      ctx.fillStyle = "#111827";
+      ctx.fillStyle = ds.template_key === "soft_round" ? "#fff7ed" : ds.template_key === "premium_dark" ? "#030712" : ds.accent_color || "#111827";
       ctx.fillRect(0, topY + imgH, A4_W, bottomH);
 
       const textX = padding;
@@ -815,17 +865,17 @@ function AdminQrPageInner() {
       ctx.fillStyle = "#ffffff";
       ctx.font =
         "950 34px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(storeName, textX + logoBox + 18, textY + 34);
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, textX + logoBox + 18, textY + 34);
 
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font =
         "850 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(`카운터 주문 · store=${storeId}`, textX + logoBox + 18, textY + 62);
+      ctx.fillText(ds.counter_title, textX + logoBox + 18, textY + 62);
 
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font =
         "800 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      const lines = (counterDesc || "")
+      const lines = (ds.counter_description || "")
         .split("\n")
         .map((x) => x.trim())
         .filter(Boolean);
@@ -845,7 +895,7 @@ function AdminQrPageInner() {
       ctx.fillStyle = "rgba(255,255,255,0.6)";
       ctx.font =
         "800 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(trimMiddle(counterUrl, 68), padding, topY + posterH - 22);
+      if (ds.show_target_url) ctx.fillText(trimMiddle(counterUrl, 68), padding, topY + posterH - 22);
 
       if (i < copies - 1) {
         ctx.strokeStyle = "#e5e7eb";
@@ -878,6 +928,7 @@ function AdminQrPageInner() {
       return;
     }
 
+    const ds = designSettings || defaultDesignSettings(storeId, counterDesc);
     const A4_W = 1240;
     const A4_H = 1754;
 
@@ -930,7 +981,7 @@ function AdminQrPageInner() {
       ctx.fillStyle = "#111827";
       ctx.font =
         "900 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(`${storeName} · 테이블 QR · store=${storeId}`, padding, 26);
+      ctx.fillText(`${ds.show_store_name ? storeName : ds.table_title} · 테이블 QR`, padding, 26);
 
       for (let i = 0; i < loaded.length; i++) {
         const row = Math.floor(i / COLS);
@@ -944,7 +995,7 @@ function AdminQrPageInner() {
         ctx.fillStyle = "#111827";
         ctx.font =
           "950 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText(storeName, x + innerPad, y + 28);
+        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, x + innerPad, y + 28);
 
         ctx.fillStyle = "#111827";
         ctx.font =
@@ -960,13 +1011,15 @@ function AdminQrPageInner() {
         ctx.fillStyle = "#9ca3af";
         ctx.font =
           "800 10.5px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText(trimMiddle(loaded[i].url, 52), x + innerPad, y + cardH - 14);
+        if (ds.show_target_url) ctx.fillText(trimMiddle(loaded[i].url, 52), x + innerPad, y + cardH - 14);
       }
 
       downloadCanvasAsPng(canvas, `table-qr_${storeId}_${tablePrintPreset}_${p + 1}of${pages.length}_${Date.now()}.png`);
       if (pages.length > 1) await sleep(350);
     }
   }
+
+  const effectiveDesign = designSettings || defaultDesignSettings(storeId, counterDesc);
 
   return (
     <main className="wrap">
@@ -1074,6 +1127,9 @@ function AdminQrPageInner() {
           min-height: 72px;
           resize: vertical;
           white-space: pre-wrap;
+        }
+        .compactTextarea {
+          min-height: 58px;
         }
         .checkRow {
           display: grid;
@@ -1243,6 +1299,39 @@ function AdminQrPageInner() {
         .presetBtn.selected {
           border-color: var(--brand);
           box-shadow: 0 0 0 2px rgba(17,24,39,0.08);
+        }
+        .designGrid {
+          display: grid;
+          gap: 10px;
+        }
+        .colorRow,
+        .toggleRow {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .colorBtn {
+          width: 34px;
+          height: 34px;
+          border-radius: 999px;
+          border: 2px solid #fff;
+          box-shadow: 0 0 0 1px var(--line);
+          cursor: pointer;
+        }
+        .colorBtn.selected { box-shadow: 0 0 0 3px rgba(17,24,39,0.22); }
+        .toggleChip {
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 999px;
+          padding: 8px 11px;
+          font-size: 12px;
+          font-weight: 950;
+          cursor: pointer;
+        }
+        .toggleChip.selected {
+          color: #fff;
+          background: var(--brand);
+          border-color: var(--brand);
         }
         .summaryBox {
           display: grid;
@@ -1590,6 +1679,87 @@ function AdminQrPageInner() {
               </div>
             )}
 
+            <div className="field">
+              <div className="label">디자인</div>
+              <div className="presetGrid">
+                {TEMPLATE_OPTIONS.map((option) => (
+                  <button
+                    className={`presetBtn ${effectiveDesign.template_key === option.key ? "selected" : ""}`}
+                    key={option.key}
+                    onClick={() => updateDesignSetting("template_key", option.key)}
+                  >
+                    <strong>{option.label}</strong>
+                    <span>{option.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">색상</div>
+              <div className="colorRow">
+                {ACCENT_COLORS.map((color) => (
+                  <button
+                    aria-label={`색상 ${color}`}
+                    className={`colorBtn ${effectiveDesign.accent_color === color ? "selected" : ""}`}
+                    key={color}
+                    onClick={() => updateDesignSetting("accent_color", color)}
+                    style={{ background: color }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">문구</div>
+              <input
+                className="input"
+                value={printTarget === "counter" ? effectiveDesign.counter_title : effectiveDesign.table_title}
+                onChange={(e) =>
+                  printTarget === "counter"
+                    ? updateDesignSetting("counter_title", e.target.value)
+                    : updateDesignSetting("table_title", e.target.value)
+                }
+                placeholder="예: QR로 주문하세요"
+              />
+              <textarea
+                className="textarea compactTextarea"
+                value={printTarget === "counter" ? effectiveDesign.counter_description : effectiveDesign.table_description}
+                onChange={(e) =>
+                  printTarget === "counter"
+                    ? updateDesignSetting("counter_description", e.target.value)
+                    : updateDesignSetting("table_description", e.target.value)
+                }
+                placeholder="예: 주문 후 카운터에서 받아가세요"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">표시 항목</div>
+              <div className="toggleRow">
+                {([
+                  ["show_logo", "로고"],
+                  ["show_main_image", "대표 이미지"],
+                  ["show_store_name", "매장명"],
+                  ["show_target_url", "URL"],
+                ] as Array<["show_logo" | "show_main_image" | "show_store_name" | "show_target_url", string]>).map(([key, label]) => (
+                  <button
+                    className={`toggleChip ${effectiveDesign[key] ? "selected" : ""}`}
+                    key={String(key)}
+                    onClick={() => updateDesignSetting(key, !effectiveDesign[key])}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="btnRow">
+              <button className="btn" onClick={saveDesignSettings} disabled={qrSaving || !storeId}>
+                디자인 저장
+              </button>
+            </div>
+
             <div className="summaryBox">
               {printTarget === "counter" ? (
                 <>
@@ -1644,11 +1814,11 @@ function AdminQrPageInner() {
           <div className="printPreview">
             {printTarget === "counter" ? (
               <div className={`posterPreview ${counterPrintPreset === "a3_poster" ? "tall" : ""}`}>
-                <div className="posterHero">{storeName}</div>
+                <div className="posterHero" style={{ background: `linear-gradient(135deg, ${effectiveDesign.accent_color}, #111827)` }}>{effectiveDesign.show_store_name ? storeName : effectiveDesign.counter_title}</div>
                 <div className="posterBottom">
                   <div>
-                    <strong>QR로 주문하세요</strong>
-                    <span>카운터/입구용</span>
+                    <strong>{effectiveDesign.counter_title}</strong>
+                    <span>{effectiveDesign.counter_description.split("\n")[0] || "카운터/입구용"}</span>
                   </div>
                   <div className="fakeQr">QR</div>
                 </div>
@@ -1657,8 +1827,8 @@ function AdminQrPageInner() {
               <div className="sheetPreview">
                 {Array.from({ length: Math.min(TABLE_PRINT_PRESETS[tablePrintPreset].cols * TABLE_PRINT_PRESETS[tablePrintPreset].rows, Math.max(activeTableQrs.length, 1)) }).map((_, idx) => (
                   <div className="miniQr" key={idx}>
-                    <span>{activeTableQrs[idx]?.label || `테이블 ${idx + 1}`}</span>
-                    <b>QR</b>
+                    <span>{effectiveDesign.show_store_name ? activeTableQrs[idx]?.label || `테이블 ${idx + 1}` : effectiveDesign.table_title}</span>
+                    <b style={{ borderColor: effectiveDesign.accent_color }}>QR</b>
                   </div>
                 ))}
               </div>
