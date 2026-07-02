@@ -4,22 +4,282 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
+import { supabase } from "@/app/lib/supabaseClient";
 import { useStoreProfile } from "@/app/lib/storeProfile";
 
-type QrItem = {
-  key: string;
+type AdminQrCode = {
+  id: string;
+  store_id: string;
+  qr_type: "counter" | "table" | "pickup" | "custom";
   label: string;
-  url: string;
-  imgSrc: string;
+  table_no: number | null;
+  target_url: string;
+  status: "active" | "inactive" | "archived";
+  sort_order: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type AdminQrDesignSettings = {
+  store_id: string;
+  template_key: string;
+  accent_color: string;
+  counter_title: string;
+  counter_description: string;
+  table_title: string;
+  table_description: string;
+  show_logo: boolean;
+  show_main_image: boolean;
+  show_store_name: boolean;
+  show_target_url: boolean;
+  counter_print_preset: string;
+  table_print_preset: string;
 };
 
 const START_PATH = "/";
-const PREVIEW_QR_SIZE = 220;
+type PrintTarget = "counter" | "table";
+type CounterPrintPreset = "a5_card" | "a4_poster" | "a3_poster" | "a4_2up";
+type TablePrintPreset = "a4_12" | "a4_8" | "a4_4";
+type TemplateKey = "simple" | "cafe_poster" | "premium_dark" | "soft_round";
 
-function qrImgUrl(dataUrl: string, size = 320, cacheBust = "") {
-  const encoded = encodeURIComponent(dataUrl);
-  const cb = cacheBust ? `&cb=${encodeURIComponent(cacheBust)}` : "";
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}${cb}`;
+type PaperPreset = {
+  label: string;
+  shortLabel: string;
+  width: number;
+  height: number;
+  copies?: number;
+};
+
+const COUNTER_PRINT_PRESETS: Record<CounterPrintPreset, PaperPreset> = {
+  a5_card: { label: "A5 카드", shortLabel: "A5", width: 874, height: 1240, copies: 1 },
+  a4_poster: { label: "A4 포스터", shortLabel: "A4", width: 1240, height: 1754, copies: 1 },
+  a3_poster: { label: "A3 대형", shortLabel: "A3", width: 1754, height: 2480, copies: 1 },
+  a4_2up: { label: "A4 2분할", shortLabel: "2분할", width: 1240, height: 1754, copies: 2 },
+};
+
+const TABLE_PRINT_PRESETS: Record<TablePrintPreset, { label: string; cols: number; rows: number }> = {
+  a4_12: { label: "A4 12분할", cols: 3, rows: 4 },
+  a4_8: { label: "A4 8분할 추천", cols: 2, rows: 4 },
+  a4_4: { label: "A4 4분할", cols: 2, rows: 2 },
+};
+
+const TEMPLATE_OPTIONS: Array<{ key: TemplateKey; label: string; hint: string }> = [
+  { key: "simple", label: "심플", hint: "기본" },
+  { key: "cafe_poster", label: "카페", hint: "이미지" },
+  { key: "premium_dark", label: "다크", hint: "고급" },
+  { key: "soft_round", label: "소프트", hint: "부드럽게" },
+];
+
+const ACCENT_COLORS = ["#111827", "#7c3aed", "#b45309", "#047857", "#be123c"];
+
+const QR_VERSION_DATA = [
+  { version: 1, size: 21, dataCodewords: 19, eccCodewords: 7, align: [] as number[] },
+  { version: 2, size: 25, dataCodewords: 34, eccCodewords: 10, align: [6, 18] },
+  { version: 3, size: 29, dataCodewords: 55, eccCodewords: 15, align: [6, 22] },
+  { version: 4, size: 33, dataCodewords: 80, eccCodewords: 20, align: [6, 26] },
+  { version: 5, size: 37, dataCodewords: 108, eccCodewords: 26, align: [6, 30] },
+];
+
+const FORMAT_BITS_L_MASK_0 = "111011111000100";
+
+function getQrVersion(text: string) {
+  const bytes = new TextEncoder().encode(text);
+  const neededBits = 4 + 8 + bytes.length * 8;
+  const picked = QR_VERSION_DATA.find((v) => v.dataCodewords * 8 >= neededBits + 4);
+  if (!picked) throw new Error("QR URL이 너무 깁니다. 짧은 도메인 또는 QR ID 방식이 필요합니다.");
+  return { ...picked, bytes };
+}
+
+function gfMul(x: number, y: number) {
+  let z = 0;
+  for (let i = 7; i >= 0; i--) {
+    z = (z << 1) ^ ((z >>> 7) * 0x11d);
+    if (((y >>> i) & 1) !== 0) z ^= x;
+  }
+  return z & 0xff;
+}
+
+function reedSolomonGenerator(degree: number) {
+  let result = [1];
+  let root = 1;
+  for (let i = 0; i < degree; i++) {
+    const next = new Array(result.length + 1).fill(0);
+    for (let j = 0; j < result.length; j++) {
+      next[j] ^= gfMul(result[j], root);
+      next[j + 1] ^= result[j];
+    }
+    result = next;
+    root = gfMul(root, 0x02);
+  }
+  return result;
+}
+
+function reedSolomonRemainder(data: number[], degree: number) {
+  const generator = reedSolomonGenerator(degree);
+  const result = new Array(degree).fill(0);
+  for (const b of data) {
+    const factor = b ^ result.shift();
+    result.push(0);
+    for (let i = 0; i < degree; i++) result[i] ^= gfMul(generator[i], factor);
+  }
+  return result;
+}
+
+function appendBits(out: number[], value: number, length: number) {
+  for (let i = length - 1; i >= 0; i--) out.push((value >>> i) & 1);
+}
+
+function bitsToCodewords(bits: number[]) {
+  const out: number[] = [];
+  for (let i = 0; i < bits.length; i += 8) {
+    let b = 0;
+    for (let j = 0; j < 8; j++) b = (b << 1) | (bits[i + j] || 0);
+    out.push(b);
+  }
+  return out;
+}
+
+function createReserved(size: number) {
+  return Array.from({ length: size }, () => Array(size).fill(false));
+}
+
+function createModules(size: number) {
+  return Array.from({ length: size }, () => Array(size).fill(false));
+}
+
+function setModule(modules: boolean[][], reserved: boolean[][], x: number, y: number, dark: boolean, reserve = true) {
+  if (x < 0 || y < 0 || y >= modules.length || x >= modules.length) return;
+  modules[y][x] = dark;
+  if (reserve) reserved[y][x] = true;
+}
+
+function drawFinder(modules: boolean[][], reserved: boolean[][], x: number, y: number) {
+  for (let dy = -1; dy <= 7; dy++) {
+    for (let dx = -1; dx <= 7; dx++) {
+      const xx = x + dx;
+      const yy = y + dy;
+      const dark = dx >= 0 && dx <= 6 && dy >= 0 && dy <= 6 && (dx === 0 || dx === 6 || dy === 0 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4));
+      setModule(modules, reserved, xx, yy, dark);
+    }
+  }
+}
+
+function drawAlignment(modules: boolean[][], reserved: boolean[][], cx: number, cy: number) {
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      const dark = Math.max(Math.abs(dx), Math.abs(dy)) !== 1;
+      setModule(modules, reserved, cx + dx, cy + dy, dark);
+    }
+  }
+}
+
+function drawFunctionPatterns(modules: boolean[][], reserved: boolean[][], version: number, align: number[]) {
+  const size = modules.length;
+  drawFinder(modules, reserved, 0, 0);
+  drawFinder(modules, reserved, size - 7, 0);
+  drawFinder(modules, reserved, 0, size - 7);
+
+  for (let i = 8; i < size - 8; i++) {
+    const dark = i % 2 === 0;
+    setModule(modules, reserved, i, 6, dark);
+    setModule(modules, reserved, 6, i, dark);
+  }
+
+  if (version > 1) {
+    for (const y of align) {
+      for (const x of align) {
+        if ((x === 6 && y === 6) || (x === 6 && y === size - 7) || (x === size - 7 && y === 6)) continue;
+        drawAlignment(modules, reserved, x, y);
+      }
+    }
+  }
+
+  setModule(modules, reserved, 8, size - 8, true);
+  for (let i = 0; i < 9; i++) {
+    if (i !== 6) {
+      reserved[8][i] = true;
+      reserved[i][8] = true;
+    }
+  }
+  for (let i = 0; i < 8; i++) {
+    reserved[8][size - 1 - i] = true;
+    reserved[size - 1 - i][8] = true;
+  }
+}
+
+function drawFormatBits(modules: boolean[][], reserved: boolean[][]) {
+  const size = modules.length;
+  const bits = FORMAT_BITS_L_MASK_0.split("").map((b) => b === "1");
+  const pos1 = [
+    [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
+    [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
+  ];
+  const pos2 = [
+    [size - 1, 8], [size - 2, 8], [size - 3, 8], [size - 4, 8], [size - 5, 8], [size - 6, 8], [size - 7, 8],
+    [8, size - 8], [8, size - 7], [8, size - 6], [8, size - 5], [8, size - 4], [8, size - 3], [8, size - 2], [8, size - 1],
+  ];
+  pos1.forEach(([x, y], i) => setModule(modules, reserved, x, y, bits[i]));
+  pos2.forEach(([x, y], i) => setModule(modules, reserved, x, y, bits[i]));
+}
+
+function createQrModules(text: string) {
+  const { version, size, dataCodewords, eccCodewords, align, bytes } = getQrVersion(text);
+  const bits: number[] = [];
+  appendBits(bits, 0b0100, 4);
+  appendBits(bits, bytes.length, 8);
+  for (const b of bytes) appendBits(bits, b, 8);
+  appendBits(bits, 0, Math.min(4, dataCodewords * 8 - bits.length));
+  while (bits.length % 8 !== 0) bits.push(0);
+  const data = bitsToCodewords(bits);
+  for (let pad = 0xec; data.length < dataCodewords; pad ^= 0xec ^ 0x11) data.push(pad);
+  const codewords = [...data, ...reedSolomonRemainder(data, eccCodewords)];
+  const allBits: number[] = [];
+  for (const cw of codewords) appendBits(allBits, cw, 8);
+
+  const modules = createModules(size);
+  const reserved = createReserved(size);
+  drawFunctionPatterns(modules, reserved, version, align);
+
+  let bitIndex = 0;
+  let upward = true;
+  for (let right = size - 1; right >= 1; right -= 2) {
+    if (right === 6) right = 5;
+    for (let vert = 0; vert < size; vert++) {
+      const y = upward ? size - 1 - vert : vert;
+      for (let dx = 0; dx < 2; dx++) {
+        const x = right - dx;
+        if (reserved[y][x]) continue;
+        const raw = bitIndex < allBits.length ? allBits[bitIndex++] === 1 : false;
+        modules[y][x] = raw !== ((x + y) % 2 === 0);
+      }
+    }
+    upward = !upward;
+  }
+
+  drawFormatBits(modules, reserved);
+  return modules;
+}
+
+function createQrDataUrl(text: string, pixelSize = 720) {
+  const modules = createQrModules(text);
+  const moduleCount = modules.length;
+  const quiet = 4;
+  const canvas = document.createElement("canvas");
+  canvas.width = pixelSize;
+  canvas.height = pixelSize;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("QR 캔버스를 만들 수 없습니다.");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, pixelSize, pixelSize);
+  const cell = Math.floor(pixelSize / (moduleCount + quiet * 2));
+  const offset = Math.floor((pixelSize - cell * (moduleCount + quiet * 2)) / 2) + quiet * cell;
+  ctx.fillStyle = "#111827";
+  for (let y = 0; y < moduleCount; y++) {
+    for (let x = 0; x < moduleCount; x++) {
+      if (modules[y][x]) ctx.fillRect(offset + x * cell, offset + y * cell, cell, cell);
+    }
+  }
+  return canvas.toDataURL("image/png");
 }
 
 function clampInt(v: string, fallback: number) {
@@ -102,6 +362,84 @@ function withQuery(url: string, params: Record<string, string>) {
   return u.toString();
 }
 
+function newClientId(prefix: string) {
+  return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function normalizeTemplateKey(v: unknown): TemplateKey {
+  return v === "cafe_poster" || v === "premium_dark" || v === "soft_round" ? v : "simple";
+}
+
+function normalizeColor(v: unknown) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return /^#[0-9a-f]{6}$/i.test(s) ? s : "#111827";
+}
+
+function normalizeBool(v: unknown, fallback: boolean) {
+  return typeof v === "boolean" ? v : fallback;
+}
+
+function designWithDefaults(storeId: string, counterDescription: string, row?: Partial<AdminQrDesignSettings> | null): AdminQrDesignSettings {
+  const fallback = defaultDesignSettings(storeId, counterDescription);
+  if (!row) return fallback;
+  return {
+    ...fallback,
+    ...row,
+    store_id: storeId,
+    template_key: normalizeTemplateKey(row.template_key),
+    accent_color: normalizeColor(row.accent_color),
+    counter_title: String(row.counter_title || fallback.counter_title),
+    counter_description: String(row.counter_description || fallback.counter_description),
+    table_title: String(row.table_title || fallback.table_title),
+    table_description: String(row.table_description || fallback.table_description),
+    show_logo: normalizeBool(row.show_logo, fallback.show_logo),
+    show_main_image: normalizeBool(row.show_main_image, fallback.show_main_image),
+    show_store_name: normalizeBool(row.show_store_name, fallback.show_store_name),
+    show_target_url: normalizeBool(row.show_target_url, fallback.show_target_url),
+  };
+}
+
+function defaultDesignSettings(storeId: string, counterDescription: string): AdminQrDesignSettings {
+  return {
+    store_id: storeId,
+    template_key: "simple",
+    accent_color: "#111827",
+    counter_title: "QR로 간편하게 주문하세요",
+    counter_description: counterDescription,
+    table_title: "테이블에서 바로 주문",
+    table_description: "QR을 찍고 메뉴를 선택해 주세요.",
+    show_logo: true,
+    show_main_image: true,
+    show_store_name: true,
+    show_target_url: false,
+    counter_print_preset: "a4_2up",
+    table_print_preset: "a4_12",
+  };
+}
+
+function normalizeQrStatus(v: unknown): AdminQrCode["status"] {
+  return v === "inactive" || v === "archived" ? v : "active";
+}
+
+function normalizeQrType(v: unknown): AdminQrCode["qr_type"] {
+  return v === "table" || v === "pickup" || v === "custom" ? v : "counter";
+}
+
+function rowToQrCode(row: Record<string, unknown>): AdminQrCode {
+  return {
+    id: String(row?.id || ""),
+    store_id: String(row?.store_id || ""),
+    qr_type: normalizeQrType(row?.qr_type),
+    label: String(row?.label || ""),
+    table_no: row.table_no === null || row.table_no === undefined ? null : Number(row.table_no),
+    target_url: String(row?.target_url || ""),
+    status: normalizeQrStatus(row?.status),
+    sort_order: row.sort_order === null || row.sort_order === undefined ? null : Number(row.sort_order),
+    created_at: typeof row.created_at === "string" ? row.created_at : null,
+    updated_at: typeof row.updated_at === "string" ? row.updated_at : null,
+  };
+}
+
 function AdminQrPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -116,16 +454,26 @@ function AdminQrPageInner() {
   // ✅ 화면에서만 쓰는(선택) 값들
   const [makeCounter, setMakeCounter] = useState(true);
   const [makeTables, setMakeTables] = useState(false);
+  const [printTarget, setPrintTarget] = useState<PrintTarget>("counter");
+  const [counterPrintPreset, setCounterPrintPreset] = useState<CounterPrintPreset>("a4_2up");
+  const [tablePrintPreset, setTablePrintPreset] = useState<TablePrintPreset>("a4_8");
 
   const [rangeStart, setRangeStart] = useState("1");
   const [rangeEnd, setRangeEnd] = useState("20");
   const [customTables, setCustomTables] = useState("");
 
-  const [showPreview, setShowPreview] = useState(false);
-  const [seed, setSeed] = useState<string>("");
+  const [qrRows, setQrRows] = useState<AdminQrCode[]>([]);
+  const [designSettings, setDesignSettings] = useState<AdminQrDesignSettings | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrSaving, setQrSaving] = useState(false);
+  const [qrMsg, setQrMsg] = useState("");
+  const [qrMsgTone, setQrMsgTone] = useState<"success" | "error" | "neutral">("neutral");
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewNote, setPreviewNote] = useState("");
 
   // ✅ 카운터 안내 문구는 QR페이지에서 별도로 관리(현재는 storeProfile 저장 대상 아님)
-  const [counterDesc, setCounterDesc] = useState(
+  const [counterDesc] = useState(
     "QR로 간편하게 주문하고 기다리세요.\n주문 후 직원 안내에 따라 픽업/수령해 주세요."
   );
 
@@ -146,21 +494,13 @@ function AdminQrPageInner() {
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    setSeed(String(Date.now()));
   }, []);
-
-  useEffect(() => {
-    if (!storeId) return;
-    setSeed(String(Date.now()));
-  }, [storeId, profile]);
 
   const storeName = profile?.storeName ?? "카페 브라운";
   const mainImage = profile?.mainImage ?? "/hero.jpg";
   const logoImage = profile?.logoImage ?? "";
 
-  const tableNumbers = useMemo(() => {
-    if (!makeTables) return [];
-
+  const pendingTableNumbers = useMemo(() => {
     const a = clampInt(rangeStart, 1);
     const b = clampInt(rangeEnd, 20);
 
@@ -173,7 +513,27 @@ function AdminQrPageInner() {
     const custom = parseTableList(customTables);
 
     return uniq([...range, ...custom]).filter((n) => n > 0).sort((x, y) => x - y);
-  }, [makeTables, rangeStart, rangeEnd, customTables]);
+  }, [rangeStart, rangeEnd, customTables]);
+
+  const counterQr = useMemo(
+    () => qrRows.find((row) => row.qr_type === "counter" && row.status === "active") || null,
+    [qrRows]
+  );
+
+  const activeTableQrs = useMemo(
+    () =>
+      qrRows
+        .filter((row) => row.qr_type === "table" && row.status === "active" && Number(row.table_no) > 0)
+        .sort((a, b) => Number(a.table_no) - Number(b.table_no)),
+    [qrRows]
+  );
+
+  const tableNumbers = useMemo(
+    () => (makeTables ? activeTableQrs.map((row) => Number(row.table_no)).filter((n) => n > 0) : []),
+    [activeTableQrs, makeTables]
+  );
+
+  const inactiveCount = useMemo(() => qrRows.filter((row) => row.status !== "active").length, [qrRows]);
 
   const baseStartUrl = useMemo(() => {
     if (!origin) return "";
@@ -191,92 +551,248 @@ function AdminQrPageInner() {
     return withQuery(baseStartUrl, { store: storeId, table: String(n) });
   };
 
-  const previewItems = useMemo(() => {
-    if (!origin || !baseStartUrl || !storeId) return [];
+  const refreshQrData = async () => {
+    if (!storeId) return;
+    setQrLoading(true);
+    setQrMsg("");
+    setQrMsgTone("neutral");
 
-    const list: QrItem[] = [];
-    const cacheBust = `${seed}-preview`;
-
-    if (makeCounter) {
-      list.push({
-        key: "counter-sample",
-        label: "카운터(샘플)",
-        url: counterUrl,
-        imgSrc: qrImgUrl(counterUrl, Math.max(240, PREVIEW_QR_SIZE), cacheBust),
-      });
-    }
-
-    if (makeTables) {
-      const first = tableNumbers[0] ?? 1;
-      const url = tableUrl(first);
-      list.push({
-        key: `table-${first}-sample`,
-        label: `${formatTableLabel(first)}(샘플)`,
-        url,
-        imgSrc: qrImgUrl(url, Math.max(240, PREVIEW_QR_SIZE), cacheBust),
-      });
-    }
-
-    return list;
-  }, [origin, baseStartUrl, storeId, makeCounter, makeTables, tableNumbers, seed, counterUrl]);
-
-  // ==========================
-  // ✅ 카운터 PNG (A4 1장에 2개)
-  // ==========================
-  async function downloadCounterPng() {
-    if (!origin || !storeId) {
-      alert("선택된 매장 정보가 없습니다. 관리자 화면에서 매장을 선택해 주세요.");
-      router.push("/admin");
-      return;
-    }
-    if (!makeCounter) {
-      alert("카운터 QR 생성 체크박스를 켜주세요.");
-      return;
-    }
-
-    const A4_W = 1240;
-    const A4_H = 1754;
-    const posterH = Math.floor(A4_H / 2);
-
-    const padding = 50;
-    const imgH = Math.floor(posterH * 0.66);
-    const bottomH = posterH - imgH;
-
-    const cacheBust = `${Date.now()}`;
-
-    const qrSize = 260;
-
-    const qrSrc = qrImgUrl(counterUrl, 720, cacheBust);
-    const [qrImg] = await Promise.all([
-      loadImage(qrSrc).catch((e) => {
-        throw new Error("QR 이미지 로드 실패\n" + String(e));
-      }),
+    const [qrRes, designRes] = await Promise.all([
+      supabase
+        .from("store_qr_codes")
+        .select("id,store_id,qr_type,label,table_no,target_url,status,sort_order,created_at,updated_at")
+        .eq("store_id", storeId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+      supabase.from("store_qr_design_settings").select("*").eq("store_id", storeId).maybeSingle(),
     ]);
 
-    const heroImg = await loadImage(mainImage).catch(() => null);
-    const logoImg = logoImage ? await loadImage(logoImage).catch(() => null) : null;
+    if (qrRes.error) {
+      setQrRows([]);
+      setQrMsgTone("error");
+      setQrMsg(
+        `QR 목록을 불러오지 못했습니다. Supabase SQL 적용 여부를 확인해 주세요. (${qrRes.error.message})`
+      );
+    } else {
+      setQrRows((Array.isArray(qrRes.data) ? qrRes.data : []).map(rowToQrCode));
+    }
+
+    if (designRes.error) {
+      const next = designWithDefaults(storeId, counterDesc);
+      setDesignSettings(next);
+      setCounterPrintPreset(next.counter_print_preset as CounterPrintPreset);
+      setTablePrintPreset(next.table_print_preset as TablePrintPreset);
+      setQrMsgTone((prev) => (prev === "error" ? prev : "neutral"));
+    } else {
+      const row = designRes.data as Partial<AdminQrDesignSettings> | null;
+      const next = designWithDefaults(storeId, counterDesc, row);
+      setDesignSettings(next);
+      if (next.counter_print_preset in COUNTER_PRINT_PRESETS) setCounterPrintPreset(next.counter_print_preset as CounterPrintPreset);
+      if (next.table_print_preset in TABLE_PRINT_PRESETS) setTablePrintPreset(next.table_print_preset as TablePrintPreset);
+    }
+
+    setQrLoading(false);
+  };
+
+  useEffect(() => {
+    refreshQrData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  async function ensureDesignSettings() {
+    if (!storeId) return;
+    const payload = {
+      ...(designSettings || defaultDesignSettings(storeId, counterDesc)),
+      store_id: storeId,
+      counter_print_preset: counterPrintPreset,
+      table_print_preset: tablePrintPreset,
+    };
+    const { error } = await supabase.from("store_qr_design_settings").upsert(payload, { onConflict: "store_id" });
+    if (error) throw error;
+    setDesignSettings(payload);
+  }
+
+  const updateDesignSetting = <K extends keyof AdminQrDesignSettings>(key: K, value: AdminQrDesignSettings[K]) => {
+    setDesignSettings((prev) => ({
+      ...(prev || defaultDesignSettings(storeId, counterDesc)),
+      store_id: storeId,
+      [key]: value,
+    }));
+  };
+
+  async function saveDesignSettings() {
+    if (!storeId) return;
+    setQrSaving(true);
+    setQrMsg("");
+    try {
+      await ensureDesignSettings();
+      setQrMsgTone("success");
+      setQrMsg("디자인 저장됨");
+    } catch (e: unknown) {
+      setQrMsgTone("error");
+      setQrMsg(`디자인 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
+  }
+
+  async function ensureCounterQr() {
+    if (!origin || !storeId || !counterUrl) {
+      setQrMsgTone("error");
+      setQrMsg("선택된 매장 또는 브라우저 주소 정보를 확인할 수 없습니다.");
+      return;
+    }
+    if (counterQr) {
+      setQrMsgTone("neutral");
+      setQrMsg("이미 사용 중인 카운터 QR이 있습니다. 기존 QR을 재사용합니다.");
+      return;
+    }
+
+    setQrSaving(true);
+    setQrMsg("");
+    try {
+      await ensureDesignSettings();
+      const payload = {
+        id: newClientId("qr_counter"),
+        store_id: storeId,
+        qr_type: "counter",
+        label: "카운터 QR",
+        table_no: null,
+        target_url: counterUrl,
+        status: "active",
+        sort_order: 0,
+      };
+      const { error } = await supabase.from("store_qr_codes").insert([payload]);
+      if (error) throw error;
+      setQrMsgTone("success");
+      setQrMsg("카운터 QR을 저장했습니다. 앞으로 이 QR을 재사용할 수 있습니다.");
+      await refreshQrData();
+    } catch (e: unknown) {
+      setQrMsgTone("error");
+      setQrMsg(`카운터 QR 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
+  }
+
+  async function addTableQrs() {
+    if (!origin || !storeId || !baseStartUrl) {
+      setQrMsgTone("error");
+      setQrMsg("선택된 매장 또는 브라우저 주소 정보를 확인할 수 없습니다.");
+      return;
+    }
+    if (!pendingTableNumbers.length) {
+      setQrMsgTone("error");
+      setQrMsg("추가할 테이블 번호를 입력해 주세요.");
+      return;
+    }
+
+    const existing = new Set(activeTableQrs.map((row) => Number(row.table_no)));
+    const createNums = pendingTableNumbers.filter((n) => !existing.has(n));
+    if (!createNums.length) {
+      setQrMsgTone("neutral");
+      setQrMsg("입력한 테이블 QR은 이미 모두 등록되어 있습니다.");
+      return;
+    }
+
+    setQrSaving(true);
+    setQrMsg("");
+    try {
+      await ensureDesignSettings();
+      const payload = createNums.map((n) => ({
+        id: newClientId(`qr_t${n}`),
+        store_id: storeId,
+        qr_type: "table",
+        label: formatTableLabel(n),
+        table_no: n,
+        target_url: tableUrl(n),
+        status: "active",
+        sort_order: n,
+      }));
+      const { error } = await supabase.from("store_qr_codes").insert(payload);
+      if (error) throw error;
+      setMakeTables(true);
+      setQrMsgTone("success");
+      setQrMsg(`테이블 QR ${createNums.length}개를 추가했습니다. 기존 QR은 중복 생성하지 않았습니다.`);
+      await refreshQrData();
+    } catch (e: unknown) {
+      setQrMsgTone("error");
+      setQrMsg(`테이블 QR 추가 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
+  }
+
+  async function updateQrStatus(row: AdminQrCode, status: AdminQrCode["status"]) {
+    setQrSaving(true);
+    setQrMsg("");
+    try {
+      const { error } = await supabase
+        .from("store_qr_codes")
+        .update({ status })
+        .eq("id", row.id)
+        .eq("store_id", storeId);
+      if (error) throw error;
+      setQrMsgTone("success");
+      setQrMsg(`${row.label} 상태를 ${status === "active" ? "사용 중" : "비활성"}으로 변경했습니다.`);
+      await refreshQrData();
+    } catch (e: unknown) {
+      setQrMsgTone("error");
+      setQrMsg(`QR 상태 변경 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
+  }
+
+  function getCounterScale() {
+    if (counterPrintPreset === "a3_poster") return 1.35;
+    if (counterPrintPreset === "a5_card") return 0.86;
+    if (counterPrintPreset === "a4_2up") return 0.82;
+    return 1;
+  }
+
+  async function createCounterPosterCanvas() {
+    const ds = designSettings || defaultDesignSettings(storeId, counterDesc);
+    const preset = COUNTER_PRINT_PRESETS[counterPrintPreset];
+    const A4_W = preset.width;
+    const A4_H = preset.height;
+    const copies = preset.copies || 1;
+    const posterH = Math.floor(A4_H / copies);
+    const scale = getCounterScale();
+
+    const padding = Math.max(36, Math.round(A4_W * 0.04 * scale));
+    const imgH = Math.floor(posterH * (counterPrintPreset === "a5_card" ? 0.54 : 0.62));
+    const bottomH = posterH - imgH;
+    const logoBox = Math.round(70 * scale);
+    const qrMax = counterPrintPreset === "a3_poster" ? 560 : counterPrintPreset === "a4_poster" ? 420 : 300;
+    const qrSize = Math.min(Math.round(A4_W * 0.25), Math.round(bottomH * 0.72), qrMax);
+
+    const qrSrc = createQrDataUrl(counterQr?.target_url || counterUrl, 720);
+    const qrImg = await loadImage(qrSrc).catch((e) => {
+      throw new Error("QR 이미지 로드 실패\n" + String(e));
+    });
+    const heroImg = ds.show_main_image ? await loadImage(mainImage).catch(() => null) : null;
+    const logoImg = ds.show_logo && logoImage ? await loadImage(logoImage).catch(() => null) : null;
 
     const canvas = document.createElement("canvas");
     canvas.width = A4_W;
     canvas.height = A4_H;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) throw new Error("Canvas를 생성할 수 없습니다.");
 
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, A4_W, A4_H);
 
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < copies; i++) {
       const topY = i * posterH;
 
       if (heroImg) {
         const sw = heroImg.naturalWidth;
         const sh = heroImg.naturalHeight;
-
         const targetW = A4_W;
         const targetH = imgH;
         const srcRatio = sw / sh;
         const dstRatio = targetW / targetH;
-
         let cropW = sw;
         let cropH = sh;
         let cropX = 0;
@@ -293,89 +809,65 @@ function AdminQrPageInner() {
         ctx.drawImage(heroImg, cropX, cropY, cropW, cropH, 0, topY, targetW, targetH);
       } else {
         const g = ctx.createLinearGradient(0, topY, A4_W, topY + imgH);
-        g.addColorStop(0, "#111827");
-        g.addColorStop(1, "#374151");
+        g.addColorStop(0, ds.template_key === "soft_round" ? ds.accent_color : "#111827");
+        g.addColorStop(1, ds.template_key === "premium_dark" ? "#030712" : "#374151");
         ctx.fillStyle = g;
         ctx.fillRect(0, topY, A4_W, imgH);
       }
 
-      ctx.fillStyle = "#111827";
+      ctx.fillStyle = ds.template_key === "soft_round" ? "#fff7ed" : ds.template_key === "premium_dark" ? "#030712" : ds.accent_color || "#111827";
       ctx.fillRect(0, topY + imgH, A4_W, bottomH);
 
       const textX = padding;
       const textY = topY + imgH + padding;
 
-      const logoBox = 70;
       if (logoImg) {
-        roundRect(
-          ctx,
-          textX,
-          textY,
-          logoBox,
-          logoBox,
-          18,
-          "rgba(255,255,255,0.12)",
-          "rgba(255,255,255,0.22)"
-        );
+        roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
         ctx.save();
         ctx.beginPath();
-        roundedClipPath(ctx, textX, textY, logoBox, logoBox, 18);
+        roundedClipPath(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale));
         ctx.clip();
         ctx.drawImage(logoImg, textX, textY, logoBox, logoBox);
         ctx.restore();
       } else {
-        roundRect(
-          ctx,
-          textX,
-          textY,
-          logoBox,
-          logoBox,
-          18,
-          "rgba(255,255,255,0.12)",
-          "rgba(255,255,255,0.22)"
-        );
+        roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
         ctx.fillStyle = "#ffffff";
-        ctx.font =
-          "900 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText("QR", textX + 20, textY + 46);
+        ctx.font = `900 ${Math.round(26 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+        ctx.fillText("QR", textX + Math.round(20 * scale), textY + Math.round(46 * scale));
       }
 
       ctx.fillStyle = "#ffffff";
-      ctx.font =
-        "950 34px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(storeName, textX + logoBox + 18, textY + 34);
+      ctx.font = `950 ${Math.round(34 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, textX + logoBox + Math.round(18 * scale), textY + Math.round(34 * scale));
 
       ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.font =
-        "850 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(`카운터 주문 · store=${storeId}`, textX + logoBox + 18, textY + 62);
+      ctx.font = `850 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.counter_title, textX + logoBox + Math.round(18 * scale), textY + Math.round(62 * scale));
 
       ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.font =
-        "800 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      const lines = (counterDesc || "")
+      ctx.font = `800 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      const lines = (ds.counter_description || "")
         .split("\n")
         .map((x) => x.trim())
         .filter(Boolean);
 
-      let dy = textY + 96;
+      let dy = textY + Math.round(96 * scale);
       for (const line of lines.slice(0, 3)) {
         ctx.fillText(line, textX, dy);
-        dy += 26;
+        dy += Math.round(26 * scale);
       }
 
-      const qrX = A4_W - padding - 260;
-      const qrY = topY + imgH + Math.floor((bottomH - 260) / 2);
-
-      roundRect(ctx, qrX - 12, qrY - 12, 260 + 24, 260 + 24, 18, "#ffffff", "rgba(255,255,255,0.18)");
-      ctx.drawImage(qrImg, qrX, qrY, 260, 260);
+      const qrX = A4_W - padding - qrSize;
+      const qrY = topY + imgH + Math.floor((bottomH - qrSize) / 2);
+      const qrPad = Math.round(12 * scale);
+      roundRect(ctx, qrX - qrPad, qrY - qrPad, qrSize + qrPad * 2, qrSize + qrPad * 2, Math.round(18 * scale), "#ffffff", "rgba(255,255,255,0.18)");
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
       ctx.fillStyle = "rgba(255,255,255,0.6)";
-      ctx.font =
-        "800 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(trimMiddle(counterUrl, 68), padding, topY + posterH - 22);
+      ctx.font = `800 ${Math.round(14 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      if (ds.show_target_url) ctx.fillText(trimMiddle(counterUrl, 68), padding, topY + posterH - Math.round(22 * scale));
 
-      if (i === 0) {
+      if (i < copies - 1) {
         ctx.strokeStyle = "#e5e7eb";
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -385,11 +877,150 @@ function AdminQrPageInner() {
       }
     }
 
-    downloadCanvasAsPng(canvas, `counter-qr_${storeId}_A4x2_${Date.now()}.png`);
+    return canvas;
+  }
+
+  async function createTableSheetCanvases(nums: number[]) {
+    const ds = designSettings || defaultDesignSettings(storeId, counterDesc);
+    const A4_W = 1240;
+    const A4_H = 1754;
+    const preset = TABLE_PRINT_PRESETS[tablePrintPreset];
+    const COLS = preset.cols;
+    const ROWS = preset.rows;
+    const PER_PAGE = COLS * ROWS;
+    const padding = 34;
+    const gap = 18;
+    const cardW = Math.floor((A4_W - padding * 2 - gap * (COLS - 1)) / COLS);
+    const cardH = Math.floor((A4_H - padding * 2 - gap * (ROWS - 1)) / ROWS);
+    const innerPad = 16;
+    const labelH = 76;
+    const qrSize = Math.min(240, cardW - innerPad * 2);
+    const pages: number[][] = [];
+
+    for (let i = 0; i < nums.length; i += PER_PAGE) pages.push(nums.slice(i, i + PER_PAGE));
+    if (pages.length === 0) pages.push([]);
+
+    const canvases: HTMLCanvasElement[] = [];
+    for (const pageNums of pages) {
+      const loaded = await Promise.all(
+        pageNums.map((n) => {
+          const url = tableUrl(n);
+          const src = createQrDataUrl(url, 720);
+          return loadImage(src).then((img) => ({ n, img, url }));
+        })
+      );
+
+      const canvas = document.createElement("canvas");
+      canvas.width = A4_W;
+      canvas.height = A4_H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas를 생성할 수 없습니다.");
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, A4_W, A4_H);
+      ctx.fillStyle = "#111827";
+      ctx.font = "900 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+      ctx.fillText(`${ds.show_store_name ? storeName : ds.table_title} · 테이블 QR`, padding, 26);
+
+      for (let i = 0; i < loaded.length; i++) {
+        const row = Math.floor(i / COLS);
+        const col = i % COLS;
+        const x = padding + col * (cardW + gap);
+        const y = padding + row * (cardH + gap) + 10;
+
+        roundRect(ctx, x, y, cardW, cardH, 16, "#ffffff", "#e5e7eb");
+        ctx.fillStyle = "#111827";
+        ctx.font = "950 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, x + innerPad, y + 28);
+        ctx.fillStyle = "#111827";
+        ctx.font = "950 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.fillText(formatTableLabel(loaded[i].n), x + innerPad, y + 56);
+
+        const qrX = x + Math.floor((cardW - qrSize) / 2);
+        const qrY = y + labelH;
+        roundRect(ctx, qrX - 10, qrY - 10, qrSize + 20, qrSize + 20, 14, "#ffffff", "#e5e7eb");
+        ctx.drawImage(loaded[i].img, qrX, qrY, qrSize, qrSize);
+        ctx.fillStyle = "#9ca3af";
+        ctx.font = "800 10.5px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        if (ds.show_target_url) ctx.fillText(trimMiddle(loaded[i].url, 52), x + innerPad, y + cardH - 14);
+      }
+
+      canvases.push(canvas);
+    }
+
+    return canvases;
+  }
+
+  async function refreshPrintPreview(canApply: () => boolean = () => true) {
+    if (!origin || !storeId) {
+      setPreviewUrl("");
+      setPreviewNote("매장을 선택해 주세요.");
+      return;
+    }
+
+    setPreviewBusy(true);
+    try {
+      if (printTarget === "counter") {
+        const canvas = await createCounterPosterCanvas();
+        if (!canApply()) return;
+        setPreviewUrl(canvas.toDataURL("image/png"));
+        setPreviewNote(`${COUNTER_PRINT_PRESETS[counterPrintPreset].label} · 실제 다운로드 기준`);
+      } else {
+        const previewNums = tableNumbers.length > 0 ? tableNumbers : pendingTableNumbers.slice(0, TABLE_PRINT_PRESETS[tablePrintPreset].cols * TABLE_PRINT_PRESETS[tablePrintPreset].rows);
+        const canvases = await createTableSheetCanvases(previewNums);
+        if (!canApply()) return;
+        setPreviewUrl(canvases[0]?.toDataURL("image/png") || "");
+        setPreviewNote(`${TABLE_PRINT_PRESETS[tablePrintPreset].label} · ${Math.max(1, canvases.length)}장 중 1장`);
+      }
+    } catch (e: unknown) {
+      if (!canApply()) return;
+      setPreviewUrl("");
+      setPreviewNote(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (canApply()) setPreviewBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      refreshPrintPreview(() => !cancelled);
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [origin, storeId, printTarget, counterPrintPreset, tablePrintPreset, counterQr?.target_url, counterUrl, mainImage, logoImage, designSettings, storeName, activeTableQrs, pendingTableNumbers]);
+
+  // ==========================
+  // ✅ 카운터 PNG
+  // ==========================
+  async function downloadCounterPng() {
+    if (!origin || !storeId) {
+      alert("선택된 매장 정보가 없습니다. 관리자 화면에서 매장을 선택해 주세요.");
+      router.push("/admin");
+      return;
+    }
+    if (!makeCounter) {
+      alert("카운터 QR을 먼저 준비해 주세요.");
+      return;
+    }
+
+    setQrSaving(true);
+    try {
+      await ensureDesignSettings();
+      const canvas = await createCounterPosterCanvas();
+      downloadCanvasAsPng(canvas, `counter-qr_${storeId}_${counterPrintPreset}_${Date.now()}.png`);
+    } catch (e: unknown) {
+      alert(`카운터 QR 다운로드 실패\n${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
   }
 
   // ==========================
-  // ✅ 테이블 PNG (A4 3x4 = 12개/장)
+  // ✅ 테이블 PNG
   // ==========================
   async function downloadTablePng() {
     if (!origin || !storeId) {
@@ -398,116 +1029,30 @@ function AdminQrPageInner() {
       return;
     }
     if (!makeTables) {
-      alert("테이블 QR 생성 체크박스를 켜주세요.");
+      alert("테이블 QR을 먼저 선택해 주세요.");
       return;
     }
     if (tableNumbers.length === 0) {
-      alert("테이블 번호가 없습니다. 범위/추가 테이블을 입력해 주세요.");
+      alert("저장된 테이블 QR이 없습니다. 테이블 QR을 먼저 만들어 주세요.");
       return;
     }
 
-    const A4_W = 1240;
-    const A4_H = 1754;
-
-    const COLS = 3;
-    const ROWS = 4;
-    const PER_PAGE = COLS * ROWS;
-
-    const padding = 34;
-    const gap = 18;
-
-    const cardW = Math.floor((A4_W - padding * 2 - gap * (COLS - 1)) / COLS);
-    const cardH = Math.floor((A4_H - padding * 2 - gap * (ROWS - 1)) / ROWS);
-
-    const innerPad = 16;
-    const labelH = 76;
-    const qrSize = Math.min(240, cardW - innerPad * 2);
-
-    const pages: number[][] = [];
-    for (let i = 0; i < tableNumbers.length; i += PER_PAGE) {
-      pages.push(tableNumbers.slice(i, i + PER_PAGE));
-    }
-
-    const cacheBust = `${Date.now()}`;
-
-    for (let p = 0; p < pages.length; p++) {
-      const nums = pages[p];
-
-      const qrPromises = nums.map((n) => {
-        const url = tableUrl(n);
-        const src = qrImgUrl(url, 720, `${cacheBust}-t${n}`);
-        return loadImage(src).then((img) => ({ n, img, url }));
-      });
-
-      let loaded: Array<{ n: number; img: HTMLImageElement; url: string }>;
-      try {
-        loaded = await Promise.all(qrPromises);
-      } catch (e) {
-        alert("테이블 QR 로드 실패\n" + String(e));
-        return;
+    setQrSaving(true);
+    try {
+      await ensureDesignSettings();
+      const canvases = await createTableSheetCanvases(tableNumbers);
+      for (let p = 0; p < canvases.length; p++) {
+        downloadCanvasAsPng(canvases[p], `table-qr_${storeId}_${tablePrintPreset}_${p + 1}of${canvases.length}_${Date.now()}.png`);
+        if (canvases.length > 1) await sleep(350);
       }
-
-      const canvas = document.createElement("canvas");
-      canvas.width = A4_W;
-      canvas.height = A4_H;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, A4_W, A4_H);
-
-      ctx.fillStyle = "#111827";
-      ctx.font =
-        "900 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(`${storeName} · 테이블 QR · store=${storeId}`, padding, 26);
-
-      for (let i = 0; i < loaded.length; i++) {
-        const row = Math.floor(i / COLS);
-        const col = i % COLS;
-
-        const x = padding + col * (cardW + gap);
-        const y = padding + row * (cardH + gap) + 10;
-
-        roundRect(ctx, x, y, cardW, cardH, 16, "#ffffff", "#e5e7eb");
-
-        ctx.fillStyle = "#111827";
-        ctx.font =
-          "950 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText(storeName, x + innerPad, y + 28);
-
-        ctx.fillStyle = "#111827";
-        ctx.font =
-          "950 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText(formatTableLabel(loaded[i].n), x + innerPad, y + 56);
-
-        const qrX = x + Math.floor((cardW - qrSize) / 2);
-        const qrY = y + labelH;
-
-        roundRect(ctx, qrX - 10, qrY - 10, qrSize + 20, qrSize + 20, 14, "#ffffff", "#e5e7eb");
-        ctx.drawImage(loaded[i].img, qrX, qrY, qrSize, qrSize);
-
-        ctx.fillStyle = "#9ca3af";
-        ctx.font =
-          "800 10.5px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText(trimMiddle(loaded[i].url, 52), x + innerPad, y + cardH - 14);
-      }
-
-      downloadCanvasAsPng(canvas, `table-qr_${storeId}_A4_3x4_${p + 1}of${pages.length}_${Date.now()}.png`);
-      if (pages.length > 1) await sleep(350);
+    } catch (e: unknown) {
+      alert(`테이블 QR 다운로드 실패\n${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
     }
   }
 
-  const selectedCount = useMemo(() => {
-    let c = 0;
-    if (makeCounter) c += 1;
-    if (makeTables) c += tableNumbers.length;
-    return c;
-  }, [makeCounter, makeTables, tableNumbers.length]);
-
-  const onTogglePreview = () => {
-    setShowPreview((v) => !v);
-    setSeed(String(Date.now()));
-  };
+  const effectiveDesign = designSettings || defaultDesignSettings(storeId, counterDesc);
 
   return (
     <main className="wrap">
@@ -541,8 +1086,15 @@ function AdminQrPageInner() {
         .titleRow {
           display: flex;
           justify-content: space-between;
-          align-items: baseline;
-          gap: 10px;
+          align-items: flex-start;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .topActions {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          justify-content: flex-end;
           flex-wrap: wrap;
         }
         .h1 {
@@ -569,12 +1121,16 @@ function AdminQrPageInner() {
           font-weight: 750;
           word-break: keep-all;
         }
-        .panelGrid {
+        .creatorGrid {
           display: grid;
-          grid-template-columns: 1fr 1.1fr;
-          gap: 10px;
+          grid-template-columns: minmax(0, 0.92fr) minmax(360px, 1.08fr);
+          gap: 12px;
           align-items: start;
-          margin-top: 10px;
+          margin-top: 12px;
+        }
+        .previewCard {
+          position: sticky;
+          top: 12px;
         }
         .card {
           background: var(--card);
@@ -615,6 +1171,9 @@ function AdminQrPageInner() {
           min-height: 72px;
           resize: vertical;
           white-space: pre-wrap;
+        }
+        .compactTextarea {
+          min-height: 58px;
         }
         .checkRow {
           display: grid;
@@ -668,6 +1227,274 @@ function AdminQrPageInner() {
           font-weight: 800;
           line-height: 1.35;
         }
+        .statusGrid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          margin-top: 10px;
+        }
+        .statCard {
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 12px;
+        }
+        .statNum {
+          font-size: 24px;
+          font-weight: 950;
+          letter-spacing: -0.03em;
+        }
+        .msg {
+          margin-top: 10px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.45;
+          border: 1px solid var(--line);
+          background: #fff;
+          color: var(--muted);
+        }
+        .msg.success {
+          border-color: #bbf7d0;
+          background: #f0fdf4;
+          color: #166534;
+        }
+        .msg.error {
+          border-color: #fecaca;
+          background: #fef2f2;
+          color: #991b1b;
+        }
+        .setupBox {
+          display: grid;
+          gap: 10px;
+          padding: 12px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #f9fafb;
+        }
+        .setupBoxTitle {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 950;
+        }
+        .qrList {
+          display: grid;
+          gap: 8px;
+          margin-top: 10px;
+          max-height: 360px;
+          overflow: auto;
+          padding-right: 2px;
+        }
+        .qrRow {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 10px;
+          align-items: center;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          padding: 10px;
+          background: #fff;
+        }
+        .qrMeta {
+          display: grid;
+          gap: 3px;
+          min-width: 0;
+        }
+        .qrName {
+          font-size: 13px;
+          font-weight: 950;
+        }
+        .qrSmall {
+          color: var(--muted);
+          font-size: 11px;
+          font-weight: 800;
+          line-height: 1.35;
+          word-break: break-all;
+        }
+        .badge {
+          display: inline-flex;
+          width: fit-content;
+          padding: 4px 8px;
+          border-radius: 999px;
+          background: #f3f4f6;
+          color: #4b5563;
+          font-size: 11px;
+          font-weight: 950;
+        }
+        .presetGrid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
+        }
+        .presetBtn {
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 14px;
+          padding: 12px;
+          text-align: left;
+          cursor: pointer;
+          display: grid;
+          gap: 4px;
+        }
+        .presetBtn strong {
+          font-size: 13px;
+          font-weight: 950;
+        }
+        .presetBtn span {
+          min-height: 15px;
+          color: var(--muted);
+          font-size: 11px;
+          font-weight: 900;
+        }
+        .presetBtn.selected {
+          border-color: var(--brand);
+          box-shadow: 0 0 0 2px rgba(17,24,39,0.08);
+        }
+        .designGrid {
+          display: grid;
+          gap: 10px;
+        }
+        .colorRow,
+        .toggleRow {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .colorBtn {
+          width: 34px;
+          height: 34px;
+          border-radius: 999px;
+          border: 2px solid #fff;
+          box-shadow: 0 0 0 1px var(--line);
+          cursor: pointer;
+        }
+        .colorBtn.selected { box-shadow: 0 0 0 3px rgba(17,24,39,0.22); }
+        .toggleChip {
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 999px;
+          padding: 8px 11px;
+          font-size: 12px;
+          font-weight: 950;
+          cursor: pointer;
+        }
+        .toggleChip.selected {
+          color: #fff;
+          background: var(--brand);
+          border-color: var(--brand);
+        }
+        .summaryBox {
+          display: grid;
+          gap: 4px;
+          padding: 12px;
+          border-radius: 14px;
+          background: #f9fafb;
+          border: 1px solid var(--line);
+        }
+        .summaryBox b { font-size: 14px; }
+        .summaryBox span { color: var(--muted); font-size: 12px; font-weight: 900; }
+        .printPreview {
+          margin-top: 14px;
+          display: grid;
+          place-items: center;
+          min-height: 360px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #f9fafb;
+          padding: 14px;
+        }
+        .previewImg {
+          width: 100%;
+          max-width: 430px;
+          height: auto;
+          border: 1px solid var(--line);
+          border-radius: 16px;
+          background: #fff;
+          box-shadow: 0 10px 30px rgba(15,23,42,0.08);
+        }
+        .previewEmpty {
+          display: grid;
+          place-items: center;
+          text-align: center;
+          min-height: 220px;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 900;
+          line-height: 1.45;
+        }
+        .posterPreview {
+          width: min(100%, 270px);
+          aspect-ratio: 1 / 1.414;
+          border-radius: 16px;
+          overflow: hidden;
+          border: 1px solid var(--line);
+          background: #fff;
+          box-shadow: 0 10px 30px rgba(15,23,42,0.08);
+        }
+        .posterPreview.tall { width: min(100%, 245px); }
+        .posterHero {
+          height: 58%;
+          display: grid;
+          place-items: center;
+          background: linear-gradient(135deg, #111827, #4b5563);
+          color: #fff;
+          font-weight: 950;
+          padding: 14px;
+          text-align: center;
+        }
+        .posterBottom {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          padding: 14px;
+          background: #111827;
+          color: #fff;
+          height: 42%;
+        }
+        .posterBottom div:first-child { display: grid; gap: 6px; }
+        .posterBottom span { color: rgba(255,255,255,0.72); font-size: 11px; font-weight: 850; }
+        .fakeQr {
+          flex: 0 0 76px;
+          height: 76px;
+          display: grid;
+          place-items: center;
+          background: #fff;
+          color: #111827;
+          border-radius: 10px;
+          font-weight: 950;
+        }
+        .sheetPreview {
+          width: 100%;
+          max-width: 390px;
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
+        }
+        .miniQr {
+          display: grid;
+          gap: 8px;
+          justify-items: center;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px;
+          min-height: 110px;
+        }
+        .miniQr span { font-size: 11px; font-weight: 950; }
+        .miniQr b {
+          width: 64px;
+          height: 64px;
+          display: grid;
+          place-items: center;
+          border: 6px solid #111827;
+          font-size: 12px;
+        }
+        .advancedBox { margin-top: 14px; }
+        .advancedBox summary { cursor: pointer; font-weight: 950; }
+        .advancedCard { margin-top: 12px; }
+        .qrList.compact { max-height: 220px; }
         .previewHead {
           display: flex;
           justify-content: space-between;
@@ -730,8 +1557,12 @@ function AdminQrPageInner() {
           line-height: 1.35;
         }
         @media (max-width: 980px) {
-          .panelGrid {
+          .creatorGrid {
             grid-template-columns: 1fr;
+          }
+          .previewCard {
+            position: static;
+            order: -1;
           }
         }
         @media (max-width: 520px) {
@@ -739,6 +1570,13 @@ function AdminQrPageInner() {
             grid-template-columns: 1fr;
           }
           .grid {
+            grid-template-columns: 1fr;
+          }
+          .statusGrid,
+          .presetGrid {
+            grid-template-columns: 1fr;
+          }
+          .qrRow {
             grid-template-columns: 1fr;
           }
           .h1 {
@@ -749,68 +1587,95 @@ function AdminQrPageInner() {
 
       <header className="topbar">
         <div className="titleRow">
-          <h1 className="h1">QR 생성</h1>
-          <span className="pill">선택 매장: {storeId || "—"}</span>
+          <div>
+            <h1 className="h1">매장 QR 만들기</h1>
+            <p className="desc">QR 출력물을 만들고 다운로드하세요.</p>
+          </div>
+          <div className="topActions">
+            <span className="pill">선택 매장: {storeId || "—"}</span>
+            <a className="btn" href={storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin"}>
+              관리자 홈
+            </a>
+          </div>
         </div>
-        <p className="desc">체크한 항목만 PNG로 다운로드합니다. (QR URL에 store 파라미터가 포함됩니다)</p>
       </header>
 
-      <section className="panelGrid">
+      <section className="statusGrid" aria-label="QR 등록 현황">
+        <div className="statCard">
+          <div className="label">카운터 QR</div>
+          <div className="statNum">{counterQr ? 1 : 0}</div>
+          <div className="hint">대표 QR</div>
+        </div>
+        <div className="statCard">
+          <div className="label">테이블 QR</div>
+          <div className="statNum">{activeTableQrs.length}</div>
+          <div className="hint">사용 중</div>
+        </div>
+        <div className="statCard">
+          <div className="label">사용 중지</div>
+          <div className="statNum">{inactiveCount}</div>
+          <div className="hint">비활성 QR</div>
+        </div>
+      </section>
+
+      {qrMsg ? <div className={`msg ${qrMsgTone}`}>{qrMsg}</div> : null}
+
+      <section className="creatorGrid">
         <div className="card">
-          <h2 className="cardTitle">설정</h2>
+          <h2 className="cardTitle">출력 설정</h2>
 
           <div className="formGrid">
             <div className="field">
-              <div className="label">매장명 (매장정보에서 자동 반영)</div>
-              <input className="input" value={storeName} disabled />
-            </div>
-
-            <div className="field">
-              <div className="label">카운터 QR 안내 문구 작성</div>
-              <textarea className="textarea" value={counterDesc} onChange={(e) => setCounterDesc(e.target.value)} />
-            </div>
-
-            <div className="checkRow">
-              <label className="checkItem">
-                <input
-                  type="checkbox"
-                  checked={makeCounter}
-                  onChange={(e) => {
-                    setMakeCounter(e.target.checked);
-                    setShowPreview(false);
+              <div className="label">출력 대상</div>
+              <div className="btnRow">
+                <button
+                  className={`btn ${printTarget === "counter" ? "btnPrimary" : ""}`}
+                  onClick={() => {
+                    setPrintTarget("counter");
+                    setMakeCounter(true);
                   }}
-                />
-                카운터 QR 생성 <small>(A4 1장에 2개)</small>
-              </label>
-
-              <label className="checkItem">
-                <input
-                  type="checkbox"
-                  checked={makeTables}
-                  onChange={(e) => {
-                    setMakeTables(e.target.checked);
-                    setShowPreview(false);
+                >
+                  카운터 QR
+                </button>
+                <button
+                  className={`btn ${printTarget === "table" ? "btnPrimary" : ""}`}
+                  onClick={() => {
+                    setPrintTarget("table");
+                    setMakeTables(true);
                   }}
-                />
-                테이블 QR 생성 <small>(A4 1장에 12개)</small>
-              </label>
+                >
+                  테이블 QR
+                </button>
+              </div>
             </div>
 
-            {makeTables ? (
-              <>
+            {printTarget === "counter" ? (
+              <div className="setupBox">
+                <h3 className="setupBoxTitle">카운터 QR 준비</h3>
+                <div className="btnRow">
+                  <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId || !!counterQr}>
+                    {counterQr ? "준비됨" : "QR 준비하기"}
+                  </button>
+                  <button className="btn" onClick={refreshQrData} disabled={qrSaving || qrLoading || !storeId}>
+                    {qrLoading ? "확인 중..." : "상태 확인"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="setupBox">
+                <h3 className="setupBoxTitle">테이블 번호</h3>
                 <div className="row2">
                   <div className="field">
-                    <div className="label">테이블 범위 시작</div>
+                    <div className="label">시작</div>
                     <input className="input" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} inputMode="numeric" />
                   </div>
                   <div className="field">
-                    <div className="label">테이블 범위 종료</div>
+                    <div className="label">종료</div>
                     <input className="input" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} inputMode="numeric" />
                   </div>
                 </div>
-
                 <div className="field">
-                  <div className="label">추가 테이블(선택)</div>
+                  <div className="label">추가 번호</div>
                   <input
                     className="input"
                     value={customTables}
@@ -818,85 +1683,216 @@ function AdminQrPageInner() {
                     placeholder='예: "21,22,30" 또는 "1~5"'
                   />
                 </div>
-              </>
-            ) : null}
+                <div className="hint">추가 대상 <b>{pendingTableNumbers.length}</b>개 · 중복 제외</div>
+                <div className="btnRow">
+                  <button className="btn btnPrimary" onClick={addTableQrs} disabled={qrSaving || qrLoading || !origin || !storeId || pendingTableNumbers.length === 0}>
+                    테이블 QR 만들기
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {printTarget === "counter" ? (
+              <div className="field">
+                <div className="label">출력 크기</div>
+                <div className="presetGrid">
+                  {(Object.entries(COUNTER_PRINT_PRESETS) as Array<[CounterPrintPreset, PaperPreset]>).map(([key, preset]) => (
+                    <button
+                      className={`presetBtn ${counterPrintPreset === key ? "selected" : ""}`}
+                      key={key}
+                      onClick={() => setCounterPrintPreset(key)}
+                    >
+                      <strong>{preset.label}</strong>
+                      <span>{key === "a3_poster" ? "입구용" : key === "a4_2up" ? "2개 출력" : ""}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="field">
+                <div className="label">출력 크기</div>
+                <div className="presetGrid">
+                  {(Object.entries(TABLE_PRINT_PRESETS) as Array<[TablePrintPreset, { label: string; cols: number; rows: number }]>).map(([key, preset]) => (
+                    <button
+                      className={`presetBtn ${tablePrintPreset === key ? "selected" : ""}`}
+                      key={key}
+                      onClick={() => setTablePrintPreset(key)}
+                    >
+                      <strong>{preset.label}</strong>
+                      <span>{key === "a4_8" ? "추천" : `${preset.cols}×${preset.rows}`}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="field">
+              <div className="label">디자인</div>
+              <div className="presetGrid">
+                {TEMPLATE_OPTIONS.map((option) => (
+                  <button
+                    className={`presetBtn ${effectiveDesign.template_key === option.key ? "selected" : ""}`}
+                    key={option.key}
+                    onClick={() => updateDesignSetting("template_key", option.key)}
+                  >
+                    <strong>{option.label}</strong>
+                    <span>{option.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">색상</div>
+              <div className="colorRow">
+                {ACCENT_COLORS.map((color) => (
+                  <button
+                    aria-label={`색상 ${color}`}
+                    className={`colorBtn ${effectiveDesign.accent_color === color ? "selected" : ""}`}
+                    key={color}
+                    onClick={() => updateDesignSetting("accent_color", color)}
+                    style={{ background: color }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">문구</div>
+              <input
+                className="input"
+                value={printTarget === "counter" ? effectiveDesign.counter_title : effectiveDesign.table_title}
+                onChange={(e) =>
+                  printTarget === "counter"
+                    ? updateDesignSetting("counter_title", e.target.value)
+                    : updateDesignSetting("table_title", e.target.value)
+                }
+                placeholder="예: QR로 주문하세요"
+              />
+              <textarea
+                className="textarea compactTextarea"
+                value={printTarget === "counter" ? effectiveDesign.counter_description : effectiveDesign.table_description}
+                onChange={(e) =>
+                  printTarget === "counter"
+                    ? updateDesignSetting("counter_description", e.target.value)
+                    : updateDesignSetting("table_description", e.target.value)
+                }
+                placeholder="예: 주문 후 카운터에서 받아가세요"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">표시 항목</div>
+              <div className="toggleRow">
+                {([
+                  ["show_logo", "로고"],
+                  ["show_main_image", "대표 이미지"],
+                  ["show_store_name", "매장명"],
+                  ["show_target_url", "URL"],
+                ] as Array<["show_logo" | "show_main_image" | "show_store_name" | "show_target_url", string]>).map(([key, label]) => (
+                  <button
+                    className={`toggleChip ${effectiveDesign[key] ? "selected" : ""}`}
+                    key={String(key)}
+                    onClick={() => updateDesignSetting(key, !effectiveDesign[key])}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="btnRow">
-              <button
-                className="btn btnPrimary"
-                onClick={() => {
-                  setSeed(String(Date.now()));
-                  downloadCounterPng();
-                }}
-                disabled={!makeCounter || !origin || !storeId}
-              >
-                카운터 QR 다운로드(PNG)
+              <button className="btn" onClick={saveDesignSettings} disabled={qrSaving || !storeId}>
+                디자인 저장
               </button>
-
-              <button
-                className="btn btnPrimary"
-                onClick={() => {
-                  setSeed(String(Date.now()));
-                  downloadTablePng();
-                }}
-                disabled={!makeTables || tableNumbers.length === 0 || !origin || !storeId}
-              >
-                테이블 QR 다운로드(PNG)
-              </button>
-
-              <button className="btn" onClick={onTogglePreview} disabled={!origin || !storeId}>
-                {showPreview ? "미리보기(샘플) 닫기" : "미리보기(샘플)"}
-              </button>
-
-              <a className="btn" href="/admin">
-                관리자 홈
-              </a>
             </div>
 
-            <div className="hint">
-              선택됨: <b>{selectedCount}</b>개
+            <div className="summaryBox">
+              {printTarget === "counter" ? (
+                <>
+                  <b>카운터 QR {counterQr ? 1 : 0}개</b>
+                  <span>{COUNTER_PRINT_PRESETS[counterPrintPreset].label} · {COUNTER_PRINT_PRESETS[counterPrintPreset].copies || 1}장</span>
+                </>
+              ) : (
+                <>
+                  <b>테이블 QR {activeTableQrs.length}개</b>
+                  <span>{TABLE_PRINT_PRESETS[tablePrintPreset].label} · {Math.max(1, Math.ceil(activeTableQrs.length / (TABLE_PRINT_PRESETS[tablePrintPreset].cols * TABLE_PRINT_PRESETS[tablePrintPreset].rows)))}장</span>
+                </>
+              )}
+            </div>
+
+            <div className="hint">출력 전 QR 스캔을 확인하세요.</div>
+
+            <div className="btnRow">
+              {printTarget === "counter" ? (
+                <button
+                  className="btn btnPrimary"
+                  onClick={() => {
+                    downloadCounterPng();
+                  }}
+                  disabled={!counterQr || !origin || !storeId}
+                >
+                  저장하고 포스터 다운로드
+                </button>
+              ) : (
+                <button
+                  className="btn btnPrimary"
+                  onClick={() => {
+                    downloadTablePng();
+                  }}
+                  disabled={activeTableQrs.length === 0 || !origin || !storeId}
+                >
+                  저장하고 카드 다운로드
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="card">
+        <div className="card previewCard">
           <div className="previewHead">
-            <h2 className="cardTitle">미리보기(샘플)</h2>
-            <div className="count">{showPreview ? `샘플 ${previewItems.length}개` : ""}</div>
+            <h2 className="cardTitle">미리보기</h2>
+            <div className="count">{previewBusy ? "생성 중" : previewNote || "실제 출력 기준"}</div>
           </div>
 
-          {!origin ? (
-            <p className="desc" style={{ marginTop: 10 }}>
-              브라우저 정보를 불러오는 중…
-            </p>
-          ) : !showPreview ? (
-            <p className="desc" style={{ marginTop: 10 }}>
-              미리보기(샘플)을 눌러 확인하세요.
-            </p>
-          ) : previewItems.length === 0 ? (
-            <p className="desc" style={{ marginTop: 10 }}>
-              생성할 항목을 체크해 주세요.
-            </p>
-          ) : (
-            <div className="grid">
-              {previewItems.map((it) => (
-                <div className="qrCard" key={it.key}>
-                  <div className="qrLabel">
-                    <strong>{it.label}</strong>
-                    <span>{storeName}</span>
-                  </div>
+          <div className="printPreview">
+            {previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="previewImg" src={previewUrl} alt="QR 출력물 미리보기" />
+            ) : (
+              <div className="previewEmpty">{previewBusy ? "미리보기 생성 중..." : previewNote || "QR 설정을 확인해 주세요."}</div>
+            )}
+          </div>
 
-                  <div className="qrImgWrap">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={it.imgSrc} alt={`${it.label} QR`} style={{ maxWidth: PREVIEW_QR_SIZE }} />
-                  </div>
-
-                  <div className="qrUrl">{it.url}</div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
+      </section>
+
+      <section className="card advancedCard">
+        <details className="advancedBox">
+          <summary>고급 관리</summary>
+          <div className="qrList compact">
+            {qrRows.length === 0 ? (
+              <div className="hint">QR이 없습니다.</div>
+            ) : (
+              qrRows.map((row) => (
+                <div className="qrRow" key={row.id}>
+                  <div className="qrMeta">
+                    <span className="badge">{row.status === "active" ? "사용 중" : row.status === "inactive" ? "사용 중지" : "보관"}</span>
+                    <div className="qrName">{row.label || (row.qr_type === "table" ? formatTableLabel(Number(row.table_no)) : "카운터 QR")}</div>
+                    <div className="qrSmall">{row.target_url}</div>
+                  </div>
+                  <button
+                    className="btn"
+                    onClick={() => updateQrStatus(row, row.status === "active" ? "inactive" : "active")}
+                    disabled={qrSaving || row.status === "archived"}
+                  >
+                    {row.status === "active" ? "사용 중지" : "다시 사용"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </details>
       </section>
     </main>
   );
