@@ -1053,8 +1053,15 @@ function AdminQrPageInner() {
         .titleRow {
           display: flex;
           justify-content: space-between;
-          align-items: baseline;
-          gap: 10px;
+          align-items: flex-start;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .topActions {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          justify-content: flex-end;
           flex-wrap: wrap;
         }
         .h1 {
@@ -1081,12 +1088,16 @@ function AdminQrPageInner() {
           font-weight: 750;
           word-break: keep-all;
         }
-        .panelGrid {
+        .creatorGrid {
           display: grid;
-          grid-template-columns: 1fr 1.1fr;
-          gap: 10px;
+          grid-template-columns: minmax(0, 0.92fr) minmax(360px, 1.08fr);
+          gap: 12px;
           align-items: start;
-          margin-top: 10px;
+          margin-top: 12px;
+        }
+        .previewCard {
+          position: sticky;
+          top: 12px;
         }
         .card {
           background: var(--card);
@@ -1221,11 +1232,18 @@ function AdminQrPageInner() {
           background: #fef2f2;
           color: #991b1b;
         }
-        .manageGrid {
+        .setupBox {
           display: grid;
-          grid-template-columns: 0.95fr 1.05fr;
           gap: 10px;
-          margin-top: 10px;
+          padding: 12px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #f9fafb;
+        }
+        .setupBoxTitle {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 950;
         }
         .qrList {
           display: grid;
@@ -1423,6 +1441,7 @@ function AdminQrPageInner() {
         }
         .advancedBox { margin-top: 14px; }
         .advancedBox summary { cursor: pointer; font-weight: 950; }
+        .advancedCard { margin-top: 12px; }
         .qrList.compact { max-height: 220px; }
         .previewHead {
           display: flex;
@@ -1486,8 +1505,12 @@ function AdminQrPageInner() {
           line-height: 1.35;
         }
         @media (max-width: 980px) {
-          .panelGrid {
+          .creatorGrid {
             grid-template-columns: 1fr;
+          }
+          .previewCard {
+            position: static;
+            order: -1;
           }
         }
         @media (max-width: 520px) {
@@ -1498,7 +1521,6 @@ function AdminQrPageInner() {
             grid-template-columns: 1fr;
           }
           .statusGrid,
-          .manageGrid,
           .presetGrid {
             grid-template-columns: 1fr;
           }
@@ -1513,10 +1535,17 @@ function AdminQrPageInner() {
 
       <header className="topbar">
         <div className="titleRow">
-          <h1 className="h1">매장 QR 만들기</h1>
-          <span className="pill">선택 매장: {storeId || "—"}</span>
+          <div>
+            <h1 className="h1">매장 QR 만들기</h1>
+            <p className="desc">QR 출력물을 만들고 다운로드하세요.</p>
+          </div>
+          <div className="topActions">
+            <span className="pill">선택 매장: {storeId || "—"}</span>
+            <a className="btn" href={storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin"}>
+              관리자 홈
+            </a>
+          </div>
         </div>
-        <p className="desc">QR을 출력해 매장에 붙이세요.</p>
       </header>
 
       <section className="statusGrid" aria-label="QR 등록 현황">
@@ -1539,84 +1568,7 @@ function AdminQrPageInner() {
 
       {qrMsg ? <div className={`msg ${qrMsgTone}`}>{qrMsg}</div> : null}
 
-      <section className="manageGrid">
-        <div className="card">
-          <h2 className="cardTitle">QR 목록</h2>
-
-          <div className="btnRow">
-            <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId || !!counterQr}>
-              {counterQr ? "카운터 QR 등록됨" : "카운터 QR 저장"}
-            </button>
-            <button className="btn" onClick={refreshQrData} disabled={qrSaving || qrLoading || !storeId}>
-              {qrLoading ? "불러오는 중..." : "목록 새로고침"}
-            </button>
-          </div>
-
-          <div className="qrList">
-            {qrLoading ? (
-              <div className="hint">QR 목록을 불러오는 중입니다.</div>
-            ) : qrRows.length === 0 ? (
-              <div className="hint">아직 저장된 QR이 없습니다. 카운터 QR을 저장하거나 테이블 QR을 추가해 주세요.</div>
-            ) : (
-              qrRows.map((row) => (
-                <div className="qrRow" key={row.id}>
-                  <div className="qrMeta">
-                    <span className="badge">{row.status === "active" ? "사용 중" : row.status === "inactive" ? "비활성" : "보관"}</span>
-                    <div className="qrName">{row.label || (row.qr_type === "table" ? formatTableLabel(Number(row.table_no)) : "카운터 QR")}</div>
-                  </div>
-                  <button
-                    className="btn"
-                    onClick={() => updateQrStatus(row, row.status === "active" ? "inactive" : "active")}
-                    disabled={qrSaving || row.status === "archived"}
-                  >
-                    {row.status === "active" ? "사용 중지" : "다시 사용"}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="card">
-          <h2 className="cardTitle">테이블 QR 추가</h2>
-          <p className="desc" style={{ marginTop: 8 }}>중복 번호는 자동 제외됩니다.</p>
-
-          <div className="formGrid">
-            <div className="row2">
-              <div className="field">
-                <div className="label">테이블 범위 시작</div>
-                <input className="input" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} inputMode="numeric" />
-              </div>
-              <div className="field">
-                <div className="label">테이블 범위 종료</div>
-                <input className="input" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} inputMode="numeric" />
-              </div>
-            </div>
-
-            <div className="field">
-              <div className="label">추가 테이블(선택)</div>
-              <input
-                className="input"
-                value={customTables}
-                onChange={(e) => setCustomTables(e.target.value)}
-                placeholder='예: "21,22,30" 또는 "1~5"'
-              />
-            </div>
-
-            <div className="hint">
-              추가 대상 <b>{pendingTableNumbers.length}</b>개
-            </div>
-
-            <div className="btnRow">
-              <button className="btn btnPrimary" onClick={addTableQrs} disabled={qrSaving || qrLoading || !origin || !storeId || pendingTableNumbers.length === 0}>
-                테이블 QR 저장/추가
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="panelGrid">
+      <section className="creatorGrid">
         <div className="card">
           <h2 className="cardTitle">출력 설정</h2>
 
@@ -1644,6 +1596,49 @@ function AdminQrPageInner() {
                 </button>
               </div>
             </div>
+
+            {printTarget === "counter" ? (
+              <div className="setupBox">
+                <h3 className="setupBoxTitle">카운터 QR 준비</h3>
+                <div className="btnRow">
+                  <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId || !!counterQr}>
+                    {counterQr ? "준비됨" : "QR 준비하기"}
+                  </button>
+                  <button className="btn" onClick={refreshQrData} disabled={qrSaving || qrLoading || !storeId}>
+                    {qrLoading ? "확인 중..." : "상태 확인"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="setupBox">
+                <h3 className="setupBoxTitle">테이블 번호</h3>
+                <div className="row2">
+                  <div className="field">
+                    <div className="label">시작</div>
+                    <input className="input" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} inputMode="numeric" />
+                  </div>
+                  <div className="field">
+                    <div className="label">종료</div>
+                    <input className="input" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} inputMode="numeric" />
+                  </div>
+                </div>
+                <div className="field">
+                  <div className="label">추가 번호</div>
+                  <input
+                    className="input"
+                    value={customTables}
+                    onChange={(e) => setCustomTables(e.target.value)}
+                    placeholder='예: "21,22,30" 또는 "1~5"'
+                  />
+                </div>
+                <div className="hint">추가 대상 <b>{pendingTableNumbers.length}</b>개 · 중복 제외</div>
+                <div className="btnRow">
+                  <button className="btn btnPrimary" onClick={addTableQrs} disabled={qrSaving || qrLoading || !origin || !storeId || pendingTableNumbers.length === 0}>
+                    테이블 QR 만들기
+                  </button>
+                </div>
+              </div>
+            )}
 
             {printTarget === "counter" ? (
               <div className="field">
@@ -1774,7 +1769,7 @@ function AdminQrPageInner() {
               )}
             </div>
 
-            <div className="hint">출력 전 스캔 확인</div>
+            <div className="hint">출력 전 QR 스캔을 확인하세요.</div>
 
             <div className="btnRow">
               {printTarget === "counter" ? (
@@ -1785,7 +1780,7 @@ function AdminQrPageInner() {
                   }}
                   disabled={!counterQr || !origin || !storeId}
                 >
-                  포스터 다운로드
+                  저장하고 포스터 다운로드
                 </button>
               ) : (
                 <button
@@ -1795,17 +1790,14 @@ function AdminQrPageInner() {
                   }}
                   disabled={activeTableQrs.length === 0 || !origin || !storeId}
                 >
-                  카드 다운로드
+                  저장하고 카드 다운로드
                 </button>
               )}
-              <a className="btn" href="/admin">
-                관리자 홈
-              </a>
             </div>
           </div>
         </div>
 
-        <div className="card">
+        <div className="card previewCard">
           <div className="previewHead">
             <h2 className="cardTitle">미리보기</h2>
             <div className="count">기본형</div>
@@ -1835,32 +1827,35 @@ function AdminQrPageInner() {
             )}
           </div>
 
-          <details className="advancedBox">
-            <summary>고급 관리</summary>
-            <div className="qrList compact">
-              {qrRows.length === 0 ? (
-                <div className="hint">QR이 없습니다.</div>
-              ) : (
-                qrRows.map((row) => (
-                  <div className="qrRow" key={row.id}>
-                    <div className="qrMeta">
-                      <span className="badge">{row.status === "active" ? "사용 중" : row.status === "inactive" ? "사용 중지" : "보관"}</span>
-                      <div className="qrName">{row.label || (row.qr_type === "table" ? formatTableLabel(Number(row.table_no)) : "카운터 QR")}</div>
-                      <div className="qrSmall">{row.target_url}</div>
-                    </div>
-                    <button
-                      className="btn"
-                      onClick={() => updateQrStatus(row, row.status === "active" ? "inactive" : "active")}
-                      disabled={qrSaving || row.status === "archived"}
-                    >
-                      {row.status === "active" ? "사용 중지" : "다시 사용"}
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </details>
         </div>
+      </section>
+
+      <section className="card advancedCard">
+        <details className="advancedBox">
+          <summary>고급 관리</summary>
+          <div className="qrList compact">
+            {qrRows.length === 0 ? (
+              <div className="hint">QR이 없습니다.</div>
+            ) : (
+              qrRows.map((row) => (
+                <div className="qrRow" key={row.id}>
+                  <div className="qrMeta">
+                    <span className="badge">{row.status === "active" ? "사용 중" : row.status === "inactive" ? "사용 중지" : "보관"}</span>
+                    <div className="qrName">{row.label || (row.qr_type === "table" ? formatTableLabel(Number(row.table_no)) : "카운터 QR")}</div>
+                    <div className="qrSmall">{row.target_url}</div>
+                  </div>
+                  <button
+                    className="btn"
+                    onClick={() => updateQrStatus(row, row.status === "active" ? "inactive" : "active")}
+                    disabled={qrSaving || row.status === "archived"}
+                  >
+                    {row.status === "active" ? "사용 중지" : "다시 사용"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </details>
       </section>
     </main>
   );
