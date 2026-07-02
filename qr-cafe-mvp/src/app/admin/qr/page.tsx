@@ -651,6 +651,7 @@ function AdminQrPageInner() {
       setQrMsg("이미 사용 중인 카운터 QR이 있습니다. 기존 QR을 재사용합니다.");
       return;
     }
+  }
 
     setQrSaving(true);
     setQrMsg("");
@@ -1157,6 +1158,8 @@ function AdminQrPageInner() {
     } finally {
       setQrSaving(false);
     }
+
+    return canvases;
   }
 
   // ==========================
