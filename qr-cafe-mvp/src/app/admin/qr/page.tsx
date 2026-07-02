@@ -1894,6 +1894,34 @@ function AdminQrPageInner() {
           </div>
         </details>
       </section>
+
+      <section className="card advancedCard">
+        <details className="advancedBox">
+          <summary>고급 관리</summary>
+          <div className="qrList compact">
+            {qrRows.length === 0 ? (
+              <div className="hint">QR이 없습니다.</div>
+            ) : (
+              qrRows.map((row) => (
+                <div className="qrRow" key={row.id}>
+                  <div className="qrMeta">
+                    <span className="badge">{row.status === "active" ? "사용 중" : row.status === "inactive" ? "사용 중지" : "보관"}</span>
+                    <div className="qrName">{row.label || (row.qr_type === "table" ? formatTableLabel(Number(row.table_no)) : "카운터 QR")}</div>
+                    <div className="qrSmall">{row.target_url}</div>
+                  </div>
+                  <button
+                    className="btn"
+                    onClick={() => updateQrStatus(row, row.status === "active" ? "inactive" : "active")}
+                    disabled={qrSaving || row.status === "archived"}
+                  >
+                    {row.status === "active" ? "사용 중지" : "다시 사용"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </details>
+      </section>
     </main>
   );
 }
