@@ -14,10 +14,10 @@ export const TABLE_PRINT_PRESETS: Record<TablePrintPreset, { label: string; cols
 };
 
 export const TEMPLATE_OPTIONS: Array<{ key: TemplateKey; label: string; hint: string }> = [
-  { key: "simple", label: "클린", hint: "깔끔" },
-  { key: "cafe_poster", label: "포토", hint: "이미지" },
-  { key: "premium_dark", label: "프리미엄", hint: "고급" },
-  { key: "soft_round", label: "라운드", hint: "부드럽게" },
+  { key: "simple", label: "클린", hint: "로고 중심 기본형" },
+  { key: "cafe_poster", label: "포토", hint: "매장 사진 포스터" },
+  { key: "premium_dark", label: "프리미엄", hint: "로고 배지 다크형" },
+  { key: "soft_round", label: "라운드", hint: "부드러운 카드형" },
 ];
 
 export const ACCENT_COLORS = ["#111827", "#7c3aed", "#b45309", "#047857", "#be123c"];
