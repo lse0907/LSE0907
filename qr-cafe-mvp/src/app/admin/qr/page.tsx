@@ -6,281 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useStoreProfile } from "@/app/lib/storeProfile";
-
-type AdminQrCode = {
-  id: string;
-  store_id: string;
-  qr_type: "counter" | "table" | "pickup" | "custom";
-  label: string;
-  table_no: number | null;
-  target_url: string;
-  status: "active" | "inactive" | "archived";
-  sort_order: number | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
-
-type AdminQrDesignSettings = {
-  store_id: string;
-  template_key: string;
-  accent_color: string;
-  counter_title: string;
-  counter_description: string;
-  table_title: string;
-  table_description: string;
-  show_logo: boolean;
-  show_main_image: boolean;
-  show_store_name: boolean;
-  show_target_url: boolean;
-  counter_print_preset: string;
-  table_print_preset: string;
-};
+import { ACCENT_COLORS, COUNTER_PRINT_PRESETS, TABLE_PRINT_PRESETS, TEMPLATE_OPTIONS, defaultDesignSettings, designWithDefaults } from "./qrDesign";
+import { createCounterPosterCanvas as renderCounterPosterCanvas, createTableSheetCanvases as renderTableSheetCanvases } from "./qrCanvas";
+import type { AdminQrCode, AdminQrDesignSettings, CounterPrintPreset, ImageSource, PaperPreset, PrintTarget, TablePrintPreset } from "./qrTypes";
 
 const START_PATH = "/";
-type PrintTarget = "counter" | "table";
-type CounterPrintPreset = "a5_card" | "a4_poster" | "a3_poster" | "a4_2up";
-type TablePrintPreset = "a4_12" | "a4_8" | "a4_4";
-type TemplateKey = "simple" | "cafe_poster" | "premium_dark" | "soft_round";
-
-type PaperPreset = {
-  label: string;
-  shortLabel: string;
-  width: number;
-  height: number;
-  copies?: number;
-};
-
-const COUNTER_PRINT_PRESETS: Record<CounterPrintPreset, PaperPreset> = {
-  a5_card: { label: "A5 카드", shortLabel: "A5", width: 874, height: 1240, copies: 1 },
-  a4_poster: { label: "A4 포스터", shortLabel: "A4", width: 1240, height: 1754, copies: 1 },
-  a3_poster: { label: "A3 대형", shortLabel: "A3", width: 1754, height: 2480, copies: 1 },
-  a4_2up: { label: "A4 2분할", shortLabel: "2분할", width: 1240, height: 1754, copies: 2 },
-};
-
-const TABLE_PRINT_PRESETS: Record<TablePrintPreset, { label: string; cols: number; rows: number }> = {
-  a4_12: { label: "A4 12분할", cols: 3, rows: 4 },
-  a4_8: { label: "A4 8분할 추천", cols: 2, rows: 4 },
-  a4_4: { label: "A4 4분할", cols: 2, rows: 2 },
-};
-
-const TEMPLATE_OPTIONS: Array<{ key: TemplateKey; label: string; hint: string }> = [
-  { key: "simple", label: "심플", hint: "기본" },
-  { key: "cafe_poster", label: "카페", hint: "이미지" },
-  { key: "premium_dark", label: "다크", hint: "고급" },
-  { key: "soft_round", label: "소프트", hint: "부드럽게" },
-];
-
-const ACCENT_COLORS = ["#111827", "#7c3aed", "#b45309", "#047857", "#be123c"];
-
-const QR_VERSION_DATA = [
-  { version: 1, size: 21, dataCodewords: 19, eccCodewords: 7, align: [] as number[] },
-  { version: 2, size: 25, dataCodewords: 34, eccCodewords: 10, align: [6, 18] },
-  { version: 3, size: 29, dataCodewords: 55, eccCodewords: 15, align: [6, 22] },
-  { version: 4, size: 33, dataCodewords: 80, eccCodewords: 20, align: [6, 26] },
-  { version: 5, size: 37, dataCodewords: 108, eccCodewords: 26, align: [6, 30] },
-];
-
-const FORMAT_BITS_L_MASK_0 = "111011111000100";
-
-function getQrVersion(text: string) {
-  const bytes = new TextEncoder().encode(text);
-  const neededBits = 4 + 8 + bytes.length * 8;
-  const picked = QR_VERSION_DATA.find((v) => v.dataCodewords * 8 >= neededBits + 4);
-  if (!picked) throw new Error("QR URL이 너무 깁니다. 짧은 도메인 또는 QR ID 방식이 필요합니다.");
-  return { ...picked, bytes };
-}
-
-function gfMul(x: number, y: number) {
-  let z = 0;
-  for (let i = 7; i >= 0; i--) {
-    z = (z << 1) ^ ((z >>> 7) * 0x11d);
-    if (((y >>> i) & 1) !== 0) z ^= x;
-  }
-  return z & 0xff;
-}
-
-function reedSolomonGenerator(degree: number) {
-  let result = [1];
-  let root = 1;
-  for (let i = 0; i < degree; i++) {
-    const next = new Array(result.length + 1).fill(0);
-    for (let j = 0; j < result.length; j++) {
-      next[j] ^= gfMul(result[j], root);
-      next[j + 1] ^= result[j];
-    }
-    result = next;
-    root = gfMul(root, 0x02);
-  }
-  return result;
-}
-
-function reedSolomonRemainder(data: number[], degree: number) {
-  const generator = reedSolomonGenerator(degree);
-  const result = new Array(degree).fill(0);
-  for (const b of data) {
-    const factor = b ^ result.shift();
-    result.push(0);
-    for (let i = 0; i < degree; i++) result[i] ^= gfMul(generator[i], factor);
-  }
-  return result;
-}
-
-function appendBits(out: number[], value: number, length: number) {
-  for (let i = length - 1; i >= 0; i--) out.push((value >>> i) & 1);
-}
-
-function bitsToCodewords(bits: number[]) {
-  const out: number[] = [];
-  for (let i = 0; i < bits.length; i += 8) {
-    let b = 0;
-    for (let j = 0; j < 8; j++) b = (b << 1) | (bits[i + j] || 0);
-    out.push(b);
-  }
-  return out;
-}
-
-function createReserved(size: number) {
-  return Array.from({ length: size }, () => Array(size).fill(false));
-}
-
-function createModules(size: number) {
-  return Array.from({ length: size }, () => Array(size).fill(false));
-}
-
-function setModule(modules: boolean[][], reserved: boolean[][], x: number, y: number, dark: boolean, reserve = true) {
-  if (x < 0 || y < 0 || y >= modules.length || x >= modules.length) return;
-  modules[y][x] = dark;
-  if (reserve) reserved[y][x] = true;
-}
-
-function drawFinder(modules: boolean[][], reserved: boolean[][], x: number, y: number) {
-  for (let dy = -1; dy <= 7; dy++) {
-    for (let dx = -1; dx <= 7; dx++) {
-      const xx = x + dx;
-      const yy = y + dy;
-      const dark = dx >= 0 && dx <= 6 && dy >= 0 && dy <= 6 && (dx === 0 || dx === 6 || dy === 0 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4));
-      setModule(modules, reserved, xx, yy, dark);
-    }
-  }
-}
-
-function drawAlignment(modules: boolean[][], reserved: boolean[][], cx: number, cy: number) {
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      const dark = Math.max(Math.abs(dx), Math.abs(dy)) !== 1;
-      setModule(modules, reserved, cx + dx, cy + dy, dark);
-    }
-  }
-}
-
-function drawFunctionPatterns(modules: boolean[][], reserved: boolean[][], version: number, align: number[]) {
-  const size = modules.length;
-  drawFinder(modules, reserved, 0, 0);
-  drawFinder(modules, reserved, size - 7, 0);
-  drawFinder(modules, reserved, 0, size - 7);
-
-  for (let i = 8; i < size - 8; i++) {
-    const dark = i % 2 === 0;
-    setModule(modules, reserved, i, 6, dark);
-    setModule(modules, reserved, 6, i, dark);
-  }
-
-  if (version > 1) {
-    for (const y of align) {
-      for (const x of align) {
-        if ((x === 6 && y === 6) || (x === 6 && y === size - 7) || (x === size - 7 && y === 6)) continue;
-        drawAlignment(modules, reserved, x, y);
-      }
-    }
-  }
-
-  setModule(modules, reserved, 8, size - 8, true);
-  for (let i = 0; i < 9; i++) {
-    if (i !== 6) {
-      reserved[8][i] = true;
-      reserved[i][8] = true;
-    }
-  }
-  for (let i = 0; i < 8; i++) {
-    reserved[8][size - 1 - i] = true;
-    reserved[size - 1 - i][8] = true;
-  }
-}
-
-function drawFormatBits(modules: boolean[][], reserved: boolean[][]) {
-  const size = modules.length;
-  const bits = FORMAT_BITS_L_MASK_0.split("").map((b) => b === "1");
-  const pos1 = [
-    [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
-    [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
-  ];
-  const pos2 = [
-    [size - 1, 8], [size - 2, 8], [size - 3, 8], [size - 4, 8], [size - 5, 8], [size - 6, 8], [size - 7, 8],
-    [8, size - 8], [8, size - 7], [8, size - 6], [8, size - 5], [8, size - 4], [8, size - 3], [8, size - 2], [8, size - 1],
-  ];
-  pos1.forEach(([x, y], i) => setModule(modules, reserved, x, y, bits[i]));
-  pos2.forEach(([x, y], i) => setModule(modules, reserved, x, y, bits[i]));
-}
-
-function createQrModules(text: string) {
-  const { version, size, dataCodewords, eccCodewords, align, bytes } = getQrVersion(text);
-  const bits: number[] = [];
-  appendBits(bits, 0b0100, 4);
-  appendBits(bits, bytes.length, 8);
-  for (const b of bytes) appendBits(bits, b, 8);
-  appendBits(bits, 0, Math.min(4, dataCodewords * 8 - bits.length));
-  while (bits.length % 8 !== 0) bits.push(0);
-  const data = bitsToCodewords(bits);
-  for (let pad = 0xec; data.length < dataCodewords; pad ^= 0xec ^ 0x11) data.push(pad);
-  const codewords = [...data, ...reedSolomonRemainder(data, eccCodewords)];
-  const allBits: number[] = [];
-  for (const cw of codewords) appendBits(allBits, cw, 8);
-
-  const modules = createModules(size);
-  const reserved = createReserved(size);
-  drawFunctionPatterns(modules, reserved, version, align);
-
-  let bitIndex = 0;
-  let upward = true;
-  for (let right = size - 1; right >= 1; right -= 2) {
-    if (right === 6) right = 5;
-    for (let vert = 0; vert < size; vert++) {
-      const y = upward ? size - 1 - vert : vert;
-      for (let dx = 0; dx < 2; dx++) {
-        const x = right - dx;
-        if (reserved[y][x]) continue;
-        const raw = bitIndex < allBits.length ? allBits[bitIndex++] === 1 : false;
-        modules[y][x] = raw !== ((x + y) % 2 === 0);
-      }
-    }
-    upward = !upward;
-  }
-
-  drawFormatBits(modules, reserved);
-  return modules;
-}
-
-function createQrDataUrl(text: string, pixelSize = 720) {
-  const modules = createQrModules(text);
-  const moduleCount = modules.length;
-  const quiet = 4;
-  const canvas = document.createElement("canvas");
-  canvas.width = pixelSize;
-  canvas.height = pixelSize;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("QR 캔버스를 만들 수 없습니다.");
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, pixelSize, pixelSize);
-  const cell = Math.floor(pixelSize / (moduleCount + quiet * 2));
-  const offset = Math.floor((pixelSize - cell * (moduleCount + quiet * 2)) / 2) + quiet * cell;
-  ctx.fillStyle = "#111827";
-  for (let y = 0; y < moduleCount; y++) {
-    for (let x = 0; x < moduleCount; x++) {
-      if (modules[y][x]) ctx.fillRect(offset + x * cell, offset + y * cell, cell, cell);
-    }
-  }
-  return canvas.toDataURL("image/png");
-}
 
 function clampInt(v: string, fallback: number) {
   const n = Number(v);
@@ -330,16 +60,6 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`이미지 로드 실패: ${src}`));
-    img.src = src;
-  });
-}
-
 function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string) {
   const url = canvas.toDataURL("image/png");
   const a = document.createElement("a");
@@ -364,57 +84,6 @@ function withQuery(url: string, params: Record<string, string>) {
 
 function newClientId(prefix: string) {
   return `${prefix}_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 10)}`;
-}
-
-function normalizeTemplateKey(v: unknown): TemplateKey {
-  return v === "cafe_poster" || v === "premium_dark" || v === "soft_round" ? v : "simple";
-}
-
-function normalizeColor(v: unknown) {
-  const s = typeof v === "string" ? v.trim() : "";
-  return /^#[0-9a-f]{6}$/i.test(s) ? s : "#111827";
-}
-
-function normalizeBool(v: unknown, fallback: boolean) {
-  return typeof v === "boolean" ? v : fallback;
-}
-
-function designWithDefaults(storeId: string, counterDescription: string, row?: Partial<AdminQrDesignSettings> | null): AdminQrDesignSettings {
-  const fallback = defaultDesignSettings(storeId, counterDescription);
-  if (!row) return fallback;
-  return {
-    ...fallback,
-    ...row,
-    store_id: storeId,
-    template_key: normalizeTemplateKey(row.template_key),
-    accent_color: normalizeColor(row.accent_color),
-    counter_title: String(row.counter_title || fallback.counter_title),
-    counter_description: String(row.counter_description || fallback.counter_description),
-    table_title: String(row.table_title || fallback.table_title),
-    table_description: String(row.table_description || fallback.table_description),
-    show_logo: normalizeBool(row.show_logo, fallback.show_logo),
-    show_main_image: normalizeBool(row.show_main_image, fallback.show_main_image),
-    show_store_name: normalizeBool(row.show_store_name, fallback.show_store_name),
-    show_target_url: normalizeBool(row.show_target_url, fallback.show_target_url),
-  };
-}
-
-function defaultDesignSettings(storeId: string, counterDescription: string): AdminQrDesignSettings {
-  return {
-    store_id: storeId,
-    template_key: "simple",
-    accent_color: "#111827",
-    counter_title: "QR로 간편하게 주문하세요",
-    counter_description: counterDescription,
-    table_title: "테이블에서 바로 주문",
-    table_description: "QR을 찍고 메뉴를 선택해 주세요.",
-    show_logo: true,
-    show_main_image: true,
-    show_store_name: true,
-    show_target_url: false,
-    counter_print_preset: "a4_2up",
-    table_print_preset: "a4_12",
-  };
 }
 
 function normalizeQrStatus(v: unknown): AdminQrCode["status"] {
@@ -620,6 +289,15 @@ function AdminQrPageInner() {
     }));
   };
 
+  const updateImageSource = (source: ImageSource) => {
+    setDesignSettings((prev) => ({
+      ...(prev || defaultDesignSettings(storeId, counterDesc)),
+      store_id: storeId,
+      image_source: source,
+      show_main_image: source !== "none",
+    }));
+  };
+
   async function saveDesignSettings() {
     if (!storeId) return;
     setQrSaving(true);
@@ -636,7 +314,7 @@ function AdminQrPageInner() {
     }
   }
 
-  async function ensureCounterQr() {
+  const ensureCounterQr = async () => {
     if (!origin || !storeId || !counterUrl) {
       setQrMsgTone("error");
       setQrMsg("선택된 매장 또는 브라우저 주소 정보를 확인할 수 없습니다.");
@@ -673,7 +351,7 @@ function AdminQrPageInner() {
     } finally {
       setQrSaving(false);
     }
-  }
+  };
 
   async function addTableQrs() {
     if (!origin || !storeId || !baseStartUrl) {
@@ -744,211 +422,35 @@ function AdminQrPageInner() {
     }
   }
 
-  function getCounterScale() {
-    if (counterPrintPreset === "a3_poster") return 1.35;
-    if (counterPrintPreset === "a5_card") return 0.86;
-    if (counterPrintPreset === "a4_2up") return 0.82;
-    return 1;
+  function getSelectedMainImage(ds: AdminQrDesignSettings) {
+    if (!ds.show_main_image || ds.image_source === "none") return "";
+    if (ds.image_source === "custom_url") return ds.custom_image_url.trim();
+    return mainImage;
   }
 
   async function createCounterPosterCanvas() {
     const ds = designSettings || defaultDesignSettings(storeId, counterDesc);
-    const preset = COUNTER_PRINT_PRESETS[counterPrintPreset];
-    const A4_W = preset.width;
-    const A4_H = preset.height;
-    const copies = preset.copies || 1;
-    const posterH = Math.floor(A4_H / copies);
-    const scale = getCounterScale();
-
-    const padding = Math.max(36, Math.round(A4_W * 0.04 * scale));
-    const imgH = Math.floor(posterH * (counterPrintPreset === "a5_card" ? 0.54 : 0.62));
-    const bottomH = posterH - imgH;
-    const logoBox = Math.round(70 * scale);
-    const qrMax = counterPrintPreset === "a3_poster" ? 560 : counterPrintPreset === "a4_poster" ? 420 : 300;
-    const qrSize = Math.min(Math.round(A4_W * 0.25), Math.round(bottomH * 0.72), qrMax);
-
-    const qrSrc = createQrDataUrl(counterQr?.target_url || counterUrl, 720);
-    const qrImg = await loadImage(qrSrc).catch((e) => {
-      throw new Error("QR 이미지 로드 실패\n" + String(e));
+    return renderCounterPosterCanvas({
+      design: ds,
+      preset: COUNTER_PRINT_PRESETS[counterPrintPreset],
+      counterPrintPreset,
+      targetUrl: counterQr?.target_url || counterUrl,
+      storeName,
+      mainImage: getSelectedMainImage(ds),
+      logoImage,
     });
-    const heroImg = ds.show_main_image ? await loadImage(mainImage).catch(() => null) : null;
-    const logoImg = ds.show_logo && logoImage ? await loadImage(logoImage).catch(() => null) : null;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = A4_W;
-    canvas.height = A4_H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas를 생성할 수 없습니다.");
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, A4_W, A4_H);
-
-    for (let i = 0; i < copies; i++) {
-      const topY = i * posterH;
-
-      if (heroImg) {
-        const sw = heroImg.naturalWidth;
-        const sh = heroImg.naturalHeight;
-        const targetW = A4_W;
-        const targetH = imgH;
-        const srcRatio = sw / sh;
-        const dstRatio = targetW / targetH;
-        let cropW = sw;
-        let cropH = sh;
-        let cropX = 0;
-        let cropY = 0;
-
-        if (srcRatio > dstRatio) {
-          cropW = Math.floor(sh * dstRatio);
-          cropX = Math.floor((sw - cropW) / 2);
-        } else {
-          cropH = Math.floor(sw / dstRatio);
-          cropY = Math.floor((sh - cropH) / 2);
-        }
-
-        ctx.drawImage(heroImg, cropX, cropY, cropW, cropH, 0, topY, targetW, targetH);
-      } else {
-        const g = ctx.createLinearGradient(0, topY, A4_W, topY + imgH);
-        g.addColorStop(0, ds.template_key === "soft_round" ? ds.accent_color : "#111827");
-        g.addColorStop(1, ds.template_key === "premium_dark" ? "#030712" : "#374151");
-        ctx.fillStyle = g;
-        ctx.fillRect(0, topY, A4_W, imgH);
-      }
-
-      ctx.fillStyle = ds.template_key === "soft_round" ? "#fff7ed" : ds.template_key === "premium_dark" ? "#030712" : ds.accent_color || "#111827";
-      ctx.fillRect(0, topY + imgH, A4_W, bottomH);
-
-      const textX = padding;
-      const textY = topY + imgH + padding;
-
-      if (logoImg) {
-        roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
-        ctx.save();
-        ctx.beginPath();
-        roundedClipPath(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale));
-        ctx.clip();
-        ctx.drawImage(logoImg, textX, textY, logoBox, logoBox);
-        ctx.restore();
-      } else {
-        roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
-        ctx.fillStyle = "#ffffff";
-        ctx.font = `900 ${Math.round(26 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-        ctx.fillText("QR", textX + Math.round(20 * scale), textY + Math.round(46 * scale));
-      }
-
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `950 ${Math.round(34 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, textX + logoBox + Math.round(18 * scale), textY + Math.round(34 * scale));
-
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.font = `850 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      ctx.fillText(ds.counter_title, textX + logoBox + Math.round(18 * scale), textY + Math.round(62 * scale));
-
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.font = `800 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      const lines = (ds.counter_description || "")
-        .split("\n")
-        .map((x) => x.trim())
-        .filter(Boolean);
-
-      let dy = textY + Math.round(96 * scale);
-      for (const line of lines.slice(0, 3)) {
-        ctx.fillText(line, textX, dy);
-        dy += Math.round(26 * scale);
-      }
-
-      const qrX = A4_W - padding - qrSize;
-      const qrY = topY + imgH + Math.floor((bottomH - qrSize) / 2);
-      const qrPad = Math.round(12 * scale);
-      roundRect(ctx, qrX - qrPad, qrY - qrPad, qrSize + qrPad * 2, qrSize + qrPad * 2, Math.round(18 * scale), "#ffffff", "rgba(255,255,255,0.18)");
-      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-      ctx.fillStyle = "rgba(255,255,255,0.6)";
-      ctx.font = `800 ${Math.round(14 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      if (ds.show_target_url) ctx.fillText(trimMiddle(counterUrl, 68), padding, topY + posterH - Math.round(22 * scale));
-
-      if (i < copies - 1) {
-        ctx.strokeStyle = "#e5e7eb";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, posterH);
-        ctx.lineTo(A4_W, posterH);
-        ctx.stroke();
-      }
-    }
-
-    return canvas;
   }
 
   async function createTableSheetCanvases(nums: number[]) {
     const ds = designSettings || defaultDesignSettings(storeId, counterDesc);
-    const A4_W = 1240;
-    const A4_H = 1754;
-    const preset = TABLE_PRINT_PRESETS[tablePrintPreset];
-    const COLS = preset.cols;
-    const ROWS = preset.rows;
-    const PER_PAGE = COLS * ROWS;
-    const padding = 34;
-    const gap = 18;
-    const cardW = Math.floor((A4_W - padding * 2 - gap * (COLS - 1)) / COLS);
-    const cardH = Math.floor((A4_H - padding * 2 - gap * (ROWS - 1)) / ROWS);
-    const innerPad = 16;
-    const labelH = 76;
-    const qrSize = Math.min(240, cardW - innerPad * 2);
-    const pages: number[][] = [];
-
-    for (let i = 0; i < nums.length; i += PER_PAGE) pages.push(nums.slice(i, i + PER_PAGE));
-    if (pages.length === 0) pages.push([]);
-
-    const canvases: HTMLCanvasElement[] = [];
-    for (const pageNums of pages) {
-      const loaded = await Promise.all(
-        pageNums.map((n) => {
-          const url = tableUrl(n);
-          const src = createQrDataUrl(url, 720);
-          return loadImage(src).then((img) => ({ n, img, url }));
-        })
-      );
-
-      const canvas = document.createElement("canvas");
-      canvas.width = A4_W;
-      canvas.height = A4_H;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas를 생성할 수 없습니다.");
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, A4_W, A4_H);
-      ctx.fillStyle = "#111827";
-      ctx.font = "900 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(`${ds.show_store_name ? storeName : ds.table_title} · 테이블 QR`, padding, 26);
-
-      for (let i = 0; i < loaded.length; i++) {
-        const row = Math.floor(i / COLS);
-        const col = i % COLS;
-        const x = padding + col * (cardW + gap);
-        const y = padding + row * (cardH + gap) + 10;
-
-        roundRect(ctx, x, y, cardW, cardH, 16, "#ffffff", "#e5e7eb");
-        ctx.fillStyle = "#111827";
-        ctx.font = "950 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, x + innerPad, y + 28);
-        ctx.fillStyle = "#111827";
-        ctx.font = "950 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText(formatTableLabel(loaded[i].n), x + innerPad, y + 56);
-
-        const qrX = x + Math.floor((cardW - qrSize) / 2);
-        const qrY = y + labelH;
-        roundRect(ctx, qrX - 10, qrY - 10, qrSize + 20, qrSize + 20, 14, "#ffffff", "#e5e7eb");
-        ctx.drawImage(loaded[i].img, qrX, qrY, qrSize, qrSize);
-        ctx.fillStyle = "#9ca3af";
-        ctx.font = "800 10.5px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        if (ds.show_target_url) ctx.fillText(trimMiddle(loaded[i].url, 52), x + innerPad, y + cardH - 14);
-      }
-
-      canvases.push(canvas);
-    }
-
-    return canvases;
+    return renderTableSheetCanvases({
+      design: ds,
+      preset: TABLE_PRINT_PRESETS[tablePrintPreset],
+      tableNumbers: nums,
+      storeName,
+      logoImage,
+      getTableUrl: tableUrl,
+    });
   }
 
   async function refreshPrintPreview(canApply: () => boolean = () => true) {
@@ -964,18 +466,24 @@ function AdminQrPageInner() {
         const canvas = await createCounterPosterCanvas();
         if (!canApply()) return;
         setPreviewUrl(canvas.toDataURL("image/png"));
-        setPreviewNote(`${COUNTER_PRINT_PRESETS[counterPrintPreset].label} · 실제 다운로드 기준`);
+        setPreviewNote(counterQr ? `${COUNTER_PRINT_PRESETS[counterPrintPreset].label} · 실제 다운로드 기준` : "카운터 QR 준비 전 미리보기");
       } else {
         const previewNums = tableNumbers.length > 0 ? tableNumbers : pendingTableNumbers.slice(0, TABLE_PRINT_PRESETS[tablePrintPreset].cols * TABLE_PRINT_PRESETS[tablePrintPreset].rows);
+        if (previewNums.length === 0) {
+          if (!canApply()) return;
+          setPreviewUrl("");
+          setPreviewNote("테이블 번호를 입력해 주세요.");
+          return;
+        }
         const canvases = await createTableSheetCanvases(previewNums);
         if (!canApply()) return;
         setPreviewUrl(canvases[0]?.toDataURL("image/png") || "");
-        setPreviewNote(`${TABLE_PRINT_PRESETS[tablePrintPreset].label} · ${Math.max(1, canvases.length)}장 중 1장`);
+        setPreviewNote(tableNumbers.length > 0 ? `${TABLE_PRINT_PRESETS[tablePrintPreset].label} · ${Math.max(1, canvases.length)}장 중 1장` : "추가 예정 번호 미리보기");
       }
     } catch (e: unknown) {
       if (!canApply()) return;
       setPreviewUrl("");
-      setPreviewNote(e instanceof Error ? e.message : String(e));
+      setPreviewNote(e instanceof Error ? "미리보기를 만들 수 없습니다. 이미지 주소와 QR 정보를 확인해 주세요." : String(e));
     } finally {
       if (canApply()) setPreviewBusy(false);
     }
@@ -1758,6 +1266,34 @@ function AdminQrPageInner() {
             </div>
 
             <div className="field">
+              <div className="label">이미지</div>
+              <div className="btnRow">
+                {([
+                  ["store_main", "대표 이미지"],
+                  ["custom_url", "직접 URL"],
+                  ["none", "이미지 없음"],
+                ] as Array<[ImageSource, string]>).map(([source, label]) => (
+                  <button
+                    className={`toggleChip ${effectiveDesign.image_source === source ? "selected" : ""}`}
+                    key={source}
+                    onClick={() => updateImageSource(source)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {effectiveDesign.image_source === "custom_url" ? (
+                <input
+                  className="input"
+                  value={effectiveDesign.custom_image_url}
+                  onChange={(e) => updateDesignSetting("custom_image_url", e.target.value)}
+                  placeholder="https://... 이미지 주소"
+                />
+              ) : null}
+              <div className="hint">직접 URL은 공개 이미지 주소만 사용하세요.</div>
+            </div>
+
+            <div className="field">
               <div className="label">문구</div>
               <input
                 className="input"
@@ -1786,7 +1322,7 @@ function AdminQrPageInner() {
               <div className="toggleRow">
                 {([
                   ["show_logo", "로고"],
-                  ["show_main_image", "대표 이미지"],
+                  ["show_main_image", "이미지 표시"],
                   ["show_store_name", "매장명"],
                   ["show_target_url", "URL"],
                 ] as Array<["show_logo" | "show_main_image" | "show_store_name" | "show_target_url", string]>).map(([key, label]) => (
@@ -1869,35 +1405,7 @@ function AdminQrPageInner() {
 
       <section className="card advancedCard">
         <details className="advancedBox">
-          <summary>고급 관리</summary>
-          <div className="qrList compact">
-            {qrRows.length === 0 ? (
-              <div className="hint">QR이 없습니다.</div>
-            ) : (
-              qrRows.map((row) => (
-                <div className="qrRow" key={row.id}>
-                  <div className="qrMeta">
-                    <span className="badge">{row.status === "active" ? "사용 중" : row.status === "inactive" ? "사용 중지" : "보관"}</span>
-                    <div className="qrName">{row.label || (row.qr_type === "table" ? formatTableLabel(Number(row.table_no)) : "카운터 QR")}</div>
-                    <div className="qrSmall">{row.target_url}</div>
-                  </div>
-                  <button
-                    className="btn"
-                    onClick={() => updateQrStatus(row, row.status === "active" ? "inactive" : "active")}
-                    disabled={qrSaving || row.status === "archived"}
-                  >
-                    {row.status === "active" ? "사용 중지" : "다시 사용"}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </details>
-      </section>
-
-      <section className="card advancedCard">
-        <details className="advancedBox">
-          <summary>고급 관리</summary>
+          <summary>QR 상태 관리</summary>
           <div className="qrList compact">
             {qrRows.length === 0 ? (
               <div className="hint">QR이 없습니다.</div>
@@ -1926,44 +1434,6 @@ function AdminQrPageInner() {
   );
 }
 
-function trimMiddle(s: string, maxLen: number) {
-  const str = String(s || "");
-  if (str.length <= maxLen) return str;
-  const head = Math.ceil((maxLen - 3) / 2);
-  const tail = Math.floor((maxLen - 3) / 2);
-  return `${str.slice(0, head)}...${str.slice(str.length - tail)}`;
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-  fill: string,
-  stroke?: string
-) {
-  ctx.beginPath();
-  roundedClipPath(ctx, x, y, w, h, r);
-  ctx.closePath();
-  ctx.fillStyle = fill;
-  ctx.fill();
-  if (stroke) {
-    ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-}
-
-function roundedClipPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-}
 export default function AdminQrPage() {
   return (
     <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>

@@ -41,6 +41,8 @@ create table if not exists public.store_qr_design_settings (
   counter_description text not null default 'QR로 간편하게 주문하고 기다리세요.\n주문 후 직원 안내에 따라 픽업/수령해 주세요.',
   table_title text not null default '테이블에서 바로 주문',
   table_description text not null default 'QR을 찍고 메뉴를 선택해 주세요.',
+  image_source text not null default 'store_main',
+  custom_image_url text not null default '',
   show_logo boolean not null default true,
   show_main_image boolean not null default true,
   show_store_name boolean not null default true,
@@ -50,9 +52,30 @@ create table if not exists public.store_qr_design_settings (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint store_qr_design_template_check check (template_key in ('simple', 'cafe_poster', 'premium_dark', 'soft_round')),
+  constraint store_qr_design_image_source_check check (image_source in ('store_main', 'custom_url', 'none')),
   constraint store_qr_design_counter_preset_check check (counter_print_preset in ('a5_card', 'a4_poster', 'a3_poster', 'a4_2up')),
   constraint store_qr_design_table_preset_check check (table_print_preset in ('a4_12', 'a4_8', 'a4_4', 'individual_png'))
 );
+
+alter table public.store_qr_design_settings
+  add column if not exists image_source text not null default 'store_main';
+
+alter table public.store_qr_design_settings
+  add column if not exists custom_image_url text not null default '';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'store_qr_design_image_source_check'
+      and conrelid = 'public.store_qr_design_settings'::regclass
+  ) then
+    alter table public.store_qr_design_settings
+      add constraint store_qr_design_image_source_check
+      check (image_source in ('store_main', 'custom_url', 'none'));
+  end if;
+end;
+$$;
 
 create or replace function public.touch_store_qr_updated_at()
 returns trigger
