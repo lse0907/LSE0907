@@ -1,4 +1,4 @@
-import type { AdminQrDesignSettings, CounterPrintPreset, PaperPreset, TablePrintPreset, TemplateKey } from "./qrTypes";
+import type { AdminQrDesignSettings, CounterPrintPreset, ImageSource, PaperPreset, TablePrintPreset, TemplateKey } from "./qrTypes";
 
 export const COUNTER_PRINT_PRESETS: Record<CounterPrintPreset, PaperPreset> = {
   a5_card: { label: "A5 카드", shortLabel: "A5", width: 874, height: 1240, copies: 1 },
@@ -35,6 +35,10 @@ export function normalizeBool(v: unknown, fallback: boolean) {
   return typeof v === "boolean" ? v : fallback;
 }
 
+export function normalizeImageSource(v: unknown): ImageSource {
+  return v === "custom_url" || v === "none" ? v : "store_main";
+}
+
 export function designWithDefaults(storeId: string, counterDescription: string, row?: Partial<AdminQrDesignSettings> | null): AdminQrDesignSettings {
   const fallback = defaultDesignSettings(storeId, counterDescription);
   if (!row) return fallback;
@@ -48,6 +52,8 @@ export function designWithDefaults(storeId: string, counterDescription: string, 
     counter_description: String(row.counter_description || fallback.counter_description),
     table_title: String(row.table_title || fallback.table_title),
     table_description: String(row.table_description || fallback.table_description),
+    image_source: normalizeImageSource(row.image_source),
+    custom_image_url: String(row.custom_image_url || ""),
     show_logo: normalizeBool(row.show_logo, fallback.show_logo),
     show_main_image: normalizeBool(row.show_main_image, fallback.show_main_image),
     show_store_name: normalizeBool(row.show_store_name, fallback.show_store_name),
@@ -64,6 +70,8 @@ export function defaultDesignSettings(storeId: string, counterDescription: strin
     counter_description: counterDescription,
     table_title: "테이블에서 바로 주문",
     table_description: "QR을 찍고 메뉴를 선택해 주세요.",
+    image_source: "store_main",
+    custom_image_url: "",
     show_logo: true,
     show_main_image: true,
     show_store_name: true,

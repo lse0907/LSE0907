@@ -11,6 +11,8 @@ export type AdminQrCode = {
   updated_at?: string | null;
 };
 
+export type ImageSource = "store_main" | "custom_url" | "none";
+
 export type AdminQrDesignSettings = {
   store_id: string;
   template_key: string;
@@ -19,6 +21,8 @@ export type AdminQrDesignSettings = {
   counter_description: string;
   table_title: string;
   table_description: string;
+  image_source: ImageSource;
+  custom_image_url: string;
   show_logo: boolean;
   show_main_image: boolean;
   show_store_name: boolean;
