@@ -82,6 +82,71 @@ function getCounterScale(counterPrintPreset: string) {
   return 1;
 }
 
+function drawLogoBadge(
+  ctx: CanvasRenderingContext2D,
+  logoImg: HTMLImageElement | null,
+  storeName: string,
+  x: number,
+  y: number,
+  size: number,
+  radius: number,
+  bg = "#ffffff",
+  textColor = "#111827",
+  stroke?: string
+) {
+  roundRect(ctx, x, y, size, size, radius, bg, stroke);
+  if (logoImg) {
+    ctx.save();
+    ctx.beginPath();
+    roundedClipPath(ctx, x, y, size, size, radius);
+    ctx.clip();
+    ctx.drawImage(logoImg, x, y, size, size);
+    ctx.restore();
+    return;
+  }
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 ${Math.round(size * 0.38)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+  ctx.fillText(storeName.trim().slice(0, 1) || "Q", x + size / 2, y + size / 2 + 1);
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
+}
+
+function drawQrCard(ctx: CanvasRenderingContext2D, qrImg: HTMLImageElement, x: number, y: number, size: number, radius: number, stroke = "#e5e7eb") {
+  const pad = Math.max(14, Math.round(size * 0.05));
+  roundRect(ctx, x - pad, y - pad, size + pad * 2, size + pad * 2, radius, "#ffffff", stroke);
+  ctx.drawImage(qrImg, x, y, size, size);
+}
+
+function fillCoverImage(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
+  const sw = img.naturalWidth;
+  const sh = img.naturalHeight;
+  const srcRatio = sw / sh;
+  const dstRatio = w / h;
+  let cropW = sw;
+  let cropH = sh;
+  let cropX = 0;
+  let cropY = 0;
+
+  if (srcRatio > dstRatio) {
+    cropW = Math.floor(sh * dstRatio);
+    cropX = Math.floor((sw - cropW) / 2);
+  } else {
+    cropH = Math.floor(sw / dstRatio);
+    cropY = Math.floor((sh - cropH) / 2);
+  }
+  ctx.drawImage(img, cropX, cropY, cropW, cropH, x, y, w, h);
+}
+
+function drawWrappedLines(ctx: CanvasRenderingContext2D, lines: string[], x: number, y: number, lineH: number, maxLines: number) {
+  let dy = y;
+  for (const line of lines.slice(0, maxLines)) {
+    ctx.fillText(line, x, dy);
+    dy += lineH;
+  }
+}
+
 export async function createCounterPosterCanvas({
   design: ds,
   preset,
@@ -96,13 +161,8 @@ export async function createCounterPosterCanvas({
   const copies = preset.copies || 1;
   const posterH = Math.floor(A4_H / copies);
   const scale = getCounterScale(counterPrintPreset);
-
-  const padding = Math.max(36, Math.round(A4_W * 0.04 * scale));
-  const imgH = Math.floor(posterH * (counterPrintPreset === "a5_card" ? 0.54 : 0.62));
-  const bottomH = posterH - imgH;
-  const logoBox = Math.round(70 * scale);
-  const qrMax = counterPrintPreset === "a3_poster" ? 560 : counterPrintPreset === "a4_poster" ? 420 : 300;
-  const qrSize = Math.min(Math.round(A4_W * 0.25), Math.round(bottomH * 0.72), qrMax);
+  const padding = Math.max(36, Math.round(A4_W * 0.045 * scale));
+  const qrMax = counterPrintPreset === "a3_poster" ? 620 : counterPrintPreset === "a4_poster" ? 470 : 320;
 
   const qrSrc = createQrDataUrl(targetUrl, 720);
   const qrImg = await loadImage(qrSrc).catch((e) => {
@@ -120,92 +180,136 @@ export async function createCounterPosterCanvas({
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, A4_W, A4_H);
 
+  const lines = (ds.counter_description || "")
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean);
+
   for (let i = 0; i < copies; i++) {
     const topY = i * posterH;
+    const template = ds.template_key;
+    const accent = ds.accent_color || "#111827";
+    const logoSize = Math.round(76 * scale);
+    const qrSize = Math.min(Math.round(A4_W * 0.32), Math.round(posterH * 0.36), qrMax);
 
-    if (heroImg) {
-      const sw = heroImg.naturalWidth;
-      const sh = heroImg.naturalHeight;
-      const targetW = A4_W;
-      const targetH = imgH;
-      const srcRatio = sw / sh;
-      const dstRatio = targetW / targetH;
-      let cropW = sw;
-      let cropH = sh;
-      let cropX = 0;
-      let cropY = 0;
-
-      if (srcRatio > dstRatio) {
-        cropW = Math.floor(sh * dstRatio);
-        cropX = Math.floor((sw - cropW) / 2);
-      } else {
-        cropH = Math.floor(sw / dstRatio);
-        cropY = Math.floor((sh - cropH) / 2);
+    if (template === "cafe_poster") {
+      const heroH = Math.round(posterH * 0.63);
+      if (heroImg) fillCoverImage(ctx, heroImg, 0, topY, A4_W, heroH);
+      else {
+        const g = ctx.createLinearGradient(0, topY, A4_W, topY + heroH);
+        g.addColorStop(0, accent);
+        g.addColorStop(1, "#111827");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, topY, A4_W, heroH);
       }
+      const overlay = ctx.createLinearGradient(0, topY, 0, topY + heroH);
+      overlay.addColorStop(0, "rgba(0,0,0,0.10)");
+      overlay.addColorStop(1, "rgba(0,0,0,0.62)");
+      ctx.fillStyle = overlay;
+      ctx.fillRect(0, topY, A4_W, heroH);
 
-      ctx.drawImage(heroImg, cropX, cropY, cropW, cropH, 0, topY, targetW, targetH);
-    } else {
-      const g = ctx.createLinearGradient(0, topY, A4_W, topY + imgH);
-      g.addColorStop(0, ds.template_key === "soft_round" ? ds.accent_color : "#111827");
-      g.addColorStop(1, ds.template_key === "premium_dark" ? "#030712" : "#374151");
+      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, padding, topY + padding, logoSize, Math.round(18 * scale), "rgba(255,255,255,0.92)", "#111827");
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `950 ${Math.round(46 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, padding, topY + heroH - Math.round(92 * scale));
+      ctx.font = `850 ${Math.round(24 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.counter_title, padding, topY + heroH - Math.round(52 * scale));
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, topY + heroH, A4_W, posterH - heroH);
+      ctx.fillStyle = "#111827";
+      ctx.font = `900 ${Math.round(20 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      drawWrappedLines(ctx, lines, padding, topY + heroH + Math.round(54 * scale), Math.round(30 * scale), 3);
+      const qrX = A4_W - padding - qrSize;
+      const qrY = topY + heroH + Math.round(((posterH - heroH) - qrSize) / 2);
+      drawQrCard(ctx, qrImg, qrX, qrY, qrSize, Math.round(22 * scale), "#d1d5db");
+      ctx.fillStyle = accent;
+      ctx.fillRect(padding, topY + posterH - Math.round(24 * scale), A4_W - padding * 2, Math.max(4, Math.round(5 * scale)));
+      if (ds.show_target_url) {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = `800 ${Math.round(13 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+        ctx.fillText(trimMiddle(targetUrl, 70), padding, topY + posterH - Math.round(34 * scale));
+      }
+    } else if (template === "premium_dark") {
+      const g = ctx.createLinearGradient(0, topY, A4_W, topY + posterH);
+      g.addColorStop(0, "#020617");
+      g.addColorStop(0.6, "#111827");
+      g.addColorStop(1, "#030712");
       ctx.fillStyle = g;
-      ctx.fillRect(0, topY, A4_W, imgH);
+      ctx.fillRect(0, topY, A4_W, posterH);
+      ctx.fillStyle = accent;
+      ctx.fillRect(padding, topY + padding, A4_W - padding * 2, Math.max(5, Math.round(6 * scale)));
+      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, A4_W / 2 - logoSize / 2, topY + Math.round(96 * scale), logoSize, Math.round(999 * scale), "rgba(255,255,255,0.96)", "#111827", "rgba(255,255,255,0.22)");
+      ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(255,255,255,0.68)";
+      ctx.font = `900 ${Math.round(15 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText("SCAN & ORDER", A4_W / 2, topY + Math.round(65 * scale));
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `950 ${Math.round(44 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, A4_W / 2, topY + Math.round(220 * scale));
+      ctx.font = `850 ${Math.round(22 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillStyle = "rgba(255,255,255,0.78)";
+      ctx.fillText(ds.counter_title, A4_W / 2, topY + Math.round(260 * scale));
+      const qrX = A4_W / 2 - qrSize / 2;
+      const qrY = topY + Math.round(posterH * 0.46);
+      drawQrCard(ctx, qrImg, qrX, qrY, qrSize, Math.round(26 * scale), "rgba(255,255,255,0.28)");
+      ctx.font = `800 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      drawWrappedLines(ctx, lines, A4_W / 2, qrY + qrSize + Math.round(58 * scale), Math.round(28 * scale), 2);
+      if (ds.show_target_url) ctx.fillText(trimMiddle(targetUrl, 64), A4_W / 2, topY + posterH - Math.round(34 * scale));
+      ctx.textAlign = "start";
+    } else if (template === "soft_round") {
+      ctx.fillStyle = "#fff7ed";
+      ctx.fillRect(0, topY, A4_W, posterH);
+      ctx.fillStyle = "rgba(251,146,60,0.16)";
+      ctx.beginPath();
+      ctx.arc(A4_W - padding, topY + padding, Math.round(150 * scale), 0, Math.PI * 2);
+      ctx.fill();
+      const cardX = padding;
+      const cardY = topY + padding;
+      const cardW = A4_W - padding * 2;
+      const cardH = posterH - padding * 2;
+      roundRect(ctx, cardX, cardY, cardW, cardH, Math.round(42 * scale), "#ffffff", "#fed7aa");
+      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, A4_W / 2 - logoSize / 2, cardY + Math.round(44 * scale), logoSize, Math.round(24 * scale), "#ffedd5", "#9a3412", "#fdba74");
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#111827";
+      ctx.font = `950 ${Math.round(38 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, A4_W / 2, cardY + Math.round(160 * scale));
+      ctx.fillStyle = "#9a3412";
+      ctx.font = `850 ${Math.round(21 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.counter_title, A4_W / 2, cardY + Math.round(198 * scale));
+      const qrX = A4_W / 2 - qrSize / 2;
+      const qrY = cardY + Math.round(cardH * 0.42);
+      drawQrCard(ctx, qrImg, qrX, qrY, qrSize, Math.round(30 * scale), "#fed7aa");
+      ctx.fillStyle = "#57534e";
+      ctx.font = `800 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      drawWrappedLines(ctx, lines, A4_W / 2, qrY + qrSize + Math.round(54 * scale), Math.round(27 * scale), 2);
+      if (ds.show_target_url) ctx.fillText(trimMiddle(targetUrl, 60), A4_W / 2, cardY + cardH - Math.round(30 * scale));
+      ctx.textAlign = "start";
+    } else {
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(0, topY, A4_W, posterH);
+      const cardX = padding;
+      const cardY = topY + padding;
+      const cardW = A4_W - padding * 2;
+      const cardH = posterH - padding * 2;
+      roundRect(ctx, cardX, cardY, cardW, cardH, Math.round(24 * scale), "#ffffff", "#e5e7eb");
+      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, A4_W / 2 - logoSize / 2, cardY + Math.round(42 * scale), logoSize, Math.round(18 * scale), "#f9fafb", "#111827", "#e5e7eb");
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#111827";
+      ctx.font = `950 ${Math.round(40 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, A4_W / 2, cardY + Math.round(158 * scale));
+      ctx.fillStyle = accent;
+      ctx.font = `900 ${Math.round(22 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.counter_title, A4_W / 2, cardY + Math.round(198 * scale));
+      const qrX = A4_W / 2 - qrSize / 2;
+      const qrY = cardY + Math.round(cardH * 0.42);
+      drawQrCard(ctx, qrImg, qrX, qrY, qrSize, Math.round(20 * scale), "#d1d5db");
+      ctx.fillStyle = "#4b5563";
+      ctx.font = `800 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      drawWrappedLines(ctx, lines, A4_W / 2, qrY + qrSize + Math.round(52 * scale), Math.round(27 * scale), 2);
+      if (ds.show_target_url) ctx.fillText(trimMiddle(targetUrl, 60), A4_W / 2, cardY + cardH - Math.round(30 * scale));
+      ctx.textAlign = "start";
     }
-
-    ctx.fillStyle = ds.template_key === "soft_round" ? "#fff7ed" : ds.template_key === "premium_dark" ? "#030712" : ds.accent_color || "#111827";
-    ctx.fillRect(0, topY + imgH, A4_W, bottomH);
-
-    const textX = padding;
-    const textY = topY + imgH + padding;
-
-    const headlineX = ds.show_logo ? textX + logoBox + Math.round(18 * scale) : textX;
-    if (ds.show_logo) {
-      if (logoImg) {
-        roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
-        ctx.save();
-        ctx.beginPath();
-        roundedClipPath(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale));
-        ctx.clip();
-        ctx.drawImage(logoImg, textX, textY, logoBox, logoBox);
-        ctx.restore();
-      } else {
-        roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
-        ctx.fillStyle = "#ffffff";
-        ctx.font = `900 ${Math.round(26 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-        ctx.fillText(storeName.trim().slice(0, 1) || "QR", textX + Math.round(22 * scale), textY + Math.round(46 * scale));
-      }
-    }
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = `950 ${Math.round(34 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-    ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, headlineX, textY + Math.round(34 * scale));
-
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.font = `850 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-    ctx.fillText(ds.counter_title, headlineX, textY + Math.round(62 * scale));
-
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.font = `800 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-    const lines = (ds.counter_description || "")
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean);
-
-    let dy = textY + Math.round(96 * scale);
-    for (const line of lines.slice(0, 3)) {
-      ctx.fillText(line, textX, dy);
-      dy += Math.round(26 * scale);
-    }
-
-    const qrX = A4_W - padding - qrSize;
-    const qrY = topY + imgH + Math.floor((bottomH - qrSize) / 2);
-    const qrPad = Math.round(12 * scale);
-    roundRect(ctx, qrX - qrPad, qrY - qrPad, qrSize + qrPad * 2, qrSize + qrPad * 2, Math.round(18 * scale), "#ffffff", "rgba(255,255,255,0.18)");
-    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.font = `800 ${Math.round(14 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-    if (ds.show_target_url) ctx.fillText(trimMiddle(targetUrl, 68), padding, topY + posterH - Math.round(22 * scale));
 
     if (i < copies - 1) {
       ctx.strokeStyle = "#e5e7eb";
@@ -294,35 +398,59 @@ export async function createTableSheetCanvases({
         roundRect(ctx, x + innerPad, y + innerPad, cardW - innerPad * 2, 36, 18, brandFill);
       }
 
-      const markSize = ds.show_logo ? 30 : 0;
-      const titleX = x + innerPad + (markSize ? markSize + 8 : 0);
+      const markSize = ds.show_logo ? (isPremium || isRound ? 38 : 30) : 0;
       const titleY = y + 30;
-      if (ds.show_logo) {
-        const markFill = isPremium ? "rgba(255,255,255,0.14)" : isPhoto ? "rgba(255,255,255,0.2)" : ds.accent_color || "#111827";
-        roundRect(ctx, x + innerPad, y + 12, markSize, markSize, 10, markFill, isPremium ? "rgba(255,255,255,0.2)" : undefined);
-        if (tableLogoImg) {
-          ctx.save();
-          ctx.beginPath();
-          roundedClipPath(ctx, x + innerPad, y + 12, markSize, markSize, 10);
-          ctx.clip();
-          ctx.drawImage(tableLogoImg, x + innerPad, y + 12, markSize, markSize);
-          ctx.restore();
-        } else {
-          ctx.fillStyle = "#ffffff";
-          ctx.font = "900 15px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-          ctx.fillText(storeName.trim().slice(0, 1) || "Q", x + innerPad + 9, y + 33);
+      if (isPremium || isRound) {
+        if (ds.show_logo) {
+          drawLogoBadge(
+            ctx,
+            tableLogoImg,
+            storeName,
+            x + Math.floor((cardW - markSize) / 2),
+            y + 14,
+            markSize,
+            isRound ? 16 : 999,
+            isPremium ? "rgba(255,255,255,0.96)" : "#ffedd5",
+            isPremium ? "#111827" : "#9a3412",
+            isPremium ? "rgba(255,255,255,0.22)" : "#fdba74"
+          );
         }
+        ctx.textAlign = "center";
+        ctx.fillStyle = titleColor;
+        ctx.font = "950 15px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, x + cardW / 2, y + (ds.show_logo ? 68 : 34));
+        ctx.fillStyle = isPremium ? "#ffffff" : "#9a3412";
+        ctx.font = "950 24px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.fillText(formatTableLabel(loaded[i].n), x + cardW / 2, y + (ds.show_logo ? 96 : 64));
+        ctx.textAlign = "start";
+      } else {
+        const titleX = x + innerPad + (markSize ? markSize + 8 : 0);
+        if (ds.show_logo) {
+          const markFill = isPhoto ? "rgba(255,255,255,0.2)" : ds.accent_color || "#111827";
+          roundRect(ctx, x + innerPad, y + 12, markSize, markSize, 10, markFill);
+          if (tableLogoImg) {
+            ctx.save();
+            ctx.beginPath();
+            roundedClipPath(ctx, x + innerPad, y + 12, markSize, markSize, 10);
+            ctx.clip();
+            ctx.drawImage(tableLogoImg, x + innerPad, y + 12, markSize, markSize);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "900 15px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+            ctx.fillText(storeName.trim().slice(0, 1) || "Q", x + innerPad + 9, y + 33);
+          }
+        }
+        ctx.fillStyle = isPhoto ? "#ffffff" : titleColor;
+        ctx.font = "950 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, titleX, titleY);
+        ctx.fillStyle = isPhoto ? "rgba(255,255,255,0.9)" : mutedColor;
+        ctx.font = "900 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.fillText(formatTableLabel(loaded[i].n), x + innerPad, y + 62);
       }
 
-      ctx.fillStyle = isPhoto ? "#ffffff" : titleColor;
-      ctx.font = "950 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(ds.show_store_name ? storeName : ds.table_title, titleX, titleY);
-      ctx.fillStyle = isPhoto ? "rgba(255,255,255,0.9)" : mutedColor;
-      ctx.font = "900 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-      ctx.fillText(formatTableLabel(loaded[i].n), x + innerPad, y + 62);
-
       const qrX = x + Math.floor((cardW - qrSize) / 2);
-      const qrY = y + labelH + (isPhoto ? 8 : 0);
+      const qrY = y + (isPremium || isRound ? 118 : labelH + (isPhoto ? 8 : 0));
       roundRect(ctx, qrX - 12, qrY - 12, qrSize + 24, qrSize + 24, isRound ? 24 : 16, "#ffffff", isPremium ? "rgba(255,255,255,0.25)" : "#e5e7eb");
       ctx.drawImage(loaded[i].img, qrX, qrY, qrSize, qrSize);
 

@@ -561,6 +561,7 @@ function AdminQrPageInner() {
   }
 
   const effectiveDesign = designSettings || defaultDesignSettings(storeId, counterDesc);
+  const selectedTemplate = TEMPLATE_OPTIONS.find((option) => option.key === effectiveDesign.template_key) || TEMPLATE_OPTIONS[0];
 
   return (
     <main className="wrap">
@@ -855,6 +856,50 @@ function AdminQrPageInner() {
           font-size: 11px;
           font-weight: 900;
         }
+        .templateBtn {
+          min-height: 92px;
+        }
+        .templateSample {
+          height: 42px;
+          border-radius: 12px;
+          border: 1px solid var(--line);
+          padding: 6px;
+          display: grid;
+          grid-template-columns: 1fr 18px;
+          gap: 5px;
+          overflow: hidden;
+        }
+        .templateSample::before,
+        .templateSample::after {
+          content: "";
+          display: block;
+          border-radius: 8px;
+        }
+        .templateSample::after {
+          background: #fff;
+          border: 4px solid currentColor;
+        }
+        .templateSample.simple {
+          background: #f8fafc;
+          color: #111827;
+        }
+        .templateSample.simple::before { background: linear-gradient(#fff, #f3f4f6); border: 1px solid #e5e7eb; }
+        .templateSample.cafe_poster {
+          background: linear-gradient(135deg, #92400e, #111827 65%, #fff 66%);
+          color: #111827;
+        }
+        .templateSample.cafe_poster::before { background: rgba(255,255,255,0.85); margin-top: 18px; }
+        .templateSample.premium_dark {
+          background: linear-gradient(135deg, #020617, #111827);
+          color: #111827;
+        }
+        .templateSample.premium_dark::before { background: rgba(255,255,255,0.16); border-top: 3px solid #b45309; }
+        .templateSample.soft_round {
+          background: #fff7ed;
+          color: #9a3412;
+          border-color: #fed7aa;
+        }
+        .templateSample.soft_round::before { background: #fff; border-radius: 14px; border: 1px solid #fed7aa; }
         .presetBtn.selected {
           border-color: var(--brand);
           box-shadow: 0 0 0 2px rgba(17,24,39,0.08);
@@ -1239,10 +1284,11 @@ function AdminQrPageInner() {
               <div className="presetGrid">
                 {TEMPLATE_OPTIONS.map((option) => (
                   <button
-                    className={`presetBtn ${effectiveDesign.template_key === option.key ? "selected" : ""}`}
+                    className={`presetBtn templateBtn ${effectiveDesign.template_key === option.key ? "selected" : ""}`}
                     key={option.key}
                     onClick={() => updateDesignSetting("template_key", option.key)}
                   >
+                    <i className={`templateSample ${option.key}`} aria-hidden="true" />
                     <strong>{option.label}</strong>
                     <span>{option.hint}</span>
                   </button>
@@ -1388,7 +1434,7 @@ function AdminQrPageInner() {
         <div className="card previewCard">
           <div className="previewHead">
             <h2 className="cardTitle">미리보기</h2>
-            <div className="count">{previewBusy ? "생성 중" : previewNote || "실제 출력 기준"}</div>
+            <div className="count">{previewBusy ? "생성 중" : `${selectedTemplate.label} · ${printTarget === "counter" ? COUNTER_PRINT_PRESETS[counterPrintPreset].label : TABLE_PRINT_PRESETS[tablePrintPreset].label} · ${previewNote || "실제 출력 기준"}`}</div>
           </div>
 
           <div className="printPreview">
