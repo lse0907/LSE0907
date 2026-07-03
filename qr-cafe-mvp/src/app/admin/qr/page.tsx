@@ -64,10 +64,10 @@ const TABLE_PRINT_PRESETS: Record<TablePrintPreset, { label: string; cols: numbe
 };
 
 const TEMPLATE_OPTIONS: Array<{ key: TemplateKey; label: string; hint: string }> = [
-  { key: "simple", label: "심플", hint: "기본" },
-  { key: "cafe_poster", label: "카페", hint: "이미지" },
-  { key: "premium_dark", label: "다크", hint: "고급" },
-  { key: "soft_round", label: "소프트", hint: "부드럽게" },
+  { key: "simple", label: "클린", hint: "깔끔" },
+  { key: "cafe_poster", label: "포토", hint: "이미지" },
+  { key: "premium_dark", label: "프리미엄", hint: "고급" },
+  { key: "soft_round", label: "라운드", hint: "부드럽게" },
 ];
 
 const ACCENT_COLORS = ["#111827", "#7c3aed", "#b45309", "#047857", "#be123c"];
@@ -636,7 +636,7 @@ function AdminQrPageInner() {
     }
   }
 
-  async function ensureCounterQr() {
+  const ensureCounterQr = async () => {
     if (!origin || !storeId || !counterUrl) {
       setQrMsgTone("error");
       setQrMsg("선택된 매장 또는 브라우저 주소 정보를 확인할 수 없습니다.");
@@ -673,7 +673,7 @@ function AdminQrPageInner() {
     } finally {
       setQrSaving(false);
     }
-  }
+  };
 
   async function addTableQrs() {
     if (!origin || !storeId || !baseStartUrl) {
@@ -821,28 +821,31 @@ function AdminQrPageInner() {
       const textX = padding;
       const textY = topY + imgH + padding;
 
-      if (logoImg) {
-        roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
-        ctx.save();
-        ctx.beginPath();
-        roundedClipPath(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale));
-        ctx.clip();
-        ctx.drawImage(logoImg, textX, textY, logoBox, logoBox);
-        ctx.restore();
-      } else {
-        roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
-        ctx.fillStyle = "#ffffff";
-        ctx.font = `900 ${Math.round(26 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-        ctx.fillText("QR", textX + Math.round(20 * scale), textY + Math.round(46 * scale));
+      const headlineX = ds.show_logo ? textX + logoBox + Math.round(18 * scale) : textX;
+      if (ds.show_logo) {
+        if (logoImg) {
+          roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
+          ctx.save();
+          ctx.beginPath();
+          roundedClipPath(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale));
+          ctx.clip();
+          ctx.drawImage(logoImg, textX, textY, logoBox, logoBox);
+          ctx.restore();
+        } else {
+          roundRect(ctx, textX, textY, logoBox, logoBox, Math.round(18 * scale), "rgba(255,255,255,0.12)", "rgba(255,255,255,0.22)");
+          ctx.fillStyle = "#ffffff";
+          ctx.font = `900 ${Math.round(26 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+          ctx.fillText(storeName.trim().slice(0, 1) || "QR", textX + Math.round(22 * scale), textY + Math.round(46 * scale));
+        }
       }
 
       ctx.fillStyle = "#ffffff";
       ctx.font = `950 ${Math.round(34 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, textX + logoBox + Math.round(18 * scale), textY + Math.round(34 * scale));
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, headlineX, textY + Math.round(34 * scale));
 
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font = `850 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      ctx.fillText(ds.counter_title, textX + logoBox + Math.round(18 * scale), textY + Math.round(62 * scale));
+      ctx.fillText(ds.counter_title, headlineX, textY + Math.round(62 * scale));
 
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font = `800 ${Math.round(18 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
@@ -896,6 +899,7 @@ function AdminQrPageInner() {
     const labelH = 76;
     const qrSize = Math.min(240, cardW - innerPad * 2);
     const pages: number[][] = [];
+    const tableLogoImg = ds.show_logo && logoImage ? await loadImage(logoImage).catch(() => null) : null;
 
     for (let i = 0; i < nums.length; i += PER_PAGE) pages.push(nums.slice(i, i + PER_PAGE));
     if (pages.length === 0) pages.push([]);
@@ -916,9 +920,13 @@ function AdminQrPageInner() {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas를 생성할 수 없습니다.");
 
-      ctx.fillStyle = "#ffffff";
+      const isPremium = ds.template_key === "premium_dark";
+      const isPhoto = ds.template_key === "cafe_poster";
+      const isRound = ds.template_key === "soft_round";
+      const pageBg = isPremium ? "#0f172a" : isRound ? "#fff7ed" : isPhoto ? "#f8fafc" : "#ffffff";
+      ctx.fillStyle = pageBg;
       ctx.fillRect(0, 0, A4_W, A4_H);
-      ctx.fillStyle = "#111827";
+      ctx.fillStyle = isPremium ? "rgba(255,255,255,0.86)" : "#111827";
       ctx.font = "900 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
       ctx.fillText(`${ds.show_store_name ? storeName : ds.table_title} · 테이블 QR`, padding, 26);
 
@@ -927,20 +935,59 @@ function AdminQrPageInner() {
         const col = i % COLS;
         const x = padding + col * (cardW + gap);
         const y = padding + row * (cardH + gap) + 10;
+        const cardRadius = isRound ? 28 : isPremium ? 22 : 16;
+        const cardFill = isPremium ? "#111827" : isRound ? "#fffbeb" : "#ffffff";
+        const cardStroke = isPremium ? "rgba(255,255,255,0.22)" : isPhoto ? ds.accent_color : isRound ? "#fed7aa" : "#e5e7eb";
+        const titleColor = isPremium ? "#ffffff" : "#111827";
+        const mutedColor = isPremium ? "rgba(255,255,255,0.72)" : "#6b7280";
+        const brandFill = isPremium ? "rgba(255,255,255,0.10)" : isRound ? "#fed7aa" : isPhoto ? ds.accent_color : "#f9fafb";
 
-        roundRect(ctx, x, y, cardW, cardH, 16, "#ffffff", "#e5e7eb");
-        ctx.fillStyle = "#111827";
-        ctx.font = "950 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, x + innerPad, y + 28);
-        ctx.fillStyle = "#111827";
-        ctx.font = "950 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
-        ctx.fillText(formatTableLabel(loaded[i].n), x + innerPad, y + 56);
+        roundRect(ctx, x, y, cardW, cardH, cardRadius, cardFill, cardStroke);
+        if (isPhoto) {
+          const g = ctx.createLinearGradient(x, y, x + cardW, y + Math.max(64, Math.floor(cardH * 0.22)));
+          g.addColorStop(0, ds.accent_color || "#111827");
+          g.addColorStop(1, "#111827");
+          roundRect(ctx, x + 1, y + 1, cardW - 2, Math.max(64, Math.floor(cardH * 0.22)), cardRadius, g);
+        } else if (isRound || isPremium) {
+          roundRect(ctx, x + innerPad, y + innerPad, cardW - innerPad * 2, 36, 18, brandFill);
+        }
+
+        const markSize = ds.show_logo ? 30 : 0;
+        const titleX = x + innerPad + (markSize ? markSize + 8 : 0);
+        const titleY = y + 30;
+        if (ds.show_logo) {
+          const markFill = isPremium ? "rgba(255,255,255,0.14)" : isPhoto ? "rgba(255,255,255,0.2)" : ds.accent_color || "#111827";
+          roundRect(ctx, x + innerPad, y + 12, markSize, markSize, 10, markFill, isPremium ? "rgba(255,255,255,0.2)" : undefined);
+          if (tableLogoImg) {
+            ctx.save();
+            ctx.beginPath();
+            roundedClipPath(ctx, x + innerPad, y + 12, markSize, markSize, 10);
+            ctx.clip();
+            ctx.drawImage(tableLogoImg, x + innerPad, y + 12, markSize, markSize);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "900 15px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+            ctx.fillText(storeName.trim().slice(0, 1) || "Q", x + innerPad + 9, y + 33);
+          }
+        }
+
+        ctx.fillStyle = isPhoto ? "#ffffff" : titleColor;
+        ctx.font = "950 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, titleX, titleY);
+        ctx.fillStyle = isPhoto ? "rgba(255,255,255,0.9)" : mutedColor;
+        ctx.font = "900 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.fillText(formatTableLabel(loaded[i].n), x + innerPad, y + 62);
 
         const qrX = x + Math.floor((cardW - qrSize) / 2);
-        const qrY = y + labelH;
-        roundRect(ctx, qrX - 10, qrY - 10, qrSize + 20, qrSize + 20, 14, "#ffffff", "#e5e7eb");
+        const qrY = y + labelH + (isPhoto ? 8 : 0);
+        roundRect(ctx, qrX - 12, qrY - 12, qrSize + 24, qrSize + 24, isRound ? 24 : 16, "#ffffff", isPremium ? "rgba(255,255,255,0.25)" : "#e5e7eb");
         ctx.drawImage(loaded[i].img, qrX, qrY, qrSize, qrSize);
-        ctx.fillStyle = "#9ca3af";
+
+        ctx.fillStyle = mutedColor;
+        ctx.font = "850 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
+        ctx.fillText(ds.table_description || "QR을 찍고 메뉴를 선택해 주세요.", x + innerPad, y + cardH - (ds.show_target_url ? 32 : 16));
+        ctx.fillStyle = isPremium ? "rgba(255,255,255,0.5)" : "#9ca3af";
         ctx.font = "800 10.5px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif";
         if (ds.show_target_url) ctx.fillText(trimMiddle(loaded[i].url, 52), x + innerPad, y + cardH - 14);
       }
@@ -1894,34 +1941,6 @@ function AdminQrPageInner() {
           </div>
         </details>
       </section>
-
-      <section className="card advancedCard">
-        <details className="advancedBox">
-          <summary>고급 관리</summary>
-          <div className="qrList compact">
-            {qrRows.length === 0 ? (
-              <div className="hint">QR이 없습니다.</div>
-            ) : (
-              qrRows.map((row) => (
-                <div className="qrRow" key={row.id}>
-                  <div className="qrMeta">
-                    <span className="badge">{row.status === "active" ? "사용 중" : row.status === "inactive" ? "사용 중지" : "보관"}</span>
-                    <div className="qrName">{row.label || (row.qr_type === "table" ? formatTableLabel(Number(row.table_no)) : "카운터 QR")}</div>
-                    <div className="qrSmall">{row.target_url}</div>
-                  </div>
-                  <button
-                    className="btn"
-                    onClick={() => updateQrStatus(row, row.status === "active" ? "inactive" : "active")}
-                    disabled={qrSaving || row.status === "archived"}
-                  >
-                    {row.status === "active" ? "사용 중지" : "다시 사용"}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </details>
-      </section>
     </main>
   );
 }
@@ -1941,7 +1960,7 @@ function roundRect(
   w: number,
   h: number,
   r: number,
-  fill: string,
+  fill: string | CanvasGradient,
   stroke?: string
 ) {
   ctx.beginPath();
