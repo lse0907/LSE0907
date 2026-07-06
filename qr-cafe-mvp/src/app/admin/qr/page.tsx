@@ -424,7 +424,6 @@ function AdminQrPageInner() {
 
   function getSelectedMainImage(ds: AdminQrDesignSettings) {
     if (!ds.show_main_image || ds.image_source === "none") return "";
-    if (ds.image_source === "custom_url") return ds.custom_image_url.trim();
     return mainImage;
   }
 
@@ -1297,7 +1296,7 @@ function AdminQrPageInner() {
             </div>
 
             <div className="field">
-              <div className="label">색상</div>
+              <div className="label">포인트 색상</div>
               <div className="colorRow">
                 {ACCENT_COLORS.map((color) => (
                   <button
@@ -1309,14 +1308,14 @@ function AdminQrPageInner() {
                   />
                 ))}
               </div>
+              <div className="hint">라인, 배지, 강조 문구에 사용돼요.</div>
             </div>
 
             <div className="field">
               <div className="label">이미지</div>
               <div className="btnRow">
                 {([
-                  ["store_main", "대표 이미지"],
-                  ["custom_url", "직접 URL"],
+                  ["store_main", "매장 대표 이미지"],
                   ["none", "이미지 없음"],
                 ] as Array<[ImageSource, string]>).map(([source, label]) => (
                   <button
@@ -1328,15 +1327,7 @@ function AdminQrPageInner() {
                   </button>
                 ))}
               </div>
-              {effectiveDesign.image_source === "custom_url" ? (
-                <input
-                  className="input"
-                  value={effectiveDesign.custom_image_url}
-                  onChange={(e) => updateDesignSetting("custom_image_url", e.target.value)}
-                  placeholder="https://... 이미지 주소"
-                />
-              ) : null}
-              <div className="hint">직접 URL은 공개 이미지 주소만 사용하세요.</div>
+              <div className="hint">사진형 템플릿에서 가장 크게 보이고, 다른 디자인은 로고와 QR이 더 돋보이게 표시돼요.</div>
             </div>
 
             <div className="field">
@@ -1364,14 +1355,12 @@ function AdminQrPageInner() {
             </div>
 
             <div className="field">
-              <div className="label">표시 항목</div>
+              <div className="label">브랜드 표시</div>
               <div className="toggleRow">
                 {([
                   ["show_logo", "로고"],
-                  ["show_main_image", "이미지 표시"],
                   ["show_store_name", "매장명"],
-                  ["show_target_url", "URL"],
-                ] as Array<["show_logo" | "show_main_image" | "show_store_name" | "show_target_url", string]>).map(([key, label]) => (
+                ] as Array<["show_logo" | "show_store_name", string]>).map(([key, label]) => (
                   <button
                     className={`toggleChip ${effectiveDesign[key] ? "selected" : ""}`}
                     key={String(key)}

@@ -14,10 +14,10 @@ export const TABLE_PRINT_PRESETS: Record<TablePrintPreset, { label: string; cols
 };
 
 export const TEMPLATE_OPTIONS: Array<{ key: TemplateKey; label: string; hint: string }> = [
-  { key: "simple", label: "클린", hint: "로고 중심 기본형" },
-  { key: "cafe_poster", label: "포토", hint: "매장 사진 포스터" },
-  { key: "premium_dark", label: "프리미엄", hint: "로고 배지 다크형" },
-  { key: "soft_round", label: "라운드", hint: "부드러운 카드형" },
+  { key: "simple", label: "기본형", hint: "깔끔한 미니멀" },
+  { key: "cafe_poster", label: "사진형", hint: "이미지 포스터" },
+  { key: "premium_dark", label: "다크형", hint: "고급 다크 포스터" },
+  { key: "soft_round", label: "소프트형", hint: "따뜻한 카페 카드" },
 ];
 
 export const ACCENT_COLORS = ["#111827", "#7c3aed", "#b45309", "#047857", "#be123c"];
@@ -36,7 +36,7 @@ export function normalizeBool(v: unknown, fallback: boolean) {
 }
 
 export function normalizeImageSource(v: unknown): ImageSource {
-  return v === "custom_url" || v === "none" ? v : "store_main";
+  return v === "none" ? "none" : "store_main";
 }
 
 export function designWithDefaults(storeId: string, counterDescription: string, row?: Partial<AdminQrDesignSettings> | null): AdminQrDesignSettings {
@@ -52,12 +52,12 @@ export function designWithDefaults(storeId: string, counterDescription: string, 
     counter_description: String(row.counter_description || fallback.counter_description),
     table_title: String(row.table_title || fallback.table_title),
     table_description: String(row.table_description || fallback.table_description),
-    image_source: normalizeImageSource(row.image_source),
+    image_source: normalizeImageSource(row.show_main_image === false ? "none" : row.image_source),
     custom_image_url: String(row.custom_image_url || ""),
     show_logo: normalizeBool(row.show_logo, fallback.show_logo),
-    show_main_image: normalizeBool(row.show_main_image, fallback.show_main_image),
+    show_main_image: normalizeImageSource(row.show_main_image === false ? "none" : row.image_source) !== "none",
     show_store_name: normalizeBool(row.show_store_name, fallback.show_store_name),
-    show_target_url: normalizeBool(row.show_target_url, fallback.show_target_url),
+    show_target_url: false,
   };
 }
 
