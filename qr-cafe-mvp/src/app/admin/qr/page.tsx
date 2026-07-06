@@ -424,7 +424,6 @@ function AdminQrPageInner() {
 
   function getSelectedMainImage(ds: AdminQrDesignSettings) {
     if (!ds.show_main_image || ds.image_source === "none") return "";
-    if (ds.image_source === "custom_url") return ds.custom_image_url.trim();
     return mainImage;
   }
 
@@ -449,6 +448,7 @@ function AdminQrPageInner() {
       tableNumbers: nums,
       storeName,
       logoImage,
+      mainImage: getSelectedMainImage(ds),
       getTableUrl: tableUrl,
     });
   }
@@ -561,6 +561,7 @@ function AdminQrPageInner() {
   }
 
   const effectiveDesign = designSettings || defaultDesignSettings(storeId, counterDesc);
+  const selectedTemplate = TEMPLATE_OPTIONS.find((option) => option.key === effectiveDesign.template_key) || TEMPLATE_OPTIONS[0];
 
   return (
     <main className="wrap">
@@ -855,6 +856,50 @@ function AdminQrPageInner() {
           font-size: 11px;
           font-weight: 900;
         }
+        .templateBtn {
+          min-height: 92px;
+        }
+        .templateSample {
+          height: 42px;
+          border-radius: 12px;
+          border: 1px solid var(--line);
+          padding: 6px;
+          display: grid;
+          grid-template-columns: 1fr 18px;
+          gap: 5px;
+          overflow: hidden;
+        }
+        .templateSample::before,
+        .templateSample::after {
+          content: "";
+          display: block;
+          border-radius: 8px;
+        }
+        .templateSample::after {
+          background: #fff;
+          border: 4px solid currentColor;
+        }
+        .templateSample.simple {
+          background: #f8fafc;
+          color: #111827;
+        }
+        .templateSample.simple::before { background: linear-gradient(#fff, #f3f4f6); border: 1px solid #e5e7eb; }
+        .templateSample.cafe_poster {
+          background: linear-gradient(135deg, #92400e, #111827 65%, #fff 66%);
+          color: #111827;
+        }
+        .templateSample.cafe_poster::before { background: rgba(255,255,255,0.85); margin-top: 18px; }
+        .templateSample.premium_dark {
+          background: linear-gradient(135deg, #020617, #111827);
+          color: #111827;
+        }
+        .templateSample.premium_dark::before { background: rgba(255,255,255,0.16); border-top: 3px solid #b45309; }
+        .templateSample.soft_round {
+          background: #fff7ed;
+          color: #9a3412;
+          border-color: #fed7aa;
+        }
+        .templateSample.soft_round::before { background: #fff; border-radius: 14px; border: 1px solid #fed7aa; }
         .presetBtn.selected {
           border-color: var(--brand);
           box-shadow: 0 0 0 2px rgba(17,24,39,0.08);
@@ -1239,10 +1284,11 @@ function AdminQrPageInner() {
               <div className="presetGrid">
                 {TEMPLATE_OPTIONS.map((option) => (
                   <button
-                    className={`presetBtn ${effectiveDesign.template_key === option.key ? "selected" : ""}`}
+                    className={`presetBtn templateBtn ${effectiveDesign.template_key === option.key ? "selected" : ""}`}
                     key={option.key}
                     onClick={() => updateDesignSetting("template_key", option.key)}
                   >
+                    <i className={`templateSample ${option.key}`} aria-hidden="true" />
                     <strong>{option.label}</strong>
                     <span>{option.hint}</span>
                   </button>
@@ -1251,7 +1297,7 @@ function AdminQrPageInner() {
             </div>
 
             <div className="field">
-              <div className="label">색상</div>
+              <div className="label">포인트 색상</div>
               <div className="colorRow">
                 {ACCENT_COLORS.map((color) => (
                   <button
@@ -1263,14 +1309,14 @@ function AdminQrPageInner() {
                   />
                 ))}
               </div>
+              <div className="hint">라인, 배지, 강조 문구에 사용돼요.</div>
             </div>
 
             <div className="field">
               <div className="label">이미지</div>
               <div className="btnRow">
                 {([
-                  ["store_main", "대표 이미지"],
-                  ["custom_url", "직접 URL"],
+                  ["store_main", "매장 대표 이미지"],
                   ["none", "이미지 없음"],
                 ] as Array<[ImageSource, string]>).map(([source, label]) => (
                   <button
@@ -1282,15 +1328,7 @@ function AdminQrPageInner() {
                   </button>
                 ))}
               </div>
-              {effectiveDesign.image_source === "custom_url" ? (
-                <input
-                  className="input"
-                  value={effectiveDesign.custom_image_url}
-                  onChange={(e) => updateDesignSetting("custom_image_url", e.target.value)}
-                  placeholder="https://... 이미지 주소"
-                />
-              ) : null}
-              <div className="hint">직접 URL은 공개 이미지 주소만 사용하세요.</div>
+              <div className="hint">사진형 템플릿에서 가장 크게 보이고, 다른 디자인은 로고와 QR이 더 돋보이게 표시돼요.</div>
             </div>
 
             <div className="field">
@@ -1318,14 +1356,12 @@ function AdminQrPageInner() {
             </div>
 
             <div className="field">
-              <div className="label">표시 항목</div>
+              <div className="label">브랜드 표시</div>
               <div className="toggleRow">
                 {([
                   ["show_logo", "로고"],
-                  ["show_main_image", "이미지 표시"],
                   ["show_store_name", "매장명"],
-                  ["show_target_url", "URL"],
-                ] as Array<["show_logo" | "show_main_image" | "show_store_name" | "show_target_url", string]>).map(([key, label]) => (
+                ] as Array<["show_logo" | "show_store_name", string]>).map(([key, label]) => (
                   <button
                     className={`toggleChip ${effectiveDesign[key] ? "selected" : ""}`}
                     key={String(key)}
@@ -1388,7 +1424,7 @@ function AdminQrPageInner() {
         <div className="card previewCard">
           <div className="previewHead">
             <h2 className="cardTitle">미리보기</h2>
-            <div className="count">{previewBusy ? "생성 중" : previewNote || "실제 출력 기준"}</div>
+            <div className="count">{previewBusy ? "생성 중" : `${selectedTemplate.label} · ${printTarget === "counter" ? COUNTER_PRINT_PRESETS[counterPrintPreset].label : TABLE_PRINT_PRESETS[tablePrintPreset].label} · ${previewNote || "실제 출력 기준"}`}</div>
           </div>
 
           <div className="printPreview">
