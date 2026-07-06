@@ -448,6 +448,7 @@ function AdminQrPageInner() {
       tableNumbers: nums,
       storeName,
       logoImage,
+      mainImage: getSelectedMainImage(ds),
       getTableUrl: tableUrl,
     });
   }
