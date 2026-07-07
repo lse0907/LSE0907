@@ -426,73 +426,72 @@ export async function createTableSheetCanvases({
         roundRect(ctx, x + innerPad, y + innerPad, cardW - innerPad * 2, density === "large" ? 52 : 36, 18, brandFill);
       }
 
-      if (isPremium || isRound) {
-        const logoX = density === "large" ? x + innerPad : x + Math.floor((cardW - markSize) / 2);
-        const logoY = density === "large" ? y + innerPad : y + 14;
-        if (ds.show_logo) {
-          drawLogoBadge(
-            ctx,
-            tableLogoImg,
-            storeName,
-            logoX,
-            logoY,
-            markSize,
-            isRound ? 16 : 999,
-            isPremium ? "rgba(255,255,255,0.96)" : "#ffedd5",
-            isPremium ? "#111827" : "#9a3412",
-            isPremium ? "rgba(255,255,255,0.22)" : "#fdba74"
-          );
-        }
-        ctx.textAlign = density === "large" ? "start" : "center";
-        ctx.fillStyle = titleColor;
-        ctx.font = isPremium
-          ? `950 ${brandFontSize}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`
-          : `950 ${brandFontSize}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`;
-        const brandX = density === "large" ? x + innerPad + (markSize ? markSize + 14 : 0) : x + cardW / 2;
-        const brandY = density === "large" ? y + innerPad + 22 : y + (ds.show_logo ? 68 : 34);
-        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, brandX, brandY);
-        ctx.fillStyle = isPremium ? "#ffffff" : "#9a3412";
-        ctx.font = isPremium
-          ? `950 ${tableLabelSize}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`
-          : `950 ${tableLabelSize}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`;
-        ctx.fillText(formatTableLabel(loaded[i].n), density === "large" ? brandX : x + cardW / 2, density === "large" ? y + innerPad + 62 : y + (ds.show_logo ? 98 : 66));
-        ctx.textAlign = "start";
-      } else {
-        const titleX = x + innerPad + (markSize ? markSize + 10 : 0);
-        if (ds.show_logo) {
-          const markFill = isPhoto ? "rgba(255,255,255,0.22)" : ds.accent_color || "#111827";
-          roundRect(ctx, x + innerPad, y + innerPad, markSize, markSize, 12, markFill);
-          if (tableLogoImg) {
-            ctx.save();
-            ctx.beginPath();
-            roundedClipPath(ctx, x + innerPad, y + innerPad, markSize, markSize, 12);
-            ctx.clip();
-            ctx.drawImage(tableLogoImg, x + innerPad, y + innerPad, markSize, markSize);
-            ctx.restore();
-          } else {
-            ctx.fillStyle = "#ffffff";
-            ctx.font = `900 ${Math.round(markSize * 0.42)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-            ctx.fillText(storeName.trim().slice(0, 1) || "Q", x + innerPad + Math.round(markSize * 0.30), y + innerPad + Math.round(markSize * 0.68));
-          }
-        }
-        ctx.fillStyle = isPhoto ? "#ffffff" : titleColor;
-        ctx.font = `950 ${brandFontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, titleX, y + innerPad + Math.round(markSize ? markSize * 0.40 : 18));
-        ctx.fillStyle = isPhoto ? "rgba(255,255,255,0.92)" : mutedColor;
-        ctx.font = `900 ${tableLabelSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-        ctx.fillText(formatTableLabel(loaded[i].n), x + innerPad, y + (density === "large" ? 96 : 62));
+      const centerX = x + cardW / 2;
+      const brandText = ds.show_store_name ? storeName : ds.table_title;
+      const labelText = formatTableLabel(loaded[i].n);
+      const brandTop = y + innerPad + (density === "compact" ? 2 : 4);
+      const brandLogoY = brandTop;
+      const brandTextY = ds.show_logo
+        ? brandLogoY + markSize + Math.round(density === "large" ? 24 : density === "medium" ? 18 : 15)
+        : brandTop + Math.round(density === "large" ? 28 : density === "medium" ? 22 : 18);
+      const tableLabelY = brandTextY + Math.round(density === "large" ? 44 : density === "medium" ? 34 : 29);
+      const qrX = x + Math.floor((cardW - qrSize) / 2);
+      const preferredQrY =
+        density === "large"
+          ? y + Math.round(cardH * 0.36)
+          : density === "medium"
+          ? y + Math.round(cardH * 0.33)
+          : y + Math.round(cardH * 0.29);
+      const minQrY = tableLabelY + Math.round(density === "large" ? 34 : density === "medium" ? 24 : 18);
+      const maxQrY = y + cardH - qrSize - Math.round(density === "large" ? 72 : density === "medium" ? 46 : 38);
+      const qrY = Math.max(minQrY, Math.min(preferredQrY, maxQrY));
+      const descY = Math.min(
+        qrY + qrSize + Math.round(density === "large" ? 34 : density === "medium" ? 24 : 20),
+        y + cardH - Math.round(density === "large" ? 28 : 16)
+      );
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+
+      if (ds.show_logo) {
+        const logoX = Math.round(centerX - markSize / 2);
+        drawLogoBadge(
+          ctx,
+          tableLogoImg,
+          storeName,
+          logoX,
+          brandLogoY,
+          markSize,
+          isRound ? 16 : isPremium ? 999 : 12,
+          isPremium ? "rgba(255,255,255,0.96)" : isRound ? "#ffedd5" : isPhoto ? "rgba(255,255,255,0.24)" : "#f9fafb",
+          isPremium ? "#111827" : isRound ? "#9a3412" : "#111827",
+          isPremium ? "rgba(255,255,255,0.22)" : isRound ? "#fdba74" : isPhoto ? "rgba(255,255,255,0.34)" : "#e5e7eb"
+        );
       }
 
-      const qrX = density === "large" && (isPhoto || isPremium || isRound) ? x + cardW - qrSize - innerPad - 6 : x + Math.floor((cardW - qrSize) / 2);
-      const qrY = density === "large" ? y + Math.round(cardH * 0.38) : y + (isPremium || isRound ? 118 : 82);
+      ctx.fillStyle = isPhoto ? "#ffffff" : titleColor;
+      ctx.font = isPremium
+        ? `950 ${brandFontSize}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`
+        : isRound
+        ? `950 ${brandFontSize}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`
+        : `950 ${brandFontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(brandText, centerX, brandTextY);
+
+      ctx.fillStyle = isPremium ? "#ffffff" : isRound ? "#9a3412" : isPhoto ? "rgba(255,255,255,0.96)" : ds.accent_color || "#111827";
+      ctx.font = isPremium
+        ? `950 ${tableLabelSize}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`
+        : isRound
+        ? `950 ${tableLabelSize}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`
+        : `950 ${tableLabelSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(labelText, centerX, tableLabelY);
+
       roundRect(ctx, qrX - 12, qrY - 12, qrSize + 24, qrSize + 24, isRound ? 24 : 16, "#ffffff", isPremium ? "rgba(255,255,255,0.25)" : "#e5e7eb");
       ctx.drawImage(loaded[i].img, qrX, qrY, qrSize, qrSize);
 
       ctx.fillStyle = mutedColor;
       ctx.font = `850 ${descFontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      const descX = density === "large" && (isPhoto || isPremium || isRound) ? x + innerPad : x + innerPad;
-      const descY = y + cardH - (density === "large" ? 28 : 16);
-      ctx.fillText(ds.table_description || "QR을 찍고 메뉴를 선택해 주세요.", descX, descY);
+      ctx.fillText(ds.table_description || "QR을 찍고 메뉴를 선택해 주세요.", centerX, descY);
+      ctx.textAlign = "start";
     }
 
     canvases.push(canvas);
