@@ -207,6 +207,9 @@ export async function createCounterPosterCanvas({
     const logoSize = counterLogoSize(template, scale);
     const qrBaseSize = Math.min(Math.round(A4_W * 0.34), Math.round(posterH * 0.38), qrMax);
     const qrSize = counterQrSize(template, qrBaseSize);
+    const centerX = A4_W / 2;
+    const isCompactCopy = copies > 1 || counterPrintPreset === "a5_card";
+    const descMaxLines = isCompactCopy ? 2 : 3;
 
     if (template === "cafe_poster") {
       if (heroImg) fillCoverImage(ctx, heroImg, 0, topY, A4_W, posterH);
@@ -219,25 +222,27 @@ export async function createCounterPosterCanvas({
       }
       drawImageTint(ctx, "#000000", 0, topY, A4_W, posterH, 0.32);
       const panelW = Math.round(A4_W - padding * 2);
-      const panelH = Math.round(posterH * 0.58);
+      const panelH = Math.round(posterH * (isCompactCopy ? 0.42 : 0.4));
       const panelX = padding;
       const panelY = topY + posterH - panelH - padding;
-      roundRect(ctx, panelX, panelY, panelW, panelH, Math.round(34 * scale), "rgba(255,255,255,0.94)", "rgba(255,255,255,0.62)");
-      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, panelX + Math.round(34 * scale), panelY + Math.round(34 * scale), logoSize, Math.round(22 * scale), "#ffffff", "#111827", "#e5e7eb");
+      roundRect(ctx, panelX, panelY, panelW, panelH, Math.round(34 * scale), "rgba(255,255,255,0.86)", "rgba(255,255,255,0.56)");
+      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, panelX + Math.round(34 * scale), panelY + Math.round(30 * scale), logoSize, Math.round(22 * scale), "#ffffff", "#111827", "#e5e7eb");
+      const textX = panelX + Math.round(34 * scale);
+      const titleY = panelY + Math.round(ds.show_logo ? 126 * scale : 54 * scale);
       ctx.fillStyle = "#111827";
-      ctx.font = `950 ${Math.round(42 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, panelX + Math.round(34 * scale), panelY + Math.round(150 * scale));
+      ctx.font = `950 ${Math.round((isCompactCopy ? 34 : 40) * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, textX, titleY);
       ctx.fillStyle = accent;
-      ctx.font = `900 ${Math.round(24 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      ctx.fillText(ds.counter_title, panelX + Math.round(34 * scale), panelY + Math.round(192 * scale));
+      ctx.font = `900 ${Math.round((isCompactCopy ? 21 : 24) * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(ds.counter_title, textX, titleY + Math.round(40 * scale));
       ctx.fillStyle = "#374151";
-      ctx.font = `800 ${Math.round(20 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      drawWrappedLines(ctx, lines, panelX + Math.round(34 * scale), panelY + Math.round(236 * scale), Math.round(31 * scale), 3);
+      ctx.font = `800 ${Math.round((isCompactCopy ? 18 : 20) * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      drawWrappedLines(ctx, lines, textX, titleY + Math.round(78 * scale), Math.round(29 * scale), descMaxLines);
       const qrX = panelX + panelW - qrSize - Math.round(40 * scale);
       const qrY = panelY + Math.round((panelH - qrSize) / 2);
       drawQrCard(ctx, qrImg, qrX, qrY, qrSize, Math.round(24 * scale), "#d1d5db");
     } else if (template === "premium_dark") {
-      const heroH = Math.round(posterH * 0.62);
+      const heroH = Math.round(posterH * 0.45);
       if (heroImg) fillCoverImage(ctx, heroImg, 0, topY, A4_W, heroH);
       else {
         const g = ctx.createLinearGradient(0, topY, A4_W, topY + heroH);
@@ -249,21 +254,25 @@ export async function createCounterPosterCanvas({
       drawImageTint(ctx, "#020617", 0, topY, A4_W, heroH, 0.42);
       ctx.fillStyle = "#020617";
       ctx.fillRect(0, topY + heroH, A4_W, posterH - heroH);
-      const qrX = A4_W / 2 - qrSize / 2;
-      const qrY = topY + heroH - Math.round(qrSize * 0.34);
-      drawQrCard(ctx, qrImg, qrX, qrY, qrSize, Math.round(28 * scale), "rgba(255,255,255,0.28)");
-      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, padding, topY + heroH + Math.round(56 * scale), logoSize, Math.round(999 * scale), "rgba(255,255,255,0.96)", "#111827", "rgba(255,255,255,0.22)");
+      const qrX = centerX - qrSize / 2;
+      const qrY = topY + Math.round(posterH * (isCompactCopy ? 0.36 : 0.4));
+      const brandY = topY + Math.round(isCompactCopy ? 70 * scale : 92 * scale);
+      ctx.textAlign = "center";
       ctx.fillStyle = "rgba(255,255,255,0.70)";
       ctx.font = `900 ${Math.round(16 * scale)}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`;
-      ctx.fillText("SCAN & ORDER", padding, topY + heroH + Math.round(38 * scale));
+      ctx.fillText("SCAN & ORDER", centerX, brandY);
+      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, Math.round(centerX - logoSize / 2), brandY + Math.round(22 * scale), logoSize, Math.round(999 * scale), "rgba(255,255,255,0.96)", "#111827", "rgba(255,255,255,0.22)");
+      ctx.textAlign = "center";
       ctx.fillStyle = "#ffffff";
-      ctx.font = `950 ${Math.round(44 * scale)}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`;
-      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, padding + logoSize + Math.round(26 * scale), topY + heroH + Math.round(104 * scale));
+      ctx.font = `950 ${Math.round((isCompactCopy ? 34 : 42) * scale)}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`;
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, centerX, brandY + Math.round(ds.show_logo ? 150 * scale : 60 * scale));
       ctx.fillStyle = "rgba(255,255,255,0.82)";
-      ctx.font = `850 ${Math.round(24 * scale)}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`;
-      ctx.fillText(ds.counter_title, padding + logoSize + Math.round(26 * scale), topY + heroH + Math.round(145 * scale));
+      ctx.font = `850 ${Math.round((isCompactCopy ? 22 : 24) * scale)}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`;
+      ctx.fillText(ds.counter_title, centerX, brandY + Math.round(ds.show_logo ? 192 * scale : 100 * scale));
+      drawQrCard(ctx, qrImg, qrX, qrY, qrSize, Math.round(28 * scale), "rgba(255,255,255,0.28)");
       ctx.font = `800 ${Math.round(20 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      drawWrappedLines(ctx, lines, padding, topY + posterH - Math.round(96 * scale), Math.round(31 * scale), 2);
+      drawWrappedLines(ctx, lines, centerX, qrY + qrSize + Math.round(58 * scale), Math.round(31 * scale), 2);
+      ctx.textAlign = "start";
       ctx.fillStyle = accent;
       ctx.fillRect(padding, topY + posterH - Math.round(34 * scale), A4_W - padding * 2, Math.max(4, Math.round(5 * scale)));
     } else if (template === "soft_round") {
@@ -277,24 +286,41 @@ export async function createCounterPosterCanvas({
       ctx.beginPath();
       ctx.arc(A4_W - padding, topY + padding, Math.round(170 * scale), 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = "rgba(251,146,60,0.12)";
+      ctx.beginPath();
+      ctx.arc(padding, topY + posterH - padding, Math.round(120 * scale), 0, Math.PI * 2);
+      ctx.fill();
       const cardX = padding;
       const cardY = topY + Math.round(padding * 1.15);
       const cardW = A4_W - padding * 2;
       const cardH = posterH - Math.round(padding * 2.3);
       roundRect(ctx, cardX, cardY, cardW, cardH, Math.round(48 * scale), "rgba(255,255,255,0.88)", "#fed7aa");
-      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, cardX + Math.round(38 * scale), cardY + Math.round(38 * scale), logoSize, Math.round(26 * scale), "#ffedd5", "#9a3412", "#fdba74");
+      ctx.textAlign = "center";
+      roundRect(ctx, centerX - Math.round(90 * scale), cardY + Math.round(34 * scale), Math.round(180 * scale), Math.round(38 * scale), Math.round(999 * scale), "#ffedd5", "#fdba74");
+      ctx.fillStyle = "#9a3412";
+      ctx.font = `950 ${Math.round(15 * scale)}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`;
+      ctx.fillText("QR ORDER", centerX, cardY + Math.round(59 * scale));
+      if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, Math.round(centerX - logoSize / 2), cardY + Math.round(92 * scale), logoSize, Math.round(26 * scale), "#ffedd5", "#9a3412", "#fdba74");
+      ctx.textAlign = "center";
       ctx.fillStyle = "#111827";
       ctx.font = `950 ${Math.round(40 * scale)}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`;
-      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, cardX + Math.round(42 * scale), cardY + Math.round(162 * scale));
+      ctx.fillText(ds.show_store_name ? storeName : ds.counter_title, centerX, cardY + Math.round(ds.show_logo ? 210 * scale : 122 * scale));
       ctx.fillStyle = "#9a3412";
       ctx.font = `850 ${Math.round(24 * scale)}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`;
-      ctx.fillText(ds.counter_title, cardX + Math.round(42 * scale), cardY + Math.round(204 * scale));
-      const qrX = cardX + cardW - qrSize - Math.round(54 * scale);
-      const qrY = cardY + Math.round(cardH * 0.38);
+      ctx.fillText(ds.counter_title, centerX, cardY + Math.round(ds.show_logo ? 252 * scale : 164 * scale));
+      const qrX = centerX - qrSize / 2;
+      const qrY = cardY + Math.round(cardH * (isCompactCopy ? 0.38 : 0.42));
       drawQrCard(ctx, qrImg, qrX, qrY, qrSize, Math.round(30 * scale), "#fed7aa");
       ctx.fillStyle = "#57534e";
       ctx.font = `800 ${Math.round(21 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      drawWrappedLines(ctx, lines, cardX + Math.round(42 * scale), qrY + Math.round(42 * scale), Math.round(32 * scale), 3);
+      drawWrappedLines(ctx, lines, centerX, qrY + qrSize + Math.round(56 * scale), Math.round(32 * scale), descMaxLines);
+      ctx.fillStyle = "rgba(251,146,60,0.45)";
+      for (let dot = 0; dot < 7; dot++) {
+        ctx.beginPath();
+        ctx.arc(centerX - Math.round(90 * scale) + dot * Math.round(30 * scale), cardY + cardH - Math.round(48 * scale), Math.round(4 * scale), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.textAlign = "start";
     } else {
       ctx.fillStyle = "#f8fafc";
       ctx.fillRect(0, topY, A4_W, posterH);
@@ -305,6 +331,10 @@ export async function createCounterPosterCanvas({
       const cardW = A4_W - padding * 2;
       const cardH = posterH - padding * 2;
       roundRect(ctx, cardX, cardY, cardW, cardH, Math.round(28 * scale), "#ffffff", "#e5e7eb");
+      const topLineY = cardY + Math.round(38 * scale);
+      const bottomLineY = cardY + cardH - Math.round(38 * scale);
+      ctx.fillStyle = accent;
+      ctx.fillRect(cardX + Math.round(42 * scale), topLineY, cardW - Math.round(84 * scale), Math.max(4, Math.round(5 * scale)));
       if (ds.show_logo) drawLogoBadge(ctx, logoImg, storeName, cardX + Math.round(42 * scale), cardY + Math.round(42 * scale), logoSize, Math.round(20 * scale), "#f9fafb", "#111827", "#e5e7eb");
       ctx.fillStyle = "#111827";
       ctx.font = `950 ${Math.round(44 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`;
@@ -312,16 +342,16 @@ export async function createCounterPosterCanvas({
       ctx.fillStyle = accent;
       ctx.font = `900 ${Math.round(26 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
       ctx.fillText(ds.counter_title, cardX + Math.round(42 * scale), cardY + Math.round(224 * scale));
-      const qrX = A4_W / 2 - qrSize / 2;
-      const qrY = cardY + Math.round(cardH * 0.43);
+      const qrX = centerX - qrSize / 2;
+      const qrY = Math.min(cardY + Math.round(cardH * 0.39), bottomLineY - qrSize - Math.round(96 * scale));
       drawQrCard(ctx, qrImg, qrX, qrY, qrSize, Math.round(22 * scale), "#d1d5db");
       ctx.fillStyle = "#4b5563";
       ctx.font = `800 ${Math.round(21 * scale)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
       ctx.textAlign = "center";
-      drawWrappedLines(ctx, lines, A4_W / 2, qrY + qrSize + Math.round(60 * scale), Math.round(32 * scale), 3);
+      drawWrappedLines(ctx, lines, centerX, Math.min(qrY + qrSize + Math.round(56 * scale), bottomLineY - Math.round(24 * scale)), Math.round(32 * scale), descMaxLines);
       ctx.textAlign = "start";
       ctx.fillStyle = accent;
-      ctx.fillRect(cardX + Math.round(42 * scale), topY + posterH - Math.round(72 * scale), cardW - Math.round(84 * scale), Math.max(4, Math.round(5 * scale)));
+      ctx.fillRect(cardX + Math.round(42 * scale), bottomLineY, cardW - Math.round(84 * scale), Math.max(4, Math.round(5 * scale)));
     }
 
     ctx.textAlign = "start";
@@ -426,73 +456,72 @@ export async function createTableSheetCanvases({
         roundRect(ctx, x + innerPad, y + innerPad, cardW - innerPad * 2, density === "large" ? 52 : 36, 18, brandFill);
       }
 
-      if (isPremium || isRound) {
-        const logoX = density === "large" ? x + innerPad : x + Math.floor((cardW - markSize) / 2);
-        const logoY = density === "large" ? y + innerPad : y + 14;
-        if (ds.show_logo) {
-          drawLogoBadge(
-            ctx,
-            tableLogoImg,
-            storeName,
-            logoX,
-            logoY,
-            markSize,
-            isRound ? 16 : 999,
-            isPremium ? "rgba(255,255,255,0.96)" : "#ffedd5",
-            isPremium ? "#111827" : "#9a3412",
-            isPremium ? "rgba(255,255,255,0.22)" : "#fdba74"
-          );
-        }
-        ctx.textAlign = density === "large" ? "start" : "center";
-        ctx.fillStyle = titleColor;
-        ctx.font = isPremium
-          ? `950 ${brandFontSize}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`
-          : `950 ${brandFontSize}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`;
-        const brandX = density === "large" ? x + innerPad + (markSize ? markSize + 14 : 0) : x + cardW / 2;
-        const brandY = density === "large" ? y + innerPad + 22 : y + (ds.show_logo ? 68 : 34);
-        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, brandX, brandY);
-        ctx.fillStyle = isPremium ? "#ffffff" : "#9a3412";
-        ctx.font = isPremium
-          ? `950 ${tableLabelSize}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`
-          : `950 ${tableLabelSize}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`;
-        ctx.fillText(formatTableLabel(loaded[i].n), density === "large" ? brandX : x + cardW / 2, density === "large" ? y + innerPad + 62 : y + (ds.show_logo ? 98 : 66));
-        ctx.textAlign = "start";
-      } else {
-        const titleX = x + innerPad + (markSize ? markSize + 10 : 0);
-        if (ds.show_logo) {
-          const markFill = isPhoto ? "rgba(255,255,255,0.22)" : ds.accent_color || "#111827";
-          roundRect(ctx, x + innerPad, y + innerPad, markSize, markSize, 12, markFill);
-          if (tableLogoImg) {
-            ctx.save();
-            ctx.beginPath();
-            roundedClipPath(ctx, x + innerPad, y + innerPad, markSize, markSize, 12);
-            ctx.clip();
-            ctx.drawImage(tableLogoImg, x + innerPad, y + innerPad, markSize, markSize);
-            ctx.restore();
-          } else {
-            ctx.fillStyle = "#ffffff";
-            ctx.font = `900 ${Math.round(markSize * 0.42)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-            ctx.fillText(storeName.trim().slice(0, 1) || "Q", x + innerPad + Math.round(markSize * 0.30), y + innerPad + Math.round(markSize * 0.68));
-          }
-        }
-        ctx.fillStyle = isPhoto ? "#ffffff" : titleColor;
-        ctx.font = `950 ${brandFontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-        ctx.fillText(ds.show_store_name ? storeName : ds.table_title, titleX, y + innerPad + Math.round(markSize ? markSize * 0.40 : 18));
-        ctx.fillStyle = isPhoto ? "rgba(255,255,255,0.92)" : mutedColor;
-        ctx.font = `900 ${tableLabelSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-        ctx.fillText(formatTableLabel(loaded[i].n), x + innerPad, y + (density === "large" ? 96 : 62));
+      const centerX = x + cardW / 2;
+      const brandText = ds.show_store_name ? storeName : ds.table_title;
+      const labelText = formatTableLabel(loaded[i].n);
+      const brandTop = y + innerPad + (density === "compact" ? 2 : 4);
+      const brandLogoY = brandTop;
+      const brandTextY = ds.show_logo
+        ? brandLogoY + markSize + Math.round(density === "large" ? 24 : density === "medium" ? 18 : 15)
+        : brandTop + Math.round(density === "large" ? 28 : density === "medium" ? 22 : 18);
+      const tableLabelY = brandTextY + Math.round(density === "large" ? 44 : density === "medium" ? 34 : 29);
+      const qrX = x + Math.floor((cardW - qrSize) / 2);
+      const preferredQrY =
+        density === "large"
+          ? y + Math.round(cardH * 0.36)
+          : density === "medium"
+          ? y + Math.round(cardH * 0.33)
+          : y + Math.round(cardH * 0.29);
+      const minQrY = tableLabelY + Math.round(density === "large" ? 34 : density === "medium" ? 24 : 18);
+      const maxQrY = y + cardH - qrSize - Math.round(density === "large" ? 72 : density === "medium" ? 46 : 38);
+      const qrY = Math.max(minQrY, Math.min(preferredQrY, maxQrY));
+      const descY = Math.min(
+        qrY + qrSize + Math.round(density === "large" ? 34 : density === "medium" ? 24 : 20),
+        y + cardH - Math.round(density === "large" ? 28 : 16)
+      );
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+
+      if (ds.show_logo) {
+        const logoX = Math.round(centerX - markSize / 2);
+        drawLogoBadge(
+          ctx,
+          tableLogoImg,
+          storeName,
+          logoX,
+          brandLogoY,
+          markSize,
+          isRound ? 16 : isPremium ? 999 : 12,
+          isPremium ? "rgba(255,255,255,0.96)" : isRound ? "#ffedd5" : isPhoto ? "rgba(255,255,255,0.24)" : "#f9fafb",
+          isPremium ? "#111827" : isRound ? "#9a3412" : "#111827",
+          isPremium ? "rgba(255,255,255,0.22)" : isRound ? "#fdba74" : isPhoto ? "rgba(255,255,255,0.34)" : "#e5e7eb"
+        );
       }
 
-      const qrX = density === "large" && (isPhoto || isPremium || isRound) ? x + cardW - qrSize - innerPad - 6 : x + Math.floor((cardW - qrSize) / 2);
-      const qrY = density === "large" ? y + Math.round(cardH * 0.38) : y + (isPremium || isRound ? 118 : 82);
+      ctx.fillStyle = isPhoto ? "#ffffff" : titleColor;
+      ctx.font = isPremium
+        ? `950 ${brandFontSize}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`
+        : isRound
+        ? `950 ${brandFontSize}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`
+        : `950 ${brandFontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(brandText, centerX, brandTextY);
+
+      ctx.fillStyle = isPremium ? "#ffffff" : isRound ? "#9a3412" : isPhoto ? "rgba(255,255,255,0.96)" : ds.accent_color || "#111827";
+      ctx.font = isPremium
+        ? `950 ${tableLabelSize}px Georgia, Times New Roman, ui-serif, Noto Sans KR, serif`
+        : isRound
+        ? `950 ${tableLabelSize}px ui-rounded, ui-sans-serif, system-ui, -apple-system, Segoe UI, Noto Sans KR, sans-serif`
+        : `950 ${tableLabelSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
+      ctx.fillText(labelText, centerX, tableLabelY);
+
       roundRect(ctx, qrX - 12, qrY - 12, qrSize + 24, qrSize + 24, isRound ? 24 : 16, "#ffffff", isPremium ? "rgba(255,255,255,0.25)" : "#e5e7eb");
       ctx.drawImage(loaded[i].img, qrX, qrY, qrSize, qrSize);
 
       ctx.fillStyle = mutedColor;
       ctx.font = `850 ${descFontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, sans-serif`;
-      const descX = density === "large" && (isPhoto || isPremium || isRound) ? x + innerPad : x + innerPad;
-      const descY = y + cardH - (density === "large" ? 28 : 16);
-      ctx.fillText(ds.table_description || "QR을 찍고 메뉴를 선택해 주세요.", descX, descY);
+      ctx.fillText(ds.table_description || "QR을 찍고 메뉴를 선택해 주세요.", centerX, descY);
+      ctx.textAlign = "start";
     }
 
     canvases.push(canvas);
