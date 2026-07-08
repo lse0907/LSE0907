@@ -658,6 +658,9 @@ function AdminQrPageInner() {
           gap: 10px;
           margin-top: 12px;
         }
+        .spanFull {
+          grid-column: 1 / -1;
+        }
         .field {
           display: grid;
           gap: 6px;
@@ -1138,6 +1141,9 @@ function AdminQrPageInner() {
           .creatorGrid {
             grid-template-columns: 1fr;
           }
+          .formGrid {
+            grid-template-columns: 1fr;
+          }
           .previewCard {
             position: static;
           }
@@ -1185,11 +1191,35 @@ function AdminQrPageInner() {
           .presetGrid {
             grid-template-columns: 1fr;
           }
+          .statusGrid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+          }
+          .statCard {
+            padding: 8px 6px;
+            border-radius: 12px;
+            text-align: center;
+          }
+          .statNum {
+            font-size: 18px;
+          }
+          .statusGrid .label {
+            font-size: 10px;
+          }
+          .statusGrid .hint {
+            display: none;
+          }
           .qrRow {
             grid-template-columns: 1fr;
           }
           .h1 {
             font-size: 24px;
+          }
+        }
+        @media (min-width: 1024px) {
+          .formGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: start;
           }
         }
       `}</style>
@@ -1234,7 +1264,7 @@ function AdminQrPageInner() {
           <h2 className="cardTitle">출력 설정</h2>
 
           <div className="formGrid">
-            <div className="field">
+            <div className="field spanFull">
               <div className="label">출력 대상</div>
               <div className="btnRow">
                 <button
@@ -1259,9 +1289,9 @@ function AdminQrPageInner() {
             </div>
 
             {printTarget === "counter" ? (
-              <div className="setupBox">
+              <div className="setupBox spanFull">
                 <h3 className="setupBoxTitle">카운터 QR 준비</h3>
-                <div className="hint">카운터 QR은 테이블 번호 없이 주문하는 대표 QR입니다. 계산대, 입구, 포장 주문 안내에 사용하세요.</div>
+                <div className="hint">카운터/포장용 대표 QR입니다.</div>
                 <div className="btnRow">
                   <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId || !!counterQr}>
                     {counterQr ? "준비됨" : "QR 준비하기"}
@@ -1272,9 +1302,9 @@ function AdminQrPageInner() {
                 </div>
               </div>
             ) : (
-              <div className="setupBox">
+              <div className="setupBox spanFull">
                 <h3 className="setupBoxTitle">테이블 번호</h3>
-                <div className="hint">테이블 QR은 스캔한 손님의 주문에 테이블 번호가 자동으로 연결됩니다.</div>
+                <div className="hint">테이블 번호가 포함된 QR입니다.</div>
                 <div className="row2">
                   <div className="field">
                     <div className="label">시작</div>
@@ -1316,12 +1346,12 @@ function AdminQrPageInner() {
                       <strong>{preset.label}</strong>
                       <span>
                         {key === "a5_card"
-                          ? "계산대 옆 작은 안내용"
+                          ? "계산대용"
                           : key === "a4_poster"
-                          ? "카운터/입구 안내용"
+                          ? "기본 포스터"
                           : key === "a3_poster"
-                          ? "멀리서도 보이는 입구용"
-                          : "A4 한 장에 2개 출력"}
+                          ? "대형 입구용"
+                          : "2개 출력"}
                       </span>
                     </button>
                   ))}
@@ -1340,10 +1370,10 @@ function AdminQrPageInner() {
                       <strong>{preset.label}</strong>
                       <span>
                         {key === "a4_12"
-                          ? "A4 한 장에 12개"
+                          ? "12개 출력"
                           : key === "a4_8"
-                          ? "가장 무난한 추천 크기"
-                          : "크게 붙이는 4분할"}
+                          ? "추천 크기"
+                          : "크게 출력"}
                       </span>
                     </button>
                   ))}
@@ -1364,12 +1394,12 @@ function AdminQrPageInner() {
                     <strong>{option.label}</strong>
                     <span>
                       {option.key === "simple"
-                        ? "가장 깔끔한 기본 안내용"
+                        ? "깔끔한 기본"
                         : option.key === "cafe_poster"
-                        ? "매장 사진을 강조하는 포스터형"
+                        ? "사진 강조"
                         : option.key === "premium_dark"
-                        ? "고급스럽고 눈에 잘 띄는 안내용"
-                        : "따뜻한 카페 카드 느낌"}
+                        ? "고급 다크"
+                        : "따뜻한 카드"}
                     </span>
                   </button>
                 ))}
@@ -1408,7 +1438,7 @@ function AdminQrPageInner() {
                   </button>
                 ))}
               </div>
-              <div className="hint">대표 이미지는 사진형에서 배경으로 크게 사용됩니다. 사진이 너무 복잡하면 문구가 덜 보일 수 있어요.</div>
+              <div className="hint">사진형 배경에 사용됩니다.</div>
             </div>
 
             <div className="field">
@@ -1434,7 +1464,7 @@ function AdminQrPageInner() {
                 }
                 placeholder="예: 주문 후 카운터에서 받아가세요"
               />
-              <div className="hint">문구가 너무 길면 출력물에서 잘릴 수 있습니다. 문구1은 짧게, 문구2는 2~3줄 이내를 추천합니다.</div>
+              <div className="hint">긴 문구는 잘릴 수 있어요.</div>
             </div>
 
             <div className="field">
@@ -1453,20 +1483,19 @@ function AdminQrPageInner() {
                   </button>
                 ))}
               </div>
-              <div className="hint">작은 출력 크기에서는 로고와 매장명이 함께 표시되면 좁아 보일 수 있습니다. 미리보기에서 답답하면 하나만 표시해 주세요.</div>
+              <div className="hint">답답하면 로고나 매장명 중 하나만 켜세요.</div>
             </div>
 
-            <div className="btnRow">
+            <div className="btnRow spanFull">
               <button className="btn" onClick={saveDesignSettings} disabled={qrSaving || !storeId}>
                 디자인 저장
               </button>
             </div>
-            <div className="noticeBox">
-              <b>저장과 다운로드는 달라요.</b>
-              <span>디자인을 다음에도 재사용하려면 먼저 저장해 주세요. 다운로드는 현재 화면의 설정으로 PNG 파일을 만듭니다.</span>
+            <div className="noticeBox spanFull">
+              <b>저장: 다음에도 사용 · 다운로드: 현재 디자인 PNG</b>
             </div>
 
-            <div className="summaryBox">
+            <div className="summaryBox spanFull">
               {printTarget === "counter" ? (
                 <>
                   <b>카운터 QR {counterQr ? 1 : 0}개</b>
@@ -1480,14 +1509,13 @@ function AdminQrPageInner() {
               )}
             </div>
 
-            <div className="hint">인쇄 전 휴대폰 카메라로 QR 스캔을 꼭 확인하세요.</div>
-            <ul className="checkList">
-              <li>매장명, 로고, 안내 문구가 겹치지 않는지 확인해 주세요.</li>
-              <li>QR이 충분히 크게 보이고 휴대폰으로 스캔되는지 확인해 주세요.</li>
-              <li>미리보기는 화면에 맞게 축소되어 보이며, 다운로드 파일은 실제 출력 크기로 생성됩니다.</li>
+            <div className="hint spanFull">다운로드 전 QR 스캔과 문구 겹침만 확인하세요.</div>
+            <ul className="checkList spanFull">
+              <li>QR 스캔 확인</li>
+              <li>문구/로고 겹침 확인</li>
             </ul>
 
-            <div className="btnRow">
+            <div className="btnRow spanFull">
               {printTarget === "counter" ? (
                 <button
                   className="btn btnPrimary"
@@ -1528,8 +1556,7 @@ function AdminQrPageInner() {
             )}
           </div>
           <div className="noticeBox">
-            <span>미리보기는 화면 크기에 맞게 축소되어 보입니다. 실제 다운로드 파일은 선택한 출력 크기 기준으로 생성됩니다.</span>
-            <span>{printTarget === "counter" ? "A4 2분할은 한 장에 같은 카운터 QR이 2개 들어갑니다." : "테이블 QR이 많으면 여러 장의 PNG 파일로 나뉘어 다운로드됩니다."}</span>
+            <span>미리보기는 축소 화면입니다. 다운로드는 실제 출력 크기입니다.</span>
           </div>
 
         </div>
@@ -1539,7 +1566,7 @@ function AdminQrPageInner() {
         <details className="advancedBox">
           <summary>QR 상태 관리</summary>
           <div className="noticeBox">
-            <span>이미 인쇄해서 사용 중인 QR은 비활성화하지 않는 것을 권장합니다. 사용 중지하면 기존 출력물을 스캔해도 주문이 연결되지 않을 수 있습니다.</span>
+            <span>인쇄해 사용 중인 QR은 사용 중지하지 마세요.</span>
           </div>
           <div className="qrList compact">
             {qrRows.length === 0 ? (
