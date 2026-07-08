@@ -658,6 +658,9 @@ function AdminQrPageInner() {
           gap: 10px;
           margin-top: 12px;
         }
+        .spanFull {
+          grid-column: 1 / -1;
+        }
         .field {
           display: grid;
           gap: 6px;
@@ -735,6 +738,31 @@ function AdminQrPageInner() {
           font-size: 12px;
           font-weight: 800;
           line-height: 1.35;
+        }
+        .noticeBox {
+          margin-top: 10px;
+          display: grid;
+          gap: 5px;
+          padding: 10px 12px;
+          border-radius: 14px;
+          border: 1px solid #e5e7eb;
+          background: #f9fafb;
+          color: #4b5563;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.45;
+        }
+        .noticeBox b {
+          color: #111827;
+          font-weight: 950;
+        }
+        .checkList {
+          margin: 10px 0 0;
+          padding-left: 18px;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.5;
         }
         .statusGrid {
           display: grid;
@@ -1113,12 +1141,46 @@ function AdminQrPageInner() {
           .creatorGrid {
             grid-template-columns: 1fr;
           }
+          .formGrid {
+            grid-template-columns: 1fr;
+          }
           .previewCard {
             position: static;
-            order: -1;
+          }
+          .printPreview {
+            min-height: 300px;
           }
         }
         @media (max-width: 520px) {
+          .wrap {
+            padding: 10px;
+          }
+          .titleRow,
+          .topActions {
+            display: grid;
+            justify-content: stretch;
+          }
+          .pill {
+            white-space: normal;
+          }
+          .card {
+            padding: 12px;
+          }
+          .btnRow {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+          .btn {
+            width: 100%;
+          }
+          .printPreview {
+            min-height: 240px;
+            padding: 10px;
+          }
+          .previewImg {
+            border-radius: 12px;
+            box-shadow: 0 6px 18px rgba(15,23,42,0.08);
+          }
           .row2 {
             grid-template-columns: 1fr;
           }
@@ -1129,11 +1191,35 @@ function AdminQrPageInner() {
           .presetGrid {
             grid-template-columns: 1fr;
           }
+          .statusGrid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+          }
+          .statCard {
+            padding: 8px 6px;
+            border-radius: 12px;
+            text-align: center;
+          }
+          .statNum {
+            font-size: 18px;
+          }
+          .statusGrid .label {
+            font-size: 10px;
+          }
+          .statusGrid .hint {
+            display: none;
+          }
           .qrRow {
             grid-template-columns: 1fr;
           }
           .h1 {
             font-size: 24px;
+          }
+        }
+        @media (min-width: 1024px) {
+          .formGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: start;
           }
         }
       `}</style>
@@ -1178,7 +1264,7 @@ function AdminQrPageInner() {
           <h2 className="cardTitle">출력 설정</h2>
 
           <div className="formGrid">
-            <div className="field">
+            <div className="field spanFull">
               <div className="label">출력 대상</div>
               <div className="btnRow">
                 <button
@@ -1203,8 +1289,9 @@ function AdminQrPageInner() {
             </div>
 
             {printTarget === "counter" ? (
-              <div className="setupBox">
+              <div className="setupBox spanFull">
                 <h3 className="setupBoxTitle">카운터 QR 준비</h3>
+                <div className="hint">카운터/포장용 대표 QR입니다.</div>
                 <div className="btnRow">
                   <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId || !!counterQr}>
                     {counterQr ? "준비됨" : "QR 준비하기"}
@@ -1215,8 +1302,9 @@ function AdminQrPageInner() {
                 </div>
               </div>
             ) : (
-              <div className="setupBox">
+              <div className="setupBox spanFull">
                 <h3 className="setupBoxTitle">테이블 번호</h3>
+                <div className="hint">테이블 번호가 포함된 QR입니다.</div>
                 <div className="row2">
                   <div className="field">
                     <div className="label">시작</div>
@@ -1256,7 +1344,15 @@ function AdminQrPageInner() {
                       onClick={() => setCounterPrintPreset(key)}
                     >
                       <strong>{preset.label}</strong>
-                      <span>{key === "a3_poster" ? "입구용" : key === "a4_2up" ? "2개 출력" : ""}</span>
+                      <span>
+                        {key === "a5_card"
+                          ? "계산대용"
+                          : key === "a4_poster"
+                          ? "기본 포스터"
+                          : key === "a3_poster"
+                          ? "대형 입구용"
+                          : "2개 출력"}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -1272,7 +1368,13 @@ function AdminQrPageInner() {
                       onClick={() => setTablePrintPreset(key)}
                     >
                       <strong>{preset.label}</strong>
-                      <span>{key === "a4_8" ? "추천" : `${preset.cols}×${preset.rows}`}</span>
+                      <span>
+                        {key === "a4_12"
+                          ? "12개 출력"
+                          : key === "a4_8"
+                          ? "추천 크기"
+                          : "크게 출력"}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -1290,7 +1392,15 @@ function AdminQrPageInner() {
                   >
                     <i className={`templateSample ${option.key}`} aria-hidden="true" />
                     <strong>{option.label}</strong>
-                    <span>{option.hint}</span>
+                    <span>
+                      {option.key === "simple"
+                        ? "깔끔한 기본"
+                        : option.key === "cafe_poster"
+                        ? "사진 강조"
+                        : option.key === "premium_dark"
+                        ? "고급 다크"
+                        : "따뜻한 카드"}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -1328,11 +1438,11 @@ function AdminQrPageInner() {
                   </button>
                 ))}
               </div>
-              <div className="hint">사진형 템플릿에서 가장 크게 보이고, 다른 디자인은 로고와 QR이 더 돋보이게 표시돼요.</div>
+              <div className="hint">사진형 배경에 사용됩니다.</div>
             </div>
 
             <div className="field">
-              <div className="label">문구</div>
+              <div className="label">문구1 · 큰 안내 문구</div>
               <input
                 className="input"
                 value={printTarget === "counter" ? effectiveDesign.counter_title : effectiveDesign.table_title}
@@ -1343,6 +1453,7 @@ function AdminQrPageInner() {
                 }
                 placeholder="예: QR로 주문하세요"
               />
+              <div className="label">문구2 · QR 아래 사용 안내</div>
               <textarea
                 className="textarea compactTextarea"
                 value={printTarget === "counter" ? effectiveDesign.counter_description : effectiveDesign.table_description}
@@ -1353,6 +1464,7 @@ function AdminQrPageInner() {
                 }
                 placeholder="예: 주문 후 카운터에서 받아가세요"
               />
+              <div className="hint">긴 문구는 잘릴 수 있어요.</div>
             </div>
 
             <div className="field">
@@ -1371,15 +1483,19 @@ function AdminQrPageInner() {
                   </button>
                 ))}
               </div>
+              <div className="hint">답답하면 로고나 매장명 중 하나만 켜세요.</div>
             </div>
 
-            <div className="btnRow">
+            <div className="btnRow spanFull">
               <button className="btn" onClick={saveDesignSettings} disabled={qrSaving || !storeId}>
                 디자인 저장
               </button>
             </div>
+            <div className="noticeBox spanFull">
+              <b>저장: 다음에도 사용 · 다운로드: 현재 디자인 PNG</b>
+            </div>
 
-            <div className="summaryBox">
+            <div className="summaryBox spanFull">
               {printTarget === "counter" ? (
                 <>
                   <b>카운터 QR {counterQr ? 1 : 0}개</b>
@@ -1393,9 +1509,13 @@ function AdminQrPageInner() {
               )}
             </div>
 
-            <div className="hint">출력 전 QR 스캔을 확인하세요.</div>
+            <div className="hint spanFull">다운로드 전 QR 스캔과 문구 겹침만 확인하세요.</div>
+            <ul className="checkList spanFull">
+              <li>QR 스캔 확인</li>
+              <li>문구/로고 겹침 확인</li>
+            </ul>
 
-            <div className="btnRow">
+            <div className="btnRow spanFull">
               {printTarget === "counter" ? (
                 <button
                   className="btn btnPrimary"
@@ -1404,7 +1524,7 @@ function AdminQrPageInner() {
                   }}
                   disabled={!counterQr || !origin || !storeId}
                 >
-                  저장하고 포스터 다운로드
+                  현재 디자인으로 포스터 다운로드
                 </button>
               ) : (
                 <button
@@ -1414,7 +1534,7 @@ function AdminQrPageInner() {
                   }}
                   disabled={activeTableQrs.length === 0 || !origin || !storeId}
                 >
-                  저장하고 카드 다운로드
+                  현재 디자인으로 카드 다운로드
                 </button>
               )}
             </div>
@@ -1435,6 +1555,9 @@ function AdminQrPageInner() {
               <div className="previewEmpty">{previewBusy ? "미리보기 생성 중..." : previewNote || "QR 설정을 확인해 주세요."}</div>
             )}
           </div>
+          <div className="noticeBox">
+            <span>미리보기는 축소 화면입니다. 다운로드는 실제 출력 크기입니다.</span>
+          </div>
 
         </div>
       </section>
@@ -1442,6 +1565,9 @@ function AdminQrPageInner() {
       <section className="card advancedCard">
         <details className="advancedBox">
           <summary>QR 상태 관리</summary>
+          <div className="noticeBox">
+            <span>인쇄해 사용 중인 QR은 사용 중지하지 마세요.</span>
+          </div>
           <div className="qrList compact">
             {qrRows.length === 0 ? (
               <div className="hint">QR이 없습니다.</div>
