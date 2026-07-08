@@ -140,6 +140,7 @@ function AdminQrPageInner() {
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewNote, setPreviewNote] = useState("");
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
   // ✅ 카운터 안내 문구는 QR페이지에서 별도로 관리(현재는 storeProfile 저장 대상 아님)
   const [counterDesc] = useState(
@@ -604,7 +605,12 @@ function AdminQrPageInner() {
           gap: 8px;
           align-items: center;
           justify-content: flex-end;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
+          min-width: 0;
+        }
+        .topActions .btn {
+          flex: 0 0 auto;
+          white-space: nowrap;
         }
         .h1 {
           margin: 0;
@@ -613,6 +619,10 @@ function AdminQrPageInner() {
           letter-spacing: -0.02em;
         }
         .pill {
+          min-width: 0;
+          max-width: min(44vw, 360px);
+          overflow: hidden;
+          text-overflow: ellipsis;
           font-size: 12px;
           font-weight: 900;
           padding: 6px 10px;
@@ -645,7 +655,7 @@ function AdminQrPageInner() {
           background: var(--card);
           border: 1px solid var(--line);
           border-radius: var(--radius);
-          padding: 14px;
+          padding: 12px;
           box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
         }
         .cardTitle {
@@ -868,7 +878,7 @@ function AdminQrPageInner() {
           border: 1px solid var(--line);
           background: #fff;
           border-radius: 14px;
-          padding: 12px;
+          padding: 10px;
           text-align: left;
           cursor: pointer;
           display: grid;
@@ -885,7 +895,7 @@ function AdminQrPageInner() {
           font-weight: 900;
         }
         .templateBtn {
-          min-height: 92px;
+          min-height: 78px;
         }
         .templateSample {
           height: 42px;
@@ -1137,6 +1147,99 @@ function AdminQrPageInner() {
           word-break: break-all;
           line-height: 1.35;
         }
+        .detailPanel {
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #fff;
+          padding: 0;
+          overflow: hidden;
+        }
+        .detailPanel summary {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          cursor: pointer;
+          padding: 12px;
+          font-weight: 950;
+        }
+        .detailPanel summary small {
+          color: var(--muted);
+          font-size: 11px;
+          font-weight: 850;
+          text-align: right;
+        }
+        .detailGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+          padding: 0 12px 12px;
+        }
+        .previewActions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .compactNotice {
+          padding: 8px 10px;
+          text-align: center;
+        }
+        .modalBackdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 50;
+          display: grid;
+          place-items: center;
+          padding: 14px;
+          background: rgba(15, 23, 42, 0.62);
+        }
+        .previewModal {
+          width: min(960px, 96vw);
+          max-height: 92vh;
+          display: grid;
+          grid-template-rows: auto minmax(0, 1fr) auto;
+          overflow: hidden;
+          border-radius: 18px;
+          background: #fff;
+          box-shadow: 0 24px 80px rgba(15, 23, 42, 0.32);
+        }
+        .modalHead,
+        .modalFoot {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 12px;
+          border-bottom: 1px solid var(--line);
+        }
+        .modalFoot {
+          border-top: 1px solid var(--line);
+          border-bottom: 0;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .modalBody {
+          display: grid;
+          place-items: center;
+          min-height: 0;
+          overflow: auto;
+          padding: 12px;
+          background: #f9fafb;
+        }
+        .modalPreviewImg {
+          width: auto;
+          max-width: 100%;
+          max-height: 76vh;
+          border-radius: 16px;
+          border: 1px solid var(--line);
+          background: #fff;
+          box-shadow: 0 12px 34px rgba(15,23,42,0.12);
+        }
+        .modalClose {
+          padding: 8px 12px;
+        }
         @media (max-width: 980px) {
           .creatorGrid {
             grid-template-columns: 1fr;
@@ -1155,13 +1258,27 @@ function AdminQrPageInner() {
           .wrap {
             padding: 10px;
           }
-          .titleRow,
-          .topActions {
+          .titleRow {
             display: grid;
-            justify-content: stretch;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: start;
+            gap: 8px;
+          }
+          .topActions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-start;
+            gap: 6px;
           }
           .pill {
-            white-space: normal;
+            max-width: 38vw;
+            padding: 5px 8px;
+            font-size: 11px;
+          }
+          .topActions .btn {
+            width: auto;
+            padding: 8px 10px;
+            font-size: 12px;
           }
           .card {
             padding: 12px;
@@ -1170,16 +1287,42 @@ function AdminQrPageInner() {
             display: grid;
             grid-template-columns: 1fr;
           }
-          .btn {
+          .btnRow .btn,
+          .previewActions .btn {
             width: 100%;
           }
           .printPreview {
-            min-height: 240px;
-            padding: 10px;
+            min-height: 160px;
+            max-height: 190px;
+            padding: 8px;
+            overflow: hidden;
           }
           .previewImg {
+            max-height: 170px;
+            width: auto;
+            max-width: 100%;
             border-radius: 12px;
             box-shadow: 0 6px 18px rgba(15,23,42,0.08);
+          }
+          .previewHead {
+            align-items: start;
+          }
+          .previewHead .count {
+            display: none;
+          }
+          .detailGrid {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+          .modalBackdrop {
+            padding: 8px;
+          }
+          .previewModal {
+            max-height: 94vh;
+            border-radius: 16px;
+          }
+          .modalPreviewImg {
+            max-height: 70vh;
           }
           .row2 {
             grid-template-columns: 1fr;
@@ -1193,15 +1336,20 @@ function AdminQrPageInner() {
           }
           .statusGrid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 6px;
+            gap: 4px;
+            margin-top: 8px;
           }
           .statCard {
-            padding: 8px 6px;
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 4px;
+            padding: 7px 4px;
             border-radius: 12px;
             text-align: center;
           }
           .statNum {
-            font-size: 18px;
+            font-size: 16px;
           }
           .statusGrid .label {
             font-size: 10px;
@@ -1228,10 +1376,10 @@ function AdminQrPageInner() {
         <div className="titleRow">
           <div>
             <h1 className="h1">매장 QR 만들기</h1>
-            <p className="desc">QR 출력물을 만들고 다운로드하세요.</p>
+            <p className="desc">인쇄용 QR을 만들어요.</p>
           </div>
           <div className="topActions">
-            <span className="pill">선택 매장: {storeId || "—"}</span>
+            <span className="pill" title={storeId ? `선택 매장: ${storeId}` : "선택 매장 없음"}>매장: {storeId || "—"}</span>
             <a className="btn" href={storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin"}>
               관리자 홈
             </a>
@@ -1261,7 +1409,7 @@ function AdminQrPageInner() {
 
       <section className="creatorGrid">
         <div className="card">
-          <h2 className="cardTitle">출력 설정</h2>
+          <h2 className="cardTitle">기본 설정</h2>
 
           <div className="formGrid">
             <div className="field spanFull">
@@ -1290,21 +1438,21 @@ function AdminQrPageInner() {
 
             {printTarget === "counter" ? (
               <div className="setupBox spanFull">
-                <h3 className="setupBoxTitle">카운터 QR 준비</h3>
-                <div className="hint">카운터/포장용 대표 QR입니다.</div>
+                <h3 className="setupBoxTitle">카운터 QR</h3>
+                <div className="hint">카운터·포장용</div>
                 <div className="btnRow">
                   <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId || !!counterQr}>
-                    {counterQr ? "준비됨" : "QR 준비하기"}
+                    {counterQr ? "등록 완료" : "QR 등록"}
                   </button>
                   <button className="btn" onClick={refreshQrData} disabled={qrSaving || qrLoading || !storeId}>
-                    {qrLoading ? "확인 중..." : "상태 확인"}
+                    {qrLoading ? "확인 중..." : "새로고침"}
                   </button>
                 </div>
               </div>
             ) : (
               <div className="setupBox spanFull">
                 <h3 className="setupBoxTitle">테이블 번호</h3>
-                <div className="hint">테이블 번호가 포함된 QR입니다.</div>
+                <div className="hint">테이블별 QR</div>
                 <div className="row2">
                   <div className="field">
                     <div className="label">시작</div>
@@ -1327,7 +1475,7 @@ function AdminQrPageInner() {
                 <div className="hint">추가 대상 <b>{pendingTableNumbers.length}</b>개 · 중복 제외</div>
                 <div className="btnRow">
                   <button className="btn btnPrimary" onClick={addTableQrs} disabled={qrSaving || qrLoading || !origin || !storeId || pendingTableNumbers.length === 0}>
-                    테이블 QR 만들기
+                    테이블 QR 생성
                   </button>
                 </div>
               </div>
@@ -1382,7 +1530,7 @@ function AdminQrPageInner() {
             )}
 
             <div className="field">
-              <div className="label">디자인</div>
+              <div className="label">템플릿</div>
               <div className="presetGrid">
                 {TEMPLATE_OPTIONS.map((option) => (
                   <button
@@ -1406,85 +1554,93 @@ function AdminQrPageInner() {
               </div>
             </div>
 
-            <div className="field">
-              <div className="label">포인트 색상</div>
-              <div className="colorRow">
-                {ACCENT_COLORS.map((color) => (
-                  <button
-                    aria-label={`색상 ${color}`}
-                    className={`colorBtn ${effectiveDesign.accent_color === color ? "selected" : ""}`}
-                    key={color}
-                    onClick={() => updateDesignSetting("accent_color", color)}
-                    style={{ background: color }}
+            <details className="detailPanel spanFull">
+              <summary>
+                <span>디자인 상세</span>
+                <small>색상·이미지·문구·브랜드</small>
+              </summary>
+              <div className="detailGrid">
+                <div className="field">
+                  <div className="label">포인트 색상</div>
+                  <div className="colorRow">
+                    {ACCENT_COLORS.map((color) => (
+                      <button
+                        aria-label={`색상 ${color}`}
+                        className={`colorBtn ${effectiveDesign.accent_color === color ? "selected" : ""}`}
+                        key={color}
+                        onClick={() => updateDesignSetting("accent_color", color)}
+                        style={{ background: color }}
+                      />
+                    ))}
+                  </div>
+                  <div className="hint">라인, 배지, 강조 문구에 사용돼요.</div>
+                </div>
+
+                <div className="field">
+                  <div className="label">이미지</div>
+                  <div className="btnRow">
+                    {([
+                      ["store_main", "매장 대표 이미지"],
+                      ["none", "이미지 없음"],
+                    ] as Array<[ImageSource, string]>).map(([source, label]) => (
+                      <button
+                        className={`toggleChip ${effectiveDesign.image_source === source ? "selected" : ""}`}
+                        key={source}
+                        onClick={() => updateImageSource(source)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="hint">사진형 배경에 사용됩니다.</div>
+                </div>
+
+                <div className="field">
+                  <div className="label">문구1 · 큰 안내 문구</div>
+                  <input
+                    className="input"
+                    value={printTarget === "counter" ? effectiveDesign.counter_title : effectiveDesign.table_title}
+                    onChange={(e) =>
+                      printTarget === "counter"
+                        ? updateDesignSetting("counter_title", e.target.value)
+                        : updateDesignSetting("table_title", e.target.value)
+                    }
+                    placeholder="예: QR로 주문하세요"
                   />
-                ))}
-              </div>
-              <div className="hint">라인, 배지, 강조 문구에 사용돼요.</div>
-            </div>
+                  <div className="label">문구2 · QR 아래 사용 안내</div>
+                  <textarea
+                    className="textarea compactTextarea"
+                    value={printTarget === "counter" ? effectiveDesign.counter_description : effectiveDesign.table_description}
+                    onChange={(e) =>
+                      printTarget === "counter"
+                        ? updateDesignSetting("counter_description", e.target.value)
+                        : updateDesignSetting("table_description", e.target.value)
+                    }
+                    placeholder="예: 주문 후 카운터에서 받아가세요"
+                  />
+                  <div className="hint">긴 문구는 잘릴 수 있어요.</div>
+                </div>
 
-            <div className="field">
-              <div className="label">이미지</div>
-              <div className="btnRow">
-                {([
-                  ["store_main", "매장 대표 이미지"],
-                  ["none", "이미지 없음"],
-                ] as Array<[ImageSource, string]>).map(([source, label]) => (
-                  <button
-                    className={`toggleChip ${effectiveDesign.image_source === source ? "selected" : ""}`}
-                    key={source}
-                    onClick={() => updateImageSource(source)}
-                  >
-                    {label}
-                  </button>
-                ))}
+                <div className="field">
+                  <div className="label">브랜드 표시</div>
+                  <div className="toggleRow">
+                    {([
+                      ["show_logo", "로고"],
+                      ["show_store_name", "매장명"],
+                    ] as Array<["show_logo" | "show_store_name", string]>).map(([key, label]) => (
+                      <button
+                        className={`toggleChip ${effectiveDesign[key] ? "selected" : ""}`}
+                        key={String(key)}
+                        onClick={() => updateDesignSetting(key, !effectiveDesign[key])}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="hint">답답하면 로고나 매장명 중 하나만 켜세요.</div>
+                </div>
               </div>
-              <div className="hint">사진형 배경에 사용됩니다.</div>
-            </div>
-
-            <div className="field">
-              <div className="label">문구1 · 큰 안내 문구</div>
-              <input
-                className="input"
-                value={printTarget === "counter" ? effectiveDesign.counter_title : effectiveDesign.table_title}
-                onChange={(e) =>
-                  printTarget === "counter"
-                    ? updateDesignSetting("counter_title", e.target.value)
-                    : updateDesignSetting("table_title", e.target.value)
-                }
-                placeholder="예: QR로 주문하세요"
-              />
-              <div className="label">문구2 · QR 아래 사용 안내</div>
-              <textarea
-                className="textarea compactTextarea"
-                value={printTarget === "counter" ? effectiveDesign.counter_description : effectiveDesign.table_description}
-                onChange={(e) =>
-                  printTarget === "counter"
-                    ? updateDesignSetting("counter_description", e.target.value)
-                    : updateDesignSetting("table_description", e.target.value)
-                }
-                placeholder="예: 주문 후 카운터에서 받아가세요"
-              />
-              <div className="hint">긴 문구는 잘릴 수 있어요.</div>
-            </div>
-
-            <div className="field">
-              <div className="label">브랜드 표시</div>
-              <div className="toggleRow">
-                {([
-                  ["show_logo", "로고"],
-                  ["show_store_name", "매장명"],
-                ] as Array<["show_logo" | "show_store_name", string]>).map(([key, label]) => (
-                  <button
-                    className={`toggleChip ${effectiveDesign[key] ? "selected" : ""}`}
-                    key={String(key)}
-                    onClick={() => updateDesignSetting(key, !effectiveDesign[key])}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="hint">답답하면 로고나 매장명 중 하나만 켜세요.</div>
-            </div>
+            </details>
 
             <div className="btnRow spanFull">
               <button className="btn" onClick={saveDesignSettings} disabled={qrSaving || !storeId}>
@@ -1492,7 +1648,7 @@ function AdminQrPageInner() {
               </button>
             </div>
             <div className="noticeBox spanFull">
-              <b>저장: 다음에도 사용 · 다운로드: 현재 디자인 PNG</b>
+              <b>저장: 다음에도 사용 · 다운로드: 현재 디자인</b>
             </div>
 
             <div className="summaryBox spanFull">
@@ -1509,35 +1665,7 @@ function AdminQrPageInner() {
               )}
             </div>
 
-            <div className="hint spanFull">다운로드 전 QR 스캔과 문구 겹침만 확인하세요.</div>
-            <ul className="checkList spanFull">
-              <li>QR 스캔 확인</li>
-              <li>문구/로고 겹침 확인</li>
-            </ul>
 
-            <div className="btnRow spanFull">
-              {printTarget === "counter" ? (
-                <button
-                  className="btn btnPrimary"
-                  onClick={() => {
-                    downloadCounterPng();
-                  }}
-                  disabled={!counterQr || !origin || !storeId}
-                >
-                  현재 디자인으로 포스터 다운로드
-                </button>
-              ) : (
-                <button
-                  className="btn btnPrimary"
-                  onClick={() => {
-                    downloadTablePng();
-                  }}
-                  disabled={activeTableQrs.length === 0 || !origin || !storeId}
-                >
-                  현재 디자인으로 카드 다운로드
-                </button>
-              )}
-            </div>
           </div>
         </div>
 
@@ -1555,18 +1683,72 @@ function AdminQrPageInner() {
               <div className="previewEmpty">{previewBusy ? "미리보기 생성 중..." : previewNote || "QR 설정을 확인해 주세요."}</div>
             )}
           </div>
-          <div className="noticeBox">
-            <span>미리보기는 축소 화면입니다. 다운로드는 실제 출력 크기입니다.</span>
+          <div className="previewActions">
+            <button className="btn" onClick={() => setPreviewModalOpen(true)} disabled={!previewUrl}>
+              크게 보기
+            </button>
+            {printTarget === "counter" ? (
+              <button className="btn btnPrimary" onClick={downloadCounterPng} disabled={!counterQr || !origin || !storeId || qrSaving}>
+                PNG 다운로드
+              </button>
+            ) : (
+              <button className="btn btnPrimary" onClick={downloadTablePng} disabled={activeTableQrs.length === 0 || !origin || !storeId || qrSaving}>
+                PNG 다운로드
+              </button>
+            )}
+          </div>
+          <div className="noticeBox compactNotice">
+            <span>스캔·문구 확인</span>
           </div>
 
         </div>
       </section>
 
+
+      {previewModalOpen ? (
+        <div className="modalBackdrop" role="presentation" onClick={() => setPreviewModalOpen(false)}>
+          <div
+            className="previewModal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="QR 출력물 미리보기"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modalHead">
+              <strong>미리보기</strong>
+              <button className="btn modalClose" onClick={() => setPreviewModalOpen(false)}>
+                닫기
+              </button>
+            </div>
+            <div className="modalBody">
+              {previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="modalPreviewImg" src={previewUrl} alt="QR 출력물 큰 미리보기" />
+              ) : (
+                <div className="previewEmpty">미리보기를 준비 중입니다.</div>
+              )}
+            </div>
+            <div className="modalFoot">
+              <span>스캔·문구 확인</span>
+              {printTarget === "counter" ? (
+                <button className="btn btnPrimary" onClick={downloadCounterPng} disabled={!counterQr || !origin || !storeId || qrSaving}>
+                  PNG 다운로드
+                </button>
+              ) : (
+                <button className="btn btnPrimary" onClick={downloadTablePng} disabled={activeTableQrs.length === 0 || !origin || !storeId || qrSaving}>
+                  PNG 다운로드
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <section className="card advancedCard">
         <details className="advancedBox">
-          <summary>QR 상태 관리</summary>
+          <summary>고급 관리</summary>
           <div className="noticeBox">
-            <span>인쇄해 사용 중인 QR은 사용 중지하지 마세요.</span>
+            <span>붙여둔 QR은 중지하지 마세요.</span>
           </div>
           <div className="qrList compact">
             {qrRows.length === 0 ? (
