@@ -714,13 +714,13 @@ function AdminQrPageInner() {
         }
         .row2 {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
           gap: 10px;
         }
         .btnRow {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+          gap: 8px;
           align-items: center;
           margin-top: 10px;
         }
@@ -871,40 +871,52 @@ function AdminQrPageInner() {
         }
         .presetGrid {
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
           gap: 8px;
+        }
+        .templateGrid {
+          grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
         }
         .presetBtn {
           border: 1px solid var(--line);
           background: #fff;
           border-radius: 14px;
-          padding: 10px;
+          padding: 10px 11px;
           text-align: left;
           cursor: pointer;
           display: grid;
-          gap: 4px;
+          gap: 3px;
+          min-height: 58px;
+          align-content: center;
         }
         .presetBtn strong {
           font-size: 13px;
           font-weight: 950;
         }
         .presetBtn span {
-          min-height: 15px;
           color: var(--muted);
           font-size: 11px;
           font-weight: 900;
         }
         .templateBtn {
-          min-height: 78px;
+          grid-template-columns: 30px minmax(0, 1fr);
+          column-gap: 9px;
+          min-height: 58px;
+        }
+        .templateBtn strong,
+        .templateBtn span {
+          grid-column: 2;
         }
         .templateSample {
-          height: 42px;
-          border-radius: 12px;
+          grid-row: 1 / span 2;
+          width: 30px;
+          height: 30px;
+          border-radius: 10px;
           border: 1px solid var(--line);
-          padding: 6px;
+          padding: 4px;
           display: grid;
-          grid-template-columns: 1fr 18px;
-          gap: 5px;
+          grid-template-columns: 1fr 9px;
+          gap: 3px;
           overflow: hidden;
         }
         .templateSample::before,
@@ -915,7 +927,7 @@ function AdminQrPageInner() {
         }
         .templateSample::after {
           background: #fff;
-          border: 4px solid currentColor;
+          border: 2px solid currentColor;
         }
         .templateSample.simple {
           background: #f8fafc;
@@ -926,7 +938,7 @@ function AdminQrPageInner() {
           background: linear-gradient(135deg, #92400e, #111827 65%, #fff 66%);
           color: #111827;
         }
-        .templateSample.cafe_poster::before { background: rgba(255,255,255,0.85); margin-top: 18px; }
+        .templateSample.cafe_poster::before { background: rgba(255,255,255,0.85); margin-top: 10px; }
         .templateSample.premium_dark {
           background: linear-gradient(135deg, #020617, #111827);
           color: #111827;
@@ -1171,15 +1183,37 @@ function AdminQrPageInner() {
         }
         .detailGrid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 12px;
           padding: 0 12px 12px;
         }
         .previewActions {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
           gap: 8px;
           margin-top: 10px;
+        }
+        .saveSummary {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 10px;
+          align-items: center;
+          padding: 10px 12px;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #f9fafb;
+        }
+        .saveSummaryText {
+          display: grid;
+          gap: 2px;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 900;
+          line-height: 1.35;
+        }
+        .saveSummaryText b {
+          color: var(--text);
+          font-size: 13px;
         }
         .compactNotice {
           padding: 8px 10px;
@@ -1284,12 +1318,10 @@ function AdminQrPageInner() {
             padding: 12px;
           }
           .btnRow {
-            display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
           }
-          .btnRow .btn,
-          .previewActions .btn {
-            width: 100%;
+          .previewActions {
+            grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
           }
           .printPreview {
             min-height: 160px;
@@ -1325,13 +1357,21 @@ function AdminQrPageInner() {
             max-height: 70vh;
           }
           .row2 {
+            grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+          }
+          .presetGrid {
+            grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+          }
+          .templateGrid {
+            grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+          }
+          .saveSummary {
             grid-template-columns: 1fr;
           }
           .grid {
             grid-template-columns: 1fr;
           }
-          .statusGrid,
-          .presetGrid {
+          .statusGrid {
             grid-template-columns: 1fr;
           }
           .statusGrid {
@@ -1366,7 +1406,7 @@ function AdminQrPageInner() {
         }
         @media (min-width: 1024px) {
           .formGrid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: 1fr;
             align-items: start;
           }
         }
@@ -1531,7 +1571,7 @@ function AdminQrPageInner() {
 
             <div className="field">
               <div className="label">템플릿</div>
-              <div className="presetGrid">
+              <div className="presetGrid templateGrid">
                 {TEMPLATE_OPTIONS.map((option) => (
                   <button
                     className={`presetBtn templateBtn ${effectiveDesign.template_key === option.key ? "selected" : ""}`}
@@ -1642,27 +1682,23 @@ function AdminQrPageInner() {
               </div>
             </details>
 
-            <div className="btnRow spanFull">
+            <div className="saveSummary spanFull">
               <button className="btn" onClick={saveDesignSettings} disabled={qrSaving || !storeId}>
                 디자인 저장
               </button>
-            </div>
-            <div className="noticeBox spanFull">
-              <b>저장: 다음에도 사용 · 다운로드: 현재 디자인</b>
-            </div>
-
-            <div className="summaryBox spanFull">
-              {printTarget === "counter" ? (
-                <>
-                  <b>카운터 QR {counterQr ? 1 : 0}개</b>
-                  <span>{COUNTER_PRINT_PRESETS[counterPrintPreset].label} · {COUNTER_PRINT_PRESETS[counterPrintPreset].copies || 1}장</span>
-                </>
-              ) : (
-                <>
-                  <b>테이블 QR {activeTableQrs.length}개</b>
-                  <span>{TABLE_PRINT_PRESETS[tablePrintPreset].label} · {Math.max(1, Math.ceil(activeTableQrs.length / (TABLE_PRINT_PRESETS[tablePrintPreset].cols * TABLE_PRINT_PRESETS[tablePrintPreset].rows)))}장</span>
-                </>
-              )}
+              <div className="saveSummaryText">
+                {printTarget === "counter" ? (
+                  <>
+                    <b>카운터 QR {counterQr ? 1 : 0}개</b>
+                    <span>{COUNTER_PRINT_PRESETS[counterPrintPreset].label} · {COUNTER_PRINT_PRESETS[counterPrintPreset].copies || 1}장 · 현재 디자인</span>
+                  </>
+                ) : (
+                  <>
+                    <b>테이블 QR {activeTableQrs.length}개</b>
+                    <span>{TABLE_PRINT_PRESETS[tablePrintPreset].label} · {Math.max(1, Math.ceil(activeTableQrs.length / (TABLE_PRINT_PRESETS[tablePrintPreset].cols * TABLE_PRINT_PRESETS[tablePrintPreset].rows)))}장 · 현재 디자인</span>
+                  </>
+                )}
+              </div>
             </div>
 
 
