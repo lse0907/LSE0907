@@ -16,6 +16,8 @@ export type ImageSource = "store_main" | "custom_url" | "none";
 export type AdminQrDesignSettings = {
   store_id: string;
   template_key: string;
+  counter_template_key: string;
+  table_template_key: string;
   accent_color: string;
   counter_title: string;
   counter_description: string;
