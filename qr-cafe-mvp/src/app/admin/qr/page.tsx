@@ -330,9 +330,11 @@ function AdminQrPageInner() {
 
   async function ensureDesignSettings() {
     if (!storeId) return;
+    const currentDesign = designSettings || defaultDesignSettings(storeId, counterDesc);
     const payload = {
-      ...(designSettings || defaultDesignSettings(storeId, counterDesc)),
+      ...currentDesign,
       store_id: storeId,
+      template_key: printTarget === "counter" ? currentDesign.counter_template_key : currentDesign.table_template_key,
       counter_print_preset: counterPrintPreset,
       table_print_preset: tablePrintPreset,
     };
@@ -493,8 +495,16 @@ function AdminQrPageInner() {
     return mainImage;
   }
 
-  async function createCounterPosterCanvas() {
+  function designForTarget(target: PrintTarget) {
     const ds = designSettings || defaultDesignSettings(storeId, counterDesc);
+    return {
+      ...ds,
+      template_key: target === "counter" ? ds.counter_template_key : ds.table_template_key,
+    };
+  }
+
+  async function createCounterPosterCanvas() {
+    const ds = designForTarget("counter");
     return renderCounterPosterCanvas({
       design: ds,
       preset: COUNTER_PRINT_PRESETS[counterPrintPreset],
@@ -507,7 +517,7 @@ function AdminQrPageInner() {
   }
 
   async function createTableSheetCanvases(nums: number[]) {
-    const ds = designSettings || defaultDesignSettings(storeId, counterDesc);
+    const ds = designForTarget("table");
     return renderTableSheetCanvases({
       design: ds,
       preset: TABLE_PRINT_PRESETS[tablePrintPreset],
@@ -627,7 +637,8 @@ function AdminQrPageInner() {
   }
 
   const effectiveDesign = designSettings || defaultDesignSettings(storeId, counterDesc);
-  const selectedTemplate = TEMPLATE_OPTIONS.find((option) => option.key === effectiveDesign.template_key) || TEMPLATE_OPTIONS[0];
+  const activeTemplateKey = printTarget === "counter" ? effectiveDesign.counter_template_key : effectiveDesign.table_template_key;
+  const selectedTemplate = TEMPLATE_OPTIONS.find((option) => option.key === activeTemplateKey) || TEMPLATE_OPTIONS[0];
 
   return (
     <main className="wrap">
@@ -1850,13 +1861,18 @@ function AdminQrPageInner() {
             )}
 
             <div className="field">
-              <div className="label">템플릿</div>
+              <div className="label">{printTarget === "counter" ? "카운터 템플릿" : "테이블 템플릿"}</div>
               <div className="presetGrid templateGrid">
                 {TEMPLATE_OPTIONS.map((option) => (
                   <button
-                    className={`presetBtn templateBtn ${effectiveDesign.template_key === option.key ? "selected" : ""}`}
+                    className={`presetBtn templateBtn ${activeTemplateKey === option.key ? "selected" : ""}`}
                     key={option.key}
-                    onClick={() => updateDesignSetting("template_key", option.key)}
+                    onClick={() =>
+                      updateDesignSetting(
+                        printTarget === "counter" ? "counter_template_key" : "table_template_key",
+                        option.key
+                      )
+                    }
                   >
                     <i className={`templateSample ${option.key}`} aria-hidden="true" />
                     <strong>{option.label}</strong>
