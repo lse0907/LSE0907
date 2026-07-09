@@ -148,8 +148,6 @@ function AdminQrPageInner() {
   const [tablePrintPreset, setTablePrintPreset] = useState<TablePrintPreset>("a4_8");
 
   const [tableCount, setTableCount] = useState("20");
-  const [rangeStart, setRangeStart] = useState("");
-  const [rangeEnd, setRangeEnd] = useState("");
   const [customTables, setCustomTables] = useState("");
 
   const [qrRows, setQrRows] = useState<AdminQrCode[]>([]);
@@ -198,21 +196,10 @@ function AdminQrPageInner() {
     const fromCount: number[] = [];
     for (let i = 1; i <= count; i++) fromCount.push(i);
 
-    const fromRange: number[] = [];
-    if (rangeStart.trim() && rangeEnd.trim()) {
-      const a = clampInt(rangeStart, 0);
-      const b = clampInt(rangeEnd, 0);
-      if (a > 0 && b > 0) {
-        const start = Math.min(a, b);
-        const end = Math.max(a, b);
-        for (let i = start; i <= end; i++) fromRange.push(i);
-      }
-    }
-
     const custom = parseTableList(customTables);
 
-    return uniq([...fromCount, ...fromRange, ...custom]).filter((n) => n > 0).sort((x, y) => x - y);
-  }, [tableCount, rangeStart, rangeEnd, customTables]);
+    return uniq([...fromCount, ...custom]).filter((n) => n > 0).sort((x, y) => x - y);
+  }, [tableCount, customTables]);
 
   const counterQr = useMemo(
     () => qrRows.find((row) => row.qr_type === "counter" && row.status === "active") || null,
@@ -243,9 +230,9 @@ function AdminQrPageInner() {
     if (qrSaving) return "생성 중...";
     if (missingTableNumbers.length === 0) return "생성할 QR 없음";
     if (activeTableQrs.length === 0) return "테이블 QR 생성";
-    if (rangeStart.trim() || rangeEnd.trim() || customTables.trim()) return "추가 QR 생성";
+    if (customTables.trim()) return "추가 QR 생성";
     return "부족한 QR 생성";
-  }, [activeTableQrs.length, customTables, missingTableNumbers.length, qrSaving, rangeEnd, rangeStart]);
+  }, [activeTableQrs.length, customTables, missingTableNumbers.length, qrSaving]);
 
   const tablePlanText = useMemo(() => {
     if (pendingTableNumbers.length === 0) return "테이블 수를 입력해 주세요.";
@@ -253,8 +240,8 @@ function AdminQrPageInner() {
       const maxExisting = activeTableQrs.reduce((max, row) => Math.max(max, Number(row.table_no) || 0), 0);
       const requestedCount = clampInt(tableCount, 0);
       return requestedCount > 0 && requestedCount < maxExisting
-        ? "이미 모두 생성됨 · 기존 QR은 유지됩니다."
-        : "이미 모두 생성됨";
+        ? "생성 완료 · 기존 QR은 유지됩니다."
+        : "생성 완료";
     }
     const summary = summarizeNumberList(missingTableNumbers);
     return `${summary} ${missingTableNumbers.length}개 ${activeTableQrs.length === 0 ? "생성 예정" : "추가 예정"}`;
@@ -892,7 +879,7 @@ function AdminQrPageInner() {
         }
         .setupBox {
           display: grid;
-          gap: 10px;
+          gap: 8px;
           padding: 12px;
           border: 1px solid var(--line);
           border-radius: 14px;
@@ -950,6 +937,9 @@ function AdminQrPageInner() {
           grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
           gap: 8px;
         }
+        .inlineActions.compactActions {
+          grid-template-columns: repeat(auto-fit, minmax(104px, max-content));
+        }
         .subDetails {
           border-top: 1px solid var(--line);
           padding-top: 2px;
@@ -960,6 +950,16 @@ function AdminQrPageInner() {
           font-size: 12px;
           font-weight: 950;
           padding: 8px 0 0;
+          list-style: none;
+        }
+        .subDetails summary::-webkit-details-marker {
+          display: none;
+        }
+        .subDetails summary::before {
+          content: "특정 번호 개별 생성 열기 ▾";
+        }
+        .subDetails[open] summary::before {
+          content: "특정 번호 개별 생성 닫기 ▴";
         }
         .subDetailsBody {
           display: grid;
@@ -1054,43 +1054,65 @@ function AdminQrPageInner() {
           height: 30px;
           border-radius: 10px;
           border: 1px solid var(--line);
-          padding: 4px;
           display: grid;
-          grid-template-columns: 1fr 9px;
-          gap: 3px;
+          place-items: center;
           overflow: hidden;
+          position: relative;
         }
         .templateSample::before,
         .templateSample::after {
           content: "";
           display: block;
-          border-radius: 8px;
-        }
-        .templateSample::after {
-          background: #fff;
-          border: 2px solid currentColor;
+          position: absolute;
         }
         .templateSample.simple {
-          background: #f8fafc;
-          color: #111827;
+          background: #ffffff;
+          border-color: #d1d5db;
         }
-        .templateSample.simple::before { background: linear-gradient(#fff, #f3f4f6); border: 1px solid #e5e7eb; }
+        .templateSample.simple::before {
+          inset: 7px;
+          border-radius: 6px;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+        }
         .templateSample.cafe_poster {
-          background: linear-gradient(135deg, #92400e, #111827 65%, #fff 66%);
-          color: #111827;
+          background: #f3f4f6;
+          border-color: #d1d5db;
         }
-        .templateSample.cafe_poster::before { background: rgba(255,255,255,0.85); margin-top: 10px; }
+        .templateSample.cafe_poster::before {
+          width: 15px;
+          height: 11px;
+          border-radius: 3px;
+          border: 2px solid #6b7280;
+          background: #fff;
+        }
+        .templateSample.cafe_poster::after {
+          width: 5px;
+          height: 5px;
+          right: 7px;
+          top: 9px;
+          border-radius: 999px;
+          background: #9ca3af;
+        }
         .templateSample.premium_dark {
-          background: linear-gradient(135deg, #020617, #111827);
-          color: #111827;
+          background: #111827;
+          border-color: #111827;
         }
-        .templateSample.premium_dark::before { background: rgba(255,255,255,0.16); border-top: 3px solid #b45309; }
+        .templateSample.premium_dark::before {
+          inset: 8px;
+          border-radius: 5px;
+          border: 1px solid rgba(255,255,255,0.28);
+        }
         .templateSample.soft_round {
-          background: #fff7ed;
-          color: #9a3412;
-          border-color: #fed7aa;
+          background: #f5e6d3;
+          border-color: #e7c9a4;
         }
-        .templateSample.soft_round::before { background: #fff; border-radius: 14px; border: 1px solid #fed7aa; }
+        .templateSample.soft_round::before {
+          inset: 7px;
+          border-radius: 7px;
+          background: rgba(255,255,255,0.48);
+          border: 1px solid #e7c9a4;
+        }
         .presetBtn.selected {
           border-color: var(--brand);
           box-shadow: 0 0 0 2px rgba(17,24,39,0.08);
@@ -1490,6 +1512,9 @@ function AdminQrPageInner() {
           background: #f0fdf4;
           color: #166534;
         }
+        .qrManageModal {
+          width: min(560px, 94vw);
+        }
         .confirmBox {
           width: min(420px, 94vw);
         }
@@ -1597,6 +1622,9 @@ function AdminQrPageInner() {
           }
           .tableCountRow {
             grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr);
+          }
+          .inlineActions.compactActions {
+            grid-template-columns: repeat(auto-fit, minmax(104px, max-content));
           }
           .grid {
             grid-template-columns: 1fr;
@@ -1713,7 +1741,7 @@ function AdminQrPageInner() {
                   <span className={`statusBadge ${counterQr ? "" : "muted"}`}>{counterQr ? "등록 완료" : "미등록"}</span>
                 </div>
                 <div className="hint">카운터·포장 주문용</div>
-                <div className="inlineActions">
+                <div className={`inlineActions ${counterQr ? "compactActions" : ""}`}>
                   {!counterQr ? (
                     <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId}>
                       QR 등록
@@ -1756,18 +1784,8 @@ function AdminQrPageInner() {
                   </button>
                 </div>
                 <details className="subDetails">
-                  <summary>세부 입력 열기 ▾</summary>
+                  <summary aria-label="특정 번호 개별 생성" />
                   <div className="subDetailsBody">
-                    <div className="row2">
-                      <div className="field">
-                        <div className="label">시작</div>
-                        <input className="input" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} inputMode="numeric" placeholder="예: 21" />
-                      </div>
-                      <div className="field">
-                        <div className="label">종료</div>
-                        <input className="input" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} inputMode="numeric" placeholder="예: 30" />
-                      </div>
-                    </div>
                     <div className="field">
                       <div className="label">특정 번호</div>
                       <input
@@ -2044,7 +2062,7 @@ function AdminQrPageInner() {
       {qrManageOpen ? (
         <div className="modalBackdrop" role="presentation" onClick={() => setQrManageOpen(false)}>
           <div
-            className="previewModal"
+            className="previewModal qrManageModal"
             role="dialog"
             aria-modal="true"
             aria-label="생성된 QR 관리"
@@ -2059,7 +2077,7 @@ function AdminQrPageInner() {
             <div className="modalBody">
               <div className="qrManageList">
                 <div className="noticeBox compactNotice">
-                  <span>붙여둔 QR은 중지하지 마세요.</span>
+                  <span>사용하지 않는 QR만 중지하세요.<br />중지된 QR로는 고객이 주문할 수 없습니다.</span>
                 </div>
                 {qrRows.length === 0 ? (
                   <div className="previewEmpty">생성된 QR이 없습니다.</div>
