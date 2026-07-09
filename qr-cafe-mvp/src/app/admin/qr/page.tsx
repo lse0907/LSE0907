@@ -1723,6 +1723,14 @@ function AdminQrPageInner() {
                     QR 목록
                   </button>
                 </div>
+                <div className="hint">카운터·포장 주문용</div>
+                {!counterQr ? (
+                  <div className="btnRow">
+                    <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId}>
+                      QR 등록
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="setupBox spanFull">
