@@ -453,11 +453,7 @@ export default function OpsPage() {
         .eq("id", 1)
         .maybeSingle();
       if (error) return;
-      setPgForm({
-        mid: String(data?.mid || ""),
-        clientKey: String(data?.client_key || ""),
-        secretKey: "",
-      });
+      setPgForm({ mid: String(data?.mid || ""), clientKey: String(data?.client_key || ""), secretKey: "" });
       setSavedPg({
         mid: String(data?.mid || ""),
         clientKey: String(data?.client_key || ""),
@@ -652,12 +648,7 @@ export default function OpsPage() {
       .upsert(payload, { onConflict: "id" });
     setMsg(error ? `PG 저장 실패: ${error.message}` : "PG 저장 완료");
     if (!error) {
-      setSavedPg({
-        mid: payload.mid,
-        clientKey: payload.client_key,
-        hasSecret: payload.secret_key ? true : savedPg?.hasSecret || false,
-        updatedAt: payload.updated_at,
-      });
+      setSavedPg({ mid: payload.mid, clientKey: payload.client_key, hasSecret: payload.secret_key ? true : savedPg?.hasSecret || false, updatedAt: payload.updated_at });
       setPgForm((prev) => ({ ...prev, secretKey: "" }));
     }
   };
