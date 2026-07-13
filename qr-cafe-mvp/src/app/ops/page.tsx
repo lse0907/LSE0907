@@ -645,13 +645,13 @@ export default function OpsPage() {
 
   return (
     <main className="wrap">
-      <style jsx>{`
+      <style jsx global>{`
         .wrap { max-width: 1440px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; color:#111827; }
         .hero { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
         .h1 { margin:0; font-size: 30px; font-weight: 950; letter-spacing:-0.02em; }
         .sub { margin:6px 0 0; color:#6b7280; font-size:14px; }
         .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-        .card { border:1px solid #e5e7eb; border-radius:18px; background:#fff; padding:16px; box-shadow:0 8px 24px rgba(15,23,42,0.04); }
+        .card { border:1px solid #e5e7eb; border-radius:18px; background:#fff; padding:18px; box-shadow:0 10px 28px rgba(15,23,42,0.045); }
         .kpis { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:12px; }
         .kpi { min-height:112px; display:grid; gap:6px; align-content:space-between; }
         .kpiLabel { color:#6b7280; font-size:13px; font-weight:800; }
@@ -660,10 +660,11 @@ export default function OpsPage() {
         .tabs { display:flex; gap:8px; overflow:auto; padding:4px; border:1px solid #e5e7eb; border-radius:16px; background:#f8fafc; }
         .tab { border:0; border-radius:12px; padding:10px 14px; background:transparent; color:#4b5563; font-weight:900; cursor:pointer; white-space:nowrap; }
         .tab.active { background:#111827; color:#fff; }
-        .btn { border:1px solid #d1d5db; padding:9px 12px; border-radius:12px; background:#fff; color:#111827; font-weight:850; cursor:pointer; }
+        .btn { border:1px solid #d1d5db; padding:10px 12px; border-radius:12px; background:#fff; color:#111827; font-weight:900; cursor:pointer; min-height:38px; }
         .btn.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
+        .btn:hover { transform: translateY(-1px); box-shadow:0 6px 14px rgba(15,23,42,0.08); }
         .btn.danger { border-color:#fecaca; color:#b91c1c; }
-        .grid2 { display:grid; grid-template-columns: 1.45fr 0.85fr; gap:16px; align-items:start; }
+        .grid2 { display:grid; grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.85fr); gap:16px; align-items:start; }
         .grid3 { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
         .sectionTitle { font-size:16px; font-weight:950; margin-bottom:10px; }
         .muted { color:#6b7280; font-size:13px; margin:0; }
@@ -672,10 +673,10 @@ export default function OpsPage() {
         .filters { display:grid; grid-template-columns: 1fr 170px 170px 170px; gap:10px; margin-bottom:12px; }
         .input, .select, .textarea { width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; font-size:14px; background:#fff; color:#111827; }
         .textarea { min-height:72px; resize:vertical; }
-        .tableWrap { overflow:auto; border:1px solid #eef2f7; border-radius:14px; }
-        table { width:100%; border-collapse: collapse; font-size: 14px; min-width: 760px; }
-        th, td { border-bottom:1px solid #eef2f7; padding:12px 10px; text-align:left; vertical-align:middle; }
-        th { background:#f9fafb; color:#4b5563; font-size:12px; }
+        .tableWrap { overflow:auto; border:1px solid #e5e7eb; border-radius:16px; background:#fff; }
+        table { width:100%; border-collapse: separate; border-spacing: 0; font-size: 14px; min-width: 760px; }
+        th, td { border-bottom:1px solid #eef2f7; padding:13px 12px; text-align:left; vertical-align:middle; }
+        th { background:#f9fafb; color:#4b5563; font-size:12px; font-weight:950; white-space:nowrap; }
         td small { display:block; color:#6b7280; font-size:12px; margin-top:3px; }
         td.num { text-align:right; font-weight:900; white-space:nowrap; }
         .cellMain { display:grid; gap:3px; min-width:0; }
@@ -684,14 +685,14 @@ export default function OpsPage() {
         .pillStack { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
         .pillStack.right { justify-content:flex-end; }
         tr { cursor:pointer; }
-        tr.sel { background:#eef6ff; }
+        tr.sel { background:#eef6ff; box-shadow: inset 4px 0 0 #2563eb; }
         tr:hover { background:#f8fafc; }
         .pill { display:inline-flex; align-items:center; border-radius:999px; padding:4px 8px; font-size:12px; font-weight:900; border:1px solid #e5e7eb; background:#f8fafc; }
         .pill.ok { color:#047857; background:#ecfdf5; border-color:#a7f3d0; }
         .pill.warn { color:#b45309; background:#fffbeb; border-color:#fde68a; }
         .pill.danger { color:#b91c1c; background:#fef2f2; border-color:#fecaca; }
-        .detailCard { position:sticky; top:16px; }
-        .detailCard h3 { margin:4px 0; font-size:22px; }
+        .detailCard { position:sticky; top:16px; align-self:start; }
+        .detailCard h3 { margin:4px 0; font-size:22px; line-height:1.2; letter-spacing:-0.02em; }
         .storeDetailHeader { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border-bottom:1px solid #eef2f7; padding-bottom:12px; }
         .infoGrid { display:grid; grid-template-columns: 110px 1fr; gap:9px 12px; margin:14px 0; font-size:14px; }
         .infoGrid span { color:#6b7280; }
@@ -703,10 +704,10 @@ export default function OpsPage() {
         .storeMini { border:1px solid #e5e7eb; border-radius:12px; padding:10px; display:grid; gap:5px; cursor:pointer; background:#fff; }
         .storeMini:hover { background:#f8fafc; }
         .metricGrid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; margin:12px 0; }
-        .metric { border:1px solid #eef2f7; border-radius:12px; background:#f9fafb; padding:10px; display:grid; gap:4px; min-width:0; }
+        .metric { border:1px solid #e5e7eb; border-radius:14px; background:#f9fafb; padding:12px; display:grid; gap:5px; min-width:0; }
         .metric span { color:#6b7280; font-size:12px; font-weight:800; }
         .metric strong { font-size:14px; line-height:1.25; word-break:break-word; }
-        .quickLinks { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; }
+        .quickLinks { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; border-top:1px solid #eef2f7; padding-top:12px; }
         .barRow { display:grid; grid-template-columns: 92px 1fr 42px; gap:8px; align-items:center; font-size:13px; }
         .barTrack { height:9px; border-radius:999px; background:#eef2f7; overflow:hidden; }
         .barFill { height:100%; border-radius:999px; background:#2563eb; }
