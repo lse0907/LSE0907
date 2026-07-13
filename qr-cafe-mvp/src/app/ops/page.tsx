@@ -7,6 +7,10 @@ import { maskToken } from "@/app/lib/billingSettings";
 
 type OpsTab = "overview" | "stores" | "billing" | "orders" | "tickets" | "settings";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
+type StoreSort = "risk" | "recentOrder" | "monthlyOrders" | "monthlyRevenue" | "expiring" | "openTickets";
+type TicketStatusFilter = "all" | "open" | "in_progress" | "resolved" | "closed";
+type TicketPriorityFilter = "all" | "urgent" | "high" | "normal" | "low";
+type TicketCategoryFilter = "all" | "billing" | "bug" | "improvement" | "inquiry" | "etc";
 
 type StoreOpsRow = {
   store_id: string;
@@ -125,6 +129,10 @@ function isExpiringSoon(raw: string | null) {
   return d != null && d >= 0 && d <= 7;
 }
 
+function isActiveTicket(status: string) {
+  return ACTIVE_TICKET_STATUSES.has(status);
+}
+
 function ticketStatusLabel(status: string) {
   if (status === "open") return "접수";
   if (status === "in_progress") return "처리 중";
@@ -166,6 +174,26 @@ function storeRiskLabel(row: StoreOpsRow) {
   return "정상";
 }
 
+function storeRiskRank(row: StoreOpsRow) {
+  if (row.urgent_ticket_count > 0) return 10;
+  if (isExpiringSoon(row.paid_until)) return 9;
+  if (row.base_plan_status === "active" && row.monthly_order_count === 0) return 8;
+  if (!row.setup_completed) return 7;
+  if (row.open_ticket_count > 0) return 6;
+  if (row.base_plan_status !== "active" && row.monthly_order_count > 0) return 5;
+  return 1;
+}
+
+function storeInsight(row: StoreOpsRow) {
+  if (row.urgent_ticket_count > 0) return "긴급 문의가 있어 가장 먼저 확인해야 합니다.";
+  if (isExpiringSoon(row.paid_until)) return "구독 만료가 가까워 갱신 안내가 필요합니다.";
+  if (row.base_plan_status === "active" && row.monthly_order_count === 0) return "유료 구독 중이지만 이번 달 주문이 없어 이탈 위험이 있습니다.";
+  if (!row.setup_completed) return "초기 설정이 완료되지 않아 온보딩 지원이 필요합니다.";
+  if (row.base_plan_status !== "active" && row.monthly_order_count > 0) return "비유료 상태에서도 주문이 발생해 유료 전환 후보입니다.";
+  if (row.monthly_order_count > 0) return "이번 달 주문이 발생하고 있어 사용 중인 매장입니다.";
+  return "현재 큰 위험 신호는 없습니다.";
+}
+
 function countBy<T extends string>(values: T[]) {
   const out: Record<string, number> = {};
   for (const v of values) out[v] = (out[v] || 0) + 1;
@@ -187,6 +215,11 @@ export default function OpsPage() {
   const [query, setQuery] = useState("");
   const [subFilter, setSubFilter] = useState("all");
   const [ticketFilter, setTicketFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<StoreSort>("risk");
+  const [ticketStatusFilter, setTicketStatusFilter] = useState<TicketStatusFilter>("all");
+  const [ticketPriorityFilter, setTicketPriorityFilter] = useState<TicketPriorityFilter>("all");
+  const [ticketCategoryFilter, setTicketCategoryFilter] = useState<TicketCategoryFilter>("all");
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
@@ -356,7 +389,7 @@ export default function OpsPage() {
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((r) => {
+    const next = rows.filter((r) => {
       const matchesQuery = !q || String(r.store_name || "").toLowerCase().includes(q) || r.store_id.toLowerCase().includes(q);
       const matchesSub =
         subFilter === "all" ||
@@ -369,7 +402,18 @@ export default function OpsPage() {
         (ticketFilter === "urgent" && r.urgent_ticket_count > 0);
       return matchesQuery && matchesSub && matchesTicket;
     });
-  }, [query, rows, subFilter, ticketFilter]);
+
+    next.sort((a, b) => {
+      if (sortBy === "recentOrder") return String(b.last_order_at || "").localeCompare(String(a.last_order_at || ""));
+      if (sortBy === "monthlyOrders") return b.monthly_order_count - a.monthly_order_count;
+      if (sortBy === "monthlyRevenue") return b.monthly_revenue - a.monthly_revenue;
+      if (sortBy === "openTickets") return b.open_ticket_count - a.open_ticket_count;
+      if (sortBy === "expiring") return (remainingDays(a.paid_until) ?? 99999) - (remainingDays(b.paid_until) ?? 99999);
+      return storeRiskRank(b) - storeRiskRank(a);
+    });
+
+    return next;
+  }, [query, rows, sortBy, subFilter, ticketFilter]);
 
   const kpi = useMemo<KpiSummary>(() => {
     const activeTicketRows = tickets.filter((t) => ACTIVE_TICKET_STATUSES.has(t.status));
@@ -396,7 +440,42 @@ export default function OpsPage() {
   const maxTicketStatus = Math.max(1, ...Object.values(ticketStatusCounts));
   const maxTicketCategory = Math.max(1, ...Object.values(ticketCategoryCounts));
 
+  const riskStores = useMemo(() => rows.filter((r) => storeRiskRank(r) >= 6).sort((a, b) => storeRiskRank(b) - storeRiskRank(a)).slice(0, 6), [rows]);
+  const opportunityStores = useMemo(
+    () => rows.filter((r) => r.base_plan_status !== "active" && r.monthly_order_count > 0).sort((a, b) => b.monthly_order_count - a.monthly_order_count).slice(0, 6),
+    [rows]
+  );
+  const paidNoOrderStores = useMemo(() => rows.filter((r) => r.base_plan_status === "active" && r.monthly_order_count === 0).sort((a, b) => storeRiskRank(b) - storeRiskRank(a)), [rows]);
+  const nonPaidActiveStores = useMemo(() => rows.filter((r) => r.base_plan_status !== "active" && r.monthly_order_count > 0).sort((a, b) => b.monthly_order_count - a.monthly_order_count), [rows]);
+  const topOrderStores = useMemo(() => rows.filter((r) => r.monthly_order_count > 0).sort((a, b) => b.monthly_order_count - a.monthly_order_count).slice(0, 5), [rows]);
+  const arpu = kpi.paidStores > 0 ? Math.round(kpi.monthlyRevenue / kpi.paidStores) : 0;
+
+  const filteredTickets = useMemo(() => {
+    return tickets
+      .filter((t) => ticketStatusFilter === "all" || t.status === ticketStatusFilter)
+      .filter((t) => ticketPriorityFilter === "all" || t.priority === ticketPriorityFilter)
+      .filter((t) => ticketCategoryFilter === "all" || t.category === ticketCategoryFilter)
+      .sort((a, b) => {
+        const priorityRank = (t: SupportTicketRow) => {
+          const activeBoost = isActiveTicket(t.status) ? 100 : 0;
+          const p = t.priority === "urgent" ? 40 : t.priority === "high" ? 30 : t.priority === "normal" ? 20 : 10;
+          const s = t.status === "open" ? 4 : t.status === "in_progress" ? 3 : t.status === "resolved" ? 2 : 1;
+          return activeBoost + p + s;
+        };
+        const rankDiff = priorityRank(b) - priorityRank(a);
+        if (rankDiff !== 0) return rankDiff;
+        return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+      });
+  }, [ticketCategoryFilter, ticketPriorityFilter, ticketStatusFilter, tickets]);
+
+  const selectedTicket = useMemo(() => {
+    if (selectedTicketId == null) return filteredTickets[0] || null;
+    return filteredTickets.find((t) => t.id === selectedTicketId) || filteredTickets[0] || null;
+  }, [filteredTickets, selectedTicketId]);
+
   const savePg = async () => {
+    const ok = window.confirm("플랫폼 PG 정보를 변경하시겠습니까? 이 설정은 전체 점주 구독 결제에 영향을 줄 수 있습니다.");
+    if (!ok) return;
     const payload: { id: number; mid: string; client_key: string; secret_key?: string; updated_at: string } = {
       id: 1,
       mid: pgForm.mid.trim(),
@@ -452,6 +531,7 @@ export default function OpsPage() {
         <thead>
           <tr>
             <th>상태</th>
+            <th>점검 신호</th>
             <th>매장</th>
             <th>구독</th>
             <th>만료</th>
@@ -464,7 +544,8 @@ export default function OpsPage() {
         <tbody>
           {filteredRows.map((r) => (
             <tr key={r.store_id} className={r.store_id === selectedStore?.store_id ? "sel" : ""} onClick={() => setSelectedStoreId(r.store_id)}>
-              <td><span className={`pill ${storeRiskLabel(r) === "정상" ? "ok" : "warn"}`}>{storeStatusLabel(r)}</span></td>
+              <td><span className={`pill ${storeStatusLabel(r) === "운영중" ? "ok" : "warn"}`}>{storeStatusLabel(r)}</span></td>
+              <td><span className={`pill ${storeRiskLabel(r) === "정상" ? "ok" : "warn"}`}>{storeRiskLabel(r)}</span></td>
               <td><strong>{r.store_name || r.store_id}</strong><small>{r.store_id}</small></td>
               <td>{r.base_plan_status}</td>
               <td>{r.paid_until ? `${fmtDate(r.paid_until)}${remainingDays(r.paid_until) != null ? ` · D-${Math.max(0, Number(remainingDays(r.paid_until)))}` : ""}` : "-"}</td>
@@ -486,6 +567,10 @@ export default function OpsPage() {
         <>
           <h3>{selectedStore.store_name || selectedStore.store_id}</h3>
           <p className="muted">store_id: {selectedStore.store_id}</p>
+          <div className={`insight ${storeRiskLabel(selectedStore) === "정상" ? "ok" : "warn"}`}>
+            <strong>{storeRiskLabel(selectedStore)}</strong>
+            <span>{storeInsight(selectedStore)}</span>
+          </div>
           <div className="infoGrid">
             <span>운영 상태</span><strong>{storeStatusLabel(selectedStore)}</strong>
             <span>점검 신호</span><strong>{storeRiskLabel(selectedStore)}</strong>
@@ -534,7 +619,7 @@ export default function OpsPage() {
         .muted { color:#6b7280; font-size:13px; margin:0; }
         .noticeList { display:grid; gap:8px; }
         .notice { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:12px; background:#f9fafb; }
-        .filters { display:grid; grid-template-columns: 1fr 180px 180px; gap:10px; margin-bottom:12px; }
+        .filters { display:grid; grid-template-columns: 1fr 170px 170px 170px; gap:10px; margin-bottom:12px; }
         .input, .select, .textarea { width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; font-size:14px; background:#fff; color:#111827; }
         .textarea { min-height:72px; resize:vertical; }
         .tableWrap { overflow:auto; border:1px solid #eef2f7; border-radius:14px; }
@@ -553,12 +638,21 @@ export default function OpsPage() {
         .detailCard h3 { margin:4px 0; font-size:22px; }
         .infoGrid { display:grid; grid-template-columns: 110px 1fr; gap:9px 12px; margin:14px 0; font-size:14px; }
         .infoGrid span { color:#6b7280; }
+        .insight { display:grid; gap:4px; border-radius:14px; padding:12px; margin:12px 0; border:1px solid #e5e7eb; background:#f9fafb; }
+        .insight span { color:#4b5563; font-size:13px; }
+        .insight.ok { background:#ecfdf5; border-color:#a7f3d0; }
+        .insight.warn { background:#fffbeb; border-color:#fde68a; }
+        .storeMiniList { display:grid; gap:8px; }
+        .storeMini { border:1px solid #e5e7eb; border-radius:12px; padding:10px; display:grid; gap:5px; cursor:pointer; background:#fff; }
+        .storeMini:hover { background:#f8fafc; }
         .quickLinks { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; }
         .barRow { display:grid; grid-template-columns: 92px 1fr 42px; gap:8px; align-items:center; font-size:13px; }
         .barTrack { height:9px; border-radius:999px; background:#eef2f7; overflow:hidden; }
         .barFill { height:100%; border-radius:999px; background:#2563eb; }
         .ticketList { display:grid; gap:10px; }
-        .ticket { border:1px solid #e5e7eb; border-radius:14px; padding:12px; display:grid; gap:8px; background:#fff; }
+        .ticket { border:1px solid #e5e7eb; border-radius:14px; padding:12px; display:grid; gap:8px; background:#fff; cursor:pointer; text-align:left; }
+        .ticket.selectedTicket { border-color:#2563eb; background:#eff6ff; }
+        .ticketDetail { border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; padding:12px; display:grid; gap:10px; margin-top:12px; }
         .ticketTop { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
         .ticketTitle { font-weight:950; }
         .settingsGrid { display:grid; grid-template-columns: 0.8fr 1.2fr; gap:16px; align-items:start; }
@@ -601,12 +695,27 @@ export default function OpsPage() {
       {!loading && activeTab === "overview" ? (
         <section className="grid2">
           <article className="card">
-            <div className="sectionTitle">주의 필요 항목</div>
-            <div className="noticeList">
-              <div className="notice"><span>만료 임박 매장</span><strong>{kpi.expiringSoonStores.toLocaleString()}개</strong></div>
-              <div className="notice"><span>설정 미완료 매장</span><strong>{kpi.setupStores.toLocaleString()}개</strong></div>
-              <div className="notice"><span>주문 없는 활성 매장</span><strong>{rows.filter((r) => r.base_plan_status === "active" && r.monthly_order_count === 0).length.toLocaleString()}개</strong></div>
-              <div className="notice"><span>긴급 문의</span><strong>{kpi.urgentTickets.toLocaleString()}건</strong></div>
+            <div className="sectionTitle">위험 신호</div>
+            <div className="storeMiniList">
+              {riskStores.length === 0 ? <p className="muted">현재 우선 점검할 위험 신호가 없습니다.</p> : null}
+              {riskStores.map((r) => (
+                <div key={r.store_id} className="storeMini" role="button" tabIndex={0} onClick={() => { setSelectedStoreId(r.store_id); setActiveTab("stores"); }} onKeyDown={(e) => { if (e.key === "Enter") { setSelectedStoreId(r.store_id); setActiveTab("stores"); } }}>
+                  <div className="row"><span className="pill warn">{storeRiskLabel(r)}</span><strong>{r.store_name || r.store_id}</strong></div>
+                  <p className="muted">{storeInsight(r)}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+          <article className="card">
+            <div className="sectionTitle">기회 신호</div>
+            <div className="storeMiniList">
+              {opportunityStores.length === 0 ? <p className="muted">주문이 발생한 비유료 매장이 아직 없습니다.</p> : null}
+              {opportunityStores.map((r) => (
+                <div key={r.store_id} className="storeMini" role="button" tabIndex={0} onClick={() => { setSelectedStoreId(r.store_id); setActiveTab("orders"); }} onKeyDown={(e) => { if (e.key === "Enter") { setSelectedStoreId(r.store_id); setActiveTab("orders"); } }}>
+                  <div className="row"><span className="pill ok">전환 후보</span><strong>{r.store_name || r.store_id}</strong></div>
+                  <p className="muted">비유료 상태에서 이번 달 주문 {r.monthly_order_count.toLocaleString()}건이 발생했습니다.</p>
+                </div>
+              ))}
             </div>
           </article>
           <article className="card">
@@ -616,6 +725,15 @@ export default function OpsPage() {
               <div className="barRow"><span>설정중</span><div className="barTrack"><div className="barFill" style={{ width: `${maxBar(kpi.setupStores, kpi.totalStores)}%` }} /></div><strong>{kpi.setupStores}</strong></div>
               <div className="barRow"><span>유료구독</span><div className="barTrack"><div className="barFill" style={{ width: `${maxBar(kpi.paidStores, kpi.totalStores)}%` }} /></div><strong>{kpi.paidStores}</strong></div>
               <div className="barRow"><span>주문매장</span><div className="barTrack"><div className="barFill" style={{ width: `${maxBar(kpi.orderActiveStores, kpi.totalStores)}%` }} /></div><strong>{kpi.orderActiveStores}</strong></div>
+            </div>
+          </article>
+          <article className="card">
+            <div className="sectionTitle">운영 요약</div>
+            <div className="noticeList">
+              <div className="notice"><span>주문 없는 유료 매장</span><strong>{paidNoOrderStores.length.toLocaleString()}개</strong></div>
+              <div className="notice"><span>주문 있는 비유료 매장</span><strong>{nonPaidActiveStores.length.toLocaleString()}개</strong></div>
+              <div className="notice"><span>만료 임박 매장</span><strong>{kpi.expiringSoonStores.toLocaleString()}개</strong></div>
+              <div className="notice"><span>긴급 문의</span><strong>{kpi.urgentTickets.toLocaleString()}건</strong></div>
             </div>
           </article>
         </section>
@@ -638,6 +756,14 @@ export default function OpsPage() {
                 <option value="open">미처리 있음</option>
                 <option value="urgent">긴급 있음</option>
               </select>
+              <select className="select" value={sortBy} onChange={(e) => setSortBy(e.target.value as StoreSort)}>
+                <option value="risk">위험 우선</option>
+                <option value="recentOrder">최근 주문순</option>
+                <option value="monthlyOrders">주문 많은순</option>
+                <option value="monthlyRevenue">월매출 높은순</option>
+                <option value="expiring">만료 임박순</option>
+                <option value="openTickets">문의 많은순</option>
+              </select>
             </div>
             {renderStoreTable()}
           </article>
@@ -653,6 +779,9 @@ export default function OpsPage() {
               <div className="notice"><span>유료 구독</span><strong>{kpi.paidStores}개</strong></div>
               <div className="notice"><span>이번 달 매출</span><strong>{fmtMoney(kpi.monthlyRevenue)}</strong></div>
               <div className="notice"><span>결제 완료</span><strong>{kpi.monthlyPaidCount}건</strong></div>
+              <div className="notice"><span>매장당 평균 매출</span><strong>{fmtMoney(arpu)}</strong></div>
+              <div className="notice"><span>만료 임박</span><strong>{kpi.expiringSoonStores}개</strong></div>
+              <div className="notice"><span>결제 없는 유료 매장</span><strong>{rows.filter((r) => r.base_plan_status === "active" && r.paid_count === 0).length}개</strong></div>
             </div>
             <div style={{ marginTop: 12 }}>{renderStoreTable()}</div>
           </article>
@@ -668,6 +797,44 @@ export default function OpsPage() {
               <div className="notice"><span>오늘 주문</span><strong>{rows.reduce((a, c) => a + c.today_order_count, 0).toLocaleString()}건</strong></div>
               <div className="notice"><span>이번 달 주문</span><strong>{kpi.monthlyOrders.toLocaleString()}건</strong></div>
               <div className="notice"><span>주문 발생 매장</span><strong>{kpi.orderActiveStores.toLocaleString()}개</strong></div>
+            </div>
+            <div className="grid3" style={{ marginTop: 12 }}>
+              <div>
+                <div className="sectionTitle">주문 없는 유료 매장</div>
+                <div className="storeMiniList">
+                  {paidNoOrderStores.slice(0, 5).map((r) => (
+                    <div key={r.store_id} className="storeMini" role="button" tabIndex={0} onClick={() => setSelectedStoreId(r.store_id)} onKeyDown={(e) => { if (e.key === "Enter") setSelectedStoreId(r.store_id); }}>
+                      <strong>{r.store_name || r.store_id}</strong>
+                      <span className="muted">{storeInsight(r)}</span>
+                    </div>
+                  ))}
+                  {paidNoOrderStores.length === 0 ? <p className="muted">주문 없는 유료 매장이 없습니다.</p> : null}
+                </div>
+              </div>
+              <div>
+                <div className="sectionTitle">유료 전환 후보</div>
+                <div className="storeMiniList">
+                  {nonPaidActiveStores.slice(0, 5).map((r) => (
+                    <div key={r.store_id} className="storeMini" role="button" tabIndex={0} onClick={() => setSelectedStoreId(r.store_id)} onKeyDown={(e) => { if (e.key === "Enter") setSelectedStoreId(r.store_id); }}>
+                      <strong>{r.store_name || r.store_id}</strong>
+                      <span className="muted">이번 달 주문 {r.monthly_order_count.toLocaleString()}건</span>
+                    </div>
+                  ))}
+                  {nonPaidActiveStores.length === 0 ? <p className="muted">유료 전환 후보가 없습니다.</p> : null}
+                </div>
+              </div>
+              <div>
+                <div className="sectionTitle">주문 TOP 5</div>
+                <div className="storeMiniList">
+                  {topOrderStores.map((r, idx) => (
+                    <div key={r.store_id} className="storeMini" role="button" tabIndex={0} onClick={() => setSelectedStoreId(r.store_id)} onKeyDown={(e) => { if (e.key === "Enter") setSelectedStoreId(r.store_id); }}>
+                      <strong>{idx + 1}. {r.store_name || r.store_id}</strong>
+                      <span className="muted">이번 달 주문 {r.monthly_order_count.toLocaleString()}건</span>
+                    </div>
+                  ))}
+                  {topOrderStores.length === 0 ? <p className="muted">이번 달 주문이 없습니다.</p> : null}
+                </div>
+              </div>
             </div>
             <div style={{ marginTop: 12 }}>{renderStoreTable()}</div>
           </article>
@@ -702,10 +869,34 @@ export default function OpsPage() {
           <article className="card">
             <div className="sectionTitle">문의/장애 관리</div>
             {ticketMsg ? <p className="muted">{ticketMsg}</p> : null}
+            <div className="filters">
+              <select className="select" value={ticketStatusFilter} onChange={(e) => setTicketStatusFilter(e.target.value as TicketStatusFilter)}>
+                <option value="all">상태 전체</option>
+                <option value="open">접수</option>
+                <option value="in_progress">처리 중</option>
+                <option value="resolved">답변 완료</option>
+                <option value="closed">종료</option>
+              </select>
+              <select className="select" value={ticketPriorityFilter} onChange={(e) => setTicketPriorityFilter(e.target.value as TicketPriorityFilter)}>
+                <option value="all">우선순위 전체</option>
+                <option value="urgent">긴급</option>
+                <option value="high">높음</option>
+                <option value="normal">보통</option>
+                <option value="low">낮음</option>
+              </select>
+              <select className="select" value={ticketCategoryFilter} onChange={(e) => setTicketCategoryFilter(e.target.value as TicketCategoryFilter)}>
+                <option value="all">카테고리 전체</option>
+                <option value="billing">결제/구독</option>
+                <option value="bug">오류</option>
+                <option value="improvement">개선요청</option>
+                <option value="inquiry">문의</option>
+                <option value="etc">기타</option>
+              </select>
+            </div>
             <div className="ticketList">
-              {tickets.length === 0 ? <p className="muted">등록된 티켓이 없습니다.</p> : null}
-              {tickets.slice(0, 40).map((t) => (
-                <div key={t.id} className="ticket">
+              {filteredTickets.length === 0 ? <p className="muted">조건에 맞는 티켓이 없습니다.</p> : null}
+              {filteredTickets.slice(0, 12).map((t) => (
+                <div key={t.id} className={`ticket ${selectedTicket?.id === t.id ? "selectedTicket" : ""}`} role="button" tabIndex={0} onClick={() => setSelectedTicketId(t.id)} onKeyDown={(e) => { if (e.key === "Enter") setSelectedTicketId(t.id); }}>
                   <div className="ticketTop">
                     <div>
                       <div className="ticketTitle">#{t.id} [{t.store_id}] {t.title}</div>
@@ -714,17 +905,25 @@ export default function OpsPage() {
                     <span className={`pill ${t.priority === "urgent" ? "danger" : ACTIVE_TICKET_STATUSES.has(t.status) ? "warn" : "ok"}`}>{ticketStatusLabel(t.status)}</span>
                   </div>
                   {t.body ? <p style={{ margin: 0, fontSize: 13 }}>{t.body}</p> : null}
-                  <textarea className="textarea" placeholder="OPS 답변/처리 메모" value={ticketDrafts[t.id] ?? ""} onChange={(e) => setTicketDrafts((prev) => ({ ...prev, [t.id]: e.target.value }))} />
-                  <div className="row">
-                    <button className="btn primary" onClick={() => void updateTicket(t.id, { ops_note: (ticketDrafts[t.id] || "").trim() || null })}>메모 저장</button>
-                    <button className="btn" onClick={() => void updateTicket(t.id, { status: "open" })}>접수</button>
-                    <button className="btn" onClick={() => void updateTicket(t.id, { status: "in_progress" })}>처리 중</button>
-                    <button className="btn" onClick={() => void updateTicket(t.id, { status: "resolved" })}>답변 완료</button>
-                    <button className="btn danger" onClick={() => void updateTicket(t.id, { status: "closed" })}>종료</button>
-                  </div>
                 </div>
               ))}
             </div>
+            {selectedTicket ? (
+              <div className="ticketDetail">
+                <div className="sectionTitle">선택 티켓 상세</div>
+                <p className="muted">#{selectedTicket.id} · {selectedTicket.store_id} · {ticketCategoryLabel(selectedTicket.category)} · {ticketPriorityLabel(selectedTicket.priority)}</p>
+                <strong>{selectedTicket.title}</strong>
+                {selectedTicket.body ? <p style={{ margin: 0 }}>{selectedTicket.body}</p> : null}
+                <textarea className="textarea" placeholder="OPS 답변/처리 메모" value={ticketDrafts[selectedTicket.id] ?? ""} onChange={(e) => setTicketDrafts((prev) => ({ ...prev, [selectedTicket.id]: e.target.value }))} />
+                <div className="row">
+                  <button className="btn primary" onClick={() => void updateTicket(selectedTicket.id, { ops_note: (ticketDrafts[selectedTicket.id] || "").trim() || null })}>메모 저장</button>
+                  <button className="btn" onClick={() => void updateTicket(selectedTicket.id, { status: "open" })}>접수</button>
+                  <button className="btn" onClick={() => void updateTicket(selectedTicket.id, { status: "in_progress" })}>처리 중</button>
+                  <button className="btn" onClick={() => void updateTicket(selectedTicket.id, { status: "resolved" })}>답변 완료</button>
+                  <button className="btn danger" onClick={() => void updateTicket(selectedTicket.id, { status: "closed" })}>종료</button>
+                </div>
+              </div>
+            ) : null}
           </article>
         </section>
       ) : null}
@@ -739,7 +938,7 @@ export default function OpsPage() {
               <span>Secret Key</span><strong>{savedPg?.hasSecret ? "********(등록됨)" : "-"}</strong>
               <span>최근 수정</span><strong>{fmtDateTime(savedPg?.updatedAt || null)}</strong>
             </div>
-            <p className="muted">Secret Key는 보안상 등록 여부만 확인하고, 변경할 때만 다시 입력합니다.</p>
+            <p className="muted">Secret Key는 저장 후 다시 표시되지 않습니다. 비워두면 기존 Secret Key가 유지되고, 변경할 때만 새 값을 입력합니다.</p>
           </article>
           <article className="card">
             <div className="sectionTitle">플랫폼 PG 연결 변경</div>
