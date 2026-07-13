@@ -525,36 +525,76 @@ export default function OpsPage() {
     );
   }
 
-  const renderStoreTable = () => (
+  const renderStoreTable = (mode: "stores" | "billing" | "orders" = "stores") => (
     <div className="tableWrap">
-      <table>
+      <table className="opsTable">
         <thead>
-          <tr>
-            <th>상태</th>
-            <th>점검 신호</th>
-            <th>매장</th>
-            <th>구독</th>
-            <th>만료</th>
-            <th>월매출</th>
-            <th>이번달 주문</th>
-            <th>문의</th>
-            <th>최근 주문</th>
-          </tr>
+          {mode === "billing" ? (
+            <tr>
+              <th>매장</th>
+              <th>구독 상태</th>
+              <th>만료/남은 기간</th>
+              <th>이번 달 결제</th>
+              <th>결제 건수</th>
+              <th>점검</th>
+            </tr>
+          ) : mode === "orders" ? (
+            <tr>
+              <th>매장</th>
+              <th>오늘 주문</th>
+              <th>이번 달 주문</th>
+              <th>최근 주문</th>
+              <th>활성도 신호</th>
+              <th>문의</th>
+            </tr>
+          ) : (
+            <tr>
+              <th>매장</th>
+              <th>상태/점검</th>
+              <th>구독/매출</th>
+              <th>주문/활성도</th>
+              <th>문의</th>
+              <th>최근활동</th>
+            </tr>
+          )}
         </thead>
         <tbody>
-          {filteredRows.map((r) => (
-            <tr key={r.store_id} className={r.store_id === selectedStore?.store_id ? "sel" : ""} onClick={() => setSelectedStoreId(r.store_id)}>
-              <td><span className={`pill ${storeStatusLabel(r) === "운영중" ? "ok" : "warn"}`}>{storeStatusLabel(r)}</span></td>
-              <td><span className={`pill ${storeRiskLabel(r) === "정상" ? "ok" : "warn"}`}>{storeRiskLabel(r)}</span></td>
-              <td><strong>{r.store_name || r.store_id}</strong><small>{r.store_id}</small></td>
-              <td>{r.base_plan_status}</td>
-              <td>{r.paid_until ? `${fmtDate(r.paid_until)}${remainingDays(r.paid_until) != null ? ` · D-${Math.max(0, Number(remainingDays(r.paid_until)))}` : ""}` : "-"}</td>
-              <td>{fmtMoney(r.monthly_revenue)}</td>
-              <td>{r.monthly_order_count.toLocaleString()}건</td>
-              <td>{r.open_ticket_count ? `${r.open_ticket_count}건` : "-"}</td>
-              <td>{fmtDateTime(r.last_order_at)}</td>
-            </tr>
-          ))}
+          {filteredRows.map((r) => {
+            const days = remainingDays(r.paid_until);
+            const dday = days != null ? `D-${Math.max(0, days)}` : "-";
+            return (
+              <tr key={r.store_id} className={r.store_id === selectedStore?.store_id ? "sel" : ""} onClick={() => setSelectedStoreId(r.store_id)}>
+                {mode === "billing" ? (
+                  <>
+                    <td><div className="cellMain"><strong>{r.store_name || r.store_id}</strong><small>{r.store_id}</small></div></td>
+                    <td><span className={`pill ${r.base_plan_status === "active" ? "ok" : "warn"}`}>{r.base_plan_status}</span></td>
+                    <td><div className="cellMain"><strong>{fmtDate(r.paid_until)}</strong><small>{dday}</small></div></td>
+                    <td className="num">{fmtMoney(r.monthly_revenue)}</td>
+                    <td className="num">{r.paid_count.toLocaleString()}건</td>
+                    <td><span className={`pill ${storeRiskLabel(r) === "정상" ? "ok" : "warn"}`}>{storeRiskLabel(r)}</span></td>
+                  </>
+                ) : mode === "orders" ? (
+                  <>
+                    <td><div className="cellMain"><strong>{r.store_name || r.store_id}</strong><small>{r.store_id}</small></div></td>
+                    <td className="num">{r.today_order_count.toLocaleString()}건</td>
+                    <td className="num">{r.monthly_order_count.toLocaleString()}건</td>
+                    <td>{r.last_order_at ? fmtDateTime(r.last_order_at) : <span className="muted">최근 주문 없음</span>}</td>
+                    <td><span className={`pill ${r.monthly_order_count > 0 ? "ok" : "warn"}`}>{r.monthly_order_count > 0 ? "사용중" : "주문없음"}</span></td>
+                    <td>{r.open_ticket_count ? <span className="pill warn">{r.open_ticket_count}건</span> : <span className="muted">문의 없음</span>}</td>
+                  </>
+                ) : (
+                  <>
+                    <td><div className="cellMain"><strong>{r.store_name || r.store_id}</strong><small>{r.store_id}</small></div></td>
+                    <td><div className="pillStack"><span className={`pill ${storeStatusLabel(r) === "운영중" ? "ok" : "warn"}`}>{storeStatusLabel(r)}</span><span className={`pill ${storeRiskLabel(r) === "정상" ? "ok" : "warn"}`}>{storeRiskLabel(r)}</span></div></td>
+                    <td><div className="cellMain"><strong>{r.base_plan_status}</strong><small>{fmtMoney(r.monthly_revenue)} · {dday}</small></div></td>
+                    <td><div className="cellMain"><strong>{r.monthly_order_count.toLocaleString()}건</strong><small>오늘 {r.today_order_count.toLocaleString()}건</small></div></td>
+                    <td>{r.open_ticket_count ? <span className="pill warn">미처리 {r.open_ticket_count}건</span> : <span className="muted">문의 없음</span>}</td>
+                    <td>{r.last_order_at ? fmtDateTime(r.last_order_at) : <span className="muted">최근 주문 없음</span>}</td>
+                  </>
+                )}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -565,23 +605,33 @@ export default function OpsPage() {
       <div className="sectionTitle">선택 매장 상세</div>
       {selectedStore ? (
         <>
-          <h3>{selectedStore.store_name || selectedStore.store_id}</h3>
-          <p className="muted">store_id: {selectedStore.store_id}</p>
+          <div className="storeDetailHeader">
+            <div>
+              <h3>{selectedStore.store_name || selectedStore.store_id}</h3>
+              <p className="muted">store_id: {selectedStore.store_id}</p>
+            </div>
+            <div className="pillStack right">
+              <span className={`pill ${storeStatusLabel(selectedStore) === "운영중" ? "ok" : "warn"}`}>{storeStatusLabel(selectedStore)}</span>
+              <span className={`pill ${storeRiskLabel(selectedStore) === "정상" ? "ok" : "warn"}`}>{storeRiskLabel(selectedStore)}</span>
+            </div>
+          </div>
+
           <div className={`insight ${storeRiskLabel(selectedStore) === "정상" ? "ok" : "warn"}`}>
-            <strong>{storeRiskLabel(selectedStore)}</strong>
+            <strong>운영 판단</strong>
             <span>{storeInsight(selectedStore)}</span>
           </div>
-          <div className="infoGrid">
-            <span>운영 상태</span><strong>{storeStatusLabel(selectedStore)}</strong>
-            <span>점검 신호</span><strong>{storeRiskLabel(selectedStore)}</strong>
-            <span>구독 상태</span><strong>{selectedStore.base_plan_status}</strong>
-            <span>구독 만료</span><strong>{fmtDate(selectedStore.paid_until)}</strong>
-            <span>이번 달 결제</span><strong>{fmtMoney(selectedStore.monthly_revenue)}</strong>
-            <span>오늘 주문</span><strong>{selectedStore.today_order_count.toLocaleString()}건</strong>
-            <span>이번 달 주문</span><strong>{selectedStore.monthly_order_count.toLocaleString()}건</strong>
-            <span>미처리 문의</span><strong>{selectedStore.open_ticket_count.toLocaleString()}건</strong>
-            <span>최근 주문</span><strong>{fmtDateTime(selectedStore.last_order_at)}</strong>
+
+          <div className="metricGrid">
+            <div className="metric"><span>구독 상태</span><strong>{selectedStore.base_plan_status}</strong></div>
+            <div className="metric"><span>구독 만료</span><strong>{fmtDate(selectedStore.paid_until)}</strong></div>
+            <div className="metric"><span>남은 기간</span><strong>{remainingDays(selectedStore.paid_until) != null ? `D-${Math.max(0, Number(remainingDays(selectedStore.paid_until)))}` : "-"}</strong></div>
+            <div className="metric"><span>이번 달 매출</span><strong>{fmtMoney(selectedStore.monthly_revenue)}</strong></div>
+            <div className="metric"><span>오늘 주문</span><strong>{selectedStore.today_order_count.toLocaleString()}건</strong></div>
+            <div className="metric"><span>이번 달 주문</span><strong>{selectedStore.monthly_order_count.toLocaleString()}건</strong></div>
+            <div className="metric"><span>미처리 문의</span><strong>{selectedStore.open_ticket_count.toLocaleString()}건</strong></div>
+            <div className="metric"><span>최근 주문</span><strong>{fmtDateTime(selectedStore.last_order_at)}</strong></div>
           </div>
+
           <div className="quickLinks">
             <button className="btn" onClick={() => router.push(`/admin?store=${encodeURIComponent(selectedStore.store_id)}`)}>점주 관리자</button>
             <button className="btn" onClick={() => router.push(`/admin/menu?store=${encodeURIComponent(selectedStore.store_id)}`)}>메뉴 관리</button>
@@ -623,10 +673,16 @@ export default function OpsPage() {
         .input, .select, .textarea { width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; font-size:14px; background:#fff; color:#111827; }
         .textarea { min-height:72px; resize:vertical; }
         .tableWrap { overflow:auto; border:1px solid #eef2f7; border-radius:14px; }
-        table { width:100%; border-collapse: collapse; font-size: 14px; min-width: 920px; }
+        table { width:100%; border-collapse: collapse; font-size: 14px; min-width: 760px; }
         th, td { border-bottom:1px solid #eef2f7; padding:12px 10px; text-align:left; vertical-align:middle; }
         th { background:#f9fafb; color:#4b5563; font-size:12px; }
         td small { display:block; color:#6b7280; font-size:12px; margin-top:3px; }
+        td.num { text-align:right; font-weight:900; white-space:nowrap; }
+        .cellMain { display:grid; gap:3px; min-width:0; }
+        .cellMain strong { font-size:14px; line-height:1.25; word-break:keep-all; }
+        .cellMain small { color:#6b7280; font-size:12px; line-height:1.25; }
+        .pillStack { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+        .pillStack.right { justify-content:flex-end; }
         tr { cursor:pointer; }
         tr.sel { background:#eef6ff; }
         tr:hover { background:#f8fafc; }
@@ -636,6 +692,7 @@ export default function OpsPage() {
         .pill.danger { color:#b91c1c; background:#fef2f2; border-color:#fecaca; }
         .detailCard { position:sticky; top:16px; }
         .detailCard h3 { margin:4px 0; font-size:22px; }
+        .storeDetailHeader { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border-bottom:1px solid #eef2f7; padding-bottom:12px; }
         .infoGrid { display:grid; grid-template-columns: 110px 1fr; gap:9px 12px; margin:14px 0; font-size:14px; }
         .infoGrid span { color:#6b7280; }
         .insight { display:grid; gap:4px; border-radius:14px; padding:12px; margin:12px 0; border:1px solid #e5e7eb; background:#f9fafb; }
@@ -645,6 +702,10 @@ export default function OpsPage() {
         .storeMiniList { display:grid; gap:8px; }
         .storeMini { border:1px solid #e5e7eb; border-radius:12px; padding:10px; display:grid; gap:5px; cursor:pointer; background:#fff; }
         .storeMini:hover { background:#f8fafc; }
+        .metricGrid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; margin:12px 0; }
+        .metric { border:1px solid #eef2f7; border-radius:12px; background:#f9fafb; padding:10px; display:grid; gap:4px; min-width:0; }
+        .metric span { color:#6b7280; font-size:12px; font-weight:800; }
+        .metric strong { font-size:14px; line-height:1.25; word-break:break-word; }
         .quickLinks { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; }
         .barRow { display:grid; grid-template-columns: 92px 1fr 42px; gap:8px; align-items:center; font-size:13px; }
         .barTrack { height:9px; border-radius:999px; background:#eef2f7; overflow:hidden; }
@@ -765,7 +826,7 @@ export default function OpsPage() {
                 <option value="openTickets">문의 많은순</option>
               </select>
             </div>
-            {renderStoreTable()}
+            {renderStoreTable("stores")}
           </article>
           {renderSelectedStore()}
         </section>
@@ -783,7 +844,7 @@ export default function OpsPage() {
               <div className="notice"><span>만료 임박</span><strong>{kpi.expiringSoonStores}개</strong></div>
               <div className="notice"><span>결제 없는 유료 매장</span><strong>{rows.filter((r) => r.base_plan_status === "active" && r.paid_count === 0).length}개</strong></div>
             </div>
-            <div style={{ marginTop: 12 }}>{renderStoreTable()}</div>
+            <div style={{ marginTop: 12 }}>{renderStoreTable("billing")}</div>
           </article>
           {renderSelectedStore()}
         </section>
@@ -836,7 +897,7 @@ export default function OpsPage() {
                 </div>
               </div>
             </div>
-            <div style={{ marginTop: 12 }}>{renderStoreTable()}</div>
+            <div style={{ marginTop: 12 }}>{renderStoreTable("orders")}</div>
           </article>
           {renderSelectedStore()}
         </section>
