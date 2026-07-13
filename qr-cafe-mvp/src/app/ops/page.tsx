@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { maskToken } from "@/app/lib/billingSettings";
 
-type OpsTab = "overview" | "stores" | "billing" | "tickets" | "settings";
+type OpsTab = "overview" | "customers" | "tickets" | "settings";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
 type StoreSort =
   | "risk"
@@ -46,6 +46,7 @@ type StoreOpsRow = {
   last_order_at: string | null;
   open_ticket_count: number;
   urgent_ticket_count: number;
+  owner_user_id: string | null;
 };
 
 type StoreBaseRow = {
@@ -77,6 +78,12 @@ type OrderBaseRow = {
   created_at: string | null;
   status: string | null;
 };
+type StoreMemberRow = {
+  store_id: string | null;
+  user_id: string | null;
+  role: string | null;
+};
+
 type SupportTicketRow = {
   id: number;
   store_id: string;
@@ -110,12 +117,12 @@ type KpiSummary = {
   inProgressTickets: number;
   urgentTickets: number;
   todayNewTickets: number;
+  ownerAccounts: number;
 };
 
 const TABS: Array<{ id: OpsTab; label: string }> = [
   { id: "overview", label: "대시보드" },
-  { id: "stores", label: "매장 관리" },
-  { id: "billing", label: "구독/결제" },
+  { id: "customers", label: "고객·구독 관리" },
   { id: "tickets", label: "문의/장애" },
   { id: "settings", label: "시스템 설정" },
 ];
@@ -149,6 +156,11 @@ function fmtDateTime(raw: string | null) {
   const t = new Date(raw).getTime();
   if (!Number.isFinite(t)) return raw;
   return new Date(t).toLocaleString("ko-KR", { hour12: false });
+}
+
+function shortId(raw: string | null) {
+  if (!raw) return "미연결";
+  return raw.length > 12 ? `${raw.slice(0, 8)}…${raw.slice(-4)}` : raw;
 }
 
 function remainingDays(raw: string | null) {
@@ -279,33 +291,41 @@ export default function OpsPage() {
       .select("store_id, store_name, status, setup_completed, created_at")
       .order("store_name", { ascending: true });
 
-    const [storesRes, billRes, addonRes, payRes, orderRes, ticketRes] =
-      await Promise.all([
-        storesQuery,
-        supabase
-          .from("store_billing")
-          .select("store_id, base_plan_status, paid_until"),
-        supabase
-          .from("store_addons")
-          .select("store_id, prepay_addon_status, addon_paid_until"),
-        supabase
-          .from("billing_payments")
-          .select("store_id, amount_krw, paid_at, status")
-          .gte("paid_at", monthStart)
-          .eq("status", "paid"),
-        supabase
-          .from("orders")
-          .select("store_id, order_date, created_at, status")
-          .gte("order_date", monthStart)
-          .neq("status", "cancelled"),
-        supabase
-          .from("support_tickets")
-          .select(
-            "id, store_id, category, priority, status, title, body, ops_note, created_at, updated_at",
-          )
-          .order("created_at", { ascending: false })
-          .limit(200),
-      ]);
+    const [
+      storesRes,
+      billRes,
+      addonRes,
+      payRes,
+      orderRes,
+      ticketRes,
+      memberRes,
+    ] = await Promise.all([
+      storesQuery,
+      supabase
+        .from("store_billing")
+        .select("store_id, base_plan_status, paid_until"),
+      supabase
+        .from("store_addons")
+        .select("store_id, prepay_addon_status, addon_paid_until"),
+      supabase
+        .from("billing_payments")
+        .select("store_id, amount_krw, paid_at, status")
+        .gte("paid_at", monthStart)
+        .eq("status", "paid"),
+      supabase
+        .from("orders")
+        .select("store_id, order_date, created_at, status")
+        .gte("order_date", monthStart)
+        .neq("status", "cancelled"),
+      supabase
+        .from("support_tickets")
+        .select(
+          "id, store_id, category, priority, status, title, body, ops_note, created_at, updated_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(200),
+      supabase.from("store_members").select("store_id, user_id, role"),
+    ]);
 
     if (
       storesRes.error ||
@@ -322,7 +342,7 @@ export default function OpsPage() {
           addonRes.error,
           payRes.error,
           orderRes.error,
-          ticketRes.error,
+          ticketRes.error || memberRes.error,
         ]
           .filter(Boolean)
           .map((e) => e?.message)
@@ -338,6 +358,9 @@ export default function OpsPage() {
     const paymentRows = (payRes.data || []) as PaymentBaseRow[];
     const orderRows = (orderRes.data || []) as OrderBaseRow[];
     const ticketRows = (ticketRes.data || []) as SupportTicketRow[];
+    const memberRows = (memberRes.data || []) as StoreMemberRow[];
+    if (memberRes.error)
+      setMsg(`점주 계정 연결 로딩 실패: ${memberRes.error.message}`);
 
     const billMap = new Map(billRows.map((x) => [x.store_id, x]));
     const addonMap = new Map(addonRows.map((x) => [x.store_id, x]));
@@ -348,6 +371,14 @@ export default function OpsPage() {
     const lastOrderMap = new Map<string, string>();
     const openTicketMap = new Map<string, number>();
     const urgentTicketMap = new Map<string, number>();
+    const ownerMap = new Map<string, string>();
+
+    for (const m of memberRows) {
+      const sid = String(m.store_id || "");
+      const uid = String(m.user_id || "");
+      if (!sid || !uid) continue;
+      if (m.role === "owner" || !ownerMap.has(sid)) ownerMap.set(sid, uid);
+    }
 
     for (const p of paymentRows) {
       const sid = String(p.store_id || "");
@@ -409,6 +440,7 @@ export default function OpsPage() {
         last_order_at: lastOrderMap.get(String(s.store_id)) || null,
         open_ticket_count: openTicketMap.get(String(s.store_id)) || 0,
         urgent_ticket_count: urgentTicketMap.get(String(s.store_id)) || 0,
+        owner_user_id: ownerMap.get(String(s.store_id)) || null,
       };
     });
 
@@ -476,7 +508,10 @@ export default function OpsPage() {
         String(r.store_name || "")
           .toLowerCase()
           .includes(q) ||
-        r.store_id.toLowerCase().includes(q);
+        r.store_id.toLowerCase().includes(q) ||
+        String(r.owner_user_id || "")
+          .toLowerCase()
+          .includes(q);
       const matchesSub =
         subFilter === "all" ||
         (subFilter === "active" && r.base_plan_status === "active") ||
@@ -536,6 +571,8 @@ export default function OpsPage() {
       todayNewTickets: tickets.filter((t) =>
         String(t.created_at || "").startsWith(ymd(new Date())),
       ).length,
+      ownerAccounts: new Set(rows.map((r) => r.owner_user_id).filter(Boolean))
+        .size,
     };
   }, [rows, tickets]);
 
@@ -722,6 +759,7 @@ export default function OpsPage() {
         <thead>
           {mode === "billing" ? (
             <tr>
+              <th>점주 계정</th>
               <th>매장</th>
               <th>구독 상태</th>
               <th>만료/남은 기간</th>
@@ -731,6 +769,7 @@ export default function OpsPage() {
             </tr>
           ) : (
             <tr>
+              <th>점주 계정</th>
               <th>매장</th>
               <th>운영 상태</th>
               <th>구독</th>
@@ -752,6 +791,12 @@ export default function OpsPage() {
               >
                 {mode === "billing" ? (
                   <>
+                    <td>
+                      <div className="cellMain">
+                        <strong>{shortId(r.owner_user_id)}</strong>
+                        <small>owner</small>
+                      </div>
+                    </td>
                     <td>
                       <div className="cellMain">
                         <strong>{r.store_name || r.store_id}</strong>
@@ -785,6 +830,12 @@ export default function OpsPage() {
                   </>
                 ) : (
                   <>
+                    <td>
+                      <div className="cellMain">
+                        <strong>{shortId(r.owner_user_id)}</strong>
+                        <small>owner</small>
+                      </div>
+                    </td>
                     <td>
                       <div className="cellMain">
                         <strong>{r.store_name || r.store_id}</strong>
@@ -861,6 +912,9 @@ export default function OpsPage() {
           <div className="storeDetailHeader">
             <div>
               <h3>{selectedStore.store_name || selectedStore.store_id}</h3>
+              <p className="muted">
+                owner: {shortId(selectedStore.owner_user_id)}
+              </p>
               <p className="muted">store_id: {selectedStore.store_id}</p>
             </div>
             <div className="pillStack right">
@@ -885,6 +939,10 @@ export default function OpsPage() {
           </div>
 
           <div className="metricGrid">
+            <div className="metric">
+              <span>점주 계정</span>
+              <strong>{shortId(selectedStore.owner_user_id)}</strong>
+            </div>
             <div className="metric">
               <span>구독 상태</span>
               <strong>{selectedStore.base_plan_status}</strong>
@@ -1559,8 +1617,11 @@ export default function OpsPage() {
 
       <section className="kpis">
         <article className="card kpi">
-          <div className="kpiLabel">가입 매장</div>
-          <div className="kpiValue">{kpi.totalStores.toLocaleString()}개</div>
+          <div className="kpiLabel">점주 계정 / 매장</div>
+          <div className="kpiValue">
+            {kpi.ownerAccounts.toLocaleString()} /{" "}
+            {kpi.totalStores.toLocaleString()}개
+          </div>
           <div className="kpiHint">
             활성 {kpi.activeStores.toLocaleString()}개 · 설정중{" "}
             {kpi.setupStores.toLocaleString()}개
@@ -1661,7 +1722,7 @@ export default function OpsPage() {
                   </strong>
                   <button
                     className="btn"
-                    onClick={() => setActiveTab("stores")}
+                    onClick={() => setActiveTab("customers")}
                   >
                     매장 보기
                   </button>
@@ -1682,7 +1743,7 @@ export default function OpsPage() {
                   </strong>
                   <button
                     className="btn"
-                    onClick={() => setActiveTab("billing")}
+                    onClick={() => setActiveTab("customers")}
                   >
                     전환 후보
                   </button>
@@ -1707,7 +1768,7 @@ export default function OpsPage() {
                   </strong>
                   <button
                     className="btn"
-                    onClick={() => setActiveTab("billing")}
+                    onClick={() => setActiveTab("customers")}
                   >
                     결제 확인
                   </button>
@@ -1771,12 +1832,12 @@ export default function OpsPage() {
                   tabIndex={0}
                   onClick={() => {
                     setSelectedStoreId(r.store_id);
-                    setActiveTab("stores");
+                    setActiveTab("customers");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       setSelectedStoreId(r.store_id);
-                      setActiveTab("stores");
+                      setActiveTab("customers");
                     }
                   }}
                 >
@@ -1809,12 +1870,12 @@ export default function OpsPage() {
                   tabIndex={0}
                   onClick={() => {
                     setSelectedStoreId(r.store_id);
-                    setActiveTab("billing");
+                    setActiveTab("customers");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       setSelectedStoreId(r.store_id);
-                      setActiveTab("billing");
+                      setActiveTab("customers");
                     }
                   }}
                 >
@@ -1850,12 +1911,12 @@ export default function OpsPage() {
                   tabIndex={0}
                   onClick={() => {
                     setSelectedStoreId(r.store_id);
-                    setActiveTab("stores");
+                    setActiveTab("customers");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       setSelectedStoreId(r.store_id);
-                      setActiveTab("stores");
+                      setActiveTab("customers");
                     }
                   }}
                 >
@@ -1911,16 +1972,56 @@ export default function OpsPage() {
         </section>
       ) : null}
 
-      {!loading && activeTab === "stores" ? (
+      {!loading && activeTab === "customers" ? (
         <section className="grid2">
           <article className="card">
-            <div className="sectionTitle">매장 관리</div>
-            <div className="filters">
+            <div className="panelHeader">
+              <div>
+                <div className="sectionTitle">고객·구독 관리</div>
+                <p>
+                  점주 계정, 매장, 구독/결제, 주문 사용량, 문의 상태를 한
+                  화면에서 함께 확인합니다.
+                </p>
+              </div>
+              <span className="pill ok">계정 → 매장</span>
+            </div>
+            <div className="grid3">
+              <div className="notice">
+                <span>점주 계정</span>
+                <strong>{kpi.ownerAccounts.toLocaleString()}개</strong>
+              </div>
+              <div className="notice">
+                <span>전체 매장</span>
+                <strong>{kpi.totalStores.toLocaleString()}개</strong>
+              </div>
+              <div className="notice">
+                <span>유료 구독</span>
+                <strong>{kpi.paidStores.toLocaleString()}개</strong>
+              </div>
+              <div className="notice">
+                <span>무료/비활성</span>
+                <strong>{freeOrInactiveStores.toLocaleString()}개</strong>
+              </div>
+              <div className="notice">
+                <span>이번 달 구독 매출</span>
+                <strong>{fmtMoney(kpi.monthlyRevenue)}</strong>
+              </div>
+              <div className="notice">
+                <span>결제/만료 점검</span>
+                <strong>
+                  {(
+                    noPaymentPaidStores.length + kpi.expiringSoonStores
+                  ).toLocaleString()}
+                  개
+                </strong>
+              </div>
+            </div>
+            <div className="filters" style={{ marginTop: 12 }}>
               <input
                 className="input"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="매장명 또는 store_id 검색"
+                placeholder="점주 계정 / 매장명 / store_id 검색"
               />
               <select
                 className="select"
@@ -1957,72 +2058,6 @@ export default function OpsPage() {
             {renderStoreTable("stores")}
           </article>
           {renderSelectedStore()}
-        </section>
-      ) : null}
-
-      {!loading && activeTab === "billing" ? (
-        <section className="card">
-          <div className="panelHeader">
-            <div>
-              <div className="sectionTitle">구독/결제</div>
-              <p>
-                이 화면은 매장 주문액이 아니라, 플랫폼 구독 매출과 결제 상태를
-                확인하는 영역입니다.
-              </p>
-            </div>
-            <span className="pill ok">구독 사업</span>
-          </div>
-          <div className="grid3">
-            <div className="notice">
-              <span>유료 구독</span>
-              <strong>{kpi.paidStores.toLocaleString()}개</strong>
-            </div>
-            <div className="notice">
-              <span>무료/비활성</span>
-              <strong>{freeOrInactiveStores.toLocaleString()}개</strong>
-            </div>
-            <div className="notice">
-              <span>이번 달 구독 매출</span>
-              <strong>{fmtMoney(kpi.monthlyRevenue)}</strong>
-            </div>
-            <div className="notice">
-              <span>결제 완료</span>
-              <strong>{kpi.monthlyPaidCount.toLocaleString()}건</strong>
-            </div>
-            <div className="notice">
-              <span>만료 임박</span>
-              <strong>{kpi.expiringSoonStores.toLocaleString()}개</strong>
-            </div>
-            <div className="notice">
-              <span>결제 없는 유료 매장</span>
-              <strong>{noPaymentPaidStores.length.toLocaleString()}개</strong>
-            </div>
-          </div>
-          <div className="grid2" style={{ marginTop: 16 }}>
-            <div>
-              <div className="sectionTitle">결제/구독 점검 목록</div>
-              {renderStoreTable("billing")}
-            </div>
-            <div className="noticeList">
-              <div className="sectionTitle">전환/매출 인사이트</div>
-              <div className="notice">
-                <span>매장당 평균 구독 매출</span>
-                <strong>{fmtMoney(arpu)}</strong>
-              </div>
-              <div className="notice">
-                <span>유료 전환 후보</span>
-                <strong>{nonPaidActiveStores.length.toLocaleString()}개</strong>
-              </div>
-              <div className="notice">
-                <span>이탈 위험 후보</span>
-                <strong>{paidNoOrderStores.length.toLocaleString()}개</strong>
-              </div>
-              <div className="notice">
-                <span>이번 달 주문 발생 매장</span>
-                <strong>{kpi.orderActiveStores.toLocaleString()}개</strong>
-              </div>
-            </div>
-          </div>
         </section>
       ) : null}
 
