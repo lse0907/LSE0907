@@ -44,6 +44,27 @@ type WalletCustomerRow = {
   tier: "general" | "regular" | "vip";
 };
 
+type TargetCustomerRow = {
+  customer_user_id: string;
+  name: string | null;
+  phone: string | null;
+  point_balance: number;
+  tier: "general" | "regular" | "vip";
+  lifetime_spent: number;
+  lifetime_orders: number;
+  last_order_at: string | null;
+  registered_at: string | null;
+  already_has_coupon: boolean;
+};
+
+type BulkIssueResult = {
+  requested_count?: number;
+  valid_count?: number;
+  issued_count?: number;
+  skipped_existing_count?: number;
+  invalid_customer_count?: number;
+};
+
 type CustomerProfileRow = {
   user_id: string;
   name: string | null;
@@ -77,6 +98,10 @@ const loyaltyTabs: Array<{ id: LoyaltyTab; label: string; desc: string }> = [
 const issuedStatusOptions: Array<[string, string]> = [["all", "전체"], ["issued", "사용 가능"], ["used", "사용 완료"], ["expired", "만료"], ["cancelled", "취소"]];
 const issuedPeriodOptions: Array<[string, string]> = [["30", "최근 30일"], ["7", "최근 7일"], ["90", "최근 90일"], ["all", "전체"]];
 const ISSUED_PAGE_SIZE = 30;
+const targetTierOptions: Array<[string, string]> = [["all", "전체"], ["general", "일반"], ["regular", "단골"], ["vip", "VIP"]];
+const targetRecentOptions: Array<[string, string]> = [["all", "전체"], ["7", "최근 7일 주문"], ["30", "최근 30일 주문"], ["90", "최근 90일 주문"]];
+const targetInactiveOptions: Array<[string, string]> = [["all", "전체"], ["30", "30일 미방문"], ["60", "60일 미방문"], ["90", "90일 미방문"]];
+const targetRegisteredOptions: Array<[string, string]> = [["all", "전체"], ["30", "등록 30일 이상"], ["90", "등록 90일 이상"], ["180", "등록 180일 이상"]];
 
 function toNumber(v: string, fallback = 0) {
   const n = Number(v);
@@ -202,6 +227,22 @@ function AdminLoyaltyInner() {
   const [issuedCoupons, setIssuedCoupons] = useState<IssuedCouponRow[]>([]);
   const [issueCustomerId, setIssueCustomerId] = useState("");
   const [issueTemplateId, setIssueTemplateId] = useState("");
+  const [issueMode, setIssueMode] = useState<"single" | "selected">("single");
+  const [targetSearch, setTargetSearch] = useState("");
+  const [targetTier, setTargetTier] = useState("all");
+  const [targetMinPoints, setTargetMinPoints] = useState("0");
+  const [targetMinOrders, setTargetMinOrders] = useState("0");
+  const [targetMinSpent, setTargetMinSpent] = useState("0");
+  const [targetRecentDays, setTargetRecentDays] = useState("all");
+  const [targetInactiveDays, setTargetInactiveDays] = useState("all");
+  const [targetRegisteredDays, setTargetRegisteredDays] = useState("all");
+  const [targetExcludeExisting, setTargetExcludeExisting] = useState(true);
+  const [targetRows, setTargetRows] = useState<TargetCustomerRow[]>([]);
+  const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>([]);
+  const [targetLoading, setTargetLoading] = useState(false);
+  const [bulkIssuing, setBulkIssuing] = useState(false);
+  const [bulkConfirmChecked, setBulkConfirmChecked] = useState(false);
+  const [bulkIssueResult, setBulkIssueResult] = useState<BulkIssueResult | null>(null);
   const [newTemplate, setNewTemplate] = useState({
     coupon_kind: "event" as CouponTemplateRow["coupon_kind"],
     name: "",
@@ -460,6 +501,7 @@ function AdminLoyaltyInner() {
   const selectedCustomer = issueCustomerId ? customerProfilesById[issueCustomerId] : null;
   const selectedTemplate = templates.find((row) => row.id === issueTemplateId) || null;
   const selectedCustomerWallet = walletCustomers.find((row) => row.customer_user_id === issueCustomerId) || null;
+  const allTargetsSelected = targetRows.length > 0 && targetRows.every((row) => selectedTargetIds.includes(row.customer_user_id));
   const previewOrderAmount = 10000;
   const newTemplatePreview = {
     discount_type: newTemplate.discount_type,
@@ -561,6 +603,85 @@ function AdminLoyaltyInner() {
     await loadWalletCustomers("recent");
   };
 
+  const searchCouponTargets = async () => {
+    if (!storeId) return;
+    if (!issueTemplateId) return showMsg("발급할 쿠폰을 먼저 선택해 주세요.", "error");
+    const tpl = templates.find((row) => row.id === issueTemplateId);
+    if (tpl && !tpl.is_active) return showMsg("비활성 쿠폰은 먼저 활성화해 주세요.", "error");
+
+    setTargetLoading(true);
+    setBulkIssueResult(null);
+    setBulkConfirmChecked(false);
+    setMsg("");
+    const { data, error } = await supabase.rpc("admin_search_coupon_targets", {
+      p_store_id: storeId,
+      p_query: targetSearch.trim(),
+      p_tier: targetTier,
+      p_min_points: Math.max(0, Math.floor(toNumber(targetMinPoints, 0))),
+      p_min_orders: Math.max(0, Math.floor(toNumber(targetMinOrders, 0))),
+      p_min_spent: Math.max(0, Math.floor(toNumber(targetMinSpent, 0))),
+      p_recent_days: targetRecentDays === "all" ? null : Number(targetRecentDays),
+      p_inactive_days: targetInactiveDays === "all" ? null : Number(targetInactiveDays),
+      p_registered_min_days: targetRegisteredDays === "all" ? null : Number(targetRegisteredDays),
+      p_template_id: issueTemplateId,
+      p_exclude_existing: targetExcludeExisting,
+      p_limit: 200,
+    });
+
+    if (error) {
+      showMsg(`대상 고객 검색 실패: ${error.message}`, "error");
+      setTargetRows([]);
+      setSelectedTargetIds([]);
+    } else {
+      const rows = (Array.isArray(data) ? data : []) as TargetCustomerRow[];
+      setTargetRows(rows);
+      setSelectedTargetIds([]);
+      const profiles = Object.fromEntries(rows.map((row) => [row.customer_user_id, { user_id: row.customer_user_id, name: row.name, phone: row.phone }]));
+      setCustomerProfilesById((prev) => ({ ...prev, ...profiles }));
+      showMsg(`검색 결과 ${rows.length}명을 확인했습니다.`, rows.length ? "success" : "info");
+    }
+    setTargetLoading(false);
+  };
+
+  const toggleTargetSelection = (customerId: string) => {
+    setSelectedTargetIds((prev) => prev.includes(customerId) ? prev.filter((id) => id !== customerId) : [...prev, customerId]);
+  };
+
+  const toggleAllTargets = () => {
+    setSelectedTargetIds(allTargetsSelected ? [] : targetRows.map((row) => row.customer_user_id));
+  };
+
+  const issueCouponToSelectedTargets = async () => {
+    if (!storeId) return;
+    if (!issueTemplateId) return showMsg("발급할 쿠폰을 선택해 주세요.", "error");
+    if (!selectedTargetIds.length) return showMsg("발급할 고객을 선택해 주세요.", "error");
+    if (!bulkConfirmChecked) return showMsg("선택 고객 발급 확인을 체크해 주세요.", "error");
+    const tpl = templates.find((row) => row.id === issueTemplateId);
+    if (tpl && !tpl.is_active) return showMsg("비활성 쿠폰은 먼저 활성화해 주세요.", "error");
+
+    setBulkIssuing(true);
+    setMsg("");
+    const { data, error } = await supabase.rpc("admin_issue_coupon_to_selected_customers", {
+      p_store_id: storeId,
+      p_template_id: issueTemplateId,
+      p_customer_user_ids: selectedTargetIds,
+      p_exclude_existing: targetExcludeExisting,
+    });
+
+    if (error) showMsg(`선택 고객 발급 실패: ${error.message}`, "error");
+    else {
+      const result = (data || {}) as BulkIssueResult;
+      const issuedTargetIds = [...selectedTargetIds];
+      setBulkIssueResult(result);
+      showMsg(`선택 ${result.requested_count || selectedTargetIds.length}명 중 ${result.issued_count || 0}명에게 발급했습니다.`, "success");
+      setBulkConfirmChecked(false);
+      setSelectedTargetIds([]);
+      if (targetExcludeExisting) setTargetRows((prev) => prev.filter((row) => !issuedTargetIds.includes(row.customer_user_id)));
+      await loadIssuedCoupons("reset");
+    }
+    setBulkIssuing(false);
+  };
+
   const handleIssuedSearch = async () => {
     await loadIssuedCoupons("reset");
   };
@@ -573,8 +694,16 @@ function AdminLoyaltyInner() {
     await loadIssuedCoupons("reset", { search: "", status: "all", period: "30" });
   };
 
-  const selectIssueTemplate = (templateId: string) => {
+  const handleIssueTemplateChange = (templateId: string) => {
     setIssueTemplateId(templateId);
+    setTargetRows([]);
+    setSelectedTargetIds([]);
+    setBulkIssueResult(null);
+    setBulkConfirmChecked(false);
+  };
+
+  const selectIssueTemplate = (templateId: string) => {
+    handleIssueTemplateChange(templateId);
     setActiveTab("issue");
   };
 
@@ -825,10 +954,23 @@ function AdminLoyaltyInner() {
               <h2>쿠폰 발급</h2>
               <p>고객 검색 후 발급</p>
             </div>
-            <button className="btn btnDark" type="button" onClick={issueCouponToCustomer} disabled={issuingCoupon}>{issuingCoupon ? "발급 중" : "발급"}</button>
+            <button
+              className="btn btnDark"
+              type="button"
+              onClick={issueMode === "single" ? issueCouponToCustomer : issueCouponToSelectedTargets}
+              disabled={issueMode === "single" ? issuingCoupon : bulkIssuing}
+            >
+              {issueMode === "single" ? (issuingCoupon ? "발급 중" : "발급") : (bulkIssuing ? "발급 중" : "선택 발급")}
+            </button>
           </div>
 
-          <div className="searchPanel">
+          <div className="modeSwitch" role="tablist" aria-label="쿠폰 발급 방식">
+            <button className={`modeButton ${issueMode === "single" ? "modeButtonOn" : ""}`} type="button" onClick={() => setIssueMode("single")}>개별 고객</button>
+            <button className={`modeButton ${issueMode === "selected" ? "modeButtonOn" : ""}`} type="button" onClick={() => setIssueMode("selected")}>검색 결과 선택 발급</button>
+          </div>
+
+          {issueMode === "single" ? (
+            <div className="searchPanel">
             <label className="field searchField">
               <span>고객 검색</span>
               <div className="fieldControl">
@@ -851,16 +993,17 @@ function AdminLoyaltyInner() {
               <button className="btn" type="button" onClick={resetCustomerSearch} disabled={customersLoading}>초기화</button>
             </div>
           </div>
+          ) : null}
 
           <div className="issueGrid">
             <div className="selectedBox">
-              <span>선택 고객</span>
-              <strong>{issueCustomerId ? customerDisplayName(selectedCustomer, issueCustomerId) : "선택 전"}</strong>
-              <p>{selectedCustomer ? `${phoneText(selectedCustomer.phone)} · ${money(selectedCustomerWallet?.point_balance || 0)}P` : "검색 결과에서 고객을 선택해 주세요."}</p>
+              <span>{issueMode === "single" ? "선택 고객" : "선택 대상"}</span>
+              <strong>{issueMode === "single" ? (issueCustomerId ? customerDisplayName(selectedCustomer, issueCustomerId) : "선택 전") : `${selectedTargetIds.length}명 선택`}</strong>
+              <p>{issueMode === "single" ? (selectedCustomer ? `${phoneText(selectedCustomer.phone)} · ${money(selectedCustomerWallet?.point_balance || 0)}P` : "검색 결과에서 고객을 선택해 주세요.") : (targetRows.length ? `검색 결과 ${targetRows.length}명` : "조건으로 고객을 검색해 주세요.")}</p>
             </div>
             <label className="field">
               <span>발급 쿠폰</span>
-              <select value={issueTemplateId} onChange={(e) => setIssueTemplateId(e.target.value)}>
+              <select value={issueTemplateId} onChange={(e) => handleIssueTemplateChange(e.target.value)}>
                 <option value="">선택해 주세요</option>
                 {templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name} · {couponKindLabel(tpl.coupon_kind)}{tpl.is_active ? "" : " [비활성]"}</option>)}
               </select>
@@ -872,13 +1015,15 @@ function AdminLoyaltyInner() {
             </div>
           </div>
 
-          <div className="listHead">
-            <h3 className="subTitle">{customerSearchSummary}</h3>
-            <span>{walletCustomers.length}명 표시</span>
-          </div>
-          {customersLoading ? <p className="muted">고객 목록 로딩 중...</p> : null}
-          {!customersLoading && walletCustomers.length === 0 ? <p className="emptyText">검색 결과가 없습니다.</p> : null}
-          <div className="customerList">
+          {issueMode === "single" ? (
+            <>
+              <div className="listHead">
+                <h3 className="subTitle">{customerSearchSummary}</h3>
+                <span>{walletCustomers.length}명 표시</span>
+              </div>
+              {customersLoading ? <p className="muted">고객 목록 로딩 중...</p> : null}
+              {!customersLoading && walletCustomers.length === 0 ? <p className="emptyText">검색 결과가 없습니다.</p> : null}
+              <div className="customerList">
             {walletCustomers.map((row) => {
               const profile = customerProfilesById[row.customer_user_id];
               const active = issueCustomerId === row.customer_user_id;
@@ -893,7 +1038,61 @@ function AdminLoyaltyInner() {
                 </article>
               );
             })}
-          </div>
+              </div>
+            </>
+          ) : null}
+
+          {issueMode === "selected" ? (
+            <div className="targetPanel">
+              <div className="formGrid targetFilterGrid">
+                <LabelInput label="이름/전화번호" value={targetSearch} onChange={setTargetSearch} placeholder="선택" />
+                <SelectInput label="등급" value={targetTier} onChange={setTargetTier} options={targetTierOptions} />
+                <LabelInput label="보유 포인트" suffix="P 이상" value={targetMinPoints} onChange={setTargetMinPoints} />
+                <LabelInput label="누적 주문수" suffix="회 이상" value={targetMinOrders} onChange={setTargetMinOrders} />
+                <LabelInput label="누적 이용금액" suffix="원 이상" value={targetMinSpent} onChange={setTargetMinSpent} />
+                <SelectInput label="최근 주문" value={targetRecentDays} onChange={setTargetRecentDays} options={targetRecentOptions} />
+                <SelectInput label="미방문" value={targetInactiveDays} onChange={setTargetInactiveDays} options={targetInactiveOptions} />
+                <SelectInput label="고객 등록" value={targetRegisteredDays} onChange={setTargetRegisteredDays} options={targetRegisteredOptions} />
+              </div>
+              <div className="targetActions">
+                <label className="checkRow">
+                  <input type="checkbox" checked={targetExcludeExisting} onChange={(e) => setTargetExcludeExisting(e.target.checked)} />
+                  이미 같은 쿠폰 받은 고객 제외
+                </label>
+                <div className="actionRow">
+                  <button className="btn btnDark" type="button" onClick={searchCouponTargets} disabled={targetLoading}>{targetLoading ? "검색 중" : "대상 검색"}</button>
+                  <button className="btn" type="button" onClick={toggleAllTargets} disabled={!targetRows.length}>{allTargetsSelected ? "전체 해제" : "검색 결과 전체 선택"}</button>
+                </div>
+              </div>
+              <div className="listHead">
+                <h3 className="subTitle">검색 결과 {targetRows.length}명</h3>
+                <span>선택 {selectedTargetIds.length}명</span>
+              </div>
+              {targetLoading ? <p className="muted">대상 고객 검색 중...</p> : null}
+              {!targetLoading && targetRows.length === 0 ? <p className="emptyText">조건에 맞는 고객을 검색해 주세요.</p> : null}
+              <div className="targetList">
+                {targetRows.map((row) => {
+                  const checked = selectedTargetIds.includes(row.customer_user_id);
+                  return (
+                    <label key={row.customer_user_id} className={`targetRow ${checked ? "targetRowOn" : ""}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleTargetSelection(row.customer_user_id)} />
+                      <div>
+                        <strong>{customerDisplayName({ user_id: row.customer_user_id, name: row.name, phone: row.phone }, row.customer_user_id)}</strong>
+                        <p>{phoneText(row.phone)} · {tierLabel(row.tier)} · {money(row.point_balance)}P</p>
+                        <p className="targetMeta">주문 {money(row.lifetime_orders)}회 · 이용 {money(row.lifetime_spent)}원 · 최근 {dateText(row.last_order_at)} · 등록 {dateText(row.registered_at)}</p>
+                      </div>
+                      {row.already_has_coupon ? <span className="badge badgeGray">보유</span> : null}
+                    </label>
+                  );
+                })}
+              </div>
+              <label className="checkRow">
+                <input type="checkbox" checked={bulkConfirmChecked} onChange={(e) => setBulkConfirmChecked(e.target.checked)} />
+                선택한 고객에게 쿠폰 발급을 확인했습니다
+              </label>
+              {bulkIssueResult ? <div className="previewBox">발급 {bulkIssueResult.issued_count || 0}명 · 제외 {bulkIssueResult.skipped_existing_count || 0}명 · 유효하지 않음 {bulkIssueResult.invalid_customer_count || 0}명</div> : null}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -1028,6 +1227,18 @@ function AdminLoyaltyInner() {
         .formGrid, .issueGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
         .searchPanel { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(150px, .6fr) auto; gap: 12px; align-items: end; padding: 14px; border: 1px solid #e2e8f0; border-radius: 16px; background: #f8fafc; }
         .searchActions { display: flex; gap: 8px; }
+        .modeSwitch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .modeButton { border: 1px solid #e2e8f0; background: #fff; border-radius: 14px; padding: 12px; color: #334155; font-weight: 950; cursor: pointer; }
+        .modeButtonOn { border-color: #111827; background: #111827; color: #fff; }
+        .targetPanel { display: grid; gap: 14px; }
+        .targetFilterGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .targetActions { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .targetList { display: grid; gap: 8px; }
+        .targetRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px; background: #fff; cursor: pointer; }
+        .targetRow strong { font-weight: 950; }
+        .targetRow p { margin-top: 4px; color: #64748b; font-weight: 800; }
+        .targetMeta { font-size: 12px; }
+        .targetRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
         .listHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
         .listHead span { color: #64748b; font-size: 13px; font-weight: 900; }
         .customerList { display: grid; gap: 8px; }
@@ -1066,13 +1277,13 @@ function AdminLoyaltyInner() {
         .badgePurple { background: #ede9fe; color: #6d28d9; }
         .subTitle { margin-top: 4px; font-size: 16px; font-weight: 950; }
         .emptyText { padding: 10px 0; }
-        @media (max-width: 900px) { .summaryGrid, .formGrid, .issueGrid, .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); } .searchPanel { grid-template-columns: 1fr 1fr; } .searchActions { grid-column: 1 / -1; } }
+        @media (max-width: 900px) { .summaryGrid, .formGrid, .issueGrid, .tabBar, .targetFilterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .searchPanel { grid-template-columns: 1fr 1fr; } .searchActions { grid-column: 1 / -1; } }
         @media (max-width: 640px) {
           .loyaltyPage { padding: 16px; }
           .heroCard, .sectionHead { display: grid; }
           .heroActions, .sectionHead .btn, .actionRow .btn { width: 100%; }
           .btn { width: 100%; text-align: center; }
-          .summaryGrid, .formGrid, .issueGrid, .itemGrid, .tabBar, .searchPanel, .customerRow { grid-template-columns: 1fr; }
+          .summaryGrid, .formGrid, .issueGrid, .itemGrid, .tabBar, .searchPanel, .customerRow, .modeSwitch, .targetFilterGrid, .targetRow { grid-template-columns: 1fr; }
           .searchActions { display: grid; grid-template-columns: 1fr 1fr; }
           .historyTableWrap { display: none; }
           .historyCards { display: grid; }
