@@ -1358,22 +1358,39 @@ body {
   }
   .topbar{
     display:grid;
+    grid-template-columns:minmax(0, 1fr) auto;
     align-items:start;
+    column-gap:10px;
+    row-gap:8px;
+  }
+  .topbar > div:first-child{
+    grid-column:1;
+    grid-row:1;
   }
   .topActions{
-    display:grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap:6px;
-    justify-content:stretch;
+    display:contents;
   }
   .topActions .btn{
-    width:100%;
-    padding:10px 8px;
+    width:auto;
+    padding:8px 9px;
     font-size:12px;
     white-space:nowrap;
   }
+  .topActions button:nth-of-type(1){
+    grid-column:1;
+    grid-row:2;
+    justify-self:start;
+  }
+  .topActions button:nth-of-type(2){
+    grid-column:2;
+    grid-row:2;
+    justify-self:end;
+  }
   .topActions .btn[href="/logout"]{
-    grid-column:1 / -1;
+    grid-column:2;
+    grid-row:1;
+    justify-self:end;
+    align-self:start;
   }
   .card{
     padding:14px;
@@ -1386,10 +1403,36 @@ body {
     flex:1 1 140px;
   }
   .storeRow{
-    display:grid;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .storeRow > div:first-child{
+    min-width:0;
+    flex:1 1 auto;
   }
   .storeActions{
+    flex:0 0 auto;
+    flex-direction:column;
+    align-items:center;
     justify-content:flex-start;
+    gap:4px;
+    margin-left:auto;
+    min-width:72px;
+  }
+  .storeActions .pill,
+  .storeActions .btnSmall{
+    line-height:1;
+    white-space:nowrap;
+  }
+  .storeActions .pill{
+    padding:6px 9px;
+    font-size:11px;
+  }
+  .storeActions .btnSmall{
+    padding:7px 9px;
+    font-size:11px;
   }
   .cardBtnTitle{ font-size:12px; }
   .btnGroup{
