@@ -79,6 +79,18 @@ type WalletSummary = {
   tier: string;
 };
 
+type CheckoutLoyaltySettings = {
+  max_redeem_pct: number;
+  min_redeem_points: number;
+  allow_point_or_coupon_only: boolean;
+};
+
+const DEFAULT_CHECKOUT_LOYALTY_SETTINGS: CheckoutLoyaltySettings = {
+  max_redeem_pct: 30,
+  min_redeem_points: 100,
+  allow_point_or_coupon_only: true,
+};
+
 function toPaymentCustomerName(name?: string | null, phone?: string | null) {
   const trimmedName = String(name || "").trim();
   if (trimmedName) return trimmedName.slice(0, 30);
@@ -279,6 +291,7 @@ function ConfirmPageInner() {
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
   const [customerPayName, setCustomerPayName] = useState("현장고객");
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
+  const [loyaltySettings, setLoyaltySettings] = useState<CheckoutLoyaltySettings>(DEFAULT_CHECKOUT_LOYALTY_SETTINGS);
   const [issuedCouponCount, setIssuedCouponCount] = useState(0);
   const [issuedCoupons, setIssuedCoupons] = useState<IssuedCoupon[]>([]);
   const [usedPointsInput, setUsedPointsInput] = useState("0");
@@ -338,12 +351,13 @@ function ConfirmPageInner() {
         setWallet(null);
         setIssuedCouponCount(0);
         setIssuedCoupons([]);
+        setLoyaltySettings(DEFAULT_CHECKOUT_LOYALTY_SETTINGS);
         setUsedPointsInput("0");
         setSelectedCouponId(null);
         return;
       }
 
-      const [walletRes, couponRes, profileRes] = await Promise.all([
+      const [walletRes, couponRes, profileRes, loyaltySettingsRes] = await Promise.all([
         supabase
           .from("customer_store_wallets")
           .select("point_balance,tier")
@@ -364,6 +378,11 @@ function ConfirmPageInner() {
           .select("name,phone")
           .eq("user_id", uid)
           .maybeSingle(),
+        supabase
+          .from("store_loyalty_settings")
+          .select("max_redeem_pct,min_redeem_points,allow_point_or_coupon_only")
+          .eq("store_id", storeId)
+          .maybeSingle(),
       ]);
 
       if (!mounted) return;
@@ -374,6 +393,12 @@ function ConfirmPageInner() {
           (profileRes.data as { name?: string | null; phone?: string | null } | null)?.phone
         )
       );
+      const settingsRow = loyaltySettingsRes.data as Partial<CheckoutLoyaltySettings> | null;
+      setLoyaltySettings({
+        max_redeem_pct: Math.min(100, Math.max(0, Number(settingsRow?.max_redeem_pct ?? DEFAULT_CHECKOUT_LOYALTY_SETTINGS.max_redeem_pct))),
+        min_redeem_points: Math.max(0, Math.floor(Number(settingsRow?.min_redeem_points ?? DEFAULT_CHECKOUT_LOYALTY_SETTINGS.min_redeem_points))),
+        allow_point_or_coupon_only: settingsRow?.allow_point_or_coupon_only ?? DEFAULT_CHECKOUT_LOYALTY_SETTINGS.allow_point_or_coupon_only,
+      });
       setIssuedCouponCount(couponRes.count || 0);
       const couponRows = (Array.isArray(couponRes.data) ? couponRes.data : []) as RawIssuedCoupon[];
       const normalized: IssuedCoupon[] = couponRows.map((row) => ({
@@ -436,24 +461,39 @@ function ConfirmPageInner() {
     return active ? "paid" : "not_required";
   };
 
-  const usedPoints = useMemo(() => {
-    const raw = Math.floor(Number(usedPointsInput || "0"));
-    if (!Number.isFinite(raw) || raw <= 0) return 0;
+  const maxUsablePoints = useMemo(() => {
     const byBalance = Math.max(0, Number(wallet?.point_balance || 0));
     const byPrice = Math.max(0, Math.floor(totalPrice));
-    return Math.min(raw, byBalance, byPrice);
-  }, [usedPointsInput, wallet?.point_balance, totalPrice]);
+    const byPolicy = Math.max(0, Math.floor((byPrice * Math.max(0, Number(loyaltySettings.max_redeem_pct || 0))) / 100));
+    return Math.min(byBalance, byPrice, byPolicy);
+  }, [wallet?.point_balance, totalPrice, loyaltySettings.max_redeem_pct]);
+
+  const rawUsedPoints = useMemo(() => {
+    const raw = Math.floor(Number(usedPointsInput || "0"));
+    return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  }, [usedPointsInput]);
+
+  const pointUsageNotice = useMemo(() => {
+    if (selectedCouponId) return "쿠폰 선택 시 포인트는 자동으로 제외됩니다.";
+    if (rawUsedPoints > 0 && rawUsedPoints < loyaltySettings.min_redeem_points) {
+      return `포인트는 ${fmt(loyaltySettings.min_redeem_points)}P 이상부터 사용할 수 있어요.`;
+    }
+    if (rawUsedPoints > maxUsablePoints) {
+      return `이번 주문은 최대 ${fmt(maxUsablePoints)}P까지 사용할 수 있어요.`;
+    }
+    return "";
+  }, [selectedCouponId, rawUsedPoints, loyaltySettings.min_redeem_points, maxUsablePoints]);
+
+  const usedPoints = useMemo(() => {
+    if (rawUsedPoints <= 0) return 0;
+    if (rawUsedPoints < loyaltySettings.min_redeem_points) return 0;
+    return Math.min(rawUsedPoints, maxUsablePoints);
+  }, [rawUsedPoints, loyaltySettings.min_redeem_points, maxUsablePoints]);
 
   const selectedCoupon = useMemo(
     () => issuedCoupons.find((c) => c.id === selectedCouponId) || null,
     [issuedCoupons, selectedCouponId]
   );
-
-  const maxUsablePoints = useMemo(() => {
-    const byBalance = Math.max(0, Number(wallet?.point_balance || 0));
-    const byPrice = Math.max(0, Math.floor(totalPrice));
-    return Math.min(byBalance, byPrice);
-  }, [wallet?.point_balance, totalPrice]);
 
   const couponDiscount = useMemo(() => {
     if (!selectedCoupon?.template) return 0;
@@ -957,7 +997,10 @@ function ConfirmPageInner() {
               </p>
             <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
               <label style={{ display: "grid", gap: 6, fontWeight: 800, color: "#374151" }}>
-                포인트 사용 (쿠폰 선택 시 자동 0)
+                포인트 사용
+                <span style={{ color: "#6b7280", fontSize: 12, fontWeight: 700 }}>
+                  최대 {fmt(maxUsablePoints)}P · 최소 {fmt(loyaltySettings.min_redeem_points)}P
+                </span>
                 <input
                   value={usedPointsInput}
                   onChange={(e) => setUsedPointsInput(e.target.value.replace(/[^\d]/g, ""))}
@@ -972,6 +1015,9 @@ function ConfirmPageInner() {
                   }}
                 />
               </label>
+              {pointUsageNotice ? (
+                <p style={{ margin: 0, color: "#b45309", fontSize: 12, fontWeight: 800 }}>{pointUsageNotice}</p>
+              ) : null}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
                   type="button"
