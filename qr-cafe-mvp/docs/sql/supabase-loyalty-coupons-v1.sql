@@ -375,6 +375,64 @@ end;
 $$;
 
 -- ---------------------------------------------------------
+-- 9-1) RPC: cancel an unused issued coupon as store member
+-- ---------------------------------------------------------
+create or replace function public.admin_cancel_customer_coupon(
+  p_store_id text,
+  p_coupon_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_coupon public.customer_coupons%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'login required';
+  end if;
+
+  if not exists (
+    select 1
+    from public.store_members m
+    where m.store_id = p_store_id
+      and m.user_id = auth.uid()
+  ) then
+    raise exception 'store member permission required';
+  end if;
+
+  select * into v_coupon
+  from public.customer_coupons c
+  where c.id = p_coupon_id
+    and c.store_id = p_store_id
+  for update;
+
+  if not found then
+    raise exception 'coupon not found';
+  end if;
+
+  if v_coupon.status <> 'issued'
+     or v_coupon.used_at is not null
+     or v_coupon.used_order_id is not null then
+    raise exception 'only unused issued coupons can be cancelled';
+  end if;
+
+  update public.customer_coupons c
+  set status = 'cancelled',
+      updated_at = now()
+  where c.id = p_coupon_id
+    and c.store_id = p_store_id;
+
+  return jsonb_build_object(
+    'ok', true,
+    'cancelled', true,
+    'coupon_id', p_coupon_id
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------
 -- 10) RPC: apply points/coupon and finalize reward
 -- ---------------------------------------------------------
 create or replace function public.apply_loyalty_on_paid_order(
@@ -740,6 +798,7 @@ declare
   v_thank_tpl_id uuid;
   v_new_coupon_id uuid;
   v_thank_every integer := 10;
+  v_loyalty_already_applied boolean := false;
 begin
   select * into v_order
   from public.orders o
@@ -759,19 +818,21 @@ begin
     return jsonb_build_object('ok', true, 'skipped', 'order_not_completed');
   end if;
 
-  if coalesce(v_order.earned_points, 0) > 0 or v_order.loyalty_snapshot is not null then
-    return jsonb_build_object('ok', true, 'skipped', 'already_finalized');
-  end if;
+  v_loyalty_already_applied := coalesce(v_order.earned_points, 0) > 0 or v_order.loyalty_snapshot is not null;
 
-  perform public.apply_loyalty_on_paid_order(
-    v_order.id,
-    p_store_id,
-    v_order.customer_user_id,
-    coalesce(v_order.total_price, 0),
-    coalesce(v_order.used_points, 0),
-    v_order.used_coupon_id,
-    v_order.id::text || ':loyalty'
-  );
+  -- Older checkout flows may apply point/coupon loyalty before staff completion.
+  -- Do not apply points twice, but still continue below so first-order/thank-you coupons can be issued on completion.
+  if not v_loyalty_already_applied then
+    perform public.apply_loyalty_on_paid_order(
+      v_order.id,
+      p_store_id,
+      v_order.customer_user_id,
+      coalesce(v_order.total_price, 0),
+      coalesce(v_order.used_points, 0),
+      v_order.used_coupon_id,
+      v_order.id::text || ':loyalty'
+    );
+  end if;
 
   perform public.recalculate_customer_tier(p_store_id, v_order.customer_user_id);
 
@@ -837,7 +898,13 @@ begin
     end if;
   end if;
 
-  return jsonb_build_object('ok', true, 'finalized', true, 'completed_orders', v_completed_count);
+  return jsonb_build_object(
+    'ok', true,
+    'finalized', not v_loyalty_already_applied,
+    'loyalty_already_applied', v_loyalty_already_applied,
+    'auto_coupon_checked', true,
+    'completed_orders', v_completed_count
+  );
 end;
 $$;
 
@@ -1248,6 +1315,7 @@ $$;
 -- 14) Grants for RPC
 -- ---------------------------------------------------------
 grant execute on function public.issue_customer_coupon(text, uuid, uuid) to authenticated;
+grant execute on function public.admin_cancel_customer_coupon(text, uuid) to authenticated;
 grant execute on function public.apply_loyalty_on_paid_order(uuid, text, uuid, integer, integer, uuid, text) to authenticated;
 grant execute on function public.recalculate_customer_tier(text, uuid) to authenticated;
 grant execute on function public.finalize_order_rewards(text, uuid) to authenticated;
