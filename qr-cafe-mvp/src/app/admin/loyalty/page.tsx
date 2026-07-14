@@ -417,7 +417,7 @@ function AdminLoyaltyInner() {
         <div>
           <p className="eyebrow">관리자 설정</p>
           <h1>포인트/쿠폰 설정</h1>
-          <p className="heroDesc">적립률, 사용 한도, 쿠폰 발급을 관리합니다.</p>
+          <p className="heroDesc">적립률·쿠폰 발급 관리</p>
           <p className="storeLine">현재 매장: <b>{storeId || "-"}</b></p>
         </div>
         <div className="heroActions">
@@ -439,7 +439,7 @@ function AdminLoyaltyInner() {
         <div className="sectionHead">
           <div>
             <h2>포인트 정책</h2>
-            <p>고객 등급별 적립률과 사용 한도입니다.</p>
+            <p>적립률과 사용 한도</p>
           </div>
           <button className="btn btnDark" type="button" onClick={saveSettings} disabled={savingSettings}>{savingSettings ? "저장 중" : "저장"}</button>
         </div>
@@ -465,7 +465,7 @@ function AdminLoyaltyInner() {
         <div className="sectionHead">
           <div>
             <h2>등급 규칙</h2>
-            <p>금액 또는 주문 수 중 하나를 만족하면 등급이 올라갑니다.</p>
+            <p>결제금액 또는 주문수 기준</p>
           </div>
           <button className="btn btnDark" type="button" onClick={saveTierRules} disabled={savingTier}>{savingTier ? "저장 중" : "저장"}</button>
         </div>
@@ -483,7 +483,7 @@ function AdminLoyaltyInner() {
         <div className="sectionHead">
           <div>
             <h2>쿠폰 만들기</h2>
-            <p>자동 쿠폰은 주문 완료 후 조건에 맞으면 발급됩니다.</p>
+            <p>조건 충족 시 자동 발급</p>
           </div>
           <button className="btn btnDark" type="button" onClick={createTemplate} disabled={savingTemplate}>{savingTemplate ? "생성 중" : "생성"}</button>
         </div>
@@ -503,7 +503,7 @@ function AdminLoyaltyInner() {
         <div className="sectionHead">
           <div>
             <h2>쿠폰 목록</h2>
-            <p>비활성 쿠폰은 새로 발급되지 않습니다.</p>
+            <p>비활성 쿠폰은 발급 중지</p>
           </div>
         </div>
         {templatesLoading ? <p className="muted">쿠폰 목록 로딩 중...</p> : null}
@@ -530,7 +530,7 @@ function AdminLoyaltyInner() {
         <div className="sectionHead">
           <div>
             <h2>쿠폰 발급</h2>
-            <p>고객과 쿠폰을 선택한 뒤 발급합니다.</p>
+            <p>고객과 쿠폰 선택</p>
           </div>
           <button className="btn btnDark" type="button" onClick={issueCouponToCustomer} disabled={issuingCoupon}>{issuingCoupon ? "발급 중" : "발급"}</button>
         </div>
@@ -538,7 +538,7 @@ function AdminLoyaltyInner() {
           <div className="selectedBox">
             <span>선택 고객</span>
             <strong>{selectedCustomer?.name || (issueCustomerId ? "이름 미등록" : "선택 전")}</strong>
-            <p>{selectedCustomer ? phoneText(selectedCustomer.phone) : "최근 고객에서 선택해 주세요."}</p>
+            <p>{selectedCustomer ? phoneText(selectedCustomer.phone) : "고객을 선택해 주세요."}</p>
           </div>
           <label className="field">
             <span>발급 쿠폰</span>
@@ -550,7 +550,7 @@ function AdminLoyaltyInner() {
           <div className="selectedBox">
             <span>선택 쿠폰</span>
             <strong>{selectedTemplate?.name || "선택 전"}</strong>
-            <p>{selectedTemplate ? discountText(selectedTemplate) : "쿠폰 목록에서 선택할 수 있습니다."}</p>
+            <p>{selectedTemplate ? discountText(selectedTemplate) : "쿠폰을 선택해 주세요."}</p>
           </div>
         </div>
 
@@ -579,7 +579,7 @@ function AdminLoyaltyInner() {
         <div className="sectionHead">
           <div>
             <h2>최근 발급 내역</h2>
-            <p>최근 30건입니다.</p>
+            <p>최근 30건</p>
           </div>
         </div>
         {issuedLoading ? <p className="muted">발급 내역 로딩 중...</p> : null}
