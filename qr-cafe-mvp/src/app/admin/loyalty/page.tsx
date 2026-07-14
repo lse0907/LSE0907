@@ -155,12 +155,24 @@ function AdminLoyaltyInner() {
   });
 
   const [templates, setTemplates] = useState<CouponTemplateRow[]>([]);
+  const [editingTemplateId, setEditingTemplateId] = useState("");
+  const [savingEditTemplate, setSavingEditTemplate] = useState(false);
   const [walletCustomers, setWalletCustomers] = useState<WalletCustomerRow[]>([]);
   const [customerProfilesById, setCustomerProfilesById] = useState<Record<string, CustomerProfileRow>>({});
   const [issuedCoupons, setIssuedCoupons] = useState<IssuedCouponRow[]>([]);
   const [issueCustomerId, setIssueCustomerId] = useState("");
   const [issueTemplateId, setIssueTemplateId] = useState("");
   const [newTemplate, setNewTemplate] = useState({
+    coupon_kind: "event" as CouponTemplateRow["coupon_kind"],
+    name: "",
+    discount_type: "fixed_amount" as CouponTemplateRow["discount_type"],
+    discount_value: "1000",
+    min_order_amount: "0",
+    max_discount_amount: "",
+    valid_days: "30",
+  });
+
+  const [editTemplate, setEditTemplate] = useState({
     coupon_kind: "event" as CouponTemplateRow["coupon_kind"],
     name: "",
     discount_type: "fixed_amount" as CouponTemplateRow["discount_type"],
@@ -422,6 +434,59 @@ function AdminLoyaltyInner() {
     setCancellingCouponId("");
   };
 
+  const startEditTemplate = (row: CouponTemplateRow) => {
+    setEditingTemplateId(row.id);
+    setEditTemplate({
+      coupon_kind: row.coupon_kind,
+      name: row.name,
+      discount_type: row.discount_type,
+      discount_value: String(row.discount_value),
+      min_order_amount: String(row.min_order_amount),
+      max_discount_amount: row.max_discount_amount == null ? "" : String(row.max_discount_amount),
+      valid_days: String(row.valid_days),
+    });
+  };
+
+  const cancelEditTemplate = () => {
+    setEditingTemplateId("");
+    setSavingEditTemplate(false);
+  };
+
+  const saveTemplateEdit = async (row: CouponTemplateRow) => {
+    if (!storeId || editingTemplateId !== row.id) return;
+    const name = editTemplate.name.trim();
+    if (!name) return showMsg("쿠폰 이름을 입력해 주세요.", "error");
+    const discountValue = Math.max(1, Math.floor(toNumber(editTemplate.discount_value, row.discount_value)));
+    if (editTemplate.discount_type === "percent" && discountValue > 100) return showMsg("정률 할인은 100% 이하로 입력해 주세요.", "error");
+
+    setSavingEditTemplate(true);
+    setMsg("");
+    const payload = {
+      coupon_kind: editTemplate.coupon_kind,
+      name,
+      discount_type: editTemplate.discount_type,
+      discount_value: discountValue,
+      min_order_amount: Math.max(0, Math.floor(toNumber(editTemplate.min_order_amount, row.min_order_amount))),
+      max_discount_amount: editTemplate.max_discount_amount.trim()
+        ? Math.max(0, Math.floor(toNumber(editTemplate.max_discount_amount, 0)))
+        : null,
+      valid_days: Math.max(1, Math.min(3660, Math.floor(toNumber(editTemplate.valid_days, row.valid_days)))),
+    };
+    const { error } = await supabase
+      .from("store_coupon_templates")
+      .update(payload)
+      .eq("id", row.id)
+      .eq("store_id", storeId);
+
+    if (error) showMsg(`쿠폰 수정 실패: ${error.message}`, "error");
+    else {
+      showMsg("쿠폰 템플릿을 수정했습니다.", "success");
+      setEditingTemplateId("");
+      await loadTemplates();
+    }
+    setSavingEditTemplate(false);
+  };
+
   const toggleTemplate = async (row: CouponTemplateRow) => {
     const { error } = await supabase.from("store_coupon_templates").update({ is_active: !row.is_active }).eq("id", row.id);
     if (error) showMsg(`쿠폰 상태 변경 실패: ${error.message}`, "error");
@@ -528,20 +593,43 @@ function AdminLoyaltyInner() {
         {templatesLoading ? <p className="muted">쿠폰 목록 로딩 중...</p> : null}
         {!templatesLoading && !templates.length ? <p className="emptyText">등록된 쿠폰이 없습니다.</p> : null}
         <div className="itemGrid">
-          {templates.map((row) => (
-            <article key={row.id} className="itemCard">
-              <div className="itemTop">
-                <strong>{row.name}</strong>
-                <span className={`badge ${row.is_active ? "badgeGreen" : "badgeGray"}`}>{row.is_active ? "활성" : "비활성"}</span>
-              </div>
-              <p>{couponKindLabel(row.coupon_kind)} · {discountText(row)}</p>
-              <p>최소 {money(row.min_order_amount)}원 · 유효 {row.valid_days}일</p>
-              <div className="actionRow">
-                <button className="btn" type="button" onClick={() => toggleTemplate(row)}>{row.is_active ? "비활성화" : "활성화"}</button>
-                <button className="btn btnDark" type="button" onClick={() => setIssueTemplateId(row.id)}>발급 선택</button>
-              </div>
-            </article>
-          ))}
+          {templates.map((row) => {
+            const editing = editingTemplateId === row.id;
+            return (
+              <article key={row.id} className="itemCard">
+                <div className="itemTop">
+                  <strong>{row.name}</strong>
+                  <span className={`badge ${row.is_active ? "badgeGreen" : "badgeGray"}`}>{row.is_active ? "활성" : "비활성"}</span>
+                </div>
+                <p>{couponKindLabel(row.coupon_kind)} · {discountText(row)}</p>
+                <p>최소 {money(row.min_order_amount)}원 · 유효 {row.valid_days}일</p>
+                {editing ? (
+                  <div className="editBox">
+                    <div className="formGrid formGridCompact">
+                      <LabelInput label="쿠폰명" value={editTemplate.name} onChange={(v) => setEditTemplate((p) => ({ ...p, name: v }))} />
+                      <SelectInput label="쿠폰 종류" value={editTemplate.coupon_kind} onChange={(v) => setEditTemplate((p) => ({ ...p, coupon_kind: v as CouponTemplateRow["coupon_kind"] }))} options={[["first_order", "첫주문 자동"], ["thank_you", "감사 자동"], ["event", "이벤트 수동"]]} />
+                      <SelectInput label="할인 방식" value={editTemplate.discount_type} onChange={(v) => setEditTemplate((p) => ({ ...p, discount_type: v as CouponTemplateRow["discount_type"] }))} options={[["fixed_amount", "정액"], ["percent", "정률"]]} />
+                      <LabelInput label="할인값" suffix={editTemplate.discount_type === "percent" ? "%" : "원"} value={editTemplate.discount_value} onChange={(v) => setEditTemplate((p) => ({ ...p, discount_value: v }))} />
+                      <LabelInput label="최소 주문금액" suffix="원" value={editTemplate.min_order_amount} onChange={(v) => setEditTemplate((p) => ({ ...p, min_order_amount: v }))} />
+                      <LabelInput label="최대 할인금액" suffix="원" value={editTemplate.max_discount_amount} onChange={(v) => setEditTemplate((p) => ({ ...p, max_discount_amount: v }))} placeholder="선택" />
+                      <LabelInput label="유효기간" suffix="일" value={editTemplate.valid_days} onChange={(v) => setEditTemplate((p) => ({ ...p, valid_days: v }))} />
+                    </div>
+                    <p className="hintText">수정 내용은 새 발급부터 적용됩니다.</p>
+                    <div className="actionRow">
+                      <button className="btn btnDark" type="button" onClick={() => saveTemplateEdit(row)} disabled={savingEditTemplate}>{savingEditTemplate ? "저장 중" : "저장"}</button>
+                      <button className="btn" type="button" onClick={cancelEditTemplate} disabled={savingEditTemplate}>취소</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="actionRow">
+                    <button className="btn" type="button" onClick={() => startEditTemplate(row)}>수정</button>
+                    <button className="btn" type="button" onClick={() => toggleTemplate(row)}>{row.is_active ? "비활성화" : "활성화"}</button>
+                    <button className="btn btnDark" type="button" onClick={() => setIssueTemplateId(row.id)}>발급 선택</button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -663,7 +751,10 @@ function AdminLoyaltyInner() {
         .field select { border: 1px solid #d1d5db; border-radius: 12px; }
         .suffix { padding-right: 11px; color: #64748b; font-weight: 950; white-space: nowrap; }
         .checkRow { display: inline-flex; align-items: center; gap: 8px; color: #334155; font-weight: 900; }
-        .previewBox, .selectedBox { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 14px; padding: 12px; color: #334155; font-weight: 900; }
+        .previewBox, .selectedBox, .editBox { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 14px; padding: 12px; color: #334155; font-weight: 900; }
+        .editBox { display: grid; gap: 10px; }
+        .hintText { color: #64748b; font-size: 12px; font-weight: 900; }
+        .formGridCompact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .selectedBox span { display: block; color: #64748b; font-size: 12px; font-weight: 950; margin-bottom: 6px; }
         .selectedBox strong { font-size: 16px; }
         .itemGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
