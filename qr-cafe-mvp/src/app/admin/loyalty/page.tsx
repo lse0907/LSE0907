@@ -65,6 +65,15 @@ type IssuedCouponRow = {
   } | null;
 };
 
+type LoyaltyTab = "policy" | "coupons" | "issue" | "history";
+
+const loyaltyTabs: Array<{ id: LoyaltyTab; label: string; desc: string }> = [
+  { id: "policy", label: "정책 설정", desc: "적립·등급" },
+  { id: "coupons", label: "쿠폰 관리", desc: "생성·수정" },
+  { id: "issue", label: "쿠폰 발급", desc: "고객 검색" },
+  { id: "history", label: "발급 내역", desc: "조회·취소" },
+];
+
 function toNumber(v: string, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -132,6 +141,10 @@ function AdminLoyaltyInner() {
   const [cancellingCouponId, setCancellingCouponId] = useState("");
   const [customersLoading, setCustomersLoading] = useState(false);
   const [issuedLoading, setIssuedLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<LoyaltyTab>("policy");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerTierFilter, setCustomerTierFilter] = useState("all");
+  const [customerSearchSummary, setCustomerSearchSummary] = useState("최근 고객");
 
   const [settings, setSettings] = useState<LoyaltySettingsRow>({
     store_id: "",
@@ -219,15 +232,54 @@ function AdminLoyaltyInner() {
     setTemplatesLoading(false);
   };
 
-  const loadWalletCustomers = async () => {
+  const loadWalletCustomers = async (mode: "recent" | "search" = "recent") => {
     if (!storeId) return;
+    const queryText = customerSearch.trim();
+    const tierFilter = customerTierFilter;
     setCustomersLoading(true);
-    const { data, error } = await supabase
+
+    let profileMap: Record<string, CustomerProfileRow> = {};
+    let matchedProfileIds: string[] | null = null;
+
+    if (mode === "search" && queryText) {
+      const [nameRes, phoneRes] = await Promise.all([
+        supabase.from("customer_profiles").select("user_id,name,phone").ilike("name", `%${queryText}%`).limit(80),
+        supabase.from("customer_profiles").select("user_id,name,phone").ilike("phone", `%${queryText}%`).limit(80),
+      ]);
+
+      const profileRows = [
+        ...((Array.isArray(nameRes.data) ? nameRes.data : []) as CustomerProfileRow[]),
+        ...((Array.isArray(phoneRes.data) ? phoneRes.data : []) as CustomerProfileRow[]),
+      ];
+      profileMap = Object.fromEntries(profileRows.map((row) => [row.user_id, row]));
+      matchedProfileIds = Array.from(new Set(profileRows.map((row) => row.user_id).filter(Boolean)));
+
+      if (nameRes.error || phoneRes.error) {
+        showMsg(`고객 검색 실패: ${(nameRes.error || phoneRes.error)?.message}`, "error");
+        setWalletCustomers([]);
+        setCustomersLoading(false);
+        return;
+      }
+
+      if (!matchedProfileIds.length) {
+        setWalletCustomers([]);
+        setCustomerSearchSummary("검색 결과 0명");
+        setCustomersLoading(false);
+        return;
+      }
+    }
+
+    let walletQuery = supabase
       .from("customer_store_wallets")
       .select("customer_user_id,point_balance,tier")
       .eq("store_id", storeId)
       .order("updated_at", { ascending: false })
-      .limit(50);
+      .limit(mode === "search" ? 80 : 100);
+
+    if (mode === "search" && tierFilter !== "all") walletQuery = walletQuery.eq("tier", tierFilter);
+    if (matchedProfileIds) walletQuery = walletQuery.in("customer_user_id", matchedProfileIds);
+
+    const { data, error } = await walletQuery;
 
     if (error) {
       showMsg(`고객 목록 조회 실패: ${error.message}`, "error");
@@ -238,8 +290,9 @@ function AdminLoyaltyInner() {
 
     const rows = (Array.isArray(data) ? data : []) as WalletCustomerRow[];
     setWalletCustomers(rows);
-    const profiles = await loadProfiles(rows.map((r) => r.customer_user_id));
-    setCustomerProfilesById((prev) => ({ ...prev, ...profiles }));
+    const loadedProfiles = await loadProfiles(rows.map((r) => r.customer_user_id));
+    setCustomerProfilesById((prev) => ({ ...prev, ...profileMap, ...loadedProfiles }));
+    setCustomerSearchSummary(mode === "search" ? `검색 결과 ${rows.length}명` : "최근 고객");
     setCustomersLoading(false);
   };
 
@@ -327,6 +380,7 @@ function AdminLoyaltyInner() {
   const activeTemplates = templates.filter((row) => row.is_active).length;
   const selectedCustomer = issueCustomerId ? customerProfilesById[issueCustomerId] : null;
   const selectedTemplate = templates.find((row) => row.id === issueTemplateId) || null;
+  const selectedCustomerWallet = walletCustomers.find((row) => row.customer_user_id === issueCustomerId) || null;
   const previewOrderAmount = 10000;
   const newTemplatePreview = {
     discount_type: newTemplate.discount_type,
@@ -416,6 +470,23 @@ function AdminLoyaltyInner() {
     setIssuingCoupon(false);
   };
 
+  const handleCustomerSearch = async () => {
+    await loadWalletCustomers("search");
+  };
+
+  const resetCustomerSearch = async () => {
+    setCustomerSearch("");
+    setCustomerTierFilter("all");
+    setIssueCustomerId("");
+    setCustomerSearchSummary("최근 고객");
+    await loadWalletCustomers("recent");
+  };
+
+  const selectIssueTemplate = (templateId: string) => {
+    setIssueTemplateId(templateId);
+    setActiveTab("issue");
+  };
+
   const cancelIssuedCoupon = async (row: IssuedCouponRow) => {
     if (!storeId || row.status !== "issued") return;
     if (!window.confirm("사용 전 쿠폰만 취소됩니다. 취소할까요?")) return;
@@ -501,7 +572,7 @@ function AdminLoyaltyInner() {
         <div>
           <p className="eyebrow">관리자 설정</p>
           <h1>포인트/쿠폰 설정</h1>
-          <p className="heroDesc">적립률·쿠폰 발급 관리</p>
+          <p className="heroDesc">정책 설정과 쿠폰 발급 관리</p>
           <p className="storeLine">현재 매장: <b>{storeId || "-"}</b></p>
         </div>
         <div className="heroActions">
@@ -519,10 +590,27 @@ function AdminLoyaltyInner() {
         <SummaryCard title="최근 발급" value={`사용 가능 ${issuedCoupons.filter((row) => row.status === "issued").length}장 · 최근 ${issuedCoupons.length}건`} />
       </section>
 
-      <section className="sectionCard">
-        <div className="sectionHead">
-          <div>
-            <h2>포인트 정책</h2>
+      <nav className="tabBar" aria-label="포인트 쿠폰 관리 탭">
+        {loyaltyTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`tabButton ${activeTab === tab.id ? "tabButtonOn" : ""}`}
+            onClick={() => setActiveTab(tab.id)}
+            aria-pressed={activeTab === tab.id}
+          >
+            <strong>{tab.label}</strong>
+            <span>{tab.desc}</span>
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === "policy" ? (
+        <>
+          <section className="sectionCard">
+            <div className="sectionHead">
+              <div>
+                <h2>포인트 정책</h2>
             <p>적립률과 사용 한도</p>
           </div>
           <button className="btn btnDark" type="button" onClick={saveSettings} disabled={savingSettings}>{savingSettings ? "저장 중" : "저장"}</button>
@@ -561,12 +649,16 @@ function AdminLoyaltyInner() {
           <LabelInput label="VIP 최소 주문" suffix="회" value={String(tierRules.vip_min_orders)} onChange={(v) => setTierRules((p) => ({ ...p, vip_min_orders: Math.max(0, Math.floor(toNumber(v, p.vip_min_orders))) }))} />
         </div>
         <div className="previewBox">최근 {tierRules.lookback_months}개월 기준 · 단골 {money(tierRules.regular_min_spent)}원 또는 {tierRules.regular_min_orders}회 · VIP {money(tierRules.vip_min_spent)}원 또는 {tierRules.vip_min_orders}회</div>
-      </section>
+          </section>
+        </>
+      ) : null}
 
-      <section className="sectionCard">
-        <div className="sectionHead">
-          <div>
-            <h2>쿠폰 만들기</h2>
+      {activeTab === "coupons" ? (
+        <>
+          <section className="sectionCard">
+            <div className="sectionHead">
+              <div>
+                <h2>쿠폰 만들기</h2>
             <p>조건 충족 시 자동 발급</p>
           </div>
           <button className="btn btnDark" type="button" onClick={createTemplate} disabled={savingTemplate}>{savingTemplate ? "생성 중" : "생성"}</button>
@@ -624,68 +716,101 @@ function AdminLoyaltyInner() {
                   <div className="actionRow">
                     <button className="btn" type="button" onClick={() => startEditTemplate(row)}>수정</button>
                     <button className="btn" type="button" onClick={() => toggleTemplate(row)}>{row.is_active ? "비활성화" : "활성화"}</button>
-                    <button className="btn btnDark" type="button" onClick={() => setIssueTemplateId(row.id)}>발급 선택</button>
+                    <button className="btn btnDark" type="button" onClick={() => selectIssueTemplate(row.id)}>발급 선택</button>
                   </div>
                 )}
               </article>
             );
           })}
         </div>
-      </section>
+          </section>
+        </>
+      ) : null}
 
-      <section className="sectionCard">
-        <div className="sectionHead">
-          <div>
-            <h2>쿠폰 발급</h2>
-            <p>고객과 쿠폰 선택</p>
+      {activeTab === "issue" ? (
+        <section className="sectionCard">
+          <div className="sectionHead">
+            <div>
+              <h2>쿠폰 발급</h2>
+              <p>고객 검색 후 발급</p>
+            </div>
+            <button className="btn btnDark" type="button" onClick={issueCouponToCustomer} disabled={issuingCoupon}>{issuingCoupon ? "발급 중" : "발급"}</button>
           </div>
-          <button className="btn btnDark" type="button" onClick={issueCouponToCustomer} disabled={issuingCoupon}>{issuingCoupon ? "발급 중" : "발급"}</button>
-        </div>
-        <div className="issueGrid">
-          <div className="selectedBox">
-            <span>선택 고객</span>
-            <strong>{selectedCustomer?.name || (issueCustomerId ? "이름 미등록" : "선택 전")}</strong>
-            <p>{selectedCustomer ? phoneText(selectedCustomer.phone) : "고객을 선택해 주세요."}</p>
-          </div>
-          <label className="field">
-            <span>발급 쿠폰</span>
-            <select value={issueTemplateId} onChange={(e) => setIssueTemplateId(e.target.value)}>
-              <option value="">선택해 주세요</option>
-              {templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name} · {couponKindLabel(tpl.coupon_kind)}{tpl.is_active ? "" : " [비활성]"}</option>)}
-            </select>
-          </label>
-          <div className="selectedBox">
-            <span>선택 쿠폰</span>
-            <strong>{selectedTemplate?.name || "선택 전"}</strong>
-            <p>{selectedTemplate ? discountText(selectedTemplate) : "쿠폰을 선택해 주세요."}</p>
-          </div>
-        </div>
 
-        <h3 className="subTitle">최근 고객</h3>
-        {customersLoading ? <p className="muted">고객 목록 로딩 중...</p> : null}
-        {!customersLoading && walletCustomers.length === 0 ? <p className="emptyText">고객 지갑 데이터가 아직 없습니다.</p> : null}
-        <div className="itemGrid">
-          {walletCustomers.map((row) => {
-            const profile = customerProfilesById[row.customer_user_id];
-            const active = issueCustomerId === row.customer_user_id;
-            return (
-              <article key={row.customer_user_id} className={`itemCard ${active ? "itemCardOn" : ""}`}>
-                <div className="itemTop">
-                  <strong>{profile?.name || "이름 미등록"}</strong>
+          <div className="searchPanel">
+            <label className="field searchField">
+              <span>고객 검색</span>
+              <div className="fieldControl">
+                <input
+                  value={customerSearch}
+                  placeholder="이름 또는 전화번호"
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleCustomerSearch(); }}
+                />
+              </div>
+            </label>
+            <SelectInput
+              label="등급"
+              value={customerTierFilter}
+              onChange={setCustomerTierFilter}
+              options={[["all", "전체"], ["general", "일반"], ["regular", "단골"], ["vip", "VIP"]]}
+            />
+            <div className="searchActions">
+              <button className="btn btnDark" type="button" onClick={handleCustomerSearch} disabled={customersLoading}>{customersLoading ? "검색 중" : "검색"}</button>
+              <button className="btn" type="button" onClick={resetCustomerSearch} disabled={customersLoading}>초기화</button>
+            </div>
+          </div>
+
+          <div className="issueGrid">
+            <div className="selectedBox">
+              <span>선택 고객</span>
+              <strong>{selectedCustomer?.name || (issueCustomerId ? "이름 미등록" : "선택 전")}</strong>
+              <p>{selectedCustomer ? `${phoneText(selectedCustomer.phone)} · ${money(selectedCustomerWallet?.point_balance || 0)}P` : "검색 결과에서 고객을 선택해 주세요."}</p>
+            </div>
+            <label className="field">
+              <span>발급 쿠폰</span>
+              <select value={issueTemplateId} onChange={(e) => setIssueTemplateId(e.target.value)}>
+                <option value="">선택해 주세요</option>
+                {templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name} · {couponKindLabel(tpl.coupon_kind)}{tpl.is_active ? "" : " [비활성]"}</option>)}
+              </select>
+            </label>
+            <div className="selectedBox">
+              <span>선택 쿠폰</span>
+              <strong>{selectedTemplate?.name || "선택 전"}</strong>
+              <p>{selectedTemplate ? discountText(selectedTemplate) : "쿠폰을 선택해 주세요."}</p>
+            </div>
+          </div>
+
+          <div className="listHead">
+            <h3 className="subTitle">{customerSearchSummary}</h3>
+            <span>{walletCustomers.length}명 표시</span>
+          </div>
+          {customersLoading ? <p className="muted">고객 목록 로딩 중...</p> : null}
+          {!customersLoading && walletCustomers.length === 0 ? <p className="emptyText">검색 결과가 없습니다.</p> : null}
+          <div className="customerList">
+            {walletCustomers.map((row) => {
+              const profile = customerProfilesById[row.customer_user_id];
+              const active = issueCustomerId === row.customer_user_id;
+              return (
+                <article key={row.customer_user_id} className={`customerRow ${active ? "customerRowOn" : ""}`}>
+                  <div>
+                    <strong>{profile?.name || "이름 미등록"}</strong>
+                    <p>{phoneText(profile?.phone)} · {money(row.point_balance)}P</p>
+                  </div>
                   <span className="badge badgePurple">{tierLabel(row.tier)}</span>
-                </div>
-                <p>{money(row.point_balance)}P · {phoneText(profile?.phone)}</p>
-                <button className="btn btnDark" type="button" onClick={() => setIssueCustomerId(row.customer_user_id)}>{active ? "선택됨" : "고객 선택"}</button>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+                  <button className={`btn ${active ? "btnDark" : ""}`} type="button" onClick={() => setIssueCustomerId(row.customer_user_id)}>{active ? "선택됨" : "선택"}</button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
-      <section className="sectionCard">
-        <div className="sectionHead">
-          <div>
-            <h2>최근 발급 내역</h2>
+      {activeTab === "history" ? (
+        <section className="sectionCard">
+          <div className="sectionHead">
+            <div>
+              <h2>최근 발급 내역</h2>
             <p>최근 30건</p>
           </div>
         </div>
@@ -716,7 +841,8 @@ function AdminLoyaltyInner() {
             );
           })}
         </div>
-      </section>
+        </section>
+      ) : null}
 
       <style jsx>{`
         .loyaltyPage { max-width: 1120px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; color: #0f172a; }
@@ -742,9 +868,24 @@ function AdminLoyaltyInner() {
         .summaryCard { padding: 16px; }
         .summaryCard span { color: #64748b; font-size: 13px; font-weight: 900; }
         .summaryCard strong { display: block; margin-top: 8px; font-size: 16px; font-weight: 950; }
+        .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+        .tabButton { border: 1px solid #e2e8f0; background: #fff; border-radius: 16px; padding: 13px; text-align: left; cursor: pointer; display: grid; gap: 4px; color: #0f172a; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04); }
+        .tabButton strong { font-size: 15px; font-weight: 950; }
+        .tabButton span { color: #64748b; font-size: 12px; font-weight: 900; }
+        .tabButtonOn { border-color: #111827; background: #111827; color: #fff; }
+        .tabButtonOn span { color: #d1d5db; }
         .sectionCard { padding: 18px; display: grid; gap: 14px; }
         .sectionHead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
         .formGrid, .issueGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        .searchPanel { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(150px, .6fr) auto; gap: 12px; align-items: end; padding: 14px; border: 1px solid #e2e8f0; border-radius: 16px; background: #f8fafc; }
+        .searchActions { display: flex; gap: 8px; }
+        .listHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+        .listHead span { color: #64748b; font-size: 13px; font-weight: 900; }
+        .customerList { display: grid; gap: 8px; }
+        .customerRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px; background: #fff; }
+        .customerRow strong { font-weight: 950; }
+        .customerRow p { margin-top: 4px; color: #64748b; font-weight: 800; }
+        .customerRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
         .field { display: grid; gap: 7px; color: #334155; font-weight: 900; }
         .fieldControl { display: flex; align-items: center; border: 1px solid #d1d5db; border-radius: 12px; overflow: hidden; background: #fff; }
         .field input, .field select { width: 100%; border: 0; outline: 0; padding: 11px 12px; font: inherit; font-weight: 850; background: #fff; color: #0f172a; }
@@ -768,13 +909,14 @@ function AdminLoyaltyInner() {
         .badgePurple { background: #ede9fe; color: #6d28d9; }
         .subTitle { margin-top: 4px; font-size: 16px; font-weight: 950; }
         .emptyText { padding: 10px 0; }
-        @media (max-width: 900px) { .summaryGrid, .formGrid, .issueGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 900px) { .summaryGrid, .formGrid, .issueGrid, .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); } .searchPanel { grid-template-columns: 1fr 1fr; } .searchActions { grid-column: 1 / -1; } }
         @media (max-width: 640px) {
           .loyaltyPage { padding: 16px; }
           .heroCard, .sectionHead { display: grid; }
           .heroActions, .sectionHead .btn, .actionRow .btn { width: 100%; }
           .btn { width: 100%; text-align: center; }
-          .summaryGrid, .formGrid, .issueGrid, .itemGrid { grid-template-columns: 1fr; }
+          .summaryGrid, .formGrid, .issueGrid, .itemGrid, .tabBar, .searchPanel, .customerRow { grid-template-columns: 1fr; }
+          .searchActions { display: grid; grid-template-columns: 1fr 1fr; }
           h1 { font-size: 24px; }
         }
       `}</style>
