@@ -940,18 +940,18 @@ body {
 .topActions .btn{
   padding:10px 12px;
   border-radius:10px;
-  font-size:13px;
+  font-size:clamp(12px, 0.75vw, 13px);
 }
 .h1{
   margin:0;
-  font-size:28px;
+  font-size:clamp(24px, 2vw, 30px);
   font-weight:950;
   letter-spacing:-0.02em;
 }
 .desc{
   margin:6px 0 0 0;
   color:var(--muted);
-  font-size:12px;
+  font-size:clamp(12px, 0.85vw, 13px);
   font-weight:800;
   line-height:1.4;
   word-break:keep-all;
@@ -959,7 +959,7 @@ body {
 .muted{
   color:var(--muted);
   font-weight:800;
-  font-size:12px;
+  font-size:clamp(12px, 0.85vw, 13px);
 }
 .card{
   background:var(--card);
@@ -980,7 +980,7 @@ body {
 }
 .cardTitle{
   margin:0;
-  font-size:16px;
+  font-size:clamp(15px, 1.1vw, 17px);
   font-weight:950;
 }
 .pill{
@@ -1076,7 +1076,7 @@ body {
 }
 .overviewTitle{
   margin:0;
-  font-size:16px;
+  font-size:clamp(15px, 1.1vw, 17px);
   font-weight:950;
 }
 .hint{
@@ -1103,7 +1103,7 @@ body {
   border-radius:12px;
   cursor:pointer;
   font-weight:950;
-  font-size:14px;
+  font-size:clamp(13px, 0.95vw, 14px);
   line-height:1.2;
   display:inline-flex;
   align-items:center;
@@ -1213,7 +1213,7 @@ body {
 }
 .storeName{
   font-weight:950;
-  font-size:14px;
+  font-size:clamp(13px, 0.95vw, 14px);
 }
 .storeStatusBadge{
   display:inline-flex;
@@ -1261,7 +1261,7 @@ body {
 }
 .cardBtnTitle{
   margin:0;
-  font-size:14px;
+  font-size:clamp(12px, 0.95vw, 14px);
   font-weight:950;
   line-height:1.1;
   white-space:nowrap;

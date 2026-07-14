@@ -644,6 +644,7 @@ function AdminQrPageInner() {
     <main className="wrap">
       <style jsx global>{`
         :root {
+          color-scheme: light;
           --bg: #f6f7f9;
           --card: #ffffff;
           --text: #111827;
@@ -654,6 +655,12 @@ function AdminQrPageInner() {
         }
         body {
           background: var(--bg);
+          color: var(--text);
+        }
+        button,
+        input,
+        select,
+        textarea {
           color: var(--text);
         }
       `}</style>
@@ -690,7 +697,7 @@ function AdminQrPageInner() {
         }
         .h1 {
           margin: 0;
-          font-size: 26px;
+          font-size: clamp(24px, 2vw, 28px);
           font-weight: 950;
           letter-spacing: -0.02em;
         }
@@ -762,6 +769,8 @@ function AdminQrPageInner() {
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           font-weight: 800;
           width: 100%;
         }
@@ -803,6 +812,8 @@ function AdminQrPageInner() {
         .btn {
           border: 1px solid var(--line);
           background: var(--card);
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           padding: 10px 14px;
           border-radius: 12px;
           cursor: pointer;
@@ -1032,6 +1043,8 @@ function AdminQrPageInner() {
         .presetBtn {
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           border-radius: 14px;
           padding: 10px 11px;
           text-align: left;
@@ -1150,6 +1163,8 @@ function AdminQrPageInner() {
         .toggleChip {
           border: 1px solid var(--line);
           background: #fff;
+          color: var(--text);
+          -webkit-text-fill-color: currentColor;
           border-radius: 999px;
           padding: 8px 11px;
           font-size: 12px;

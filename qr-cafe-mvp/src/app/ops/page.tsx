@@ -1033,6 +1033,7 @@ export default function OpsPage() {
     <main className="wrap">
       <style jsx global>{`
         .wrap {
+          width: 100%;
           max-width: 1440px;
           margin: 0 auto;
           padding: 24px;
@@ -1048,14 +1049,14 @@ export default function OpsPage() {
         }
         .h1 {
           margin: 0;
-          font-size: 30px;
+          font-size: clamp(24px, 2vw, 30px);
           font-weight: 950;
           letter-spacing: -0.02em;
         }
         .sub {
           margin: 6px 0 0;
           color: #6b7280;
-          font-size: 14px;
+          font-size: clamp(13px, 0.9vw, 14px);
         }
         .row {
           display: flex;
@@ -1083,17 +1084,17 @@ export default function OpsPage() {
         }
         .kpiLabel {
           color: #6b7280;
-          font-size: 13px;
+          font-size: clamp(12px, 0.85vw, 13px);
           font-weight: 800;
         }
         .kpiValue {
-          font-size: 26px;
+          font-size: clamp(22px, 2.2vw, 28px);
           font-weight: 950;
           letter-spacing: -0.03em;
         }
         .kpiHint {
           color: #6b7280;
-          font-size: 12px;
+          font-size: clamp(12px, 0.8vw, 13px);
         }
         .tabs {
           display: flex;
@@ -1153,13 +1154,13 @@ export default function OpsPage() {
           gap: 12px;
         }
         .sectionTitle {
-          font-size: 16px;
+          font-size: clamp(15px, 1.1vw, 17px);
           font-weight: 950;
           margin-bottom: 10px;
         }
         .muted {
           color: #6b7280;
-          font-size: 13px;
+          font-size: clamp(12px, 0.85vw, 13px);
           margin: 0;
         }
         .noticeList {
@@ -1486,17 +1487,17 @@ export default function OpsPage() {
         }
         .todoCard h3 {
           margin: 0;
-          font-size: 16px;
+          font-size: clamp(15px, 1.1vw, 17px);
           font-weight: 950;
         }
         .todoCard p {
           margin: 5px 0 0;
           color: #6b7280;
-          font-size: 13px;
+          font-size: clamp(12px, 0.85vw, 13px);
           line-height: 1.45;
         }
         .todoCount {
-          font-size: 24px;
+          font-size: clamp(21px, 2vw, 26px);
           font-weight: 950;
           white-space: nowrap;
         }
@@ -1573,7 +1574,7 @@ export default function OpsPage() {
             grid-template-columns: 1fr;
           }
           .kpiValue {
-            font-size: 21px;
+            font-size: clamp(21px, 6vw, 24px);
           }
           .filters {
             grid-template-columns: 1fr;
