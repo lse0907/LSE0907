@@ -1358,13 +1358,13 @@ body {
   }
   .topbar{
     display:grid;
-    grid-template-columns:minmax(0, 1fr) auto;
+    grid-template-columns:auto auto minmax(0, 1fr) auto;
     align-items:start;
-    column-gap:10px;
+    column-gap:6px;
     row-gap:8px;
   }
   .topbar > div:first-child{
-    grid-column:1;
+    grid-column:1 / 4;
     grid-row:1;
   }
   .topActions{
@@ -1384,10 +1384,10 @@ body {
   .topActions button:nth-of-type(2){
     grid-column:2;
     grid-row:2;
-    justify-self:end;
+    justify-self:start;
   }
   .topActions .btn[href="/logout"]{
-    grid-column:2;
+    grid-column:4;
     grid-row:1;
     justify-self:end;
     align-self:start;
