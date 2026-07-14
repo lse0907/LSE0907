@@ -129,6 +129,7 @@ function AdminLoyaltyInner() {
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [issuingCoupon, setIssuingCoupon] = useState(false);
+  const [cancellingCouponId, setCancellingCouponId] = useState("");
   const [customersLoading, setCustomersLoading] = useState(false);
   const [issuedLoading, setIssuedLoading] = useState(false);
 
@@ -403,6 +404,24 @@ function AdminLoyaltyInner() {
     setIssuingCoupon(false);
   };
 
+  const cancelIssuedCoupon = async (row: IssuedCouponRow) => {
+    if (!storeId || row.status !== "issued") return;
+    if (!window.confirm("사용 전 쿠폰만 취소됩니다. 취소할까요?")) return;
+
+    setCancellingCouponId(row.id);
+    setMsg("");
+    const { error } = await supabase.rpc("admin_cancel_customer_coupon", {
+      p_store_id: storeId,
+      p_coupon_id: row.id,
+    });
+    if (error) showMsg(`쿠폰 취소 실패: ${error.message}`, "error");
+    else {
+      showMsg("쿠폰을 취소했습니다.", "success");
+      await loadIssuedCoupons();
+    }
+    setCancellingCouponId("");
+  };
+
   const toggleTemplate = async (row: CouponTemplateRow) => {
     const { error } = await supabase.from("store_coupon_templates").update({ is_active: !row.is_active }).eq("id", row.id);
     if (error) showMsg(`쿠폰 상태 변경 실패: ${error.message}`, "error");
@@ -595,6 +614,16 @@ function AdminLoyaltyInner() {
                 </div>
                 <p>{profile?.name || "이름 미등록"} · {phoneText(profile?.phone)}</p>
                 <p>발급 {dateText(row.issued_at)} · 만료 {dateText(row.expires_at)}</p>
+                {row.status === "issued" ? (
+                  <button
+                    className="btn btnDanger"
+                    type="button"
+                    disabled={cancellingCouponId === row.id}
+                    onClick={() => cancelIssuedCoupon(row)}
+                  >
+                    {cancellingCouponId === row.id ? "취소 중" : "쿠폰 취소"}
+                  </button>
+                ) : null}
               </article>
             );
           })}
@@ -615,6 +644,7 @@ function AdminLoyaltyInner() {
         .heroActions, .actionRow { display: flex; gap: 8px; flex-wrap: wrap; }
         .btn { border: 1px solid #d1d5db; background: #fff; color: #111827; border-radius: 12px; padding: 10px 13px; font-weight: 900; cursor: pointer; text-decoration: none; }
         .btnDark { border-color: #111827; background: #111827; color: #fff; }
+        .btnDanger { border-color: #fecaca; background: #fff5f5; color: #b91c1c; }
         .btn:disabled { opacity: .55; cursor: not-allowed; }
         .notice { padding: 12px 14px; border-radius: 14px; font-weight: 900; white-space: pre-wrap; }
         .notice-success { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
