@@ -740,6 +740,7 @@ declare
   v_thank_tpl_id uuid;
   v_new_coupon_id uuid;
   v_thank_every integer := 10;
+  v_loyalty_already_applied boolean := false;
 begin
   select * into v_order
   from public.orders o
@@ -759,19 +760,21 @@ begin
     return jsonb_build_object('ok', true, 'skipped', 'order_not_completed');
   end if;
 
-  if coalesce(v_order.earned_points, 0) > 0 or v_order.loyalty_snapshot is not null then
-    return jsonb_build_object('ok', true, 'skipped', 'already_finalized');
-  end if;
+  v_loyalty_already_applied := coalesce(v_order.earned_points, 0) > 0 or v_order.loyalty_snapshot is not null;
 
-  perform public.apply_loyalty_on_paid_order(
-    v_order.id,
-    p_store_id,
-    v_order.customer_user_id,
-    coalesce(v_order.total_price, 0),
-    coalesce(v_order.used_points, 0),
-    v_order.used_coupon_id,
-    v_order.id::text || ':loyalty'
-  );
+  -- Older checkout flows may apply point/coupon loyalty before staff completion.
+  -- Do not apply points twice, but still continue below so first-order/thank-you coupons can be issued on completion.
+  if not v_loyalty_already_applied then
+    perform public.apply_loyalty_on_paid_order(
+      v_order.id,
+      p_store_id,
+      v_order.customer_user_id,
+      coalesce(v_order.total_price, 0),
+      coalesce(v_order.used_points, 0),
+      v_order.used_coupon_id,
+      v_order.id::text || ':loyalty'
+    );
+  end if;
 
   perform public.recalculate_customer_tier(p_store_id, v_order.customer_user_id);
 
@@ -837,7 +840,13 @@ begin
     end if;
   end if;
 
-  return jsonb_build_object('ok', true, 'finalized', true, 'completed_orders', v_completed_count);
+  return jsonb_build_object(
+    'ok', true,
+    'finalized', not v_loyalty_already_applied,
+    'loyalty_already_applied', v_loyalty_already_applied,
+    'auto_coupon_checked', true,
+    'completed_orders', v_completed_count
+  );
 end;
 $$;
 
