@@ -4,7 +4,11 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { getCurrentStoreId, setCurrentStoreId, clearCurrentStoreId } from "@/app/lib/currentStore";
+import {
+  getCurrentStoreId,
+  setCurrentStoreId,
+  clearCurrentStoreId,
+} from "@/app/lib/currentStore";
 
 type StoreStatus = "active" | "inactive" | "deleted";
 
@@ -79,16 +83,34 @@ function AdminPageInner() {
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [storesLoaded, setStoresLoaded] = useState(false);
 
-  const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(() => getCurrentStoreId());
+  const [selectedStoreId, setSelectedStoreIdState] = useState<string | null>(
+    () => getCurrentStoreId(),
+  );
   const [msg, setMsg] = useState<string>("");
-  const [activeSection, setActiveSection] = useState<"store" | "ops" | "support" | null>(null);
-  const [storeStatusFilter, setStoreStatusFilter] = useState<StoreStatusFilter>("all");
+  const [activeSection, setActiveSection] = useState<
+    "store" | "ops" | "support" | null
+  >(null);
+  const [storeStatusFilter, setStoreStatusFilter] =
+    useState<StoreStatusFilter>("all");
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
-  const [statsSummary, setStatsSummary] = useState({ daily: 0, weekly: 0, monthly: 0 });
-  const [billingByStore, setBillingByStore] = useState<Record<string, StoreBillingSummary>>({});
-  const [hideSetupBannerForCurrentSelection, setHideSetupBannerForCurrentSelection] = useState(false);
-  const [selectedStoreCounts, setSelectedStoreCounts] = useState<{ categories: number; options: number; menus: number } | null>(null);
+  const [statsSummary, setStatsSummary] = useState({
+    daily: 0,
+    weekly: 0,
+    monthly: 0,
+  });
+  const [billingByStore, setBillingByStore] = useState<
+    Record<string, StoreBillingSummary>
+  >({});
+  const [
+    hideSetupBannerForCurrentSelection,
+    setHideSetupBannerForCurrentSelection,
+  ] = useState(false);
+  const [selectedStoreCounts, setSelectedStoreCounts] = useState<{
+    categories: number;
+    options: number;
+    menus: number;
+  } | null>(null);
   const subPanelRef = useRef<HTMLDivElement | null>(null);
   const didOpenDefaultSectionRef = useRef(false);
 
@@ -100,7 +122,11 @@ function AdminPageInner() {
   const visibleStores = useMemo(() => {
     return stores
       .filter((store) => getStoreLifecycleStatus(store) !== "deleted")
-      .filter((store) => storeStatusFilter === "all" || getStoreDisplayStatus(store) === storeStatusFilter);
+      .filter(
+        (store) =>
+          storeStatusFilter === "all" ||
+          getStoreDisplayStatus(store) === storeStatusFilter,
+      );
   }, [stores, storeStatusFilter]);
 
   const setSelectedStoreId = (storeId: string) => {
@@ -130,7 +156,8 @@ function AdminPageInner() {
     return out;
   };
 
-  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const monthKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
   const loadMyStores = async (uid: string) => {
     const memRes = await supabase
@@ -141,9 +168,9 @@ function AdminPageInner() {
 
     if (memRes.error) throw memRes.error;
 
-	    const memRows = (memRes.data || []) as MemberRow[];
+    const memRows = (memRes.data || []) as MemberRow[];
 
-	    const ids = memRows.map((m) => m.store_id).filter(Boolean);
+    const ids = memRows.map((m) => m.store_id).filter(Boolean);
     if (!ids.length) {
       setStores([]);
       setBillingByStore({});
@@ -155,18 +182,30 @@ function AdminPageInner() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let storeRes: any = await supabase
       .from("stores")
-      .select("store_id, store_name, setup_completed, setup_last_step, status, created_at, updated_at")
+      .select(
+        "store_id, store_name, setup_completed, setup_last_step, status, created_at, updated_at",
+      )
       .in("store_id", ids);
     if (storeRes.error && /status/i.test(storeRes.error.message || "")) {
       storeRes = await supabase
         .from("stores")
-        .select("store_id, store_name, setup_completed, setup_last_step, created_at, updated_at")
+        .select(
+          "store_id, store_name, setup_completed, setup_last_step, created_at, updated_at",
+        )
         .in("store_id", ids);
     }
 
     const [billingRes, paymentRes] = await Promise.all([
-      supabase.from("store_billing").select("store_id, base_plan_status, paid_until").in("store_id", ids),
-      supabase.from("billing_payments").select("store_id, paid_at, status").in("store_id", ids).eq("status", "paid").order("paid_at", { ascending: false }),
+      supabase
+        .from("store_billing")
+        .select("store_id, base_plan_status, paid_until")
+        .in("store_id", ids),
+      supabase
+        .from("billing_payments")
+        .select("store_id, paid_at, status")
+        .in("store_id", ids)
+        .eq("status", "paid")
+        .order("paid_at", { ascending: false }),
     ]);
 
     if (storeRes.error) throw storeRes.error;
@@ -174,15 +213,23 @@ function AdminPageInner() {
     if (paymentRes.error) throw paymentRes.error;
 
     const list = (storeRes.data || []) as StoreRow[];
-    list.sort((a, b) => String(a.store_name || "").localeCompare(String(b.store_name || "")));
+    list.sort((a, b) =>
+      String(a.store_name || "").localeCompare(String(b.store_name || "")),
+    );
 
     const nextBilling: Record<string, StoreBillingSummary> = {};
     for (const row of billingRes.data || []) {
       const storeId = String((row as { store_id: string }).store_id || "");
       if (!storeId) continue;
       nextBilling[storeId] = {
-        basePlanStatus: String((row as { base_plan_status?: string | null }).base_plan_status || "inactive"),
-        paidUntil: String((row as { paid_until?: string | null }).paid_until || "").trim() || null,
+        basePlanStatus: String(
+          (row as { base_plan_status?: string | null }).base_plan_status ||
+            "inactive",
+        ),
+        paidUntil:
+          String(
+            (row as { paid_until?: string | null }).paid_until || "",
+          ).trim() || null,
         lastPaidAt: null,
       };
     }
@@ -191,7 +238,9 @@ function AdminPageInner() {
       const storeId = String((row as { store_id: string }).store_id || "");
       if (!storeId) continue;
       if (nextBilling[storeId]?.lastPaidAt) continue;
-      const paidAt = String((row as { paid_at?: string | null }).paid_at || "").trim() || null;
+      const paidAt =
+        String((row as { paid_at?: string | null }).paid_at || "").trim() ||
+        null;
       nextBilling[storeId] = {
         basePlanStatus: nextBilling[storeId]?.basePlanStatus || "inactive",
         paidUntil: nextBilling[storeId]?.paidUntil || null,
@@ -236,11 +285,25 @@ function AdminPageInner() {
       if (error) throw error;
 
       const rows = (Array.isArray(data) ? data : []) as OrderSummaryRow[];
-      const sum = (list: OrderSummaryRow[]) => list.reduce((acc, cur) => acc + Math.max(0, Number(cur.total_price || 0)), 0);
+      const sum = (list: OrderSummaryRow[]) =>
+        list.reduce(
+          (acc, cur) => acc + Math.max(0, Number(cur.total_price || 0)),
+          0,
+        );
 
-      const daily = sum(rows.filter((r) => String(r?.order_date || "") === todayKey));
-      const weekly = sum(rows.filter((r) => String(r?.order_date || "") >= weekStart && String(r?.order_date || "") <= weekEnd));
-      const monthly = sum(rows.filter((r) => String(r?.order_date || "").startsWith(month)));
+      const daily = sum(
+        rows.filter((r) => String(r?.order_date || "") === todayKey),
+      );
+      const weekly = sum(
+        rows.filter(
+          (r) =>
+            String(r?.order_date || "") >= weekStart &&
+            String(r?.order_date || "") <= weekEnd,
+        ),
+      );
+      const monthly = sum(
+        rows.filter((r) => String(r?.order_date || "").startsWith(month)),
+      );
 
       setStatsSummary({ daily, weekly, monthly });
     } catch (e: unknown) {
@@ -298,13 +361,18 @@ function AdminPageInner() {
 
   useEffect(() => {
     if (!storesLoaded) return;
-    const selectableStores = stores.filter((store) => getStoreLifecycleStatus(store) !== "deleted");
+    const selectableStores = stores.filter(
+      (store) => getStoreLifecycleStatus(store) !== "deleted",
+    );
     if (!selectableStores.length) {
       setSelectedStoreIdState(null);
       clearCurrentStoreId();
       return;
     }
-    if (selectedStoreId && selectableStores.some((s) => s.store_id === selectedStoreId)) {
+    if (
+      selectedStoreId &&
+      selectableStores.some((s) => s.store_id === selectedStoreId)
+    ) {
       return;
     }
     setSelectedStoreIdState(null);
@@ -337,7 +405,10 @@ function AdminPageInner() {
     if (!activeSection || !subPanelRef.current) return;
     if (!window.matchMedia("(max-width: 720px)").matches) return;
     window.setTimeout(() => {
-      subPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      subPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
     }, 80);
   }, [activeSection]);
 
@@ -372,20 +443,48 @@ function AdminPageInner() {
     }
     router.push(`/admin/setup?store=${encodeURIComponent(selectedStoreId)}`);
   };
-  const selectedStoreIncomplete = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed !== true);
-  const selectedStoreNeedsSetupByData = selectedStoreCounts != null && (selectedStoreCounts.categories < 1 || selectedStoreCounts.options < 1 || selectedStoreCounts.menus < 1);
-  const selectedStoreShouldShowSetup = selectedStoreIncomplete || selectedStoreNeedsSetupByData;
-  const selectedStoreSetupCompleted = !!selectedStoreId && stores.some((s) => s.store_id === selectedStoreId && s.setup_completed === true);
+  const selectedStoreIncomplete =
+    !!selectedStoreId &&
+    stores.some(
+      (s) => s.store_id === selectedStoreId && s.setup_completed !== true,
+    );
+  const selectedStoreNeedsSetupByData =
+    selectedStoreCounts != null &&
+    (selectedStoreCounts.categories < 1 ||
+      selectedStoreCounts.options < 1 ||
+      selectedStoreCounts.menus < 1);
+  const selectedStoreShouldShowSetup =
+    selectedStoreIncomplete || selectedStoreNeedsSetupByData;
+  const selectedStoreSetupCompleted =
+    !!selectedStoreId &&
+    stores.some(
+      (s) => s.store_id === selectedStoreId && s.setup_completed === true,
+    );
   const selectedStoreCompletedSteps = selectedStoreCounts
-    ? (selectedStoreCounts.categories > 0 ? 1 : 0) + (selectedStoreCounts.options > 0 ? 1 : 0) + (selectedStoreCounts.menus > 0 ? 1 : 0) + (selectedStoreSetupCompleted ? 1 : 0)
+    ? (selectedStoreCounts.categories > 0 ? 1 : 0) +
+      (selectedStoreCounts.options > 0 ? 1 : 0) +
+      (selectedStoreCounts.menus > 0 ? 1 : 0) +
+      (selectedStoreSetupCompleted ? 1 : 0)
     : 0;
-  const showSetupBanner = selectedStoreShouldShowSetup && !hideSetupBannerForCurrentSelection;
-  const selectedBilling = selectedStoreId ? billingByStore[selectedStoreId] : null;
-  const selectedFreeRemaining = selectedStore ? calcRemainingDays(selectedStore.created_at) : null;
-  const selectedPaidRemaining = calcPaidRemainingDays(selectedBilling?.paidUntil || null);
-  const selectedSubscriptionStatus = selectedBilling?.basePlanStatus === "active" ? "유료" : "무료";
-  const selectedRemainingPeriod = selectedBilling?.basePlanStatus === "active" ? selectedPaidRemaining : selectedFreeRemaining;
-  const selectedRemainingText = selectedRemainingPeriod == null ? "-" : `${selectedRemainingPeriod}일`;
+  const showSetupBanner =
+    selectedStoreShouldShowSetup && !hideSetupBannerForCurrentSelection;
+  const selectedBilling = selectedStoreId
+    ? billingByStore[selectedStoreId]
+    : null;
+  const selectedFreeRemaining = selectedStore
+    ? calcRemainingDays(selectedStore.created_at)
+    : null;
+  const selectedPaidRemaining = calcPaidRemainingDays(
+    selectedBilling?.paidUntil || null,
+  );
+  const selectedSubscriptionStatus =
+    selectedBilling?.basePlanStatus === "active" ? "유료" : "무료";
+  const selectedRemainingPeriod =
+    selectedBilling?.basePlanStatus === "active"
+      ? selectedPaidRemaining
+      : selectedFreeRemaining;
+  const selectedRemainingText =
+    selectedRemainingPeriod == null ? "-" : `${selectedRemainingPeriod}일`;
   const dismissSetupBanner = () => {
     setHideSetupBannerForCurrentSelection(true);
   };
@@ -395,9 +494,18 @@ function AdminPageInner() {
     let mounted = true;
     (async () => {
       const [catRes, optRes, menuRes] = await Promise.all([
-        supabase.from("menu_categories").select("id", { count: "exact", head: true }).eq("store_id", selectedStoreId),
-        supabase.from("option_groups").select("id", { count: "exact", head: true }).eq("store_id", selectedStoreId),
-        supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("store_id", selectedStoreId),
+        supabase
+          .from("menu_categories")
+          .select("id", { count: "exact", head: true })
+          .eq("store_id", selectedStoreId),
+        supabase
+          .from("option_groups")
+          .select("id", { count: "exact", head: true })
+          .eq("store_id", selectedStoreId),
+        supabase
+          .from("menu_items")
+          .select("id", { count: "exact", head: true })
+          .eq("store_id", selectedStoreId),
       ]);
       if (!mounted || catRes.error || optRes.error || menuRes.error) return;
       setSelectedStoreCounts({
@@ -414,7 +522,9 @@ function AdminPageInner() {
   if (booting) {
     return (
       <main className="wrap">
-        <style jsx global>{baseCss}</style>
+        <style jsx global>
+          {baseCss}
+        </style>
         <div className="card">
           <h1 className="h1">관리자</h1>
           <p className="muted">로딩 중...</p>
@@ -425,19 +535,28 @@ function AdminPageInner() {
 
   return (
     <main className="wrap">
-      <style jsx global>{baseCss}</style>
+      <style jsx global>
+        {baseCss}
+      </style>
 
       <header className="topbar">
         <div>
           <h1 className="h1">관리자</h1>
-          
         </div>
 
         <div className="topActions">
-          <button className="btn" onClick={() => goPublic("/menu")} disabled={!selectedStoreId}>
+          <button
+            className="btn"
+            onClick={() => goPublic("/menu")}
+            disabled={!selectedStoreId}
+          >
             고객화면 보기
           </button>
-          <button className="btn" onClick={() => goPublic("/staff")} disabled={!selectedStoreId}>
+          <button
+            className="btn"
+            onClick={() => goPublic("/staff")}
+            disabled={!selectedStoreId}
+          >
             직원화면 보기
           </button>
           <a className="btn" href="/logout">
@@ -451,9 +570,13 @@ function AdminPageInner() {
         <div className="setupBanner" role="status" aria-live="polite">
           <div>
             <strong>운영 전 필수 설정을 마무리해 주세요.</strong>
-            <div className="muted">남은 단계를 완료하면 주문 운영을 시작할 수 있습니다.</div>
+            <div className="muted">
+              남은 단계를 완료하면 주문 운영을 시작할 수 있습니다.
+            </div>
             {selectedStoreCounts ? (
-              <div className="muted">현재 진행 단계: {selectedStoreCompletedSteps}/4</div>
+              <div className="muted">
+                현재 진행 단계: {selectedStoreCompletedSteps}/4
+              </div>
             ) : null}
           </div>
           <div className="setupBannerActions">
@@ -481,7 +604,11 @@ function AdminPageInner() {
 
           <p className="muted">매장을 선택해 주세요.</p>
           {stores.length > 0 ? (
-            <div className="storeFilterRow" role="tablist" aria-label="매장 상태 필터">
+            <div
+              className="storeFilterRow"
+              role="tablist"
+              aria-label="매장 상태 필터"
+            >
               {[
                 { key: "all", label: "전체" },
                 { key: "active", label: "운영중" },
@@ -492,7 +619,9 @@ function AdminPageInner() {
                   key={filter.key}
                   className={`filterChip ${storeStatusFilter === filter.key ? "filterChipOn" : ""}`.trim()}
                   type="button"
-                  onClick={() => setStoreStatusFilter(filter.key as StoreStatusFilter)}
+                  onClick={() =>
+                    setStoreStatusFilter(filter.key as StoreStatusFilter)
+                  }
                 >
                   {filter.label}
                 </button>
@@ -502,11 +631,15 @@ function AdminPageInner() {
 
           {stores.length === 0 ? (
             <div className="emptyBox">
-              <p className="muted">매장이 없습니다. 먼저 매장을 만들어주세요.</p>
+              <p className="muted">
+                매장이 없습니다. 먼저 매장을 만들어주세요.
+              </p>
             </div>
           ) : (
             <>
-              {!selectedStoreId ? <div className="muted">선택된 매장이 없습니다.</div> : null}
+              {!selectedStoreId ? (
+                <div className="muted">선택된 매장이 없습니다.</div>
+              ) : null}
               {/* 2차 관리자 홈 보완: 선택 카드 높이를 안정적으로 유지하기 위해 선택 뱃지와 액션 버튼을 한 줄 영역에 묶습니다. */}
               <div className="storeList">
                 {visibleStores.length === 0 ? (
@@ -518,36 +651,70 @@ function AdminPageInner() {
                   const on = s.store_id === selectedStoreId;
                   const remaining = calcRemainingDays(s.created_at);
                   const billing = billingByStore[s.store_id];
-                  const paidRemaining = calcPaidRemainingDays(billing?.paidUntil || null);
-                  const remainingText = (days: number | null) => (days == null ? "-" : `${days}일`);
-                  const subscriptionStatus = billing?.basePlanStatus === "active" ? "유료" : "무료";
+                  const paidRemaining = calcPaidRemainingDays(
+                    billing?.paidUntil || null,
+                  );
+                  const remainingText = (days: number | null) =>
+                    days == null ? "-" : `${days}일`;
+                  const subscriptionStatus =
+                    billing?.basePlanStatus === "active" ? "유료" : "무료";
                   const remainingPeriod =
-                    billing?.basePlanStatus === "active" ? remainingText(paidRemaining) : remainingText(remaining);
+                    billing?.basePlanStatus === "active"
+                      ? remainingText(paidRemaining)
+                      : remainingText(remaining);
                   const displayStatus = getStoreDisplayStatus(s);
                   const statusLabel = getStoreStatusLabel(s);
                   return (
-                    <div key={s.store_id} className={`storeRow ${on ? "storeRowOn" : ""} ${displayStatus === "inactive" ? "storeRowInactive" : ""}`.trim()} onClick={() => handleSelectStore(s.store_id)} role="button" tabIndex={0} onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        handleSelectStore(s.store_id);
-                      }
-                    }}>
+                    <div
+                      key={s.store_id}
+                      className={`storeRow ${on ? "storeRowOn" : ""} ${displayStatus === "inactive" ? "storeRowInactive" : ""}`.trim()}
+                      onClick={() => handleSelectStore(s.store_id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleSelectStore(s.store_id);
+                        }
+                      }}
+                    >
                       <div style={{ minWidth: 0 }}>
                         <div className="storeNameLine">
-                          <div className="storeName">{s.store_name || "(이름 없음)"}</div>
-                          <span className={`storeStatusBadge storeStatus${displayStatus[0].toUpperCase()}${displayStatus.slice(1)}`}>{statusLabel}</span>
+                          <div className="storeName">
+                            {s.store_name || "(이름 없음)"}
+                          </div>
+                          <span
+                            className={`storeStatusBadge storeStatus${displayStatus[0].toUpperCase()}${displayStatus.slice(1)}`}
+                          >
+                            {statusLabel}
+                          </span>
                         </div>
-                        <div className="muted">{subscriptionStatus} · {remainingPeriod} 남음</div>
+                        <div className="muted">
+                          {subscriptionStatus} · {remainingPeriod} 남음
+                        </div>
                       </div>
-                      <div className="storeActions" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="storeActions"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {on ? <div className="pill pillOn">선택</div> : null}
                         {on && selectedStoreShouldShowSetup ? (
-                          <button className="btn btnSetup btnSmall" onClick={goSetup}>
+                          <button
+                            className="btn btnSetup btnSmall"
+                            onClick={goSetup}
+                          >
                             초기설정
                           </button>
                         ) : null}
                         {on && !selectedStoreShouldShowSetup ? (
-                          <button className="btn btnBilling btnSmall" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`)}>
+                          <button
+                            className="btn btnBilling btnSmall"
+                            onClick={() =>
+                              router.push(
+                                `/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`,
+                              )
+                            }
+                          >
                             구독결제
                           </button>
                         ) : null}
@@ -557,7 +724,8 @@ function AdminPageInner() {
                 })}
               </div>
               <p className="hint" style={{ marginTop: 6 }}>
-                남은사용기간이 만료 되면 기능 사용이 제한 됩니다.<br />
+                남은사용기간이 만료 되면 기능 사용이 제한 됩니다.
+                <br />
                 만료 전에 결제를 진행해 주세요.
               </p>
             </>
@@ -572,113 +740,156 @@ function AdminPageInner() {
               <section className="overviewCard overviewCardSelected">
                 <div className="overviewHead">
                   <h2 className="overviewTitle">매장 현황</h2>
-                  <button className="btn btnSmall" onClick={() => go("/admin/stats")}>
+                  <button
+                    className="btn btnSmall"
+                    onClick={() => go("/admin/stats")}
+                  >
                     매출보기
                   </button>
                 </div>
                 <div className="overviewStoreLine">
-                  <span className="currentStorePill">{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장 미선택"}</span>
-                  {selectedStore ? <span className={`storeStatusBadge storeStatus${getStoreDisplayStatus(selectedStore)[0].toUpperCase()}${getStoreDisplayStatus(selectedStore).slice(1)}`}>{getStoreStatusLabel(selectedStore)}</span> : null}
+                  <span className="currentStorePill">
+                    {selectedStore
+                      ? selectedStore.store_name || selectedStore.store_id
+                      : "매장 미선택"}
+                  </span>
+                  {selectedStore ? (
+                    <span
+                      className={`storeStatusBadge storeStatus${getStoreDisplayStatus(selectedStore)[0].toUpperCase()}${getStoreDisplayStatus(selectedStore).slice(1)}`}
+                    >
+                      {getStoreStatusLabel(selectedStore)}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="statsSummary statsSummaryCompact">
                   <div className="statsRow">
                     <span className="statsLabel">일간 매출</span>
-                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.daily.toLocaleString()}원`}</span>
+                    <span className="statsValue">
+                      {statsLoading
+                        ? "로딩중..."
+                        : `${statsSummary.daily.toLocaleString()}원`}
+                    </span>
                   </div>
                   <div className="statsRow">
                     <span className="statsLabel">주간 매출</span>
-                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.weekly.toLocaleString()}원`}</span>
+                    <span className="statsValue">
+                      {statsLoading
+                        ? "로딩중..."
+                        : `${statsSummary.weekly.toLocaleString()}원`}
+                    </span>
                   </div>
                   <div className="statsRow">
                     <span className="statsLabel">월간 매출</span>
-                    <span className="statsValue">{statsLoading ? "로딩중..." : `${statsSummary.monthly.toLocaleString()}원`}</span>
+                    <span className="statsValue">
+                      {statsLoading
+                        ? "로딩중..."
+                        : `${statsSummary.monthly.toLocaleString()}원`}
+                    </span>
                   </div>
                   <div className="statsRow">
                     <span className="statsLabel">구독 상태</span>
-                    <span className="statsValue">{selectedSubscriptionStatus} · {selectedRemainingText}</span>
+                    <span className="statsValue">
+                      {selectedSubscriptionStatus} · {selectedRemainingText}
+                    </span>
                   </div>
-                  {statsErr ? <div className="hint">요약 로딩 실패: {statsErr}</div> : null}
+                  {statsErr ? (
+                    <div className="hint">요약 로딩 실패: {statsErr}</div>
+                  ) : null}
                 </div>
               </section>
             </div>
           ) : null}
 
-	          <div className="btnGroup">
-	            <button
-	              className={`cardBtn ${activeSection === "store" ? "cardBtnOn" : ""}`}
-	              onClick={() => setActiveSection((prev) => (prev === "store" ? null : "store"))}
-	              disabled={!selectedStoreId}
-	            >
-	              <div className="cardBtnTitle">매장설정</div>
-	            </button>
+          <div className="btnGroup">
+            <button
+              className={`cardBtn ${activeSection === "store" ? "cardBtnOn" : ""}`}
+              onClick={() =>
+                setActiveSection((prev) => (prev === "store" ? null : "store"))
+              }
+              disabled={!selectedStoreId}
+            >
+              <div className="cardBtnTitle">매장설정</div>
+            </button>
 
-	            <button
-	              className={`cardBtn ${activeSection === "ops" ? "cardBtnOn" : ""}`}
-	              onClick={() => setActiveSection((prev) => (prev === "ops" ? null : "ops"))}
-	              disabled={!selectedStoreId}
-	            >
-	              <div className="cardBtnTitle">메뉴설정</div>
-	            </button>
+            <button
+              className={`cardBtn ${activeSection === "ops" ? "cardBtnOn" : ""}`}
+              onClick={() =>
+                setActiveSection((prev) => (prev === "ops" ? null : "ops"))
+              }
+              disabled={!selectedStoreId}
+            >
+              <div className="cardBtnTitle">메뉴설정</div>
+            </button>
 
-	            <button
-	              className={`cardBtn ${activeSection === "support" ? "cardBtnOn" : ""}`}
-	              onClick={() => setActiveSection((prev) => (prev === "support" ? null : "support"))}
-	              disabled={!selectedStoreId}
-	            >
-	              <div className="cardBtnTitle">지원센터</div>
-	            </button>
-	          </div>
-
-	          {activeSection === "store" ? (
-	            <div className="subPanel" ref={subPanelRef}>
-	              <button className="subBtn" onClick={() => go("/admin/store")}>
-	                매장정보
-	              </button>
-	              <button className="subBtn" onClick={() => go("/admin/billing")}>
-	                결제 설정
-	              </button>
-	              <button className="subBtn" onClick={() => go("/admin/qr")}>
-	                매장 QR 생성
-	              </button>
-	              <button className="subBtn" onClick={() => go("/admin/loyalty")}>
-	                포인트/쿠폰 설정
-	              </button>
-	            </div>
-	          ) : null}
-
-	          {activeSection === "ops" ? (
-	            <div className="subPanel" ref={subPanelRef}>
-	              <button className="subBtn" onClick={() => go("/admin/categories")}>
-	                카테고리 관리
-	              </button>
-	              <button className="subBtn" onClick={() => go("/admin/options")}>
-	                옵션관리
-	              </button>
-	              <button className="subBtn" onClick={() => go("/admin/menu")}>
-	                메뉴관리
-	              </button>
-	              <button className="subBtn" onClick={() => go("/admin/menu/option-connect")}>
-	                옵션 연결 확인
-	              </button>
-	              <button className="subBtn" onClick={() => go("/admin/import")}>
-	                일괄 데이터 업로드
-	              </button>
-	            </div>
-	          ) : null}
-
-	          {activeSection === "support" ? (
-	            <div className="subPanel" ref={subPanelRef}>
-	              <button className="subBtn" onClick={() => go("/admin/support")}>
-	                문의하기
-	              </button>
-	            </div>
-	          ) : null}
-
-        {!selectedStoreId ? (
-          <div className="alert" style={{ marginTop: 12 }}>
-            매장을 선택해야 버튼이 활성화됩니다.
+            <button
+              className={`cardBtn ${activeSection === "support" ? "cardBtnOn" : ""}`}
+              onClick={() =>
+                setActiveSection((prev) =>
+                  prev === "support" ? null : "support",
+                )
+              }
+              disabled={!selectedStoreId}
+            >
+              <div className="cardBtnTitle">지원센터</div>
+            </button>
           </div>
-        ) : null}
+
+          {activeSection === "store" ? (
+            <div className="subPanel" ref={subPanelRef}>
+              <button className="subBtn" onClick={() => go("/admin/store")}>
+                매장정보
+              </button>
+              <button className="subBtn" onClick={() => go("/admin/billing")}>
+                결제 설정
+              </button>
+              <button className="subBtn" onClick={() => go("/admin/qr")}>
+                매장 QR 생성
+              </button>
+              <button className="subBtn" onClick={() => go("/admin/loyalty")}>
+                포인트/쿠폰 설정
+              </button>
+            </div>
+          ) : null}
+
+          {activeSection === "ops" ? (
+            <div className="subPanel" ref={subPanelRef}>
+              <button
+                className="subBtn"
+                onClick={() => go("/admin/categories")}
+              >
+                카테고리 관리
+              </button>
+              <button className="subBtn" onClick={() => go("/admin/options")}>
+                옵션관리
+              </button>
+              <button className="subBtn" onClick={() => go("/admin/menu")}>
+                메뉴관리
+              </button>
+              <button
+                className="subBtn"
+                onClick={() => go("/admin/menu/option-connect")}
+              >
+                옵션 연결 확인
+              </button>
+              <button className="subBtn" onClick={() => go("/admin/import")}>
+                일괄 데이터 업로드
+              </button>
+            </div>
+          ) : null}
+
+          {activeSection === "support" ? (
+            <div className="subPanel" ref={subPanelRef}>
+              <button className="subBtn" onClick={() => go("/admin/support")}>
+                문의하기
+              </button>
+            </div>
+          ) : null}
+
+          {!selectedStoreId ? (
+            <div className="alert" style={{ marginTop: 12 }}>
+              매장을 선택해야 버튼이 활성화됩니다.
+            </div>
+          ) : null}
         </section>
       </div>
     </main>
@@ -701,16 +912,17 @@ body {
   color: var(--text);
 }
 .wrap{
-  max-width: 920px;
+  width:100%;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 14px;
+  padding: 22px;
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 .adminLayout{
   display:grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-  gap:12px;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap:16px;
   align-items:start;
 }
 .topbar{
@@ -721,12 +933,12 @@ body {
 }
 .topActions{
   display:flex;
-  gap:5px;
+  gap:8px;
   flex-wrap:wrap;
   justify-content:flex-end;
 }
 .topActions .btn{
-  padding:9px 10px;
+  padding:10px 12px;
   border-radius:10px;
   font-size:13px;
 }
@@ -753,7 +965,7 @@ body {
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--radius);
-  padding:14px;
+  padding:16px;
   box-shadow:0 1px 0 rgba(0,0,0,0.03);
 }
 .row{
@@ -953,7 +1165,7 @@ body {
   display:grid;
   gap:10px;
   margin-top:12px;
-  max-height: min(58vh, 560px);
+  max-height: min(62vh, 620px);
   overflow-y: auto;
   padding-right:4px;
 }
@@ -1111,20 +1323,73 @@ body {
   top:10px;
   z-index:5;
 }
+@media (max-width: 960px){
+  .wrap{
+    max-width: 760px;
+    padding:18px;
+  }
+  .adminLayout{
+    grid-template-columns: 1fr;
+  }
+  .storeList{
+    max-height: min(46vh, 420px);
+  }
+  .menuCard{
+    order:2;
+  }
+  .listCard{
+    order:1;
+  }
+  .topbar{
+    align-items:center;
+  }
+  .setupBanner{
+    align-items:flex-start;
+  }
+}
 @media (max-width: 640px){
   .adminLayout{
     grid-template-columns: 1fr;
   }
-  .wrap{ padding:12px; }
-  .topbar{ align-items:center; }
+  .wrap{
+    max-width: 100%;
+    padding:12px;
+    gap:12px;
+  }
+  .topbar{
+    display:grid;
+    align-items:start;
+  }
   .topActions{
-    flex-wrap:wrap;
-    gap:4px;
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap:6px;
+    justify-content:stretch;
   }
   .topActions .btn{
-    padding:8px 8px;
+    width:100%;
+    padding:10px 8px;
     font-size:12px;
     white-space:nowrap;
+  }
+  .topActions .btn[href="/logout"]{
+    grid-column:1 / -1;
+  }
+  .card{
+    padding:14px;
+    border-radius:14px;
+  }
+  .setupBannerActions{
+    width:100%;
+  }
+  .setupBannerActions .btn{
+    flex:1 1 140px;
+  }
+  .storeRow{
+    display:grid;
+  }
+  .storeActions{
+    justify-content:flex-start;
   }
   .cardBtnTitle{ font-size:12px; }
   .btnGroup{
@@ -1171,7 +1436,13 @@ body {
 `;
 export default function AdminPage() {
   return (
-    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="card">
+          <p className="muted">로딩 중...</p>
+        </div>
+      }
+    >
       <AdminPageInner />
     </Suspense>
   );
