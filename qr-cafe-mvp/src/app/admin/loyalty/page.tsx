@@ -502,6 +502,18 @@ function AdminLoyaltyInner() {
   const selectedTemplate = templates.find((row) => row.id === issueTemplateId) || null;
   const selectedCustomerWallet = walletCustomers.find((row) => row.customer_user_id === issueCustomerId) || null;
   const allTargetsSelected = targetRows.length > 0 && targetRows.every((row) => selectedTargetIds.includes(row.customer_user_id));
+  const selectedIssueButtonLabel = issueMode === "single"
+    ? (issuingCoupon ? "발급 중" : "발급")
+    : (bulkIssuing ? "발급 중" : `선택 ${selectedTargetIds.length}명 발급`);
+  const targetFilterSummary = [
+    targetTier !== "all" ? tierLabel(targetTier) : "전체 등급",
+    toNumber(targetMinPoints, 0) > 0 ? `${money(toNumber(targetMinPoints, 0))}P 이상` : "포인트 전체",
+    toNumber(targetMinOrders, 0) > 0 ? `${money(toNumber(targetMinOrders, 0))}회 이상` : "주문 전체",
+    toNumber(targetMinSpent, 0) > 0 ? `${money(toNumber(targetMinSpent, 0))}원 이상` : "이용금액 전체",
+    targetRecentDays !== "all" ? `최근 ${targetRecentDays}일 주문` : "최근 주문 전체",
+    targetInactiveDays !== "all" ? `${targetInactiveDays}일 미방문` : "미방문 전체",
+    targetRegisteredDays !== "all" ? `등록 ${targetRegisteredDays}일 이상` : "등록 기간 전체",
+  ].join(" · ");
   const previewOrderAmount = 10000;
   const newTemplatePreview = {
     discount_type: newTemplate.discount_type,
@@ -960,7 +972,7 @@ function AdminLoyaltyInner() {
               onClick={issueMode === "single" ? issueCouponToCustomer : issueCouponToSelectedTargets}
               disabled={issueMode === "single" ? issuingCoupon : bulkIssuing}
             >
-              {issueMode === "single" ? (issuingCoupon ? "발급 중" : "발급") : (bulkIssuing ? "발급 중" : "선택 발급")}
+              {selectedIssueButtonLabel}
             </button>
           </div>
 
@@ -1061,7 +1073,7 @@ function AdminLoyaltyInner() {
                 </label>
                 <div className="actionRow">
                   <button className="btn btnDark" type="button" onClick={searchCouponTargets} disabled={targetLoading}>{targetLoading ? "검색 중" : "대상 검색"}</button>
-                  <button className="btn" type="button" onClick={toggleAllTargets} disabled={!targetRows.length}>{allTargetsSelected ? "전체 해제" : "검색 결과 전체 선택"}</button>
+                  <button className="btn" type="button" onClick={toggleAllTargets} disabled={!targetRows.length}>{allTargetsSelected ? "전체 해제" : "표시된 고객 전체 선택"}</button>
                 </div>
               </div>
               <div className="listHead">
@@ -1086,11 +1098,19 @@ function AdminLoyaltyInner() {
                   );
                 })}
               </div>
-              <label className="checkRow">
-                <input type="checkbox" checked={bulkConfirmChecked} onChange={(e) => setBulkConfirmChecked(e.target.checked)} />
-                선택한 고객에게 쿠폰 발급을 확인했습니다
-              </label>
-              {bulkIssueResult ? <div className="previewBox">발급 {bulkIssueResult.issued_count || 0}명 · 제외 {bulkIssueResult.skipped_existing_count || 0}명 · 유효하지 않음 {bulkIssueResult.invalid_customer_count || 0}명</div> : null}
+              <div className="confirmBox">
+                <div>
+                  <span>발급 전 확인</span>
+                  <strong>{selectedTemplate?.name || "쿠폰 선택 전"} · 선택 {selectedTargetIds.length}명</strong>
+                  <p>{targetFilterSummary}</p>
+                  <p>{targetExcludeExisting ? "같은 쿠폰 보유 고객 제외" : "같은 쿠폰 보유 고객도 포함"}</p>
+                </div>
+                <label className="checkRow">
+                  <input type="checkbox" checked={bulkConfirmChecked} onChange={(e) => setBulkConfirmChecked(e.target.checked)} />
+                  선택 고객 발급 확인
+                </label>
+              </div>
+              {bulkIssueResult ? <div className="previewBox resultBox">발급 {bulkIssueResult.issued_count || 0}명 · 제외 {bulkIssueResult.skipped_existing_count || 0}명 · 유효하지 않음 {bulkIssueResult.invalid_customer_count || 0}명</div> : null}
             </div>
           ) : null}
         </section>
@@ -1193,101 +1213,124 @@ function AdminLoyaltyInner() {
       ) : null}
 
       <style jsx>{`
-        .loyaltyPage { max-width: 1120px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; color: #0f172a; }
-        .heroCard, .sectionCard, .summaryCard { border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); }
-        .heroCard { padding: 22px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
-        .eyebrow { margin: 0 0 6px; color: #7c3aed; font-weight: 900; font-size: 13px; }
+        .loyaltyPage { max-width: 1120px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; color: #0f172a; font-size: 14px; }
+        .heroCard, .sectionCard, .summaryCard { border: 1px solid #dbe3ef; border-radius: 20px; background: #fff; box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06); }
+        .heroCard { padding: 24px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
+        .eyebrow { margin: 0 0 7px; color: #7c3aed; font-weight: 900; font-size: 12px; }
         h1, h2, h3, p { margin: 0; }
-        h1 { font-size: 28px; font-weight: 950; letter-spacing: -0.04em; }
-        h2 { font-size: 20px; font-weight: 950; letter-spacing: -0.03em; }
-        .heroDesc, .storeLine, .sectionHead p, .itemCard p, .selectedBox p, .muted, .emptyText { color: #64748b; font-weight: 750; }
-        .heroDesc { margin-top: 8px; }
-        .storeLine { margin-top: 10px; }
+        h1 { font-size: 27px; font-weight: 950; letter-spacing: -0.04em; line-height: 1.15; }
+        h2 { font-size: 19px; font-weight: 950; letter-spacing: -0.03em; line-height: 1.2; }
+        .heroDesc, .storeLine, .sectionHead p, .itemCard p, .selectedBox p, .confirmBox p, .muted, .emptyText { color: #64748b; font-weight: 650; line-height: 1.45; }
+        .heroDesc { margin-top: 9px; }
+        .storeLine { margin-top: 9px; }
         .heroActions, .actionRow { display: flex; gap: 8px; flex-wrap: wrap; }
-        .btn { border: 1px solid #d1d5db; background: #fff; color: #111827; border-radius: 12px; padding: 10px 13px; font-weight: 900; cursor: pointer; text-decoration: none; }
+        .btn { min-height: 40px; border: 1px solid #cbd5e1; background: #fff; color: #111827; border-radius: 12px; padding: 0 14px; font-weight: 850; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+        .btn:hover:not(:disabled) { transform: translateY(-1px); border-color: #94a3b8; }
         .btnDark { border-color: #111827; background: #111827; color: #fff; }
         .btnDanger { border-color: #fecaca; background: #fff5f5; color: #b91c1c; }
-        .btn:disabled { opacity: .55; cursor: not-allowed; }
-        .notice { padding: 12px 14px; border-radius: 14px; font-weight: 900; white-space: pre-wrap; }
-        .notice-success { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+        .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+        .notice { padding: 13px 15px; border-radius: 14px; font-weight: 850; white-space: pre-wrap; }
+        .notice-success { background: #ecfdf5; color: #047857; border: 1px solid #86efac; }
         .notice-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
         .notice-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
         .summaryGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-        .summaryCard { padding: 16px; }
-        .summaryCard span { color: #64748b; font-size: 13px; font-weight: 900; }
-        .summaryCard strong { display: block; margin-top: 8px; font-size: 16px; font-weight: 950; }
+        .summaryCard { padding: 15px 16px; min-height: 78px; display: grid; align-content: center; gap: 7px; }
+        .summaryCard span { color: #64748b; font-size: 12px; font-weight: 850; }
+        .summaryCard strong { display: block; font-size: 15px; font-weight: 900; line-height: 1.35; letter-spacing: -0.02em; }
         .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-        .tabButton { border: 1px solid #e2e8f0; background: #fff; border-radius: 16px; padding: 13px; text-align: left; cursor: pointer; display: grid; gap: 4px; color: #0f172a; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04); }
-        .tabButton strong { font-size: 15px; font-weight: 950; }
-        .tabButton span { color: #64748b; font-size: 12px; font-weight: 900; }
+        .tabButton { min-height: 62px; border: 1px solid #dbe3ef; background: #fff; border-radius: 16px; padding: 12px 13px; text-align: left; cursor: pointer; display: grid; gap: 3px; align-content: center; color: #0f172a; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04); }
+        .tabButton strong { font-size: 14px; font-weight: 900; }
+        .tabButton span { color: #64748b; font-size: 12px; font-weight: 750; }
         .tabButtonOn { border-color: #111827; background: #111827; color: #fff; }
         .tabButtonOn span { color: #d1d5db; }
-        .sectionCard { padding: 18px; display: grid; gap: 14px; }
+        .sectionCard { padding: 20px; display: grid; gap: 16px; }
         .sectionHead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-        .formGrid, .issueGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-        .searchPanel { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(150px, .6fr) auto; gap: 12px; align-items: end; padding: 14px; border: 1px solid #e2e8f0; border-radius: 16px; background: #f8fafc; }
-        .searchActions { display: flex; gap: 8px; }
-        .modeSwitch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        .modeButton { border: 1px solid #e2e8f0; background: #fff; border-radius: 14px; padding: 12px; color: #334155; font-weight: 950; cursor: pointer; }
-        .modeButtonOn { border-color: #111827; background: #111827; color: #fff; }
-        .targetPanel { display: grid; gap: 14px; }
+        .formGrid, .issueGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+        .searchPanel { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(160px, .6fr) auto; gap: 12px; align-items: end; padding: 14px; border: 1px solid #dbe3ef; border-radius: 18px; background: #f8fafc; }
+        .searchActions { display: flex; gap: 8px; align-items: center; }
+        .modeSwitch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; border: 1px solid #dbe3ef; background: #f8fafc; padding: 6px; border-radius: 16px; }
+        .modeButton { min-height: 44px; border: 0; background: transparent; border-radius: 12px; color: #334155; font-weight: 900; cursor: pointer; }
+        .modeButtonOn { background: #111827; color: #fff; box-shadow: 0 8px 20px rgba(15, 23, 42, .16); }
+        .targetPanel { display: grid; gap: 15px; }
         .targetFilterGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .targetActions { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
-        .targetList { display: grid; gap: 8px; }
-        .targetRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px; background: #fff; cursor: pointer; }
-        .targetRow strong { font-weight: 950; }
-        .targetRow p { margin-top: 4px; color: #64748b; font-weight: 800; }
+        .targetList { display: grid; gap: 9px; }
+        .targetRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid #dbe3ef; border-radius: 16px; padding: 14px; background: #fff; cursor: pointer; }
+        .targetRow strong { font-weight: 900; font-size: 15px; }
+        .targetRow p { margin-top: 5px; color: #64748b; font-weight: 700; line-height: 1.35; }
         .targetMeta { font-size: 12px; }
-        .targetRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
+        .targetRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); background: #fbfaff; }
+        .confirmBox { display: flex; justify-content: space-between; gap: 14px; align-items: center; border: 1px solid #dbe3ef; background: #f8fafc; border-radius: 16px; padding: 14px; }
+        .confirmBox span { display: block; color: #64748b; font-size: 12px; font-weight: 850; margin-bottom: 5px; }
+        .confirmBox strong { display: block; font-size: 15px; font-weight: 950; margin-bottom: 4px; }
+        .resultBox { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }
         .listHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-        .listHead span { color: #64748b; font-size: 13px; font-weight: 900; }
-        .customerList { display: grid; gap: 8px; }
-        .customerRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px; background: #fff; }
-        .customerRow strong { font-weight: 950; }
-        .customerRow p { margin-top: 4px; color: #64748b; font-weight: 800; }
+        .listHead span { color: #64748b; font-size: 13px; font-weight: 800; }
+        .customerList { display: grid; gap: 9px; }
+        .customerRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border: 1px solid #dbe3ef; border-radius: 16px; padding: 14px; background: #fff; }
+        .customerRow strong { font-weight: 900; }
+        .customerRow p { margin-top: 4px; color: #64748b; font-weight: 700; }
         .customerRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
         .historySearchPanel { grid-template-columns: minmax(0, 1.3fr) minmax(140px, .5fr) minmax(140px, .5fr) auto; }
-        .historyTableWrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 16px; }
+        .historyTableWrap { overflow-x: auto; border: 1px solid #dbe3ef; border-radius: 16px; }
         .historyTable { width: 100%; border-collapse: collapse; min-width: 760px; background: #fff; }
-        .historyTable th, .historyTable td { padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
-        .historyTable th { background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 950; }
-        .historyTable td { color: #0f172a; font-weight: 850; }
-        .historyTable td p { margin-top: 4px; color: #64748b; font-weight: 800; }
+        .historyTable th, .historyTable td { padding: 13px 14px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
+        .historyTable th { background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 850; }
+        .historyTable td { color: #0f172a; font-weight: 700; }
+        .historyTable td p { margin-top: 4px; color: #64748b; font-weight: 650; }
         .historyCards { display: none; gap: 10px; }
-        .field { display: grid; gap: 7px; color: #334155; font-weight: 900; }
-        .fieldControl { display: flex; align-items: center; border: 1px solid #d1d5db; border-radius: 12px; overflow: hidden; background: #fff; }
-        .field input, .field select { width: 100%; border: 0; outline: 0; padding: 11px 12px; font: inherit; font-weight: 850; background: #fff; color: #0f172a; }
-        .field select { border: 1px solid #d1d5db; border-radius: 12px; }
-        .suffix { padding-right: 11px; color: #64748b; font-weight: 950; white-space: nowrap; }
-        .checkRow { display: inline-flex; align-items: center; gap: 8px; color: #334155; font-weight: 900; }
-        .previewBox, .selectedBox, .editBox { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 14px; padding: 12px; color: #334155; font-weight: 900; }
+        .field { display: grid; gap: 8px; color: #334155; font-weight: 850; font-size: 13px; }
+        .fieldControl { min-height: 44px; display: flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; background: #fff; transition: border-color .15s ease, box-shadow .15s ease; }
+        .fieldControl:focus-within { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
+        .field input, .field select { width: 100%; min-height: 44px; border: 1px solid #cbd5e1; outline: 0; border-radius: 12px; padding: 0 12px; font: inherit; font-weight: 800; background: #fff; color: #0f172a; }
+        .fieldControl input { min-height: 42px; border: 0; border-radius: 0; padding: 0 12px; }
+        .field select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #64748b 50%), linear-gradient(135deg, #64748b 50%, transparent 50%); background-position: calc(100% - 17px) 18px, calc(100% - 11px) 18px; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; padding-right: 32px; }
+        .suffix { padding-right: 12px; color: #64748b; font-weight: 900; white-space: nowrap; }
+        .checkRow { display: inline-flex; align-items: center; gap: 8px; color: #334155; font-weight: 850; }
+        .checkRow input, .targetRow input { width: 16px; height: 16px; accent-color: #111827; }
+        .previewBox, .selectedBox, .editBox { border: 1px solid #dbe3ef; background: #f8fafc; border-radius: 16px; padding: 14px; color: #334155; font-weight: 850; }
         .editBox { display: grid; gap: 10px; }
-        .hintText { color: #64748b; font-size: 12px; font-weight: 900; }
+        .hintText { color: #64748b; font-size: 12px; font-weight: 800; }
         .formGridCompact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .selectedBox span { display: block; color: #64748b; font-size: 12px; font-weight: 950; margin-bottom: 6px; }
-        .selectedBox strong { font-size: 16px; }
-        .itemGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-        .itemCard { border: 1px solid #e2e8f0; border-radius: 16px; padding: 13px; display: grid; gap: 9px; background: #fff; }
+        .selectedBox span { display: block; color: #64748b; font-size: 12px; font-weight: 850; margin-bottom: 6px; }
+        .selectedBox strong { font-size: 16px; font-weight: 950; }
+        .itemGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .itemCard { border: 1px solid #dbe3ef; border-radius: 18px; padding: 15px; display: grid; gap: 10px; background: #fff; }
         .itemCardOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
         .itemTop { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
         .itemTop strong { font-weight: 950; }
-        .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; font-size: 12px; font-weight: 950; white-space: nowrap; }
+        .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; font-size: 12px; font-weight: 850; white-space: nowrap; }
         .badgeGreen { background: #dcfce7; color: #166534; }
         .badgeGray { background: #f1f5f9; color: #475569; }
         .badgePurple { background: #ede9fe; color: #6d28d9; }
-        .subTitle { margin-top: 4px; font-size: 16px; font-weight: 950; }
+        .subTitle { margin-top: 4px; font-size: 16px; font-weight: 900; }
         .emptyText { padding: 10px 0; }
-        @media (max-width: 900px) { .summaryGrid, .formGrid, .issueGrid, .tabBar, .targetFilterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .searchPanel { grid-template-columns: 1fr 1fr; } .searchActions { grid-column: 1 / -1; } }
+        @media (max-width: 900px) {
+          .summaryGrid, .formGrid, .issueGrid, .targetFilterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .searchPanel { grid-template-columns: 1fr 1fr; }
+          .searchActions { grid-column: 1 / -1; }
+        }
         @media (max-width: 640px) {
-          .loyaltyPage { padding: 16px; }
-          .heroCard, .sectionHead { display: grid; }
-          .heroActions, .sectionHead .btn, .actionRow .btn { width: 100%; }
+          .loyaltyPage { padding: 14px; gap: 12px; }
+          .heroCard { display: grid; padding: 18px; border-radius: 18px; }
+          .heroActions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+          .sectionHead { display: grid; }
+          .sectionHead .btn, .actionRow .btn { width: 100%; }
           .btn { width: 100%; text-align: center; }
-          .summaryGrid, .formGrid, .issueGrid, .itemGrid, .tabBar, .searchPanel, .customerRow, .modeSwitch, .targetFilterGrid, .targetRow { grid-template-columns: 1fr; }
+          h1 { font-size: 24px; }
+          h2 { font-size: 18px; }
+          .summaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .summaryCard { min-height: 68px; padding: 12px; }
+          .summaryCard strong { font-size: 13px; }
+          .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .tabButton { min-height: 54px; padding: 10px 12px; }
+          .formGrid, .issueGrid, .itemGrid, .searchPanel, .customerRow, .targetFilterGrid, .targetRow, .historySearchPanel { grid-template-columns: 1fr; }
+          .modeSwitch { grid-template-columns: 1fr; }
+          .targetActions, .confirmBox { display: grid; }
           .searchActions { display: grid; grid-template-columns: 1fr 1fr; }
           .historyTableWrap { display: none; }
           .historyCards { display: grid; }
-          h1 { font-size: 24px; }
         }
       `}</style>
     </main>
