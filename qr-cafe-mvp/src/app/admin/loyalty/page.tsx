@@ -1214,128 +1214,128 @@ function AdminLoyaltyInner() {
         </section>
       ) : null}
 
-      <style jsx>{`
+      <style jsx global>{`
         .loyaltyPage { max-width: 1120px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; color: #0f172a; font-size: 14px; }
-        .heroCard, .sectionCard, .summaryCard { border: 1px solid #dbe3ef; border-radius: 20px; background: #fff; box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06); }
-        .heroCard { padding: 24px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
-        .eyebrow { margin: 0 0 7px; color: #7c3aed; font-weight: 900; font-size: 12px; }
-        h1, h2, h3, p { margin: 0; }
-        h1 { font-size: 27px; font-weight: 950; letter-spacing: -0.04em; line-height: 1.15; }
-        h2 { font-size: 19px; font-weight: 950; letter-spacing: -0.03em; line-height: 1.2; }
-        .heroDesc, .storeLine, .sectionHead p, .itemCard p, .selectedBox p, .confirmBox p, .muted, .emptyText { color: #64748b; font-weight: 650; line-height: 1.45; }
-        .heroDesc { margin-top: 9px; }
-        .storeLine { margin-top: 9px; }
-        .heroActions, .actionRow { display: flex; gap: 8px; flex-wrap: wrap; }
-        .btn { min-height: 40px; border: 1px solid #cbd5e1; background: #fff; color: #111827; border-radius: 12px; padding: 0 14px; font-weight: 850; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
-        .btn:hover:not(:disabled) { transform: translateY(-1px); border-color: #94a3b8; }
-        .btnDark { border-color: #111827; background: #111827; color: #fff; }
-        .btnDanger { border-color: #fecaca; background: #fff5f5; color: #b91c1c; }
-        .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
-        .notice { padding: 13px 15px; border-radius: 14px; font-weight: 850; white-space: pre-wrap; }
-        .notice-success { background: #ecfdf5; color: #047857; border: 1px solid #86efac; }
-        .notice-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-        .notice-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-        .summaryGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-        .summaryCard { position: relative; padding: 18px 18px 18px 20px; min-height: 104px; display: grid; align-content: center; gap: 8px; overflow: hidden; }
-        .summaryCard::before { content: ""; position: absolute; left: 0; top: 18px; bottom: 18px; width: 4px; border-radius: 999px; background: #111827; }
-        .summaryCard span { color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
-        .summaryCard strong { display: block; font-size: 19px; font-weight: 950; line-height: 1.2; letter-spacing: -0.03em; }
-        .summaryCard p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.35; }
-        .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-        .tabButton { min-height: 62px; border: 1px solid #dbe3ef; background: #fff; border-radius: 16px; padding: 12px 13px; text-align: left; cursor: pointer; display: grid; gap: 3px; align-content: center; color: #0f172a; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04); }
-        .tabButton strong { font-size: 14px; font-weight: 900; }
-        .tabButton span { color: #64748b; font-size: 12px; font-weight: 750; }
-        .tabButtonOn { border-color: #111827; background: #111827; color: #fff; }
-        .tabButtonOn span { color: #d1d5db; }
-        .sectionCard { padding: 20px; display: grid; gap: 16px; }
-        .sectionHead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-        .formGrid, .issueGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-        .searchPanel { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(160px, .6fr) auto; gap: 12px; align-items: end; padding: 14px; border: 1px solid #dbe3ef; border-radius: 18px; background: #f8fafc; }
-        .searchActions { display: flex; gap: 8px; align-items: center; }
-        .modeSwitch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; border: 1px solid #dbe3ef; background: #f8fafc; padding: 6px; border-radius: 16px; }
-        .modeButton { min-height: 44px; border: 0; background: transparent; border-radius: 12px; color: #334155; font-weight: 900; cursor: pointer; }
-        .modeButtonOn { background: #111827; color: #fff; box-shadow: 0 8px 20px rgba(15, 23, 42, .16); }
-        .targetPanel { display: grid; gap: 15px; }
-        .targetFilterGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        .targetActions { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
-        .targetList { display: grid; gap: 9px; }
-        .targetRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid #dbe3ef; border-radius: 16px; padding: 14px; background: #fff; cursor: pointer; }
-        .targetRow strong { font-weight: 900; font-size: 15px; }
-        .targetRow p { margin-top: 5px; color: #64748b; font-weight: 700; line-height: 1.35; }
-        .targetMeta { font-size: 12px; }
-        .targetRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); background: #fbfaff; }
-        .confirmBox { display: flex; justify-content: space-between; gap: 14px; align-items: center; border: 1px solid #dbe3ef; background: #f8fafc; border-radius: 16px; padding: 14px; }
-        .confirmBox span { display: block; color: #64748b; font-size: 12px; font-weight: 850; margin-bottom: 5px; }
-        .confirmBox strong { display: block; font-size: 15px; font-weight: 950; margin-bottom: 4px; }
-        .resultBox { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }
-        .listHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-        .listHead span { color: #64748b; font-size: 13px; font-weight: 800; }
-        .customerList { display: grid; gap: 9px; }
-        .customerRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border: 1px solid #dbe3ef; border-radius: 16px; padding: 14px; background: #fff; }
-        .customerRow strong { font-weight: 900; }
-        .customerRow p { margin-top: 4px; color: #64748b; font-weight: 700; }
-        .customerRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
-        .historySearchPanel { grid-template-columns: minmax(0, 1.3fr) minmax(140px, .5fr) minmax(140px, .5fr) auto; }
-        .historyTableWrap { overflow-x: auto; border: 1px solid #dbe3ef; border-radius: 16px; }
-        .historyTable { width: 100%; border-collapse: collapse; min-width: 760px; background: #fff; }
-        .historyTable th, .historyTable td { padding: 13px 14px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
-        .historyTable th { background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 850; }
-        .historyTable td { color: #0f172a; font-weight: 700; }
-        .historyTable td p { margin-top: 4px; color: #64748b; font-weight: 650; }
-        .historyCards { display: none; gap: 10px; }
-        .field { display: grid; gap: 9px; color: #334155; font-weight: 850; font-size: 13px; letter-spacing: -0.01em; }
-        .fieldBox { min-height: 52px; display: flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 15px; overflow: hidden; background: #fff; box-shadow: inset 0 1px 0 rgba(15, 23, 42, .03); transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
-        .fieldBox:focus-within { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); background: #fff; }
-        .field input, .field select { width: 100%; min-height: 50px; border: 0; outline: 0; border-radius: 0; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 800; background: transparent; color: #0f172a; }
-        .field input::placeholder { color: #94a3b8; font-weight: 750; }
-        .field select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #64748b 50%), linear-gradient(135deg, #64748b 50%, transparent 50%); background-position: calc(100% - 18px) 22px, calc(100% - 11px) 22px; background-size: 7px 7px, 7px 7px; background-repeat: no-repeat; padding-right: 36px; }
-        .fieldSuffix { min-width: 54px; align-self: stretch; border-left: 1px solid #e2e8f0; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
-        .checkRow { display: inline-flex; align-items: center; gap: 8px; color: #334155; font-weight: 850; }
-        .checkRow input, .targetRow input { width: 16px; height: 16px; accent-color: #111827; }
-        .previewBox, .selectedBox, .editBox { border: 1px solid #dbe3ef; background: #f8fafc; border-radius: 16px; padding: 14px; color: #334155; font-weight: 850; }
-        .editBox { display: grid; gap: 10px; }
-        .hintText { color: #64748b; font-size: 12px; font-weight: 800; }
-        .formGridCompact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .selectedBox span { display: block; color: #64748b; font-size: 12px; font-weight: 850; margin-bottom: 6px; }
-        .selectedBox strong { font-size: 16px; font-weight: 950; }
-        .itemGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-        .itemCard { border: 1px solid #dbe3ef; border-radius: 18px; padding: 15px; display: grid; gap: 10px; background: #fff; }
-        .itemCardOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
-        .itemTop { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
-        .itemTop strong { font-weight: 950; }
-        .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; font-size: 12px; font-weight: 850; white-space: nowrap; }
-        .badgeGreen { background: #dcfce7; color: #166534; }
-        .badgeGray { background: #f1f5f9; color: #475569; }
-        .badgePurple { background: #ede9fe; color: #6d28d9; }
-        .subTitle { margin-top: 4px; font-size: 16px; font-weight: 900; }
-        .emptyText { padding: 10px 0; }
+        .loyaltyPage .heroCard, .loyaltyPage .sectionCard, .loyaltyPage .summaryCard { border: 1px solid #dbe3ef; border-radius: 20px; background: #fff; box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06); }
+        .loyaltyPage .heroCard { padding: 24px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
+        .loyaltyPage .eyebrow { margin: 0 0 7px; color: #7c3aed; font-weight: 900; font-size: 12px; }
+        .loyaltyPage h1, .loyaltyPage h2, .loyaltyPage h3, .loyaltyPage p { margin: 0; }
+        .loyaltyPage h1 { font-size: 27px; font-weight: 950; letter-spacing: -0.04em; line-height: 1.15; }
+        .loyaltyPage h2 { font-size: 19px; font-weight: 950; letter-spacing: -0.03em; line-height: 1.2; }
+        .loyaltyPage .heroDesc, .loyaltyPage .storeLine, .loyaltyPage .sectionHead p, .loyaltyPage .itemCard p, .loyaltyPage .selectedBox p, .loyaltyPage .confirmBox p, .loyaltyPage .muted, .loyaltyPage .emptyText { color: #64748b; font-weight: 650; line-height: 1.45; }
+        .loyaltyPage .heroDesc { margin-top: 9px; }
+        .loyaltyPage .storeLine { margin-top: 9px; }
+        .loyaltyPage .heroActions, .loyaltyPage .actionRow { display: flex; gap: 8px; flex-wrap: wrap; }
+        .loyaltyPage .btn { min-height: 40px; border: 1px solid #cbd5e1; background: #fff; color: #111827; border-radius: 12px; padding: 0 14px; font-weight: 850; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+        .loyaltyPage .btn:hover:not(:disabled) { transform: translateY(-1px); border-color: #94a3b8; }
+        .loyaltyPage .btnDark { border-color: #111827; background: #111827; color: #fff; }
+        .loyaltyPage .btnDanger { border-color: #fecaca; background: #fff5f5; color: #b91c1c; }
+        .loyaltyPage .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+        .loyaltyPage .notice { padding: 13px 15px; border-radius: 14px; font-weight: 850; white-space: pre-wrap; }
+        .loyaltyPage .notice-success { background: #ecfdf5; color: #047857; border: 1px solid #86efac; }
+        .loyaltyPage .notice-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+        .loyaltyPage .notice-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+        .loyaltyPage .summaryGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+        .loyaltyPage .summaryCard { position: relative; padding: 18px 18px 18px 20px; min-height: 104px; display: grid; align-content: center; gap: 8px; overflow: hidden; }
+        .loyaltyPage .summaryCard::before { content: ""; position: absolute; left: 0; top: 18px; bottom: 18px; width: 4px; border-radius: 999px; background: #111827; }
+        .loyaltyPage .summaryCard span { color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
+        .loyaltyPage .summaryCard strong { display: block; font-size: 19px; font-weight: 950; line-height: 1.2; letter-spacing: -0.03em; }
+        .loyaltyPage .summaryCard p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.35; }
+        .loyaltyPage .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+        .loyaltyPage .tabButton { min-height: 62px; border: 1px solid #dbe3ef; background: #fff; border-radius: 16px; padding: 12px 13px; text-align: left; cursor: pointer; display: grid; gap: 3px; align-content: center; color: #0f172a; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04); }
+        .loyaltyPage .tabButton strong { font-size: 14px; font-weight: 900; }
+        .loyaltyPage .tabButton span { color: #64748b; font-size: 12px; font-weight: 750; }
+        .loyaltyPage .tabButtonOn { border-color: #111827; background: #111827; color: #fff; }
+        .loyaltyPage .tabButtonOn span { color: #d1d5db; }
+        .loyaltyPage .sectionCard { padding: 20px; display: grid; gap: 16px; }
+        .loyaltyPage .sectionHead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+        .loyaltyPage .formGrid, .loyaltyPage .issueGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+        .loyaltyPage .searchPanel { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(160px, .6fr) auto; gap: 12px; align-items: end; padding: 14px; border: 1px solid #dbe3ef; border-radius: 18px; background: #f8fafc; }
+        .loyaltyPage .searchActions { display: flex; gap: 8px; align-items: center; }
+        .loyaltyPage .modeSwitch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; border: 1px solid #dbe3ef; background: #f8fafc; padding: 6px; border-radius: 16px; }
+        .loyaltyPage .modeButton { min-height: 44px; border: 0; background: transparent; border-radius: 12px; color: #334155; font-weight: 900; cursor: pointer; }
+        .loyaltyPage .modeButtonOn { background: #111827; color: #fff; box-shadow: 0 8px 20px rgba(15, 23, 42, .16); }
+        .loyaltyPage .targetPanel { display: grid; gap: 15px; }
+        .loyaltyPage .targetFilterGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .loyaltyPage .targetActions { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .loyaltyPage .targetList { display: grid; gap: 9px; }
+        .loyaltyPage .targetRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid #dbe3ef; border-radius: 16px; padding: 14px; background: #fff; cursor: pointer; }
+        .loyaltyPage .targetRow strong { font-weight: 900; font-size: 15px; }
+        .loyaltyPage .targetRow p { margin-top: 5px; color: #64748b; font-weight: 700; line-height: 1.35; }
+        .loyaltyPage .targetMeta { font-size: 12px; }
+        .loyaltyPage .targetRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); background: #fbfaff; }
+        .loyaltyPage .confirmBox { display: flex; justify-content: space-between; gap: 14px; align-items: center; border: 1px solid #dbe3ef; background: #f8fafc; border-radius: 16px; padding: 14px; }
+        .loyaltyPage .confirmBox span { display: block; color: #64748b; font-size: 12px; font-weight: 850; margin-bottom: 5px; }
+        .loyaltyPage .confirmBox strong { display: block; font-size: 15px; font-weight: 950; margin-bottom: 4px; }
+        .loyaltyPage .resultBox { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }
+        .loyaltyPage .listHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+        .loyaltyPage .listHead span { color: #64748b; font-size: 13px; font-weight: 800; }
+        .loyaltyPage .customerList { display: grid; gap: 9px; }
+        .loyaltyPage .customerRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border: 1px solid #dbe3ef; border-radius: 16px; padding: 14px; background: #fff; }
+        .loyaltyPage .customerRow strong { font-weight: 900; }
+        .loyaltyPage .customerRow p { margin-top: 4px; color: #64748b; font-weight: 700; }
+        .loyaltyPage .customerRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
+        .loyaltyPage .historySearchPanel { grid-template-columns: minmax(0, 1.3fr) minmax(140px, .5fr) minmax(140px, .5fr) auto; }
+        .loyaltyPage .historyTableWrap { overflow-x: auto; border: 1px solid #dbe3ef; border-radius: 16px; }
+        .loyaltyPage .historyTable { width: 100%; border-collapse: collapse; min-width: 760px; background: #fff; }
+        .loyaltyPage .historyTable th, .loyaltyPage .historyTable td { padding: 13px 14px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
+        .loyaltyPage .historyTable th { background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 850; }
+        .loyaltyPage .historyTable td { color: #0f172a; font-weight: 700; }
+        .loyaltyPage .historyTable td p { margin-top: 4px; color: #64748b; font-weight: 650; }
+        .loyaltyPage .historyCards { display: none; gap: 10px; }
+        .loyaltyPage .field { display: grid; gap: 9px; color: #334155; font-weight: 850; font-size: 13px; letter-spacing: -0.01em; }
+        .loyaltyPage .fieldBox { min-height: 52px; display: flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 15px; overflow: hidden; background: #fff; box-shadow: inset 0 1px 0 rgba(15, 23, 42, .03); transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+        .loyaltyPage .fieldBox:focus-within { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); background: #fff; }
+        .loyaltyPage .field input, .loyaltyPage .field select { width: 100%; min-height: 50px; border: 0; outline: 0; border-radius: 0; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 800; background: transparent; color: #0f172a; }
+        .loyaltyPage .field input::placeholder { color: #94a3b8; font-weight: 750; }
+        .loyaltyPage .field select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #64748b 50%), linear-gradient(135deg, #64748b 50%, transparent 50%); background-position: calc(100% - 18px) 22px, calc(100% - 11px) 22px; background-size: 7px 7px, 7px 7px; background-repeat: no-repeat; padding-right: 36px; }
+        .loyaltyPage .fieldSuffix { min-width: 54px; align-self: stretch; border-left: 1px solid #e2e8f0; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+        .loyaltyPage .checkRow { display: inline-flex; align-items: center; gap: 8px; color: #334155; font-weight: 850; }
+        .loyaltyPage .checkRow input, .loyaltyPage .targetRow input { width: 16px; height: 16px; accent-color: #111827; }
+        .loyaltyPage .previewBox, .loyaltyPage .selectedBox, .loyaltyPage .editBox { border: 1px solid #dbe3ef; background: #f8fafc; border-radius: 16px; padding: 14px; color: #334155; font-weight: 850; }
+        .loyaltyPage .editBox { display: grid; gap: 10px; }
+        .loyaltyPage .hintText { color: #64748b; font-size: 12px; font-weight: 800; }
+        .loyaltyPage .formGridCompact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .loyaltyPage .selectedBox span { display: block; color: #64748b; font-size: 12px; font-weight: 850; margin-bottom: 6px; }
+        .loyaltyPage .selectedBox strong { font-size: 16px; font-weight: 950; }
+        .loyaltyPage .itemGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .loyaltyPage .itemCard { border: 1px solid #dbe3ef; border-radius: 18px; padding: 15px; display: grid; gap: 10px; background: #fff; }
+        .loyaltyPage .itemCardOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
+        .loyaltyPage .itemTop { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+        .loyaltyPage .itemTop strong { font-weight: 950; }
+        .loyaltyPage .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; font-size: 12px; font-weight: 850; white-space: nowrap; }
+        .loyaltyPage .badgeGreen { background: #dcfce7; color: #166534; }
+        .loyaltyPage .badgeGray { background: #f1f5f9; color: #475569; }
+        .loyaltyPage .badgePurple { background: #ede9fe; color: #6d28d9; }
+        .loyaltyPage .subTitle { margin-top: 4px; font-size: 16px; font-weight: 900; }
+        .loyaltyPage .emptyText { padding: 10px 0; }
         @media (max-width: 900px) {
-          .summaryGrid, .formGrid, .issueGrid, .targetFilterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .searchPanel { grid-template-columns: 1fr 1fr; }
-          .searchActions { grid-column: 1 / -1; }
+          .loyaltyPage .summaryGrid, .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .targetFilterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .loyaltyPage .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .loyaltyPage .searchPanel { grid-template-columns: 1fr 1fr; }
+          .loyaltyPage .searchActions { grid-column: 1 / -1; }
         }
         @media (max-width: 640px) {
           .loyaltyPage { padding: 14px; gap: 12px; }
-          .heroCard { display: grid; padding: 18px; border-radius: 18px; }
-          .heroActions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
-          .sectionHead { display: grid; }
-          .sectionHead .btn, .actionRow .btn { width: 100%; }
-          .btn { width: 100%; text-align: center; }
-          h1 { font-size: 24px; }
-          h2 { font-size: 18px; }
-          .summaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-          .summaryCard { min-height: 88px; padding: 14px 14px 14px 18px; }
-          .summaryCard strong { font-size: 15px; }
-          .summaryCard p { font-size: 12px; }
-          .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-          .tabButton { min-height: 54px; padding: 10px 12px; }
-          .formGrid, .issueGrid, .itemGrid, .searchPanel, .customerRow, .targetFilterGrid, .targetRow, .historySearchPanel { grid-template-columns: 1fr; }
-          .modeSwitch { grid-template-columns: 1fr; }
-          .targetActions, .confirmBox { display: grid; }
-          .searchActions { display: grid; grid-template-columns: 1fr 1fr; }
-          .historyTableWrap { display: none; }
-          .historyCards { display: grid; }
+          .loyaltyPage .heroCard { display: grid; padding: 18px; border-radius: 18px; }
+          .loyaltyPage .heroActions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+          .loyaltyPage .sectionHead { display: grid; }
+          .loyaltyPage .sectionHead .btn, .loyaltyPage .actionRow .btn { width: 100%; }
+          .loyaltyPage .btn { width: 100%; text-align: center; }
+          .loyaltyPage h1 { font-size: 24px; }
+          .loyaltyPage h2 { font-size: 18px; }
+          .loyaltyPage .summaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .loyaltyPage .summaryCard { min-height: 88px; padding: 14px 14px 14px 18px; }
+          .loyaltyPage .summaryCard strong { font-size: 15px; }
+          .loyaltyPage .summaryCard p { font-size: 12px; }
+          .loyaltyPage .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .loyaltyPage .tabButton { min-height: 54px; padding: 10px 12px; }
+          .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .itemGrid, .loyaltyPage .searchPanel, .loyaltyPage .customerRow, .loyaltyPage .targetFilterGrid, .loyaltyPage .targetRow, .loyaltyPage .historySearchPanel { grid-template-columns: 1fr; }
+          .loyaltyPage .modeSwitch { grid-template-columns: 1fr; }
+          .loyaltyPage .targetActions, .loyaltyPage .confirmBox { display: grid; }
+          .loyaltyPage .searchActions { display: grid; grid-template-columns: 1fr 1fr; }
+          .loyaltyPage .historyTableWrap { display: none; }
+          .loyaltyPage .historyCards { display: grid; }
         }
       `}</style>
     </main>
