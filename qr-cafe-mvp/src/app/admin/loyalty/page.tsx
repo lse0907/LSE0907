@@ -59,6 +59,27 @@ type BulkIssueResult = {
   invalid_customer_count?: number;
 };
 
+type TargetCustomerRow = {
+  customer_user_id: string;
+  name: string | null;
+  phone: string | null;
+  point_balance: number;
+  tier: "general" | "regular" | "vip";
+  lifetime_spent: number;
+  lifetime_orders: number;
+  last_order_at: string | null;
+  registered_at: string | null;
+  already_has_coupon: boolean;
+};
+
+type BulkIssueResult = {
+  requested_count?: number;
+  valid_count?: number;
+  issued_count?: number;
+  skipped_existing_count?: number;
+  invalid_customer_count?: number;
+};
+
 type CustomerProfileRow = {
   user_id: string;
   name: string | null;
