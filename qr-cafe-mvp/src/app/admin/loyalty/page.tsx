@@ -816,10 +816,10 @@ function AdminLoyaltyInner() {
       {msg ? <div className={`notice notice-${msgTone}`} role="status">{msg}</div> : null}
 
       <section className="summaryGrid" aria-label="포인트 쿠폰 요약">
-        <SummaryCard title="적립률" value={`일반 ${settings.tier_general_rate_pct}% · 단골 ${settings.tier_regular_rate_pct}% · VIP ${settings.tier_vip_rate_pct}%`} />
-        <SummaryCard title="사용 제한" value={`최소 ${money(settings.min_redeem_points)}P · 최대 ${settings.max_redeem_pct}%`} />
-        <SummaryCard title="쿠폰 템플릿" value={`활성 ${activeTemplates}개 · 전체 ${templates.length}개`} />
-        <SummaryCard title="최근 발급" value={`사용 가능 ${issuedCoupons.filter((row) => row.status === "issued").length}장 · 최근 ${issuedCoupons.length}건`} />
+        <SummaryCard title="적립률" main={`일반 ${settings.tier_general_rate_pct}%`} sub={`단골 ${settings.tier_regular_rate_pct}% · VIP ${settings.tier_vip_rate_pct}%`} />
+        <SummaryCard title="사용 제한" main={`최소 ${money(settings.min_redeem_points)}P`} sub={`최대 ${settings.max_redeem_pct}%`} />
+        <SummaryCard title="쿠폰 템플릿" main={`활성 ${activeTemplates}개`} sub={`전체 ${templates.length}개`} />
+        <SummaryCard title="최근 발급" main={`사용 가능 ${issuedCoupons.filter((row) => row.status === "issued").length}장`} sub={`최근 ${issuedCoupons.length}건`} />
       </section>
 
       <nav className="tabBar" aria-label="포인트 쿠폰 관리 탭">
@@ -985,7 +985,7 @@ function AdminLoyaltyInner() {
             <div className="searchPanel">
             <label className="field searchField">
               <span>고객 검색</span>
-              <div className="fieldControl">
+              <div className="fieldBox">
                 <input
                   value={customerSearch}
                   placeholder="이름 또는 전화번호"
@@ -1015,10 +1015,12 @@ function AdminLoyaltyInner() {
             </div>
             <label className="field">
               <span>발급 쿠폰</span>
-              <select value={issueTemplateId} onChange={(e) => handleIssueTemplateChange(e.target.value)}>
-                <option value="">선택해 주세요</option>
-                {templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name} · {couponKindLabel(tpl.coupon_kind)}{tpl.is_active ? "" : " [비활성]"}</option>)}
-              </select>
+              <div className="fieldBox">
+                <select value={issueTemplateId} onChange={(e) => handleIssueTemplateChange(e.target.value)}>
+                  <option value="">선택해 주세요</option>
+                  {templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name} · {couponKindLabel(tpl.coupon_kind)}{tpl.is_active ? "" : " [비활성]"}</option>)}
+                </select>
+              </div>
             </label>
             <div className="selectedBox">
               <span>선택 쿠폰</span>
@@ -1128,7 +1130,7 @@ function AdminLoyaltyInner() {
           <div className="searchPanel historySearchPanel">
             <label className="field searchField">
               <span>고객 검색</span>
-              <div className="fieldControl">
+              <div className="fieldBox">
                 <input
                   value={issuedSearch}
                   placeholder="이름 또는 전화번호"
@@ -1234,9 +1236,11 @@ function AdminLoyaltyInner() {
         .notice-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
         .notice-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
         .summaryGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-        .summaryCard { padding: 15px 16px; min-height: 78px; display: grid; align-content: center; gap: 7px; }
-        .summaryCard span { color: #64748b; font-size: 12px; font-weight: 850; }
-        .summaryCard strong { display: block; font-size: 15px; font-weight: 900; line-height: 1.35; letter-spacing: -0.02em; }
+        .summaryCard { position: relative; padding: 18px 18px 18px 20px; min-height: 104px; display: grid; align-content: center; gap: 8px; overflow: hidden; }
+        .summaryCard::before { content: ""; position: absolute; left: 0; top: 18px; bottom: 18px; width: 4px; border-radius: 999px; background: #111827; }
+        .summaryCard span { color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
+        .summaryCard strong { display: block; font-size: 19px; font-weight: 950; line-height: 1.2; letter-spacing: -0.03em; }
+        .summaryCard p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.35; }
         .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
         .tabButton { min-height: 62px; border: 1px solid #dbe3ef; background: #fff; border-radius: 16px; padding: 12px 13px; text-align: left; cursor: pointer; display: grid; gap: 3px; align-content: center; color: #0f172a; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04); }
         .tabButton strong { font-size: 14px; font-weight: 900; }
@@ -1279,13 +1283,13 @@ function AdminLoyaltyInner() {
         .historyTable td { color: #0f172a; font-weight: 700; }
         .historyTable td p { margin-top: 4px; color: #64748b; font-weight: 650; }
         .historyCards { display: none; gap: 10px; }
-        .field { display: grid; gap: 8px; color: #334155; font-weight: 850; font-size: 13px; }
-        .fieldControl { min-height: 44px; display: flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; background: #fff; transition: border-color .15s ease, box-shadow .15s ease; }
-        .fieldControl:focus-within { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
-        .field input, .field select { width: 100%; min-height: 44px; border: 1px solid #cbd5e1; outline: 0; border-radius: 12px; padding: 0 12px; font: inherit; font-weight: 800; background: #fff; color: #0f172a; }
-        .fieldControl input { min-height: 42px; border: 0; border-radius: 0; padding: 0 12px; }
-        .field select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #64748b 50%), linear-gradient(135deg, #64748b 50%, transparent 50%); background-position: calc(100% - 17px) 18px, calc(100% - 11px) 18px; background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; padding-right: 32px; }
-        .suffix { padding-right: 12px; color: #64748b; font-weight: 900; white-space: nowrap; }
+        .field { display: grid; gap: 9px; color: #334155; font-weight: 850; font-size: 13px; letter-spacing: -0.01em; }
+        .fieldBox { min-height: 52px; display: flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 15px; overflow: hidden; background: #fff; box-shadow: inset 0 1px 0 rgba(15, 23, 42, .03); transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+        .fieldBox:focus-within { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); background: #fff; }
+        .field input, .field select { width: 100%; min-height: 50px; border: 0; outline: 0; border-radius: 0; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 800; background: transparent; color: #0f172a; }
+        .field input::placeholder { color: #94a3b8; font-weight: 750; }
+        .field select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #64748b 50%), linear-gradient(135deg, #64748b 50%, transparent 50%); background-position: calc(100% - 18px) 22px, calc(100% - 11px) 22px; background-size: 7px 7px, 7px 7px; background-repeat: no-repeat; padding-right: 36px; }
+        .fieldSuffix { min-width: 54px; align-self: stretch; border-left: 1px solid #e2e8f0; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
         .checkRow { display: inline-flex; align-items: center; gap: 8px; color: #334155; font-weight: 850; }
         .checkRow input, .targetRow input { width: 16px; height: 16px; accent-color: #111827; }
         .previewBox, .selectedBox, .editBox { border: 1px solid #dbe3ef; background: #f8fafc; border-radius: 16px; padding: 14px; color: #334155; font-weight: 850; }
@@ -1321,8 +1325,9 @@ function AdminLoyaltyInner() {
           h1 { font-size: 24px; }
           h2 { font-size: 18px; }
           .summaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-          .summaryCard { min-height: 68px; padding: 12px; }
-          .summaryCard strong { font-size: 13px; }
+          .summaryCard { min-height: 88px; padding: 14px 14px 14px 18px; }
+          .summaryCard strong { font-size: 15px; }
+          .summaryCard p { font-size: 12px; }
           .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
           .tabButton { min-height: 54px; padding: 10px 12px; }
           .formGrid, .issueGrid, .itemGrid, .searchPanel, .customerRow, .targetFilterGrid, .targetRow, .historySearchPanel { grid-template-columns: 1fr; }
@@ -1337,11 +1342,12 @@ function AdminLoyaltyInner() {
   );
 }
 
-function SummaryCard({ title, value }: { title: string; value: string }) {
+function SummaryCard({ title, main, sub }: { title: string; main: string; sub?: string }) {
   return (
     <article className="summaryCard">
       <span>{title}</span>
-      <strong>{value}</strong>
+      <strong>{main}</strong>
+      {sub ? <p>{sub}</p> : null}
     </article>
   );
 }
@@ -1350,9 +1356,9 @@ function LabelInput({ label, value, onChange, suffix, placeholder }: { label: st
   return (
     <label className="field">
       <span>{label}</span>
-      <div className="fieldControl">
+      <div className="fieldBox">
         <input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
-        {suffix ? <em className="suffix">{suffix}</em> : null}
+        {suffix ? <span className="fieldSuffix">{suffix}</span> : null}
       </div>
     </label>
   );
@@ -1362,9 +1368,11 @@ function SelectInput({ label, value, onChange, options }: { label: string; value
   return (
     <label className="field">
       <span>{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map(([optionValue, labelText]) => <option key={optionValue} value={optionValue}>{labelText}</option>)}
-      </select>
+      <div className="fieldBox">
+        <select value={value} onChange={(e) => onChange(e.target.value)}>
+          {options.map(([optionValue, labelText]) => <option key={optionValue} value={optionValue}>{labelText}</option>)}
+        </select>
+      </div>
     </label>
   );
 }
