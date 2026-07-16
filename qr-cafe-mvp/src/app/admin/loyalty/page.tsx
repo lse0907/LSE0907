@@ -1204,7 +1204,7 @@ function AdminLoyaltyInner() {
 
       <style jsx global>{`
         .loyaltyPage { width: min(100% - 32px, 1120px); margin: 0 auto; padding: 18px 0 22px; display: grid; gap: 12px; color: #0f172a; font-size: 14px; }
-        html { color-scheme: light; scrollbar-gutter: stable; }
+        html { color-scheme: light; overflow-y: scroll; scrollbar-gutter: stable both-edges; }
         body { background: #eef4fb; color: #0f172a; }
         .loyaltyPage { min-height: 100dvh; background: transparent; }
         .loyaltyPage .summaryStrip { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px 12px; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 750; box-shadow: inset 0 1px 0 rgba(255,255,255,.85); }
@@ -1237,7 +1237,7 @@ function AdminLoyaltyInner() {
         .loyaltyPage .loadMoreBtn { justify-self: center; min-width: 180px; }
 
         .loyaltyPage .heroCard, .loyaltyPage .sectionCard, .loyaltyPage .summaryCard { border: 1px solid #dbe3ef; border-radius: 20px; background: #fff; box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06); }
-        .loyaltyPage .heroCard { min-height: 112px; padding: 18px; display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
+        .loyaltyPage .heroCard { height: 112px; min-height: 112px; padding: 18px; display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); overflow: hidden; }
         .loyaltyPage .eyebrow { margin: 0 0 7px; color: #2563eb; font-weight: 900; font-size: 12px; }
         .loyaltyPage h1, .loyaltyPage h2, .loyaltyPage h3, .loyaltyPage p { margin: 0; }
         .loyaltyPage h1 { font-size: 27px; font-weight: 950; letter-spacing: -0.04em; line-height: 1.15; }
@@ -1246,6 +1246,7 @@ function AdminLoyaltyInner() {
         .loyaltyPage .heroDesc { margin-top: 6px; }
         .loyaltyPage .storeLine { margin-top: 8px; }
         .loyaltyPage .heroActions, .loyaltyPage .actionRow { display: flex; gap: 8px; flex-wrap: wrap; }
+        .loyaltyPage .heroActions { flex: 0 0 auto; flex-wrap: nowrap; }
         .loyaltyPage .btn { min-height: 40px; border: 1px solid #cbd5e1; background: #fff; color: #111827; border-radius: 12px; padding: 0 14px; font-weight: 850; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
         .loyaltyPage .btn:hover:not(:disabled) { transform: translateY(-1px); border-color: #94a3b8; }
         .loyaltyPage .btnDark { border-color: #111827; background: #111827; color: #fff; }
@@ -1261,11 +1262,11 @@ function AdminLoyaltyInner() {
         .loyaltyPage .summaryCard span { color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
         .loyaltyPage .summaryCard strong { display: block; font-size: 19px; font-weight: 950; line-height: 1.2; letter-spacing: -0.03em; }
         .loyaltyPage .summaryCard p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.35; }
-        .loyaltyPage .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid #dbe3ef; border-radius: 14px; overflow: hidden; background: #fff; }
-        .loyaltyPage .tabButton { height: 46px; min-height: 0; border: 0; border-right: 1px solid #e2e8f0; background: #fff; border-radius: 0; padding: 0 12px; text-align: center; cursor: pointer; display: grid; gap: 1px; align-content: center; justify-items: center; color: #0f172a; box-shadow: none; overflow: hidden; }
+        .loyaltyPage .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 46px; gap: 0; border: 1px solid #dbe3ef; border-radius: 14px; overflow: hidden; background: #fff; }
+        .loyaltyPage .tabButton { height: 46px; min-height: 46px; max-height: 46px; border: 0; border-right: 1px solid #e2e8f0; background: #fff; border-radius: 0; padding: 0 12px; text-align: center; cursor: pointer; display: grid; gap: 1px; align-content: center; justify-items: center; color: #0f172a; box-shadow: none; overflow: hidden; }
         .loyaltyPage .tabButton:last-child { border-right: 0; }
-        .loyaltyPage .tabButton strong { font-size: 14px; font-weight: 900; line-height: 1.1; }
-        .loyaltyPage .tabButton span { color: #64748b; font-size: 11px; font-weight: 750; line-height: 1.1; }
+        .loyaltyPage .tabButton strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 900; line-height: 1.1; }
+        .loyaltyPage .tabButton span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #64748b; font-size: 11px; font-weight: 750; line-height: 1.1; }
         .loyaltyPage .tabButtonOn { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; box-shadow: inset 0 -3px 0 #2563eb; }
         .loyaltyPage .tabButtonOn span { color: #1d4ed8; }
         .loyaltyPage .sectionCard { padding: 20px; display: grid; gap: 16px; }
@@ -1376,6 +1377,9 @@ function AdminLoyaltyInner() {
         .loyaltyPage .badgePurple { background: #dbeafe; color: #1d4ed8; }
         .loyaltyPage .subTitle { margin-top: 4px; font-size: 16px; font-weight: 900; }
         .loyaltyPage .emptyText { padding: 10px 0; }
+        @media (max-width: 1120px) {
+          .loyaltyPage .tabButton span { display: none; }
+        }
         @media (max-width: 900px) {
           .loyaltyPage .summaryGrid, .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .targetFilterGrid, .loyaltyPage .issueSteps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .loyaltyPage .templateToolbar { grid-template-columns: 1fr 1fr; }
@@ -1389,7 +1393,7 @@ function AdminLoyaltyInner() {
         }
         @media (max-width: 640px) {
           .loyaltyPage { padding: 14px; gap: 12px; }
-          .loyaltyPage .heroCard { min-height: auto; display: grid; padding: 14px; border-radius: 16px; }
+          .loyaltyPage .heroCard { height: auto; min-height: auto; display: grid; padding: 14px; border-radius: 16px; overflow: visible; }
           .loyaltyPage .heroActions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
           .loyaltyPage .sectionHead, .loyaltyPage .issueHeroHead, .loyaltyPage .targetCardHead { display: grid; }
           .loyaltyPage .sectionHead .btn, .loyaltyPage .actionRow .btn { width: 100%; }
