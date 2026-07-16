@@ -96,6 +96,9 @@ const targetTierOptions: Array<[string, string]> = [["all", "전체"], ["general
 const targetRecentOptions: Array<[string, string]> = [["all", "전체"], ["7", "최근 7일 주문"], ["30", "최근 30일 주문"], ["90", "최근 90일 주문"]];
 const targetInactiveOptions: Array<[string, string]> = [["all", "전체"], ["30", "30일 미방문"], ["60", "60일 미방문"], ["90", "90일 미방문"]];
 const targetRegisteredOptions: Array<[string, string]> = [["all", "전체"], ["30", "등록 30일 이상"], ["90", "등록 90일 이상"], ["180", "등록 180일 이상"]];
+const templateStatusOptions: Array<[string, string]> = [["all", "전체"], ["active", "활성"], ["inactive", "비활성"]];
+const templateKindOptions: Array<[string, string]> = [["all", "전체"], ["first_order", "첫주문"], ["thank_you", "감사"], ["event", "이벤트"]];
+const TEMPLATE_INITIAL_LIMIT = 12;
 
 function toNumber(v: string, fallback = 0) {
   const n = Number(v);
@@ -186,6 +189,11 @@ function AdminLoyaltyInner() {
   const [issuedPeriodFilter, setIssuedPeriodFilter] = useState("30");
   const [issuedHasMore, setIssuedHasMore] = useState(false);
   const [issuedSummary, setIssuedSummary] = useState("최근 30건");
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templateStatusFilter, setTemplateStatusFilter] = useState("all");
+  const [templateKindFilter, setTemplateKindFilter] = useState("all");
+  const [templateVisibleCount, setTemplateVisibleCount] = useState(TEMPLATE_INITIAL_LIMIT);
 
   const [settings, setSettings] = useState<LoyaltySettingsRow>({
     store_id: "",
@@ -421,6 +429,16 @@ function AdminLoyaltyInner() {
   }, [storeId]);
 
   const activeTemplates = templates.filter((row) => row.is_active).length;
+  const inactiveTemplates = templates.length - activeTemplates;
+  const filteredTemplates = templates.filter((row) => {
+    const query = templateSearch.trim().toLowerCase();
+    const matchesSearch = !query || row.name.toLowerCase().includes(query) || couponKindLabel(row.coupon_kind).toLowerCase().includes(query) || discountText(row).toLowerCase().includes(query);
+    const matchesStatus = templateStatusFilter === "all" || (templateStatusFilter === "active" ? row.is_active : !row.is_active);
+    const matchesKind = templateKindFilter === "all" || row.coupon_kind === templateKindFilter;
+    return matchesSearch && matchesStatus && matchesKind;
+  });
+  const visibleTemplates = filteredTemplates.slice(0, templateVisibleCount);
+  const hasMoreTemplates = filteredTemplates.length > visibleTemplates.length;
   const selectedTemplate = templates.find((row) => row.id === issueTemplateId) || null;
   const allTargetsSelected = targetRows.length > 0 && targetRows.every((row) => selectedTargetIds.includes(row.customer_user_id));
   const selectedIssueButtonLabel = bulkIssuing
@@ -506,6 +524,7 @@ function AdminLoyaltyInner() {
     else {
       showMsg("쿠폰 템플릿을 생성했습니다.", "success");
       setNewTemplate({ coupon_kind: "event", name: "", discount_type: "fixed_amount", discount_value: "1000", min_order_amount: "0", max_discount_amount: "", valid_days: "30" });
+      setShowCreateTemplate(false);
       await loadTemplates();
     }
     setSavingTemplate(false);
@@ -711,11 +730,11 @@ function AdminLoyaltyInner() {
 
       {msg ? <div className={`notice notice-${msgTone}`} role="status">{msg}</div> : null}
 
-      <section className="summaryGrid" aria-label="포인트 쿠폰 요약">
-        <SummaryCard title="적립률" main={`일반 ${settings.tier_general_rate_pct}%`} sub={`단골 ${settings.tier_regular_rate_pct}% · VIP ${settings.tier_vip_rate_pct}%`} />
-        <SummaryCard title="사용 제한" main={`최소 ${money(settings.min_redeem_points)}P`} sub={`최대 ${settings.max_redeem_pct}%`} />
-        <SummaryCard title="쿠폰 템플릿" main={`활성 ${activeTemplates}개`} sub={`전체 ${templates.length}개`} />
-        <SummaryCard title="최근 발급" main={`사용 가능 ${issuedCoupons.filter((row) => row.status === "issued").length}장`} sub={`최근 ${issuedCoupons.length}건`} />
+      <section className="summaryStrip" aria-label="포인트 쿠폰 요약">
+        <span><b>적립률</b> 일반 {settings.tier_general_rate_pct}% · 단골 {settings.tier_regular_rate_pct}% · VIP {settings.tier_vip_rate_pct}%</span>
+        <span><b>사용 제한</b> 최소 {money(settings.min_redeem_points)}P · 최대 {settings.max_redeem_pct}%</span>
+        <span><b>쿠폰</b> 활성 {activeTemplates}개 · 비활성 {inactiveTemplates}개</span>
+        <span><b>최근 발급</b> 사용 가능 {issuedCoupons.filter((row) => row.status === "issued").length}장</span>
       </section>
 
       <nav className="tabBar" aria-label="포인트 쿠폰 관리 탭">
@@ -782,77 +801,140 @@ function AdminLoyaltyInner() {
       ) : null}
 
       {activeTab === "coupons" ? (
-        <>
-          <section className="sectionCard">
-            <div className="sectionHead">
-              <div>
-                <h2>쿠폰 만들기</h2>
-            <p>조건 충족 시 자동 발급</p>
+        <section className="sectionCard couponManageSection">
+          <div className="sectionHead compactHead">
+            <div>
+              <h2>쿠폰 관리</h2>
+              <p>목록을 먼저 확인하고 필요한 경우 새 쿠폰을 만듭니다.</p>
+            </div>
+            <button className="btn btnDark" type="button" onClick={() => setShowCreateTemplate((prev) => !prev)}>
+              {showCreateTemplate ? "만들기 닫기" : "+ 새 쿠폰"}
+            </button>
           </div>
-          <button className="btn btnDark" type="button" onClick={createTemplate} disabled={savingTemplate}>{savingTemplate ? "생성 중" : "생성"}</button>
-        </div>
-        <div className="formGrid">
-          <LabelInput label="쿠폰명" value={newTemplate.name} onChange={(v) => setNewTemplate((p) => ({ ...p, name: v }))} />
-          <SelectInput label="쿠폰 종류" value={newTemplate.coupon_kind} onChange={(v) => setNewTemplate((p) => ({ ...p, coupon_kind: v as CouponTemplateRow["coupon_kind"] }))} options={[['first_order', '첫주문 자동'], ['thank_you', '감사 자동'], ['event', '이벤트 수동']]} />
-          <SelectInput label="할인 방식" value={newTemplate.discount_type} onChange={(v) => setNewTemplate((p) => ({ ...p, discount_type: v as CouponTemplateRow["discount_type"] }))} options={[['fixed_amount', '정액'], ['percent', '정률']]} />
-          <LabelInput label="할인값" suffix={newTemplate.discount_type === "percent" ? "%" : "원"} value={newTemplate.discount_value} onChange={(v) => setNewTemplate((p) => ({ ...p, discount_value: v }))} />
-          <LabelInput label="최소 주문금액" suffix="원" value={newTemplate.min_order_amount} onChange={(v) => setNewTemplate((p) => ({ ...p, min_order_amount: v }))} />
-          <LabelInput label="최대 할인금액" suffix="원" value={newTemplate.max_discount_amount} onChange={(v) => setNewTemplate((p) => ({ ...p, max_discount_amount: v }))} placeholder="선택" />
-          <LabelInput label="유효기간" suffix="일" value={newTemplate.valid_days} onChange={(v) => setNewTemplate((p) => ({ ...p, valid_days: v }))} />
-        </div>
-        <div className="previewBox">미리보기: {discountText(newTemplatePreview)} · {money(toNumber(newTemplate.min_order_amount, 0))}원 이상 · {Math.max(1, Math.floor(toNumber(newTemplate.valid_days, 30)))}일</div>
-      </section>
 
-      <section className="sectionCard">
-        <div className="sectionHead">
-          <div>
-            <h2>쿠폰 목록</h2>
-            <p>비활성 쿠폰은 발급 중지</p>
+          <div className="templateStats" aria-label="쿠폰 템플릿 상태 요약">
+            <span>전체 <b>{templates.length}</b>개</span>
+            <span>활성 <b>{activeTemplates}</b>개</span>
+            <span>비활성 <b>{inactiveTemplates}</b>개</span>
           </div>
-        </div>
-        {templatesLoading ? <p className="muted">쿠폰 목록 로딩 중...</p> : null}
-        {!templatesLoading && !templates.length ? <p className="emptyText">등록된 쿠폰이 없습니다.</p> : null}
-        <div className="itemGrid">
-          {templates.map((row) => {
-            const editing = editingTemplateId === row.id;
-            return (
-              <article key={row.id} className="itemCard">
-                <div className="itemTop">
-                  <strong>{row.name}</strong>
-                  <span className={`badge ${row.is_active ? "badgeGreen" : "badgeGray"}`}>{row.is_active ? "활성" : "비활성"}</span>
+
+          {showCreateTemplate ? (
+            <div className="createPanel">
+              <div className="panelHead">
+                <div>
+                  <h3>새 쿠폰 만들기</h3>
+                  <p>생성 후 쿠폰 목록에서 바로 발급 대상으로 선택할 수 있습니다.</p>
                 </div>
-                <p>{couponKindLabel(row.coupon_kind)} · {discountText(row)}</p>
-                <p>최소 {money(row.min_order_amount)}원 · 유효 {row.valid_days}일</p>
-                {editing ? (
-                  <div className="editBox">
-                    <div className="formGrid formGridCompact">
-                      <LabelInput label="쿠폰명" value={editTemplate.name} onChange={(v) => setEditTemplate((p) => ({ ...p, name: v }))} />
-                      <SelectInput label="쿠폰 종류" value={editTemplate.coupon_kind} onChange={(v) => setEditTemplate((p) => ({ ...p, coupon_kind: v as CouponTemplateRow["coupon_kind"] }))} options={[["first_order", "첫주문 자동"], ["thank_you", "감사 자동"], ["event", "이벤트 수동"]]} />
-                      <SelectInput label="할인 방식" value={editTemplate.discount_type} onChange={(v) => setEditTemplate((p) => ({ ...p, discount_type: v as CouponTemplateRow["discount_type"] }))} options={[["fixed_amount", "정액"], ["percent", "정률"]]} />
-                      <LabelInput label="할인값" suffix={editTemplate.discount_type === "percent" ? "%" : "원"} value={editTemplate.discount_value} onChange={(v) => setEditTemplate((p) => ({ ...p, discount_value: v }))} />
-                      <LabelInput label="최소 주문금액" suffix="원" value={editTemplate.min_order_amount} onChange={(v) => setEditTemplate((p) => ({ ...p, min_order_amount: v }))} />
-                      <LabelInput label="최대 할인금액" suffix="원" value={editTemplate.max_discount_amount} onChange={(v) => setEditTemplate((p) => ({ ...p, max_discount_amount: v }))} placeholder="선택" />
-                      <LabelInput label="유효기간" suffix="일" value={editTemplate.valid_days} onChange={(v) => setEditTemplate((p) => ({ ...p, valid_days: v }))} />
+                <button className="btn" type="button" onClick={() => setShowCreateTemplate(false)} disabled={savingTemplate}>닫기</button>
+              </div>
+              <div className="formGrid createTemplateGrid">
+                <LabelInput label="쿠폰명" value={newTemplate.name} onChange={(v) => setNewTemplate((p) => ({ ...p, name: v }))} />
+                <SelectInput label="쿠폰 종류" value={newTemplate.coupon_kind} onChange={(v) => setNewTemplate((p) => ({ ...p, coupon_kind: v as CouponTemplateRow["coupon_kind"] }))} options={[["first_order", "첫주문 자동"], ["thank_you", "감사 자동"], ["event", "이벤트 수동"]]} />
+                <SelectInput label="할인 방식" value={newTemplate.discount_type} onChange={(v) => setNewTemplate((p) => ({ ...p, discount_type: v as CouponTemplateRow["discount_type"] }))} options={[["fixed_amount", "정액"], ["percent", "정률"]]} />
+                <LabelInput label="할인값" suffix={newTemplate.discount_type === "percent" ? "%" : "원"} value={newTemplate.discount_value} onChange={(v) => setNewTemplate((p) => ({ ...p, discount_value: v }))} />
+                <LabelInput label="최소 주문금액" suffix="원" value={newTemplate.min_order_amount} onChange={(v) => setNewTemplate((p) => ({ ...p, min_order_amount: v }))} />
+                <LabelInput label="최대 할인금액" suffix="원" value={newTemplate.max_discount_amount} onChange={(v) => setNewTemplate((p) => ({ ...p, max_discount_amount: v }))} placeholder="선택" />
+                <LabelInput label="유효기간" suffix="일" value={newTemplate.valid_days} onChange={(v) => setNewTemplate((p) => ({ ...p, valid_days: v }))} />
+              </div>
+              <div className="previewBox compactPreview">미리보기: {discountText(newTemplatePreview)} · {money(toNumber(newTemplate.min_order_amount, 0))}원 이상 · {Math.max(1, Math.floor(toNumber(newTemplate.valid_days, 30)))}일</div>
+              <div className="actionRow panelActions">
+                <button className="btn" type="button" onClick={() => setShowCreateTemplate(false)} disabled={savingTemplate}>취소</button>
+                <button className="btn btnDark" type="button" onClick={createTemplate} disabled={savingTemplate}>{savingTemplate ? "생성 중" : "생성"}</button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="templateToolbar">
+            <label className="field searchField">
+              <span>쿠폰명 검색</span>
+              <div className="fieldBox">
+                <input
+                  value={templateSearch}
+                  placeholder="쿠폰명, 종류, 혜택 검색"
+                  onChange={(e) => {
+                    setTemplateSearch(e.target.value);
+                    setTemplateVisibleCount(TEMPLATE_INITIAL_LIMIT);
+                  }}
+                />
+              </div>
+            </label>
+            <SelectInput
+              label="상태"
+              value={templateStatusFilter}
+              onChange={(v) => {
+                setTemplateStatusFilter(v);
+                setTemplateVisibleCount(TEMPLATE_INITIAL_LIMIT);
+              }}
+              options={templateStatusOptions}
+            />
+            <SelectInput
+              label="종류"
+              value={templateKindFilter}
+              onChange={(v) => {
+                setTemplateKindFilter(v);
+                setTemplateVisibleCount(TEMPLATE_INITIAL_LIMIT);
+              }}
+              options={templateKindOptions}
+            />
+          </div>
+
+          <div className="listHead compactListHead">
+            <div>
+              <h3 className="subTitle">쿠폰 목록</h3>
+              <span>조건에 맞는 쿠폰 {filteredTemplates.length}개 중 {visibleTemplates.length}개 표시</span>
+            </div>
+          </div>
+          {templatesLoading ? <p className="muted">쿠폰 목록 로딩 중...</p> : null}
+          {!templatesLoading && !filteredTemplates.length ? <p className="emptyText">조건에 맞는 쿠폰이 없습니다.</p> : null}
+
+          <div className="templateList" role="list">
+            {visibleTemplates.map((row) => {
+              const editing = editingTemplateId === row.id;
+              return (
+                <article key={row.id} className="templateRow" role="listitem">
+                  <div className="templateMain">
+                    <div className="templateTitleLine">
+                      <strong>{row.name}</strong>
+                      <span className={`badge ${row.is_active ? "badgeGreen" : "badgeGray"}`}>{row.is_active ? "활성" : "비활성"}</span>
                     </div>
-                    <p className="hintText">수정 내용은 새 발급부터 적용됩니다.</p>
-                    <div className="actionRow">
-                      <button className="btn btnDark" type="button" onClick={() => saveTemplateEdit(row)} disabled={savingEditTemplate}>{savingEditTemplate ? "저장 중" : "저장"}</button>
-                      <button className="btn" type="button" onClick={cancelEditTemplate} disabled={savingEditTemplate}>취소</button>
+                    <p>{couponKindLabel(row.coupon_kind)} · {discountText(row)}</p>
+                    <p>최소 {money(row.min_order_amount)}원 · 유효 {row.valid_days}일</p>
+                  </div>
+                  {editing ? (
+                    <div className="editBox templateEditBox">
+                      <div className="formGrid formGridCompact">
+                        <LabelInput label="쿠폰명" value={editTemplate.name} onChange={(v) => setEditTemplate((p) => ({ ...p, name: v }))} />
+                        <SelectInput label="쿠폰 종류" value={editTemplate.coupon_kind} onChange={(v) => setEditTemplate((p) => ({ ...p, coupon_kind: v as CouponTemplateRow["coupon_kind"] }))} options={[["first_order", "첫주문 자동"], ["thank_you", "감사 자동"], ["event", "이벤트 수동"]]} />
+                        <SelectInput label="할인 방식" value={editTemplate.discount_type} onChange={(v) => setEditTemplate((p) => ({ ...p, discount_type: v as CouponTemplateRow["discount_type"] }))} options={[["fixed_amount", "정액"], ["percent", "정률"]]} />
+                        <LabelInput label="할인값" suffix={editTemplate.discount_type === "percent" ? "%" : "원"} value={editTemplate.discount_value} onChange={(v) => setEditTemplate((p) => ({ ...p, discount_value: v }))} />
+                        <LabelInput label="최소 주문금액" suffix="원" value={editTemplate.min_order_amount} onChange={(v) => setEditTemplate((p) => ({ ...p, min_order_amount: v }))} />
+                        <LabelInput label="최대 할인금액" suffix="원" value={editTemplate.max_discount_amount} onChange={(v) => setEditTemplate((p) => ({ ...p, max_discount_amount: v }))} placeholder="선택" />
+                        <LabelInput label="유효기간" suffix="일" value={editTemplate.valid_days} onChange={(v) => setEditTemplate((p) => ({ ...p, valid_days: v }))} />
+                      </div>
+                      <p className="hintText">수정 내용은 새 발급부터 적용됩니다.</p>
+                      <div className="actionRow">
+                        <button className="btn btnDark" type="button" onClick={() => saveTemplateEdit(row)} disabled={savingEditTemplate}>{savingEditTemplate ? "저장 중" : "저장"}</button>
+                        <button className="btn" type="button" onClick={cancelEditTemplate} disabled={savingEditTemplate}>취소</button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="actionRow">
-                    <button className="btn" type="button" onClick={() => startEditTemplate(row)}>수정</button>
-                    <button className="btn" type="button" onClick={() => toggleTemplate(row)}>{row.is_active ? "비활성화" : "활성화"}</button>
-                    <button className="btn btnDark" type="button" onClick={() => selectIssueTemplate(row.id)}>발급 선택</button>
-                  </div>
-                )}
-              </article>
-            );
-          })}
-        </div>
-          </section>
-        </>
+                  ) : (
+                    <div className="rowActions">
+                      <button className="btn" type="button" onClick={() => startEditTemplate(row)}>수정</button>
+                      <button className="btn" type="button" onClick={() => toggleTemplate(row)}>{row.is_active ? "비활성" : "활성"}</button>
+                      <button className="btn btnDark" type="button" onClick={() => selectIssueTemplate(row.id)}>발급</button>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+
+          {hasMoreTemplates ? (
+            <button className="btn loadMoreBtn" type="button" onClick={() => setTemplateVisibleCount((prev) => prev + TEMPLATE_INITIAL_LIMIT)}>
+              더보기
+            </button>
+          ) : null}
+        </section>
       ) : null}
 
       {activeTab === "issue" ? (
@@ -1133,7 +1215,39 @@ function AdminLoyaltyInner() {
       ) : null}
 
       <style jsx global>{`
-        .loyaltyPage { max-width: 1120px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; color: #0f172a; font-size: 14px; }
+        .loyaltyPage { max-width: 1120px; margin: 0 auto; padding: 20px; display: grid; gap: 14px; color: #0f172a; font-size: 14px; }
+        html { color-scheme: light; }
+        body { background: #f6f7fb; color: #0f172a; }
+        .loyaltyPage { min-height: 100dvh; background: #f6f7fb; }
+        .loyaltyPage .summaryStrip { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px 12px; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 750; box-shadow: inset 0 1px 0 rgba(255,255,255,.85); }
+        .loyaltyPage .summaryStrip span { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; border-right: 1px solid #e2e8f0; padding-right: 10px; }
+        .loyaltyPage .summaryStrip span:last-child { border-right: 0; padding-right: 0; }
+        .loyaltyPage .summaryStrip b { color: #111827; font-weight: 950; }
+        .loyaltyPage .templateStats { display: flex; flex-wrap: wrap; gap: 8px; color: #475569; font-size: 13px; font-weight: 850; }
+        .loyaltyPage .templateStats span { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 10px; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; }
+        .loyaltyPage .templateStats b { color: #111827; }
+        .loyaltyPage .couponManageSection { gap: 14px; }
+        .loyaltyPage .compactHead { align-items: center; }
+        .loyaltyPage .createPanel { border: 1px solid #c4b5fd; border-radius: 18px; background: linear-gradient(135deg, #faf5ff 0%, #ffffff 100%); padding: 16px; display: grid; gap: 14px; }
+        .loyaltyPage .panelHead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+        .loyaltyPage .panelHead h3 { font-size: 17px; font-weight: 950; }
+        .loyaltyPage .panelHead p { margin-top: 5px; color: #64748b; font-weight: 700; line-height: 1.4; }
+        .loyaltyPage .compactPreview { padding: 11px 12px; font-size: 13px; }
+        .loyaltyPage .panelActions { justify-content: flex-end; }
+        .loyaltyPage .templateToolbar { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(130px, .45fr) minmax(130px, .45fr); gap: 10px; align-items: end; padding: 12px; border: 1px solid #e2e8f0; border-radius: 16px; background: #f8fafc; }
+        .loyaltyPage .compactListHead { align-items: flex-end; }
+        .loyaltyPage .compactListHead > div { display: grid; gap: 4px; }
+        .loyaltyPage .templateList { display: grid; gap: 8px; }
+        .loyaltyPage .templateRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid #e2e8f0; border-radius: 15px; padding: 12px; background: #fff; box-shadow: 0 6px 16px rgba(15, 23, 42, .035); }
+        .loyaltyPage .templateMain { min-width: 0; display: grid; gap: 5px; }
+        .loyaltyPage .templateTitleLine { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .loyaltyPage .templateTitleLine strong { font-weight: 950; font-size: 15px; }
+        .loyaltyPage .templateMain p { color: #64748b; font-size: 13px; font-weight: 700; line-height: 1.35; }
+        .loyaltyPage .rowActions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+        .loyaltyPage .rowActions .btn { min-height: 34px; border-radius: 10px; padding: 0 10px; }
+        .loyaltyPage .templateEditBox { grid-column: 1 / -1; }
+        .loyaltyPage .loadMoreBtn { justify-self: center; min-width: 180px; }
+
         .loyaltyPage .heroCard, .loyaltyPage .sectionCard, .loyaltyPage .summaryCard { border: 1px solid #dbe3ef; border-radius: 20px; background: #fff; box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06); }
         .loyaltyPage .heroCard { padding: 24px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
         .loyaltyPage .eyebrow { margin: 0 0 7px; color: #7c3aed; font-weight: 900; font-size: 12px; }
@@ -1160,10 +1274,10 @@ function AdminLoyaltyInner() {
         .loyaltyPage .summaryCard strong { display: block; font-size: 19px; font-weight: 950; line-height: 1.2; letter-spacing: -0.03em; }
         .loyaltyPage .summaryCard p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.35; }
         .loyaltyPage .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-        .loyaltyPage .tabButton { min-height: 62px; border: 1px solid #dbe3ef; background: #fff; border-radius: 16px; padding: 12px 13px; text-align: left; cursor: pointer; display: grid; gap: 3px; align-content: center; color: #0f172a; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04); }
+        .loyaltyPage .tabButton { min-height: 50px; border: 1px solid #dbe3ef; background: #fff; border-radius: 14px; padding: 10px 12px; text-align: left; cursor: pointer; display: grid; gap: 2px; align-content: center; color: #0f172a; box-shadow: none; }
         .loyaltyPage .tabButton strong { font-size: 14px; font-weight: 900; }
         .loyaltyPage .tabButton span { color: #64748b; font-size: 12px; font-weight: 750; }
-        .loyaltyPage .tabButtonOn { border-color: #111827; background: #111827; color: #fff; }
+        .loyaltyPage .tabButtonOn { border-color: #7c3aed; background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); color: #fff; box-shadow: 0 12px 24px rgba(124, 58, 237, .22); }
         .loyaltyPage .tabButtonOn span { color: #d1d5db; }
         .loyaltyPage .sectionCard { padding: 20px; display: grid; gap: 16px; }
         .loyaltyPage .sectionHead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
@@ -1261,6 +1375,8 @@ function AdminLoyaltyInner() {
         .loyaltyPage .emptyText { padding: 10px 0; }
         @media (max-width: 900px) {
           .loyaltyPage .summaryGrid, .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .targetFilterGrid, .loyaltyPage .issueSteps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .loyaltyPage .templateToolbar { grid-template-columns: 1fr 1fr; }
+          .loyaltyPage .templateToolbar .searchField { grid-column: 1 / -1; }
           .loyaltyPage .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .loyaltyPage .searchPanel, .loyaltyPage .targetBasicGrid { grid-template-columns: 1fr 1fr; }
           .loyaltyPage .searchActions { grid-column: 1 / -1; }
@@ -1272,6 +1388,7 @@ function AdminLoyaltyInner() {
           .loyaltyPage .sectionHead, .loyaltyPage .issueHeroHead, .loyaltyPage .targetCardHead { display: grid; }
           .loyaltyPage .sectionHead .btn, .loyaltyPage .actionRow .btn { width: 100%; }
           .loyaltyPage .btn { width: 100%; text-align: center; }
+          .loyaltyPage .tabButton span { display: none; }
           .loyaltyPage h1 { font-size: 24px; }
           .loyaltyPage h2 { font-size: 18px; }
           .loyaltyPage .summaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -1280,7 +1397,12 @@ function AdminLoyaltyInner() {
           .loyaltyPage .summaryCard p { font-size: 12px; }
           .loyaltyPage .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
           .loyaltyPage .tabButton { min-height: 54px; padding: 10px 12px; }
-          .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .itemGrid, .loyaltyPage .searchPanel, .loyaltyPage .customerRow, .loyaltyPage .targetBasicGrid, .loyaltyPage .targetFilterGrid, .loyaltyPage .targetRow, .loyaltyPage .historySearchPanel, .loyaltyPage .issueSteps, .loyaltyPage .resultStats { grid-template-columns: 1fr; }
+          .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .itemGrid, .loyaltyPage .searchPanel, .loyaltyPage .customerRow, .loyaltyPage .targetBasicGrid, .loyaltyPage .targetFilterGrid, .loyaltyPage .targetRow, .loyaltyPage .historySearchPanel, .loyaltyPage .issueSteps, .loyaltyPage .resultStats, .loyaltyPage .templateToolbar, .loyaltyPage .templateRow { grid-template-columns: 1fr; }
+          .loyaltyPage .summaryStrip { display: grid; gap: 6px; padding: 10px; }
+          .loyaltyPage .summaryStrip span { border-right: 0; padding-right: 0; }
+          .loyaltyPage .panelHead { display: grid; }
+          .loyaltyPage .rowActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+          .loyaltyPage .rowActions .btn { width: 100%; }
           .loyaltyPage .issueStep { min-height: 48px; }
           .loyaltyPage .targetSearchCard, .loyaltyPage .targetResultsCard, .loyaltyPage .issueResultCard { padding: 14px; border-radius: 16px; }
           .loyaltyPage .modeSwitch { grid-template-columns: 1fr; }
@@ -1292,16 +1414,6 @@ function AdminLoyaltyInner() {
         }
       `}</style>
     </main>
-  );
-}
-
-function SummaryCard({ title, main, sub }: { title: string; main: string; sub?: string }) {
-  return (
-    <article className="summaryCard">
-      <span>{title}</span>
-      <strong>{main}</strong>
-      {sub ? <p>{sub}</p> : null}
-    </article>
   );
 }
 
