@@ -448,8 +448,7 @@ function AdminLoyaltyInner() {
       : "고객 선택 후 발급";
   const issueSteps = [
     { label: "쿠폰 선택", done: Boolean(issueTemplateId) },
-    { label: "고객 검색", done: targetRows.length > 0 },
-    { label: "고객 선택", done: selectedTargetIds.length > 0 },
+    { label: "고객 찾기", done: targetRows.length > 0 && selectedTargetIds.length > 0 },
     { label: "확인 후 발급", done: bulkConfirmChecked },
   ];
   const targetFilterSummary = [
@@ -717,9 +716,7 @@ function AdminLoyaltyInner() {
     <main className="loyaltyPage">
       <section className="heroCard">
         <div>
-          <p className="eyebrow">관리자 설정</p>
           <h1>포인트/쿠폰 설정</h1>
-          <p className="heroDesc">정책 설정과 쿠폰 발급 관리</p>
           <p className="storeLine">현재 매장: <b>{storeId || "-"}</b></p>
         </div>
         <div className="heroActions">
@@ -754,7 +751,7 @@ function AdminLoyaltyInner() {
 
       {activeTab === "policy" ? (
         <>
-          <section className="sectionCard">
+          <section className="sectionCard compactSection">
             <div className="sectionHead">
               <div>
                 <h2>포인트 정책</h2>
@@ -762,7 +759,7 @@ function AdminLoyaltyInner() {
           </div>
           <button className="btn btnDark" type="button" onClick={saveSettings} disabled={savingSettings}>{savingSettings ? "저장 중" : "저장"}</button>
         </div>
-        <div className="formGrid">
+        <div className="formGrid denseGrid policyGrid">
           <LabelInput label="일반 적립률" suffix="%" value={String(settings.tier_general_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_general_rate_pct: clampNumber(toNumber(v, p.tier_general_rate_pct), 0, 100) }))} />
           <LabelInput label="단골 적립률" suffix="%" value={String(settings.tier_regular_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_regular_rate_pct: clampNumber(toNumber(v, p.tier_regular_rate_pct), 0, 100) }))} />
           <LabelInput label="VIP 적립률" suffix="%" value={String(settings.tier_vip_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_vip_rate_pct: clampNumber(toNumber(v, p.tier_vip_rate_pct), 0, 100) }))} />
@@ -780,7 +777,7 @@ function AdminLoyaltyInner() {
         </div>
       </section>
 
-      <section className="sectionCard">
+      <section className="sectionCard compactSection">
         <div className="sectionHead">
           <div>
             <h2>등급 규칙</h2>
@@ -788,7 +785,7 @@ function AdminLoyaltyInner() {
           </div>
           <button className="btn btnDark" type="button" onClick={saveTierRules} disabled={savingTier}>{savingTier ? "저장 중" : "저장"}</button>
         </div>
-        <div className="formGrid">
+        <div className="formGrid denseGrid tierGrid">
           <LabelInput label="집계 기간" suffix="개월" value={String(tierRules.lookback_months)} onChange={(v) => setTierRules((p) => ({ ...p, lookback_months: Math.max(1, Math.floor(toNumber(v, p.lookback_months))) }))} />
           <LabelInput label="단골 최소 결제" suffix="원" value={String(tierRules.regular_min_spent)} onChange={(v) => setTierRules((p) => ({ ...p, regular_min_spent: Math.max(0, Math.floor(toNumber(v, p.regular_min_spent))) }))} />
           <LabelInput label="단골 최소 주문" suffix="회" value={String(tierRules.regular_min_orders)} onChange={(v) => setTierRules((p) => ({ ...p, regular_min_orders: Math.max(0, Math.floor(toNumber(v, p.regular_min_orders))) }))} />
@@ -827,7 +824,7 @@ function AdminLoyaltyInner() {
                 </div>
                 <button className="btn" type="button" onClick={() => setShowCreateTemplate(false)} disabled={savingTemplate}>닫기</button>
               </div>
-              <div className="formGrid createTemplateGrid">
+              <div className="formGrid denseGrid createTemplateGrid">
                 <LabelInput label="쿠폰명" value={newTemplate.name} onChange={(v) => setNewTemplate((p) => ({ ...p, name: v }))} />
                 <SelectInput label="쿠폰 종류" value={newTemplate.coupon_kind} onChange={(v) => setNewTemplate((p) => ({ ...p, coupon_kind: v as CouponTemplateRow["coupon_kind"] }))} options={[["first_order", "첫주문 자동"], ["thank_you", "감사 자동"], ["event", "이벤트 수동"]]} />
                 <SelectInput label="할인 방식" value={newTemplate.discount_type} onChange={(v) => setNewTemplate((p) => ({ ...p, discount_type: v as CouponTemplateRow["discount_type"] }))} options={[["fixed_amount", "정액"], ["percent", "정률"]]} />
@@ -902,7 +899,7 @@ function AdminLoyaltyInner() {
                   </div>
                   {editing ? (
                     <div className="editBox templateEditBox">
-                      <div className="formGrid formGridCompact">
+                      <div className="formGrid denseGrid formGridCompact">
                         <LabelInput label="쿠폰명" value={editTemplate.name} onChange={(v) => setEditTemplate((p) => ({ ...p, name: v }))} />
                         <SelectInput label="쿠폰 종류" value={editTemplate.coupon_kind} onChange={(v) => setEditTemplate((p) => ({ ...p, coupon_kind: v as CouponTemplateRow["coupon_kind"] }))} options={[["first_order", "첫주문 자동"], ["thank_you", "감사 자동"], ["event", "이벤트 수동"]]} />
                         <SelectInput label="할인 방식" value={editTemplate.discount_type} onChange={(v) => setEditTemplate((p) => ({ ...p, discount_type: v as CouponTemplateRow["discount_type"] }))} options={[["fixed_amount", "정액"], ["percent", "정률"]]} />
@@ -939,20 +936,11 @@ function AdminLoyaltyInner() {
 
       {activeTab === "issue" ? (
         <section className="sectionCard issueSection">
-          <div className="sectionHead issueHeroHead">
+          <div className="sectionHead issueHeroHead compactHead">
             <div>
-              <p className="eyebrow">쿠폰 운영</p>
               <h2>쿠폰 발급</h2>
-              <p>고객을 검색하고 1명 또는 여러 명을 선택해 쿠폰을 발급합니다.</p>
+              <p>쿠폰을 선택하고 발급할 고객을 찾으세요.</p>
             </div>
-            <button
-              className="btn btnDark issuePrimaryButton"
-              type="button"
-              onClick={issueCouponToSelectedTargets}
-              disabled={bulkIssuing}
-            >
-              {selectedIssueButtonLabel}
-            </button>
           </div>
 
           <div className="issueSteps" aria-label="쿠폰 발급 단계">
@@ -980,18 +968,13 @@ function AdminLoyaltyInner() {
               <strong>{selectedTemplate?.name || "선택 전"}</strong>
               <p>{selectedTemplate ? `${discountText(selectedTemplate)} · 최소 ${money(selectedTemplate.min_order_amount)}원 · ${selectedTemplate.valid_days}일` : "발급할 쿠폰을 선택해 주세요."}</p>
             </div>
-            <div className="selectedBox summaryHighlight">
-              <span>선택 고객</span>
-              <strong>{selectedTargetIds.length ? `${selectedTargetIds.length}명 선택` : "선택 전"}</strong>
-              <p>{targetRows.length ? `검색 결과 ${targetRows.length}명 중 선택` : "고객을 검색한 뒤 체크해 주세요."}</p>
-            </div>
           </div>
 
           <div className="targetPanel targetSearchCard">
             <div className="targetCardHead">
               <div>
-                <h3 className="subTitle">대상 고객 검색</h3>
-                <p>이름/전화번호와 등급으로 먼저 찾고, 필요한 경우 상세 조건을 추가하세요.</p>
+                <h3 className="subTitle">고객 찾기</h3>
+                <p>이름/전화번호와 등급으로 검색하세요.</p>
               </div>
               <button className="btn" type="button" onClick={() => setShowAdvancedTargetFilters((prev) => !prev)}>
                 {showAdvancedTargetFilters ? "상세 조건 닫기" : "상세 조건 열기"}
@@ -1052,7 +1035,7 @@ function AdminLoyaltyInner() {
               <input type="checkbox" checked={targetExcludeExisting} onChange={(e) => setTargetExcludeExisting(e.target.checked)} />
               <span>
                 <strong>이미 같은 쿠폰 받은 고객 제외</strong>
-                <em>중복 발급을 막고 싶다면 켜두세요. 이벤트 재발급이 필요한 경우에만 해제하세요.</em>
+                <em>같은 쿠폰 중복 발급을 막습니다.</em>
               </span>
             </label>
           </div>
@@ -1096,10 +1079,15 @@ function AdminLoyaltyInner() {
               <p>적용 필터: {targetFilterSummary}</p>
               <p>중복 발급: {targetExcludeExisting ? "같은 쿠폰 보유 고객 제외" : "같은 쿠폰 보유 고객도 포함"}</p>
             </div>
-            <label className="checkRow confirmCheckRow">
-              <input type="checkbox" checked={bulkConfirmChecked} onChange={(e) => setBulkConfirmChecked(e.target.checked)} />
-              위 내용을 확인했고 선택 고객에게 쿠폰을 발급합니다.
-            </label>
+            <div className="confirmActions">
+              <label className="checkRow confirmCheckRow">
+                <input type="checkbox" checked={bulkConfirmChecked} onChange={(e) => setBulkConfirmChecked(e.target.checked)} />
+                확인 후 발급합니다.
+              </label>
+              <button className="btn btnDark issuePrimaryButton" type="button" onClick={issueCouponToSelectedTargets} disabled={bulkIssuing}>
+                {selectedIssueButtonLabel}
+              </button>
+            </div>
           </div>
 
           {bulkIssueResult ? (
@@ -1127,7 +1115,7 @@ function AdminLoyaltyInner() {
             </div>
           </div>
 
-          <div className="searchPanel historySearchPanel">
+          <div className="searchPanel historySearchPanel compactSearchPanel">
             <label className="field searchField">
               <span>고객 검색</span>
               <div className="fieldBox">
@@ -1215,10 +1203,10 @@ function AdminLoyaltyInner() {
       ) : null}
 
       <style jsx global>{`
-        .loyaltyPage { max-width: 1120px; margin: 0 auto; padding: 20px; display: grid; gap: 14px; color: #0f172a; font-size: 14px; }
-        html { color-scheme: light; }
-        body { background: #f6f7fb; color: #0f172a; }
-        .loyaltyPage { min-height: 100dvh; background: #f6f7fb; }
+        .loyaltyPage { width: min(100% - 32px, 1120px); margin: 0 auto; padding: 18px 0 22px; display: grid; gap: 12px; color: #0f172a; font-size: 14px; }
+        html { color-scheme: light; scrollbar-gutter: stable; }
+        body { background: #eef4fb; color: #0f172a; }
+        .loyaltyPage { min-height: 100dvh; background: transparent; }
         .loyaltyPage .summaryStrip { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px 12px; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 750; box-shadow: inset 0 1px 0 rgba(255,255,255,.85); }
         .loyaltyPage .summaryStrip span { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; border-right: 1px solid #e2e8f0; padding-right: 10px; }
         .loyaltyPage .summaryStrip span:last-child { border-right: 0; padding-right: 0; }
@@ -1228,7 +1216,7 @@ function AdminLoyaltyInner() {
         .loyaltyPage .templateStats b { color: #111827; }
         .loyaltyPage .couponManageSection { gap: 14px; }
         .loyaltyPage .compactHead { align-items: center; }
-        .loyaltyPage .createPanel { border: 1px solid #c4b5fd; border-radius: 18px; background: linear-gradient(135deg, #faf5ff 0%, #ffffff 100%); padding: 16px; display: grid; gap: 14px; }
+        .loyaltyPage .createPanel { border: 1px solid #bfdbfe; border-radius: 18px; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%); padding: 16px; display: grid; gap: 14px; }
         .loyaltyPage .panelHead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
         .loyaltyPage .panelHead h3 { font-size: 17px; font-weight: 950; }
         .loyaltyPage .panelHead p { margin-top: 5px; color: #64748b; font-weight: 700; line-height: 1.4; }
@@ -1249,21 +1237,21 @@ function AdminLoyaltyInner() {
         .loyaltyPage .loadMoreBtn { justify-self: center; min-width: 180px; }
 
         .loyaltyPage .heroCard, .loyaltyPage .sectionCard, .loyaltyPage .summaryCard { border: 1px solid #dbe3ef; border-radius: 20px; background: #fff; box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06); }
-        .loyaltyPage .heroCard { padding: 24px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
-        .loyaltyPage .eyebrow { margin: 0 0 7px; color: #7c3aed; font-weight: 900; font-size: 12px; }
+        .loyaltyPage .heroCard { min-height: 112px; padding: 18px; display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
+        .loyaltyPage .eyebrow { margin: 0 0 7px; color: #2563eb; font-weight: 900; font-size: 12px; }
         .loyaltyPage h1, .loyaltyPage h2, .loyaltyPage h3, .loyaltyPage p { margin: 0; }
         .loyaltyPage h1 { font-size: 27px; font-weight: 950; letter-spacing: -0.04em; line-height: 1.15; }
         .loyaltyPage h2 { font-size: 19px; font-weight: 950; letter-spacing: -0.03em; line-height: 1.2; }
         .loyaltyPage .heroDesc, .loyaltyPage .storeLine, .loyaltyPage .sectionHead p, .loyaltyPage .itemCard p, .loyaltyPage .selectedBox p, .loyaltyPage .confirmBox p, .loyaltyPage .muted, .loyaltyPage .emptyText { color: #64748b; font-weight: 650; line-height: 1.45; }
-        .loyaltyPage .heroDesc { margin-top: 9px; }
-        .loyaltyPage .storeLine { margin-top: 9px; }
+        .loyaltyPage .heroDesc { margin-top: 6px; }
+        .loyaltyPage .storeLine { margin-top: 8px; }
         .loyaltyPage .heroActions, .loyaltyPage .actionRow { display: flex; gap: 8px; flex-wrap: wrap; }
         .loyaltyPage .btn { min-height: 40px; border: 1px solid #cbd5e1; background: #fff; color: #111827; border-radius: 12px; padding: 0 14px; font-weight: 850; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
         .loyaltyPage .btn:hover:not(:disabled) { transform: translateY(-1px); border-color: #94a3b8; }
         .loyaltyPage .btnDark { border-color: #111827; background: #111827; color: #fff; }
         .loyaltyPage .btnDanger { border-color: #fecaca; background: #fff5f5; color: #b91c1c; }
         .loyaltyPage .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
-        .loyaltyPage .notice { padding: 13px 15px; border-radius: 14px; font-weight: 850; white-space: pre-wrap; }
+        .loyaltyPage .notice { min-height: 38px; display: flex; align-items: center; padding: 9px 12px; border-radius: 12px; font-weight: 850; white-space: normal; line-height: 1.35; }
         .loyaltyPage .notice-success { background: #ecfdf5; color: #047857; border: 1px solid #86efac; }
         .loyaltyPage .notice-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
         .loyaltyPage .notice-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
@@ -1273,24 +1261,39 @@ function AdminLoyaltyInner() {
         .loyaltyPage .summaryCard span { color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
         .loyaltyPage .summaryCard strong { display: block; font-size: 19px; font-weight: 950; line-height: 1.2; letter-spacing: -0.03em; }
         .loyaltyPage .summaryCard p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.35; }
-        .loyaltyPage .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-        .loyaltyPage .tabButton { min-height: 50px; border: 1px solid #dbe3ef; background: #fff; border-radius: 14px; padding: 10px 12px; text-align: left; cursor: pointer; display: grid; gap: 2px; align-content: center; color: #0f172a; box-shadow: none; }
-        .loyaltyPage .tabButton strong { font-size: 14px; font-weight: 900; }
-        .loyaltyPage .tabButton span { color: #64748b; font-size: 12px; font-weight: 750; }
-        .loyaltyPage .tabButtonOn { border-color: #7c3aed; background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); color: #fff; box-shadow: 0 12px 24px rgba(124, 58, 237, .22); }
-        .loyaltyPage .tabButtonOn span { color: #d1d5db; }
+        .loyaltyPage .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid #dbe3ef; border-radius: 14px; overflow: hidden; background: #fff; }
+        .loyaltyPage .tabButton { height: 46px; min-height: 0; border: 0; border-right: 1px solid #e2e8f0; background: #fff; border-radius: 0; padding: 0 12px; text-align: center; cursor: pointer; display: grid; gap: 1px; align-content: center; justify-items: center; color: #0f172a; box-shadow: none; overflow: hidden; }
+        .loyaltyPage .tabButton:last-child { border-right: 0; }
+        .loyaltyPage .tabButton strong { font-size: 14px; font-weight: 900; line-height: 1.1; }
+        .loyaltyPage .tabButton span { color: #64748b; font-size: 11px; font-weight: 750; line-height: 1.1; }
+        .loyaltyPage .tabButtonOn { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; box-shadow: inset 0 -3px 0 #2563eb; }
+        .loyaltyPage .tabButtonOn span { color: #1d4ed8; }
         .loyaltyPage .sectionCard { padding: 20px; display: grid; gap: 16px; }
         .loyaltyPage .sectionHead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+        .loyaltyPage .compactSection { gap: 12px; }
+        .loyaltyPage .denseGrid { gap: 10px; }
+        .loyaltyPage .denseGrid .field { gap: 6px; }
+        .loyaltyPage .denseGrid .fieldBox { min-height: 42px; border-radius: 12px; }
+        .loyaltyPage .denseGrid .field input, .loyaltyPage .denseGrid .field select { min-height: 40px; font-size: 14px; padding: 0 11px; }
+        .loyaltyPage .denseGrid .fieldSuffix { min-width: 44px; font-size: 12px; }
+        .loyaltyPage .policyGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .loyaltyPage .tierGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        .loyaltyPage .createTemplateGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .loyaltyPage .createTemplateGrid .field:first-child { grid-column: 1 / -1; }
+        .loyaltyPage .compactSearchPanel .fieldBox { min-height: 42px; border-radius: 12px; }
+        .loyaltyPage .compactSearchPanel .field input, .loyaltyPage .compactSearchPanel .field select { min-height: 40px; font-size: 14px; }
+        .loyaltyPage .confirmActions { display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+
         .loyaltyPage .issueSection { gap: 18px; }
-        .loyaltyPage .issueHeroHead { padding: 16px; border: 1px solid #e2e8f0; border-radius: 18px; background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%); align-items: center; }
+        .loyaltyPage .issueHeroHead { padding: 14px; border: 1px solid #dbeafe; border-radius: 16px; background: #f8fbff; align-items: center; }
         .loyaltyPage .issuePrimaryButton { min-width: 170px; min-height: 46px; box-shadow: 0 12px 24px rgba(17, 24, 39, .18); }
-        .loyaltyPage .issueSteps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-        .loyaltyPage .issueStep { min-height: 58px; display: flex; align-items: center; gap: 10px; border: 1px solid #dbe3ef; border-radius: 16px; padding: 12px; background: #fff; color: #64748b; font-weight: 900; }
+        .loyaltyPage .issueSteps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .loyaltyPage .issueStep { min-height: 44px; display: flex; align-items: center; gap: 10px; border: 1px solid #dbe3ef; border-radius: 16px; padding: 12px; background: #fff; color: #64748b; font-weight: 900; }
         .loyaltyPage .issueStep span { width: 28px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: #f1f5f9; color: #475569; font-size: 13px; flex: 0 0 auto; }
-        .loyaltyPage .issueStepDone { border-color: #c4b5fd; background: #faf5ff; color: #5b21b6; box-shadow: 0 8px 22px rgba(124, 58, 237, .08); }
-        .loyaltyPage .issueStepDone span { background: #7c3aed; color: #fff; }
+        .loyaltyPage .issueStepDone { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; box-shadow: 0 8px 22px rgba(37, 99, 235, .08); }
+        .loyaltyPage .issueStepDone span { background: #2563eb; color: #fff; }
         .loyaltyPage .formGrid, .loyaltyPage .issueGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-        .loyaltyPage .issueSummaryGrid { align-items: stretch; }
+        .loyaltyPage .issueSummaryGrid { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); align-items: stretch; }
         .loyaltyPage .searchPanel { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(160px, .6fr) auto; gap: 12px; align-items: end; padding: 14px; border: 1px solid #dbe3ef; border-radius: 18px; background: #f8fafc; }
         .loyaltyPage .searchActions { display: flex; gap: 8px; align-items: center; }
         .loyaltyPage .modeSwitch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; border: 1px solid #dbe3ef; background: #f8fafc; padding: 6px; border-radius: 16px; }
@@ -1310,11 +1313,11 @@ function AdminLoyaltyInner() {
         .loyaltyPage .targetRow p { margin-top: 5px; color: #64748b; font-weight: 700; line-height: 1.35; }
         .loyaltyPage .targetMeta { font-size: 12px; }
         .loyaltyPage .targetNameLine { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-        .loyaltyPage .targetRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); background: #fbfaff; }
+        .loyaltyPage .targetRowOn { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .14); background: #f8fbff; }
         .loyaltyPage .confirmBox { display: flex; justify-content: space-between; gap: 14px; align-items: center; border: 1px solid #dbe3ef; background: #f8fafc; border-radius: 16px; padding: 14px; }
         .loyaltyPage .confirmBox span { display: block; color: #64748b; font-size: 12px; font-weight: 850; margin-bottom: 5px; }
         .loyaltyPage .confirmBox strong { display: block; font-size: 15px; font-weight: 950; margin-bottom: 4px; }
-        .loyaltyPage .issueConfirmBox { border-color: #c4b5fd; background: #faf5ff; }
+        .loyaltyPage .issueConfirmBox { border-color: #bfdbfe; background: #eff6ff; }
         .loyaltyPage .confirmCheckRow { max-width: 330px; line-height: 1.4; }
         .loyaltyPage .resultBox { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }
         .loyaltyPage .issueResultCard { border: 1px solid #a7f3d0; border-radius: 18px; padding: 16px; display: grid; gap: 14px; }
@@ -1332,7 +1335,7 @@ function AdminLoyaltyInner() {
         .loyaltyPage .customerRow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border: 1px solid #dbe3ef; border-radius: 16px; padding: 14px; background: #fff; }
         .loyaltyPage .customerRow strong { font-weight: 900; }
         .loyaltyPage .customerRow p { margin-top: 4px; color: #64748b; font-weight: 700; }
-        .loyaltyPage .customerRowOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
+        .loyaltyPage .customerRowOn { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .14); }
         .loyaltyPage .historySearchPanel { grid-template-columns: minmax(0, 1.3fr) minmax(140px, .5fr) minmax(140px, .5fr) auto; }
         .loyaltyPage .historyTableWrap { overflow-x: auto; border: 1px solid #dbe3ef; border-radius: 16px; }
         .loyaltyPage .historyTable { width: 100%; border-collapse: collapse; min-width: 760px; background: #fff; }
@@ -1343,7 +1346,7 @@ function AdminLoyaltyInner() {
         .loyaltyPage .historyCards { display: none; gap: 10px; }
         .loyaltyPage .field { display: grid; gap: 9px; color: #334155; font-weight: 850; font-size: 13px; letter-spacing: -0.01em; }
         .loyaltyPage .fieldBox { min-height: 52px; display: flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 15px; overflow: hidden; background: #fff; box-shadow: inset 0 1px 0 rgba(15, 23, 42, .03); transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
-        .loyaltyPage .fieldBox:focus-within { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); background: #fff; }
+        .loyaltyPage .fieldBox:focus-within { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .14); background: #fff; }
         .loyaltyPage .field input, .loyaltyPage .field select { width: 100%; min-height: 50px; border: 0; outline: 0; border-radius: 0; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 800; background: transparent; color: #0f172a; }
         .loyaltyPage .field input::placeholder { color: #94a3b8; font-weight: 750; }
         .loyaltyPage .field select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #64748b 50%), linear-gradient(135deg, #64748b 50%, transparent 50%); background-position: calc(100% - 18px) 22px, calc(100% - 11px) 22px; background-size: 7px 7px, 7px 7px; background-repeat: no-repeat; padding-right: 36px; }
@@ -1364,26 +1367,29 @@ function AdminLoyaltyInner() {
         .loyaltyPage .selectedBox strong { font-size: 16px; font-weight: 950; }
         .loyaltyPage .itemGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
         .loyaltyPage .itemCard { border: 1px solid #dbe3ef; border-radius: 18px; padding: 15px; display: grid; gap: 10px; background: #fff; }
-        .loyaltyPage .itemCardOn { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124, 58, 237, .12); }
+        .loyaltyPage .itemCardOn { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .14); }
         .loyaltyPage .itemTop { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
         .loyaltyPage .itemTop strong { font-weight: 950; }
         .loyaltyPage .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; font-size: 12px; font-weight: 850; white-space: nowrap; }
         .loyaltyPage .badgeGreen { background: #dcfce7; color: #166534; }
         .loyaltyPage .badgeGray { background: #f1f5f9; color: #475569; }
-        .loyaltyPage .badgePurple { background: #ede9fe; color: #6d28d9; }
+        .loyaltyPage .badgePurple { background: #dbeafe; color: #1d4ed8; }
         .loyaltyPage .subTitle { margin-top: 4px; font-size: 16px; font-weight: 900; }
         .loyaltyPage .emptyText { padding: 10px 0; }
         @media (max-width: 900px) {
           .loyaltyPage .summaryGrid, .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .targetFilterGrid, .loyaltyPage .issueSteps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .loyaltyPage .templateToolbar { grid-template-columns: 1fr 1fr; }
           .loyaltyPage .templateToolbar .searchField { grid-column: 1 / -1; }
-          .loyaltyPage .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .loyaltyPage .tabBar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+          .loyaltyPage .tabButton span { display: none; }
+          .loyaltyPage .policyGrid, .loyaltyPage .tierGrid, .loyaltyPage .createTemplateGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .loyaltyPage .issueSteps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .loyaltyPage .searchPanel, .loyaltyPage .targetBasicGrid { grid-template-columns: 1fr 1fr; }
           .loyaltyPage .searchActions { grid-column: 1 / -1; }
         }
         @media (max-width: 640px) {
           .loyaltyPage { padding: 14px; gap: 12px; }
-          .loyaltyPage .heroCard { display: grid; padding: 18px; border-radius: 18px; }
+          .loyaltyPage .heroCard { min-height: auto; display: grid; padding: 14px; border-radius: 16px; }
           .loyaltyPage .heroActions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
           .loyaltyPage .sectionHead, .loyaltyPage .issueHeroHead, .loyaltyPage .targetCardHead { display: grid; }
           .loyaltyPage .sectionHead .btn, .loyaltyPage .actionRow .btn { width: 100%; }
@@ -1395,18 +1401,22 @@ function AdminLoyaltyInner() {
           .loyaltyPage .summaryCard { min-height: 88px; padding: 14px 14px 14px 18px; }
           .loyaltyPage .summaryCard strong { font-size: 15px; }
           .loyaltyPage .summaryCard p { font-size: 12px; }
-          .loyaltyPage .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-          .loyaltyPage .tabButton { min-height: 54px; padding: 10px 12px; }
+          .loyaltyPage .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+          .loyaltyPage .tabButton { height: 42px; padding: 0 10px; }
           .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .itemGrid, .loyaltyPage .searchPanel, .loyaltyPage .customerRow, .loyaltyPage .targetBasicGrid, .loyaltyPage .targetFilterGrid, .loyaltyPage .targetRow, .loyaltyPage .historySearchPanel, .loyaltyPage .issueSteps, .loyaltyPage .resultStats, .loyaltyPage .templateToolbar, .loyaltyPage .templateRow { grid-template-columns: 1fr; }
+          .loyaltyPage .policyGrid, .loyaltyPage .tierGrid, .loyaltyPage .createTemplateGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .loyaltyPage .createTemplateGrid .field:first-child, .loyaltyPage .historySearchPanel .searchField { grid-column: 1 / -1; }
+          .loyaltyPage .historySearchPanel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .loyaltyPage .issueSteps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
           .loyaltyPage .summaryStrip { display: grid; gap: 6px; padding: 10px; }
           .loyaltyPage .summaryStrip span { border-right: 0; padding-right: 0; }
           .loyaltyPage .panelHead { display: grid; }
           .loyaltyPage .rowActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
           .loyaltyPage .rowActions .btn { width: 100%; }
-          .loyaltyPage .issueStep { min-height: 48px; }
+          .loyaltyPage .issueStep { min-height: 42px; padding: 9px; gap: 7px; }
           .loyaltyPage .targetSearchCard, .loyaltyPage .targetResultsCard, .loyaltyPage .issueResultCard { padding: 14px; border-radius: 16px; }
           .loyaltyPage .modeSwitch { grid-template-columns: 1fr; }
-          .loyaltyPage .targetActions, .loyaltyPage .confirmBox { display: grid; }
+          .loyaltyPage .targetActions, .loyaltyPage .confirmBox, .loyaltyPage .confirmActions { display: grid; }
           .loyaltyPage .confirmCheckRow { max-width: none; }
           .loyaltyPage .searchActions { display: grid; grid-template-columns: 1fr 1fr; }
           .loyaltyPage .historyTableWrap { display: none; }
