@@ -1203,11 +1203,11 @@ function AdminLoyaltyInner() {
       ) : null}
 
       <style jsx global>{`
-        .loyaltyPage { width: min(100% - 32px, 1120px); margin: 0 auto; padding: 18px 0 22px; display: grid; gap: 12px; color: #0f172a; font-size: 14px; }
+        .loyaltyPage { width: min(100% - 32px, 1120px); margin: 0 auto; padding: 18px 0 22px; display: grid; align-content: start; gap: 12px; color: #0f172a; font-size: 14px; }
         html { color-scheme: light; overflow-y: scroll; scrollbar-gutter: stable both-edges; }
         body { background: #eef4fb; color: #0f172a; }
-        .loyaltyPage { min-height: 100dvh; background: transparent; }
-        .loyaltyPage .summaryStrip { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px 12px; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 750; box-shadow: inset 0 1px 0 rgba(255,255,255,.85); }
+        .loyaltyPage { background: transparent; }
+        .loyaltyPage .summaryStrip { align-self: start; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px 12px; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 750; box-shadow: inset 0 1px 0 rgba(255,255,255,.85); }
         .loyaltyPage .summaryStrip span { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; border-right: 1px solid #e2e8f0; padding-right: 10px; }
         .loyaltyPage .summaryStrip span:last-child { border-right: 0; padding-right: 0; }
         .loyaltyPage .summaryStrip b { color: #111827; font-weight: 950; }
@@ -1262,7 +1262,7 @@ function AdminLoyaltyInner() {
         .loyaltyPage .summaryCard span { color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
         .loyaltyPage .summaryCard strong { display: block; font-size: 19px; font-weight: 950; line-height: 1.2; letter-spacing: -0.03em; }
         .loyaltyPage .summaryCard p { color: #64748b; font-size: 13px; font-weight: 750; line-height: 1.35; }
-        .loyaltyPage .tabBar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 46px; gap: 0; border: 1px solid #dbe3ef; border-radius: 14px; overflow: hidden; background: #fff; }
+        .loyaltyPage .tabBar { align-self: start; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 46px; gap: 0; border: 1px solid #dbe3ef; border-radius: 14px; overflow: hidden; background: #fff; }
         .loyaltyPage .tabButton { height: 46px; min-height: 46px; max-height: 46px; border: 0; border-right: 1px solid #e2e8f0; background: #fff; border-radius: 0; padding: 0 12px; text-align: center; cursor: pointer; display: grid; gap: 1px; align-content: center; justify-items: center; color: #0f172a; box-shadow: none; overflow: hidden; }
         .loyaltyPage .tabButton:last-child { border-right: 0; }
         .loyaltyPage .tabButton strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 900; line-height: 1.1; }
