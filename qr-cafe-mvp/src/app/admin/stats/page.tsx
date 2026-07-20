@@ -395,15 +395,21 @@ function AdminStatsPageInner() {
     }
   };
 
+  const fetchStoreMeta = async (sid: string) => {
+    const [storeRes, billingRes] = await Promise.all([
+      supabase.from("stores").select("store_name").eq("store_id", sid).maybeSingle(),
+      supabase.from("store_billing").select("base_plan_status,paid_until").eq("store_id", sid).maybeSingle(),
+    ]);
+    if (!storeRes.error) setStoreName(String(storeRes.data?.store_name || "").trim());
+    if (!billingRes.error) setBilling({ status: String(billingRes.data?.base_plan_status || "inactive"), paidUntil: String(billingRes.data?.paid_until || "").trim() || null });
+  };
+
   const fetchFromDb = async () => {
     if (!storeId) return;
-
     const { start, end } = computedFetchRange;
     if (start > end) return;
-
     setLoading(true);
     setErrMsg("");
-
     try {
       await fetchStoreMeta(storeId);
 
@@ -526,7 +532,6 @@ function AdminStatsPageInner() {
     const start = parseYmd(effectiveStart);
     const end = parseYmd(effectiveEnd);
     if (start > end) return [];
-
     const bucket = new Map<string, Summary>();
     for (const order of nonCanceled) {
       if (!inRange(order.orderDate, effectiveStart, effectiveEnd)) continue;
@@ -550,6 +555,7 @@ function AdminStatsPageInner() {
 
     return rows;
   }, [nonCanceled, effectiveStart, effectiveEnd]);
+  const rangeTotals = useMemo(() => rangeSummaryRows.reduce<Summary>((t, r) => ({ sales: t.sales + r.sales, orders: t.orders + r.orders, qty: t.qty + r.qty, dineIn: t.dineIn + r.dineIn, takeout: t.takeout + r.takeout }), { sales: 0, orders: 0, qty: 0, dineIn: 0, takeout: 0 }), [rangeSummaryRows]);
 
   const rangeTotals = useMemo(
     () =>
