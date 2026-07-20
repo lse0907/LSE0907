@@ -452,11 +452,11 @@ function AdminStatsPageInner() {
             <div className="subscribeBox">
               <p>구독하면 매장 운영에 필요한 상세 분석을 확인할 수 있습니다.</p>
               <ul className="featureList" aria-label="구독 후 제공되는 고급 통계">
-                <li>오늘/어제 매출 비교</li>
-                <li>이번 주/지난주 매출 비교</li>
-                <li>객단가와 주문 유형 분석</li>
-                <li>시간대별 주문 흐름</li>
-                <li>인기 메뉴/매출 TOP 5</li>
+                <li>오늘 vs 어제 매출 변화</li>
+                <li>이번 주 vs 지난주 매출 변화</li>
+                <li>객단가 변화와 포장 비율 변화</li>
+                <li>시간대별 주문 흐름과 피크 시간대</li>
+                <li>매출 TOP 5</li>
               </ul>
               <div className="btnRow">
                 <button className="btn btnPrimary" type="button" onClick={goBilling}>구독 관리</button>
@@ -466,7 +466,7 @@ function AdminStatsPageInner() {
           ) : (
             <div className="advancedGrid">
               <div className="advancedCard">
-                <h3>오늘 비교</h3>
+                <h3>오늘 vs 어제</h3>
                 <div className="compareGrid">
                   <div><span>오늘</span><strong>{formatWon(daily.sales)}</strong></div>
                   <div><span>어제</span><strong>{formatWon(yesterday.sales)}</strong></div>
@@ -476,7 +476,7 @@ function AdminStatsPageInner() {
               </div>
 
               <div className="advancedCard">
-                <h3>주간 비교</h3>
+                <h3>이번 주 vs 지난주</h3>
                 <div className="compareGrid">
                   <div><span>이번 주</span><strong>{formatWon(weekly.sales)}</strong></div>
                   <div><span>지난주</span><strong>{formatWon(lastWeek.sales)}</strong></div>
@@ -486,22 +486,22 @@ function AdminStatsPageInner() {
               </div>
 
               <div className="advancedCard">
-                <h3>객단가 분석</h3>
+                <h3>객단가 변화</h3>
                 <div className="compareGrid">
                   <div><span>오늘</span><strong>{formatWon(avgOrder(daily))}</strong></div>
-                  <div><span>이번 주</span><strong>{formatWon(avgOrder(weekly))}</strong></div>
-                  <div><span>이번 달</span><strong>{formatWon(avgOrder(monthly))}</strong></div>
-                  <div><span>선택 기간</span><strong>{formatWon(avgOrder(rangeTotals))}</strong></div>
+                  <div><span>어제</span><strong>{formatWon(avgOrder(yesterday))}</strong></div>
+                  <div><span>증감</span><strong>{changeLabel(changeAmount(avgOrder(daily), avgOrder(yesterday)))}</strong></div>
+                  <div><span>이번 달 평균</span><strong>{formatWon(avgOrder(monthly))}</strong></div>
                 </div>
               </div>
 
               <div className="advancedCard">
-                <h3>주문 유형</h3>
+                <h3>포장 비율 변화</h3>
                 <div className="compareGrid">
-                  <div><span>매장</span><strong>{monthly.dineIn}건</strong></div>
-                  <div><span>포장</span><strong>{monthly.takeout}건</strong></div>
-                  <div><span>포장 비율</span><strong>{takeoutRate(monthly)}%</strong></div>
-                  <div><span>월 주문</span><strong>{monthly.orders}건</strong></div>
+                  <div><span>오늘</span><strong>{takeoutRate(daily)}%</strong></div>
+                  <div><span>이번 주</span><strong>{takeoutRate(weekly)}%</strong></div>
+                  <div><span>이번 달</span><strong>{takeoutRate(monthly)}%</strong></div>
+                  <div><span>선택 기간</span><strong>{takeoutRate(rangeTotals)}%</strong></div>
                 </div>
               </div>
 
@@ -656,6 +656,7 @@ function AdminStatsPageInner() {
           background: #fff;
           color: inherit;
           cursor: pointer;
+          font-family: inherit;
           font-weight: 900;
           text-decoration: none;
           display: inline-flex;
@@ -672,6 +673,9 @@ function AdminStatsPageInner() {
           min-height: 40px;
           padding: 0 14px;
           border-radius: 12px;
+          font-size: 13px;
+          line-height: 1;
+          white-space: nowrap;
         }
         .quickBtn {
           min-height: 36px;
@@ -1074,13 +1078,25 @@ function AdminStatsPageInner() {
           line-height: 1.45;
         }
         @media (max-width: 900px) {
-          .summaryGrid,
           .twoCol {
             grid-template-columns: 1fr;
           }
           .metricCard { min-height: 0; }
         }
-        @media (max-width: 640px) {
+        @media (min-width: 701px) and (max-width: 900px) {
+          .summaryGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .titleRow {
+            display: grid;
+          }
+          .heroActions {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 700px) {
           .statsPage {
             width: min(100% - 20px, 1120px);
             padding: 10px 0 18px;
@@ -1100,8 +1116,11 @@ function AdminStatsPageInner() {
           .heroDesc { font-size: 13px; }
           .heroActions {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr 1fr;
             width: 100%;
+          }
+          .advancedStatsBtn {
+            grid-column: 1 / -1;
           }
           .btnRow {
             display: grid;
@@ -1116,7 +1135,21 @@ function AdminStatsPageInner() {
             min-width: 0;
           }
           .summaryGrid { gap: 10px; }
-          .salesLine { font-size: 26px; }
+          .metricCard { gap: 6px; }
+          .metricCard::before {
+            top: 14px;
+            bottom: 14px;
+            width: 3px;
+          }
+          .salesLine {
+            font-size: 24px;
+            margin-top: 2px;
+          }
+          .metricLine {
+            margin-top: 0;
+            font-size: 12px;
+          }
+          .metricSub { font-size: 11px; }
           .quickRow {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1157,6 +1190,17 @@ function AdminStatsPageInner() {
           .peakBox strong {
             text-align: left;
           }
+          .topItem,
+          .dayCard {
+            padding: 9px 10px;
+          }
+          .rank {
+            min-width: 26px;
+            height: 26px;
+          }
+        }
+        @media (max-width: 420px) {
+          .heroDesc { display: none; }
         }
       `}</style>
 
@@ -1174,9 +1218,9 @@ function AdminStatsPageInner() {
             </div>
           </div>
           <div className="heroActions">
-            <a className="btn" href={storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin"}>관리자 홈</a>
-            <button className="btn" type="button" onClick={() => setAdvancedOpen(true)}>{isPaidSubscriber ? "고급 통계" : "고급 통계 미리보기"}</button>
-            <button className="btn" type="button" onClick={fetchFromDb} disabled={loading}>{loading ? "새로고침 중" : "새로고침"}</button>
+            <a className="btn homeBtn" href={storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin"}>관리자 홈</a>
+            <button className="btn refreshBtn" type="button" onClick={fetchFromDb} disabled={loading}>{loading ? "새로고침 중" : "새로고침"}</button>
+            <button className="btn advancedStatsBtn" type="button" onClick={() => setAdvancedOpen(true)}>{isPaidSubscriber ? "고급 통계" : "고급 통계 미리보기"}</button>
           </div>
         </div>
         {errMsg ? <div className="err">오류: {errMsg}</div> : null}
@@ -1215,7 +1259,7 @@ function AdminStatsPageInner() {
       <section className="twoCol">
         <div className="card">
           <div className="sectionHead">
-            <h2 className="cardTitle">인기 메뉴 TOP 5</h2>
+            <h2 className="cardTitle">판매수량 TOP 5</h2>
             {!isPaidSubscriber ? <span className="lockBadge">일부 공개</span> : null}
           </div>
           {top5.length === 0 ? (
