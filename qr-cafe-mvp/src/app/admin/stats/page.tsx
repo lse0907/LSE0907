@@ -523,7 +523,8 @@ function AdminStatsPageInner() {
   return (
     <main className="statsPage">
       <style jsx global>{`:root{--bg:#f6f7f9;--card:#fff;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--brand:#111827;--radius:16px}body{background:var(--bg);color:var(--text)}`}</style>
-      <style jsx>{`
+      {/* These styles must be global because metric cards and the advanced modal are returned from helper render functions. */}
+      <style jsx global>{`
         .statsPage {
           width: min(100% - 32px, 1120px);
           margin: 0 auto;
