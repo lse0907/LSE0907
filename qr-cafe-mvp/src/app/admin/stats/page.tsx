@@ -32,7 +32,7 @@ type OrderRecord = {
 type Summary = { sales: number; orders: number; qty: number; dineIn: number; takeout: number };
 type BillingState = { status: string; paidUntil: string | null };
 type TopMenu = { id: string; name: string; qty: number; sales: number };
-type TimeBucket = { key: string; label: string; count: number };
+type TimeBucket = { key: string; label: string; range: string; count: number };
 
 const emptySummary: Summary = { sales: 0, orders: 0, qty: 0, dineIn: 0, takeout: 0 };
 
@@ -288,11 +288,11 @@ function AdminStatsPageInner() {
 
   const timeBuckets = useMemo<TimeBucket[]>(() => {
     const base = [
-      { key: "morning", label: "오전", count: 0 },
-      { key: "lunch", label: "점심", count: 0 },
-      { key: "afternoon", label: "오후", count: 0 },
-      { key: "evening", label: "저녁", count: 0 },
-      { key: "night", label: "심야", count: 0 },
+      { key: "morning", label: "오전", range: "06-11시", count: 0 },
+      { key: "lunch", label: "점심", range: "11-14시", count: 0 },
+      { key: "afternoon", label: "오후", range: "14-18시", count: 0 },
+      { key: "evening", label: "저녁", range: "18-22시", count: 0 },
+      { key: "night", label: "심야", range: "22-06시", count: 0 },
     ];
     const byKey = new Map(base.map((b) => [b.key, b]));
     for (const o of weeklyOrders) {
@@ -410,6 +410,10 @@ function AdminStatsPageInner() {
   const todayDiff = changeAmount(daily.sales, yesterday.sales);
   const weekDiff = changeAmount(weekly.sales, lastWeek.sales);
   const maxBucketCount = Math.max(1, ...timeBuckets.map((b) => b.count));
+  const peakBucket = useMemo(() => {
+    const ranked = [...timeBuckets].sort((a, b) => b.count - a.count);
+    return ranked[0]?.count > 0 ? ranked[0] : null;
+  }, [timeBuckets]);
 
   const renderMetricCard = (title: string, period: string, summary: Summary, locked = false) => (
     <div className={`card metricCard ${locked ? "locked" : ""}`}>
@@ -446,11 +450,13 @@ function AdminStatsPageInner() {
           </div>
           {!isPaidSubscriber ? (
             <div className="subscribeBox">
-              <p>구독 후 고급 통계를 확인할 수 있습니다.</p>
-              <ul className="featureList">
+              <p>구독하면 매장 운영에 필요한 상세 분석을 확인할 수 있습니다.</p>
+              <ul className="featureList" aria-label="구독 후 제공되는 고급 통계">
                 <li>오늘/어제 매출 비교</li>
                 <li>이번 주/지난주 매출 비교</li>
-                <li>시간대별 주문 흐름과 매출 TOP 5</li>
+                <li>객단가와 주문 유형 분석</li>
+                <li>시간대별 주문 흐름</li>
+                <li>인기 메뉴/매출 TOP 5</li>
               </ul>
               <div className="btnRow">
                 <button className="btn btnPrimary" type="button" onClick={goBilling}>구독 관리</button>
@@ -479,12 +485,43 @@ function AdminStatsPageInner() {
                 </div>
               </div>
 
+              <div className="advancedCard">
+                <h3>객단가 분석</h3>
+                <div className="compareGrid">
+                  <div><span>오늘</span><strong>{formatWon(avgOrder(daily))}</strong></div>
+                  <div><span>이번 주</span><strong>{formatWon(avgOrder(weekly))}</strong></div>
+                  <div><span>이번 달</span><strong>{formatWon(avgOrder(monthly))}</strong></div>
+                  <div><span>선택 기간</span><strong>{formatWon(avgOrder(rangeTotals))}</strong></div>
+                </div>
+              </div>
+
+              <div className="advancedCard">
+                <h3>주문 유형</h3>
+                <div className="compareGrid">
+                  <div><span>매장</span><strong>{monthly.dineIn}건</strong></div>
+                  <div><span>포장</span><strong>{monthly.takeout}건</strong></div>
+                  <div><span>포장 비율</span><strong>{takeoutRate(monthly)}%</strong></div>
+                  <div><span>월 주문</span><strong>{monthly.orders}건</strong></div>
+                </div>
+              </div>
+
               <div className="advancedCard wide">
                 <h3>시간대별 주문</h3>
+                {peakBucket ? (
+                  <div className="peakBox">
+                    <span>피크 시간대</span>
+                    <strong>{peakBucket.label} {peakBucket.range} · {peakBucket.count}건</strong>
+                  </div>
+                ) : (
+                  <div className="peakBox mutedPeak">
+                    <span>피크 시간대</span>
+                    <strong>이번 주 주문 데이터가 아직 없습니다.</strong>
+                  </div>
+                )}
                 <div className="barList">
                   {timeBuckets.map((bucket) => (
                     <div key={bucket.key} className="barRow">
-                      <span>{bucket.label}</span>
+                      <span>{bucket.label} {bucket.range}</span>
                       <div className="barTrack"><div className="barFill" style={{ width: `${Math.max(5, (bucket.count / maxBucketCount) * 100)}%` }} /></div>
                       <strong>{bucket.count}건</strong>
                     </div>
@@ -582,6 +619,7 @@ function AdminStatsPageInner() {
         }
         .metaRow,
         .btnRow,
+        .heroActions,
         .quickRow {
           display: flex;
           gap: 8px;
@@ -641,6 +679,7 @@ function AdminStatsPageInner() {
           border-radius: 999px;
           font-size: 13px;
         }
+        .heroActions .btn { min-width: 104px; }
         .btnPrimary {
           background: var(--brand);
           border-color: var(--brand);
@@ -668,6 +707,10 @@ function AdminStatsPageInner() {
           align-items: center;
           background: #fffbeb;
           border-color: #fde68a;
+        }
+        .notice .btnPrimary {
+          flex: 0 0 auto;
+          min-width: 128px;
         }
         .noticeText {
           margin: 0;
@@ -972,9 +1015,35 @@ function AdminStatsPageInner() {
           margin-top: 5px;
           font-size: 15px;
         }
+        .peakBox {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          align-items: center;
+          border: 1px solid #bfdbfe;
+          border-radius: 14px;
+          background: #eff6ff;
+          color: #1d4ed8;
+          padding: 10px 12px;
+          margin-bottom: 10px;
+        }
+        .peakBox span {
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .peakBox strong {
+          font-size: 14px;
+          font-weight: 950;
+          text-align: right;
+        }
+        .mutedPeak {
+          border-color: var(--line);
+          background: #f8fafc;
+          color: var(--muted);
+        }
         .barRow {
           display: grid;
-          grid-template-columns: 46px minmax(0, 1fr) 50px;
+          grid-template-columns: 92px minmax(0, 1fr) 50px;
           gap: 8px;
           align-items: center;
           font-size: 13px;
@@ -1029,17 +1098,22 @@ function AdminStatsPageInner() {
           }
           .h1 { font-size: 24px; }
           .heroDesc { font-size: 13px; }
+          .heroActions {
+            display: grid;
+            grid-template-columns: 1fr;
+            width: 100%;
+          }
           .btnRow {
             display: grid;
             grid-template-columns: 1fr 1fr;
             width: 100%;
           }
-          .btnRow .btn:last-child:nth-child(3) {
-            grid-column: 1 / -1;
-          }
           .btn,
           .quickBtn {
             width: 100%;
+          }
+          .notice .btnPrimary {
+            min-width: 0;
           }
           .summaryGrid { gap: 10px; }
           .salesLine { font-size: 26px; }
@@ -1074,7 +1148,14 @@ function AdminStatsPageInner() {
             grid-template-columns: 1fr;
           }
           .barRow {
-            grid-template-columns: 42px minmax(0, 1fr) 44px;
+            grid-template-columns: 82px minmax(0, 1fr) 44px;
+          }
+          .peakBox {
+            display: grid;
+            gap: 4px;
+          }
+          .peakBox strong {
+            text-align: left;
           }
         }
       `}</style>
@@ -1092,9 +1173,9 @@ function AdminStatsPageInner() {
               <span className="pill">{modeLabel}</span>
             </div>
           </div>
-          <div className="btnRow">
+          <div className="heroActions">
             <a className="btn" href={storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin"}>관리자 홈</a>
-            <button className="btn" type="button" onClick={() => setAdvancedOpen(true)}>고급 통계</button>
+            <button className="btn" type="button" onClick={() => setAdvancedOpen(true)}>{isPaidSubscriber ? "고급 통계" : "고급 통계 미리보기"}</button>
             <button className="btn" type="button" onClick={fetchFromDb} disabled={loading}>{loading ? "새로고침 중" : "새로고침"}</button>
           </div>
         </div>
