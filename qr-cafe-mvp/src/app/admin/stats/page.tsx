@@ -32,7 +32,7 @@ type OrderRecord = {
 type Summary = { sales: number; orders: number; qty: number; dineIn: number; takeout: number };
 type BillingState = { status: string; paidUntil: string | null };
 type TopMenu = { id: string; name: string; qty: number; sales: number };
-type TimeBucket = { key: string; label: string; count: number };
+type TimeBucket = { key: string; label: string; range: string; count: number };
 
 const emptySummary: Summary = { sales: 0, orders: 0, qty: 0, dineIn: 0, takeout: 0 };
 
@@ -66,6 +66,17 @@ function takeoutRate(summary: Summary) { return summary.orders > 0 ? Math.round(
 function inRange(orderDate: string, startYmd: string, endYmd: string) { return Boolean(orderDate) && orderDate >= startYmd && orderDate <= endYmd; }
 function downloadTextFile(filename: string, content: string, mime: string) { const blob = new Blob([content], { type: mime }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
 function csvEscape(v: string) { return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
+function csvCellText(v: unknown) { return String(v ?? "").replace(/\r?\n/g, " ").replace(/\s+/g, " ").trim(); }
+function csvCell(v: unknown) { return csvEscape(csvCellText(v)); }
+function statusLabel(status: OrderStatus) {
+  if (status === "checked") return "확인";
+  if (status === "making") return "제조중";
+  if (status === "ready_for_packing") return "포장준비";
+  if (status === "completed") return "완료";
+  if (status === "cancelled") return "취소";
+  return "신규";
+}
+function orderModeLabel(mode: OrderMode) { return mode === "takeout" ? "포장" : "매장식사"; }
 function normalizeStatus(v: unknown): OrderStatus { const s = String(v || "").trim(); if (s === "checked" || s === "making" || s === "ready_for_packing" || s === "completed" || s === "cancelled") return s; if (s === "ready") return "ready_for_packing"; if (s === "done") return "completed"; if (s === "canceled") return "cancelled"; return "new"; }
 function normalizeMode(v: unknown): OrderMode { return v === "takeout" ? "takeout" : "dine-in"; }
 function toInt(v: unknown, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? Math.floor(n) : fallback; }
@@ -277,11 +288,11 @@ function AdminStatsPageInner() {
 
   const timeBuckets = useMemo<TimeBucket[]>(() => {
     const base = [
-      { key: "morning", label: "오전", count: 0 },
-      { key: "lunch", label: "점심", count: 0 },
-      { key: "afternoon", label: "오후", count: 0 },
-      { key: "evening", label: "저녁", count: 0 },
-      { key: "night", label: "심야", count: 0 },
+      { key: "morning", label: "오전", range: "06-11시", count: 0 },
+      { key: "lunch", label: "점심", range: "11-14시", count: 0 },
+      { key: "afternoon", label: "오후", range: "14-18시", count: 0 },
+      { key: "evening", label: "저녁", range: "18-22시", count: 0 },
+      { key: "night", label: "심야", range: "22-06시", count: 0 },
     ];
     const byKey = new Map(base.map((b) => [b.key, b]));
     for (const o of weeklyOrders) {
@@ -356,30 +367,35 @@ function AdminStatsPageInner() {
     const list = nonCanceled.filter((o) => inRange(o.orderDate, effectiveStart, effectiveEnd)).sort((a, b) => a.createdAt - b.createdAt);
     if (list.length === 0) { setRangeMsg("선택한 기간에 주문이 없습니다."); return; }
     setRangeMsg("");
-    const rows = [["orderDate", "time", "displayNo", "mode", "table", "status", "buzzerNo", "requestNote", "itemName", "qty", "unitPrice", "lineTotal", "orderTotal", "internalId", "storeId"].join(",")];
+    const header = ["주문일자", "주문시간", "주문번호", "상품순번", "주문유형", "테이블", "진동벨", "주문상태", "요청사항", "메뉴명", "수량", "단가", "상품합계", "주문합계", "주문ID", "매장ID"];
+    const rows = [header.map(csvCell).join(",")];
     for (const o of list) {
-      const orderItems = o.items?.length ? o.items : [{ id: "", name: "", price: 0, qty: 0 }];
-      for (const it of orderItems) {
+      const orderItems = o.items?.length ? o.items : [{ id: "", name: "상품 정보 없음", price: 0, qty: 0 }];
+      orderItems.forEach((it, idx) => {
+        const qty = Number(it.qty || 0);
+        const price = Number(it.price || 0);
         rows.push([
           o.orderDate,
           formatTime(o.createdAt),
           o.displayNo,
-          o.mode === "dine-in" ? "매장" : "포장",
+          idx + 1,
+          orderModeLabel(o.mode),
           o.table ?? "",
-          o.status,
           o.buzzerNo ?? "",
+          statusLabel(o.status),
           o.requestNote ?? "",
-          it.name,
-          it.qty ? String(it.qty) : "",
-          it.price ? String(it.price) : "",
-          it.price && it.qty ? String(it.price * it.qty) : "",
-          String(o.totalPrice),
+          it.name || "상품 정보 없음",
+          qty || "",
+          price || "",
+          qty && price ? qty * price : "",
+          o.totalPrice,
           o.id,
           String(o.storeId || o.store_id || storeId),
-        ].map((x) => csvEscape(String(x))).join(","));
-      }
+        ].map(csvCell).join(","));
+      });
     }
-    downloadTextFile(`qr-cafe-sales-detail_${storeId}_${effectiveStart}_to_${effectiveEnd}.csv`, rows.join("\n"), "text/csv;charset=utf-8");
+    const csvContent = `\uFEFF${rows.join("\n")}`;
+    downloadTextFile(`sales-detail-items_${storeId}_${effectiveStart}_to_${effectiveEnd}.csv`, csvContent, "text/csv;charset=utf-8");
   };
 
   const previewCount = 3;
@@ -394,15 +410,19 @@ function AdminStatsPageInner() {
   const todayDiff = changeAmount(daily.sales, yesterday.sales);
   const weekDiff = changeAmount(weekly.sales, lastWeek.sales);
   const maxBucketCount = Math.max(1, ...timeBuckets.map((b) => b.count));
+  const peakBucket = useMemo(() => {
+    const ranked = [...timeBuckets].sort((a, b) => b.count - a.count);
+    return ranked[0]?.count > 0 ? ranked[0] : null;
+  }, [timeBuckets]);
 
   const renderMetricCard = (title: string, period: string, summary: Summary, locked = false) => (
     <div className={`card metricCard ${locked ? "locked" : ""}`}>
       <div className="cardHead">
         <div>
           <h2 className="cardTitle">{title}</h2>
-          <div className="cardPeriod">{period}</div>
+          <div className="cardPeriod desktopMetricOnly">{period}</div>
         </div>
-        {locked ? <span className="lockBadge">유료 전용</span> : <span className="miniBadge">포장 {takeoutRate(summary)}%</span>}
+        {locked ? <span className="lockBadge desktopMetricOnly">유료 전용</span> : <span className="miniBadge desktopMetricOnly">포장 {takeoutRate(summary)}%</span>}
       </div>
       {locked ? (
         <div className="lockBox">
@@ -412,8 +432,8 @@ function AdminStatsPageInner() {
       ) : (
         <>
           <div className="salesLine">{formatWonCompact(summary.sales)}</div>
-          <div className="metricLine">주문 {summary.orders}건 · 수량 {summary.qty}개</div>
-          <div className="metricSub">객단가 {formatWon(avgOrder(summary))} · 매장 {summary.dineIn} / 포장 {summary.takeout}</div>
+          <div className="metricLine"><span>주문 {summary.orders}건</span><span>판매 {summary.qty}개</span></div>
+          <div className="metricSub desktopMetricOnly">객단가 {formatWon(avgOrder(summary))} · 매장 {summary.dineIn} / 포장 {summary.takeout}</div>
         </>
       )}
     </div>
@@ -430,7 +450,14 @@ function AdminStatsPageInner() {
           </div>
           {!isPaidSubscriber ? (
             <div className="subscribeBox">
-              <p>구독 후 확인할 수 있습니다.</p>
+              <p>구독하면 매장 운영에 필요한 상세 분석을 확인할 수 있습니다.</p>
+              <ul className="featureList" aria-label="구독 후 제공되는 고급 통계">
+                <li>오늘 vs 어제 매출 변화</li>
+                <li>이번 주 vs 지난주 매출 변화</li>
+                <li>객단가 변화와 포장 비율 변화</li>
+                <li>시간대별 주문 흐름과 피크 시간대</li>
+                <li>매출 TOP 5</li>
+              </ul>
               <div className="btnRow">
                 <button className="btn btnPrimary" type="button" onClick={goBilling}>구독 관리</button>
                 <button className="btn" type="button" onClick={() => setAdvancedOpen(false)}>닫기</button>
@@ -439,7 +466,7 @@ function AdminStatsPageInner() {
           ) : (
             <div className="advancedGrid">
               <div className="advancedCard">
-                <h3>오늘 비교</h3>
+                <h3>오늘 vs 어제</h3>
                 <div className="compareGrid">
                   <div><span>오늘</span><strong>{formatWon(daily.sales)}</strong></div>
                   <div><span>어제</span><strong>{formatWon(yesterday.sales)}</strong></div>
@@ -449,7 +476,7 @@ function AdminStatsPageInner() {
               </div>
 
               <div className="advancedCard">
-                <h3>주간 비교</h3>
+                <h3>이번 주 vs 지난주</h3>
                 <div className="compareGrid">
                   <div><span>이번 주</span><strong>{formatWon(weekly.sales)}</strong></div>
                   <div><span>지난주</span><strong>{formatWon(lastWeek.sales)}</strong></div>
@@ -458,12 +485,43 @@ function AdminStatsPageInner() {
                 </div>
               </div>
 
+              <div className="advancedCard">
+                <h3>객단가 변화</h3>
+                <div className="compareGrid">
+                  <div><span>오늘</span><strong>{formatWon(avgOrder(daily))}</strong></div>
+                  <div><span>어제</span><strong>{formatWon(avgOrder(yesterday))}</strong></div>
+                  <div><span>증감</span><strong>{changeLabel(changeAmount(avgOrder(daily), avgOrder(yesterday)))}</strong></div>
+                  <div><span>이번 달 평균</span><strong>{formatWon(avgOrder(monthly))}</strong></div>
+                </div>
+              </div>
+
+              <div className="advancedCard">
+                <h3>포장 비율 변화</h3>
+                <div className="compareGrid">
+                  <div><span>오늘</span><strong>{takeoutRate(daily)}%</strong></div>
+                  <div><span>이번 주</span><strong>{takeoutRate(weekly)}%</strong></div>
+                  <div><span>이번 달</span><strong>{takeoutRate(monthly)}%</strong></div>
+                  <div><span>선택 기간</span><strong>{takeoutRate(rangeTotals)}%</strong></div>
+                </div>
+              </div>
+
               <div className="advancedCard wide">
                 <h3>시간대별 주문</h3>
+                {peakBucket ? (
+                  <div className="peakBox">
+                    <span>피크 시간대</span>
+                    <strong>{peakBucket.label} {peakBucket.range} · {peakBucket.count}건</strong>
+                  </div>
+                ) : (
+                  <div className="peakBox mutedPeak">
+                    <span>피크 시간대</span>
+                    <strong>이번 주 주문 데이터가 아직 없습니다.</strong>
+                  </div>
+                )}
                 <div className="barList">
                   {timeBuckets.map((bucket) => (
                     <div key={bucket.key} className="barRow">
-                      <span>{bucket.label}</span>
+                      <span>{bucket.label} {bucket.range}</span>
                       <div className="barTrack"><div className="barFill" style={{ width: `${Math.max(5, (bucket.count / maxBucketCount) * 100)}%` }} /></div>
                       <strong>{bucket.count}건</strong>
                     </div>
@@ -500,27 +558,689 @@ function AdminStatsPageInner() {
   };
 
   return (
-    <main className="wrap">
+    <main className="statsPage">
       <style jsx global>{`:root{--bg:#f6f7f9;--card:#fff;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--brand:#111827;--radius:16px}body{background:var(--bg);color:var(--text)}`}</style>
-      <style jsx>{`
-        .wrap{max-width:1100px;margin:0 auto;padding:14px;display:grid;gap:10px}.topbar{display:grid;gap:8px}.titleRow{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}.h1{margin:0;font-size:28px;font-weight:950;letter-spacing:-.02em}.metaRow,.btnRow,.quickRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.pill,.miniBadge,.lockBadge{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 9px;color:var(--muted);font-size:12px;font-weight:900;white-space:nowrap}.lockBadge{background:#fff7ed;border-color:#fed7aa;color:#9a3412}.btn,.quickBtn,.linkBtn,.closeBtn{border:1px solid var(--line);background:#fff;border-radius:12px;cursor:pointer;font-weight:900}.btn:disabled,.quickBtn:disabled{cursor:not-allowed;opacity:.55}.btn{padding:10px 13px;text-decoration:none;color:inherit}.quickBtn{padding:8px 10px;font-size:13px}.btnPrimary{background:var(--brand);border-color:var(--brand);color:#fff}.linkBtn{padding:7px 9px;font-size:12px}.closeBtn{width:36px;height:36px;font-size:22px;line-height:1}.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;box-shadow:0 1px 0 rgba(0,0,0,.03)}.notice{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fffbeb;border-color:#fde68a}.noticeText{margin:0;color:#92400e;font-size:13px;font-weight:850;line-height:1.35}.summaryGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.cardHead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.cardTitle{margin:0;font-size:16px;font-weight:950;line-height:1.15}.cardPeriod{margin-top:5px;color:var(--muted);font-size:12px;font-weight:850;line-height:1.15}.salesLine{margin-top:9px;font-size:27px;font-weight:950;letter-spacing:-.02em;line-height:1.05;white-space:nowrap}.metricLine{margin-top:8px;font-size:13px;font-weight:950}.metricSub{margin-top:4px;color:var(--muted);font-size:12px;font-weight:850;line-height:1.25}.locked{background:linear-gradient(180deg,#fff,#fafafa)}.lockBox{margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted)}.twoCol{display:grid;grid-template-columns:1.1fr .9fr;gap:10px}.topList,.mobileRows{margin-top:8px;display:grid;gap:6px}.topItem,.dayCard{border:1px solid var(--line);border-radius:14px;padding:8px 10px;background:#fff;display:flex;justify-content:space-between;align-items:center;gap:10px}.rank{min-width:26px;height:26px;border-radius:999px;display:inline-grid;place-items:center;background:#111827;color:#fff;font-size:12px;font-weight:950}.topMain{display:flex;gap:8px;align-items:center;min-width:0}.topName{font-weight:950;line-height:1.2;overflow:hidden;text-overflow:ellipsis}.topSub,.daySub{margin-top:2px;color:var(--muted);font-size:12px;font-weight:850;line-height:1.15}.topMeta,.daySales{color:var(--muted);font-size:13px;font-weight:900;text-align:right;white-space:nowrap}.rangeRow{margin-top:8px;display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}.field{display:grid;gap:5px}.label{font-size:12px;color:var(--muted);font-weight:900}.input{width:100%;padding:10px 11px;border-radius:12px;border:1px solid var(--line);background:#fff;font-weight:850}.totals{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.totalBox{border:1px solid var(--line);border-radius:14px;padding:9px;background:#fff}.totalLabel{color:var(--muted);font-size:12px;font-weight:900}.totalValue{margin-top:3px;font-size:14px;font-weight:950}.sectionHead{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}.tableWrap{margin-top:8px;overflow:auto;border-radius:14px;border:1px solid var(--line);background:#fff}table{width:100%;border-collapse:collapse;min-width:720px}th,td{padding:11px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}th{color:var(--muted);font-size:13px;font-weight:950;background:#fafafa}.tfoot{background:#f9fafb;font-weight:950}.muted{color:var(--muted)}.err,.rangeMsg{color:#b91c1c;font-weight:900;font-size:13px}.rangeMsg{margin-top:8px}.mobileRows{display:none}.modalBackdrop{position:fixed;inset:0;z-index:50;background:rgba(17,24,39,.42);display:grid;place-items:center;padding:16px}.modalPanel{width:min(760px,100%);max-height:min(760px,calc(100vh - 32px));overflow:auto;background:#fff;border-radius:22px;border:1px solid var(--line);padding:14px;box-shadow:0 24px 60px rgba(0,0,0,.22)}.modalHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}.advancedGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.advancedCard{border:1px solid var(--line);border-radius:16px;padding:12px;background:#fff}.advancedCard.wide{grid-column:1/-1}.advancedCard h3{margin:0 0 10px;font-size:14px;font-weight:950}.compareGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.compareGrid div{border:1px solid var(--line);border-radius:14px;padding:9px}.compareGrid span{display:block;color:var(--muted);font-size:12px;font-weight:900}.compareGrid strong{display:block;margin-top:4px;font-size:15px}.barList{display:grid;gap:8px}.barRow{display:grid;grid-template-columns:42px 1fr 46px;gap:8px;align-items:center;font-size:13px;font-weight:900}.barTrack{height:10px;border-radius:999px;background:#f3f4f6;overflow:hidden}.barFill{height:100%;border-radius:999px;background:#111827}.subscribeBox{display:grid;gap:12px}.subscribeBox p{margin:0;color:var(--muted);font-weight:900}@media(max-width:900px){.summaryGrid,.twoCol{grid-template-columns:1fr}}@media(max-width:640px){.wrap{padding:10px;gap:8px}.h1{font-size:23px}.card{padding:10px}.summaryGrid{gap:8px}.salesLine{font-size:24px}.btn{padding:9px 11px}.notice{align-items:flex-start}.rangeRow{grid-template-columns:1fr 1fr}.rangeRow .btnPrimary{grid-column:1/-1}.totals{grid-template-columns:1fr 1fr;gap:6px}.tableWrap{display:none}.mobileRows{display:grid}.modalBackdrop{align-items:end;padding:0}.modalPanel{width:100%;max-height:88vh;border-radius:22px 22px 0 0;padding:12px}.advancedGrid,.compareGrid{grid-template-columns:1fr}.barRow{grid-template-columns:38px 1fr 42px}.topItem,.dayCard{padding:8px}}
+      {/* These styles must be global because metric cards and the advanced modal are returned from helper render functions. */}
+      <style jsx global>{`
+        .statsPage {
+          width: min(100% - 32px, 1120px);
+          margin: 0 auto;
+          padding: 18px 0 24px;
+          display: grid;
+          gap: 14px;
+          color: var(--text);
+        }
+        .heroCard,
+        .card {
+          background: var(--card);
+          border: 1px solid #dbe3ef;
+          border-radius: 20px;
+          box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+        }
+        .heroCard {
+          padding: 18px;
+          display: grid;
+          gap: 10px;
+          background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        }
+        .titleRow,
+        .cardHead,
+        .sectionHead,
+        .notice,
+        .lockBox,
+        .modalHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .titleRow,
+        .sectionHead { flex-wrap: wrap; }
+        .eyebrow {
+          margin: 0 0 6px;
+          color: #2563eb;
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: 0.04em;
+        }
+        .h1 {
+          margin: 0;
+          font-size: 28px;
+          font-weight: 950;
+          letter-spacing: -0.04em;
+          line-height: 1.12;
+        }
+        .heroDesc {
+          margin: 7px 0 0;
+          color: var(--muted);
+          font-size: 14px;
+          font-weight: 750;
+          line-height: 1.45;
+        }
+        .metaRow,
+        .btnRow,
+        .heroActions,
+        .quickRow {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .metaRow { margin-top: 10px; }
+        .pill,
+        .miniBadge,
+        .lockBadge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 28px;
+          border: 1px solid var(--line);
+          background: #fff;
+          border-radius: 999px;
+          padding: 5px 10px;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+        .miniBadge { background: #f8fafc; }
+        .lockBadge {
+          background: #fff7ed;
+          border-color: #fed7aa;
+          color: #9a3412;
+        }
+        .btn,
+        .quickBtn,
+        .linkBtn,
+        .closeBtn {
+          border: 1px solid #cbd5e1;
+          background: #fff;
+          color: inherit;
+          cursor: pointer;
+          font-family: inherit;
+          font-weight: 900;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .btn:disabled,
+        .quickBtn:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+        .btn {
+          min-height: 40px;
+          padding: 0 14px;
+          border-radius: 12px;
+          font-size: 13px;
+          line-height: 1;
+          white-space: nowrap;
+        }
+        .quickBtn {
+          min-height: 36px;
+          padding: 0 12px;
+          border-radius: 999px;
+          font-size: 13px;
+        }
+        .heroActions .btn { min-width: 104px; }
+        .btnPrimary {
+          background: var(--brand);
+          border-color: var(--brand);
+          color: #fff;
+        }
+        .linkBtn {
+          min-height: 34px;
+          padding: 0 10px;
+          border-radius: 10px;
+          font-size: 12px;
+        }
+        .closeBtn {
+          width: 38px;
+          height: 38px;
+          border-radius: 12px;
+          font-size: 24px;
+          line-height: 1;
+        }
+        .card {
+          padding: 16px;
+          display: grid;
+          gap: 10px;
+        }
+        .notice {
+          align-items: center;
+          background: #fffbeb;
+          border-color: #fde68a;
+        }
+        .notice .btnPrimary {
+          flex: 0 0 auto;
+          min-width: 128px;
+        }
+        .noticeText {
+          margin: 0;
+          color: #92400e;
+          font-size: 13px;
+          font-weight: 850;
+          line-height: 1.4;
+        }
+        .summaryGrid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .metricCard {
+          position: relative;
+          min-height: 154px;
+          overflow: hidden;
+        }
+        .metricCard::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 18px;
+          bottom: 18px;
+          width: 4px;
+          border-radius: 999px;
+          background: #111827;
+        }
+        .cardTitle {
+          margin: 0;
+          font-size: 17px;
+          font-weight: 950;
+          line-height: 1.2;
+          letter-spacing: -0.02em;
+        }
+        .cardPeriod {
+          margin-top: 5px;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.2;
+        }
+        .salesLine {
+          margin-top: 4px;
+          font-size: 30px;
+          font-weight: 950;
+          letter-spacing: -0.04em;
+          line-height: 1.05;
+          white-space: nowrap;
+        }
+        .metricLine {
+          margin-top: 2px;
+          font-size: 13px;
+          font-weight: 950;
+          display: flex;
+          gap: 4px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+        .metricLine span + span::before {
+          content: "·";
+          margin-right: 4px;
+        }
+        .metricSub {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.35;
+        }
+        .locked {
+          background: linear-gradient(180deg, #fff, #fafafa);
+        }
+        .lockBox {
+          align-items: center;
+          color: var(--muted);
+          border: 1px dashed #cbd5e1;
+          border-radius: 14px;
+          padding: 10px;
+          background: #f8fafc;
+        }
+        .twoCol {
+          display: grid;
+          grid-template-columns: 1.08fr 0.92fr;
+          gap: 12px;
+        }
+        .topList,
+        .mobileRows,
+        .barList,
+        .subscribeBox,
+        .featureList {
+          display: grid;
+          gap: 8px;
+        }
+        .topItem,
+        .dayCard {
+          border: 1px solid var(--line);
+          border-radius: 15px;
+          padding: 11px 12px;
+          background: #fff;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+        }
+        .rank {
+          min-width: 28px;
+          height: 28px;
+          border-radius: 999px;
+          display: inline-grid;
+          place-items: center;
+          background: #111827;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 950;
+        }
+        .topMain {
+          display: flex;
+          gap: 9px;
+          align-items: center;
+          min-width: 0;
+        }
+        .topName {
+          font-weight: 950;
+          line-height: 1.2;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .topSub,
+        .daySub {
+          margin-top: 3px;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.25;
+        }
+        .topMeta,
+        .daySales {
+          color: #334155;
+          font-size: 13px;
+          font-weight: 950;
+          text-align: right;
+          white-space: nowrap;
+        }
+        .rangeRow {
+          display: grid;
+          grid-template-columns: 1fr 1fr auto;
+          gap: 8px;
+          align-items: end;
+        }
+        .field {
+          display: grid;
+          gap: 6px;
+        }
+        .label {
+          font-size: 12px;
+          color: var(--muted);
+          font-weight: 900;
+        }
+        .input {
+          width: 100%;
+          min-height: 42px;
+          padding: 0 12px;
+          border-radius: 12px;
+          border: 1px solid #cbd5e1;
+          background: #fff;
+          font-weight: 850;
+        }
+        .totals {
+          border-top: 1px solid var(--line);
+          padding-top: 10px;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .totalBox {
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 10px;
+          background: #f8fafc;
+        }
+        .totalLabel {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .totalValue {
+          margin-top: 3px;
+          font-size: 15px;
+          font-weight: 950;
+        }
+        .tableWrap {
+          overflow: auto;
+          border-radius: 16px;
+          border: 1px solid var(--line);
+          background: #fff;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 720px;
+        }
+        th,
+        td {
+          padding: 12px;
+          border-bottom: 1px solid var(--line);
+          text-align: left;
+          font-size: 14px;
+        }
+        th {
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 950;
+          background: #f8fafc;
+        }
+        .tfoot {
+          background: #f9fafb;
+          font-weight: 950;
+        }
+        .desktopMetricOnly { display: revert; }
+        .muted { color: var(--muted); }
+        .err,
+        .rangeMsg {
+          color: #b91c1c;
+          font-weight: 900;
+          font-size: 13px;
+        }
+        .emptyBox {
+          border: 1px dashed #cbd5e1;
+          border-radius: 16px;
+          padding: 16px;
+          background: #f8fafc;
+          color: #475569;
+        }
+        .emptyBox strong {
+          display: block;
+          color: #111827;
+          font-size: 15px;
+          font-weight: 950;
+        }
+        .emptyBox p {
+          margin: 6px 0 0;
+          font-size: 13px;
+          font-weight: 750;
+          line-height: 1.45;
+        }
+        .emptyError {
+          border-color: #fecaca;
+          background: #fef2f2;
+        }
+        .mobileRows { display: none; }
+        .modalBackdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 50;
+          background: rgba(15, 23, 42, 0.48);
+          display: grid;
+          place-items: center;
+          padding: 18px;
+        }
+        .modalPanel {
+          width: min(780px, 100%);
+          max-height: min(780px, calc(100vh - 36px));
+          overflow: auto;
+          background: #fff;
+          border-radius: 24px;
+          border: 1px solid #dbe3ef;
+          padding: 18px;
+          box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
+        }
+        .modalHead {
+          align-items: center;
+          margin-bottom: 12px;
+        }
+        .advancedGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .advancedCard {
+          border: 1px solid var(--line);
+          border-radius: 18px;
+          padding: 14px;
+          background: #fff;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+        }
+        .advancedCard.wide { grid-column: 1 / -1; }
+        .advancedCard h3 {
+          margin: 0 0 11px;
+          font-size: 15px;
+          font-weight: 950;
+        }
+        .compareGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .compareGrid div {
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 10px;
+          background: #f8fafc;
+        }
+        .compareGrid span {
+          display: block;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .compareGrid strong {
+          display: block;
+          margin-top: 5px;
+          font-size: 15px;
+        }
+        .peakBox {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          align-items: center;
+          border: 1px solid #bfdbfe;
+          border-radius: 14px;
+          background: #eff6ff;
+          color: #1d4ed8;
+          padding: 10px 12px;
+          margin-bottom: 10px;
+        }
+        .peakBox span {
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .peakBox strong {
+          font-size: 14px;
+          font-weight: 950;
+          text-align: right;
+        }
+        .mutedPeak {
+          border-color: var(--line);
+          background: #f8fafc;
+          color: var(--muted);
+        }
+        .barRow {
+          display: grid;
+          grid-template-columns: 92px minmax(0, 1fr) 50px;
+          gap: 8px;
+          align-items: center;
+          font-size: 13px;
+          font-weight: 900;
+        }
+        .barTrack {
+          height: 11px;
+          border-radius: 999px;
+          background: #f1f5f9;
+          overflow: hidden;
+        }
+        .barFill {
+          height: 100%;
+          border-radius: 999px;
+          background: #111827;
+        }
+        .subscribeBox p {
+          margin: 0;
+          color: var(--muted);
+          font-weight: 900;
+        }
+        .featureList {
+          margin: 0;
+          padding-left: 18px;
+          color: #475569;
+          font-size: 13px;
+          font-weight: 800;
+          line-height: 1.45;
+        }
+        @media (max-width: 900px) {
+          .twoCol {
+            grid-template-columns: 1fr;
+          }
+          .metricCard { min-height: 0; }
+        }
+        @media (min-width: 701px) and (max-width: 900px) {
+          .summaryGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .titleRow {
+            display: grid;
+          }
+          .heroActions {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 700px) {
+          .statsPage {
+            width: min(100% - 20px, 1120px);
+            padding: 10px 0 18px;
+            gap: 10px;
+          }
+          .heroCard,
+          .card {
+            border-radius: 16px;
+            padding: 13px;
+          }
+          .titleRow,
+          .notice,
+          .lockBox {
+            display: grid;
+          }
+          .h1 { font-size: 24px; }
+          .heroDesc { font-size: 13px; }
+          .heroActions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 100%;
+          }
+          .advancedStatsBtn {
+            grid-column: 1 / -1;
+          }
+          .btnRow {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 100%;
+          }
+          .btn,
+          .quickBtn {
+            width: 100%;
+          }
+          .notice .btnPrimary {
+            min-width: 0;
+          }
+          .summaryGrid { gap: 10px; }
+          .metricCard { gap: 6px; }
+          .metricCard::before {
+            top: 14px;
+            bottom: 14px;
+            width: 3px;
+          }
+          .salesLine {
+            font-size: 24px;
+            margin-top: 2px;
+          }
+          .metricLine {
+            margin-top: 0;
+            font-size: 12px;
+            display: grid;
+            gap: 2px;
+            line-height: 1.35;
+          }
+          .metricLine span + span::before {
+            content: "";
+            margin-right: 0;
+          }
+          .metricSub { font-size: 11px; }
+          .desktopMetricOnly { display: none; }
+          .quickRow {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .rangeRow {
+            grid-template-columns: 1fr;
+          }
+          .totals {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .tableWrap { display: none; }
+          .mobileRows { display: grid; }
+          .dayCard {
+            align-items: flex-start;
+          }
+          .modalBackdrop {
+            align-items: end;
+            place-items: end stretch;
+            padding: 0;
+          }
+          .modalPanel {
+            width: 100%;
+            max-height: 88vh;
+            border-radius: 24px 24px 0 0;
+            padding: 14px;
+          }
+          .advancedGrid,
+          .compareGrid {
+            grid-template-columns: 1fr;
+          }
+          .barRow {
+            grid-template-columns: 82px minmax(0, 1fr) 44px;
+          }
+          .peakBox {
+            display: grid;
+            gap: 4px;
+          }
+          .peakBox strong {
+            text-align: left;
+          }
+          .topItem,
+          .dayCard {
+            padding: 9px 10px;
+          }
+          .rank {
+            min-width: 26px;
+            height: 26px;
+          }
+        }
+        @media (max-width: 420px) {
+          .heroDesc { display: none; }
+          .metricCard .cardTitle { font-size: 15px; }
+          .salesLine { font-size: 22px; }
+          .metricLine { font-size: 11px; }
+        }
       `}</style>
 
-      <header className="topbar">
+      <header className="heroCard">
         <div className="titleRow">
           <div>
+            <p className="eyebrow">SALES DASHBOARD</p>
             <h1 className="h1">매출 통계</h1>
-            <div className="metaRow" style={{ marginTop: 7 }}>
+            <p className="heroDesc">주문 흐름, 인기 메뉴, 기간별 매출을 한 화면에서 확인하세요.</p>
+            <div className="metaRow">
               <span className="pill">{displayStoreName}</span>
               <span className="pill">취소 주문 제외</span>
               <span className="pill">{isPaidSubscriber ? "유료 구독 중" : "일부 제한"}</span>
               <span className="pill">{modeLabel}</span>
             </div>
           </div>
-          <div className="btnRow">
-            <a className="btn" href="/admin">관리자 홈</a>
-            <button className="btn" type="button" onClick={() => setAdvancedOpen(true)}>고급 통계</button>
-            <button className="btn" type="button" onClick={fetchFromDb} disabled={loading}>{loading ? "새로고침 중" : "새로고침"}</button>
+          <div className="heroActions">
+            <a className="btn homeBtn" href={storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin"}>관리자 홈</a>
+            <button className="btn refreshBtn" type="button" onClick={fetchFromDb} disabled={loading}>{loading ? "새로고침 중" : "새로고침"}</button>
+            <button className="btn advancedStatsBtn" type="button" onClick={() => setAdvancedOpen(true)}>{isPaidSubscriber ? "고급 통계" : "고급 통계 미리보기"}</button>
           </div>
         </div>
         {errMsg ? <div className="err">오류: {errMsg}</div> : null}
@@ -528,7 +1248,7 @@ function AdminStatsPageInner() {
 
       {!isPaidSubscriber ? (
         <section className="card notice">
-          <p className="noticeText">일부 통계는 구독 후 확인할 수 있습니다.</p>
+          <p className="noticeText">주간 상세, 기간 조회, CSV 다운로드, 고급 통계는 구독 후 확인할 수 있습니다.</p>
           <button className="btn btnPrimary" type="button" onClick={goBilling}>구독 관리</button>
         </section>
       ) : null}
@@ -540,18 +1260,18 @@ function AdminStatsPageInner() {
           <div className="cardHead">
             <div>
               <h2 className="cardTitle">이번 달</h2>
-              <div className="cardPeriod">{month}</div>
+              <div className="cardPeriod desktopMetricOnly">{month}</div>
             </div>
-            {isPaidSubscriber ? <span className="miniBadge">포장 {takeoutRate(monthly)}%</span> : <span className="lockBadge">상세 유료</span>}
+            {isPaidSubscriber ? <span className="miniBadge desktopMetricOnly">포장 {takeoutRate(monthly)}%</span> : <span className="lockBadge desktopMetricOnly">상세 유료</span>}
           </div>
           <div className="salesLine">{formatWonCompact(monthly.sales)}</div>
           {isPaidSubscriber ? (
             <>
-              <div className="metricLine">주문 {monthly.orders}건 · 수량 {monthly.qty}개</div>
-              <div className="metricSub">객단가 {formatWon(avgOrder(monthly))} · 매장 {monthly.dineIn} / 포장 {monthly.takeout}</div>
+              <div className="metricLine"><span>주문 {monthly.orders}건</span><span>판매 {monthly.qty}개</span></div>
+              <div className="metricSub desktopMetricOnly">객단가 {formatWon(avgOrder(monthly))} · 매장 {monthly.dineIn} / 포장 {monthly.takeout}</div>
             </>
           ) : (
-            <div className="metricSub">상세 지표는 구독 후 확인</div>
+            <div className="metricSub desktopMetricOnly">상세 지표는 구독 후 확인</div>
           )}
         </div>
       </section>
@@ -559,11 +1279,11 @@ function AdminStatsPageInner() {
       <section className="twoCol">
         <div className="card">
           <div className="sectionHead">
-            <h2 className="cardTitle">인기 메뉴 TOP 5</h2>
+            <h2 className="cardTitle">판매수량 TOP 5</h2>
             {!isPaidSubscriber ? <span className="lockBadge">일부 공개</span> : null}
           </div>
           {top5.length === 0 ? (
-            <p className="muted" style={{ marginTop: 10 }}>당월 판매 데이터가 없습니다.</p>
+            <div className="emptyBox"><strong>아직 판매된 메뉴가 없습니다.</strong><p>주문이 들어오면 인기 메뉴가 자동으로 집계됩니다.</p></div>
           ) : (
             <div className="topList">
               {(isPaidSubscriber ? top5 : top5.slice(0, 1)).map((m, idx) => (
@@ -608,7 +1328,7 @@ function AdminStatsPageInner() {
               <span className="label">종료일</span>
               <input className="input" type="date" value={rangeEnd} disabled={!isPaidSubscriber} onChange={(e) => { setRangeEnd(e.target.value); setRangeExpanded(false); setRangeMsg(""); }} />
             </label>
-            <button className="btn btnPrimary" type="button" onClick={downloadRangeCsv} disabled={loading}>상세 내역 받기</button>
+            <button className="btn btnPrimary" type="button" onClick={downloadRangeCsv} disabled={loading}>엑셀용 CSV 다운로드</button>
           </div>
           {rangeMsg ? <div className="rangeMsg">{rangeMsg}</div> : null}
           {isPaidSubscriber ? (
@@ -635,11 +1355,11 @@ function AdminStatsPageInner() {
           ) : null}
         </div>
         {!effectiveStart || !effectiveEnd ? (
-          <p className="muted" style={{ marginTop: 10 }}>기간을 선택해 주세요.</p>
+          <div className="emptyBox"><strong>기간을 선택해 주세요.</strong><p>조회할 시작일과 종료일을 선택하면 일자별 요약을 확인할 수 있습니다.</p></div>
         ) : effectiveStart > effectiveEnd ? (
-          <p className="muted" style={{ marginTop: 10 }}>시작일이 종료일보다 늦습니다.</p>
+          <div className="emptyBox emptyError"><strong>기간을 다시 확인해 주세요.</strong><p>시작일은 종료일보다 늦을 수 없습니다.</p></div>
         ) : rangeSummaryRows.length === 0 ? (
-          <p className="muted" style={{ marginTop: 10 }}>선택한 기간에 주문이 없습니다.</p>
+          <div className="emptyBox"><strong>선택한 기간에 주문이 없습니다.</strong><p>다른 기간을 선택하거나 새로고침 후 다시 확인해 주세요.</p></div>
         ) : (
           <>
             <div className="tableWrap">
