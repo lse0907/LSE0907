@@ -432,7 +432,7 @@ function AdminStatsPageInner() {
       ) : (
         <>
           <div className="salesLine">{formatWonCompact(summary.sales)}</div>
-          <div className="metricLine">주문 {summary.orders}건 · 판매 {summary.qty}개</div>
+          <div className="metricLine"><span>주문 {summary.orders}건</span><span>판매 {summary.qty}개</span></div>
           <div className="metricSub desktopMetricOnly">객단가 {formatWon(avgOrder(summary))} · 매장 {summary.dineIn} / 포장 {summary.takeout}</div>
         </>
       )}
@@ -769,6 +769,14 @@ function AdminStatsPageInner() {
           margin-top: 2px;
           font-size: 13px;
           font-weight: 950;
+          display: flex;
+          gap: 4px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+        .metricLine span + span::before {
+          content: "·";
+          margin-right: 4px;
         }
         .metricSub {
           color: var(--muted);
@@ -1149,6 +1157,13 @@ function AdminStatsPageInner() {
           .metricLine {
             margin-top: 0;
             font-size: 12px;
+            display: grid;
+            gap: 2px;
+            line-height: 1.35;
+          }
+          .metricLine span + span::before {
+            content: "";
+            margin-right: 0;
           }
           .metricSub { font-size: 11px; }
           .desktopMetricOnly { display: none; }
@@ -1203,6 +1218,9 @@ function AdminStatsPageInner() {
         }
         @media (max-width: 420px) {
           .heroDesc { display: none; }
+          .metricCard .cardTitle { font-size: 15px; }
+          .salesLine { font-size: 22px; }
+          .metricLine { font-size: 11px; }
         }
       `}</style>
 
@@ -1249,7 +1267,7 @@ function AdminStatsPageInner() {
           <div className="salesLine">{formatWonCompact(monthly.sales)}</div>
           {isPaidSubscriber ? (
             <>
-              <div className="metricLine">주문 {monthly.orders}건 · 판매 {monthly.qty}개</div>
+              <div className="metricLine"><span>주문 {monthly.orders}건</span><span>판매 {monthly.qty}개</span></div>
               <div className="metricSub desktopMetricOnly">객단가 {formatWon(avgOrder(monthly))} · 매장 {monthly.dineIn} / 포장 {monthly.takeout}</div>
             </>
           ) : (
