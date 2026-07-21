@@ -420,9 +420,9 @@ function AdminStatsPageInner() {
       <div className="cardHead">
         <div>
           <h2 className="cardTitle">{title}</h2>
-          <div className="cardPeriod">{period}</div>
+          <div className="cardPeriod desktopMetricOnly">{period}</div>
         </div>
-        {locked ? <span className="lockBadge">유료 전용</span> : <span className="miniBadge">포장 {takeoutRate(summary)}%</span>}
+        {locked ? <span className="lockBadge desktopMetricOnly">유료 전용</span> : <span className="miniBadge desktopMetricOnly">포장 {takeoutRate(summary)}%</span>}
       </div>
       {locked ? (
         <div className="lockBox">
@@ -432,8 +432,8 @@ function AdminStatsPageInner() {
       ) : (
         <>
           <div className="salesLine">{formatWonCompact(summary.sales)}</div>
-          <div className="metricLine">주문 {summary.orders}건 · 수량 {summary.qty}개</div>
-          <div className="metricSub">객단가 {formatWon(avgOrder(summary))} · 매장 {summary.dineIn} / 포장 {summary.takeout}</div>
+          <div className="metricLine">주문 {summary.orders}건 · 판매 {summary.qty}개</div>
+          <div className="metricSub desktopMetricOnly">객단가 {formatWon(avgOrder(summary))} · 매장 {summary.dineIn} / 포장 {summary.takeout}</div>
         </>
       )}
     </div>
@@ -925,6 +925,7 @@ function AdminStatsPageInner() {
           background: #f9fafb;
           font-weight: 950;
         }
+        .desktopMetricOnly { display: revert; }
         .muted { color: var(--muted); }
         .err,
         .rangeMsg {
@@ -1150,6 +1151,7 @@ function AdminStatsPageInner() {
             font-size: 12px;
           }
           .metricSub { font-size: 11px; }
+          .desktopMetricOnly { display: none; }
           .quickRow {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1240,18 +1242,18 @@ function AdminStatsPageInner() {
           <div className="cardHead">
             <div>
               <h2 className="cardTitle">이번 달</h2>
-              <div className="cardPeriod">{month}</div>
+              <div className="cardPeriod desktopMetricOnly">{month}</div>
             </div>
-            {isPaidSubscriber ? <span className="miniBadge">포장 {takeoutRate(monthly)}%</span> : <span className="lockBadge">상세 유료</span>}
+            {isPaidSubscriber ? <span className="miniBadge desktopMetricOnly">포장 {takeoutRate(monthly)}%</span> : <span className="lockBadge desktopMetricOnly">상세 유료</span>}
           </div>
           <div className="salesLine">{formatWonCompact(monthly.sales)}</div>
           {isPaidSubscriber ? (
             <>
-              <div className="metricLine">주문 {monthly.orders}건 · 수량 {monthly.qty}개</div>
-              <div className="metricSub">객단가 {formatWon(avgOrder(monthly))} · 매장 {monthly.dineIn} / 포장 {monthly.takeout}</div>
+              <div className="metricLine">주문 {monthly.orders}건 · 판매 {monthly.qty}개</div>
+              <div className="metricSub desktopMetricOnly">객단가 {formatWon(avgOrder(monthly))} · 매장 {monthly.dineIn} / 포장 {monthly.takeout}</div>
             </>
           ) : (
-            <div className="metricSub">상세 지표는 구독 후 확인</div>
+            <div className="metricSub desktopMetricOnly">상세 지표는 구독 후 확인</div>
           )}
         </div>
       </section>
