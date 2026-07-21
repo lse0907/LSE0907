@@ -1093,9 +1093,6 @@ function AdminStatsPageInner() {
           .metricCard { min-height: 0; }
         }
         @media (min-width: 701px) and (max-width: 900px) {
-          .summaryGrid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
           .titleRow {
             display: grid;
           }
