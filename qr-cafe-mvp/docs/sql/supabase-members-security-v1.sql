@@ -90,28 +90,34 @@ alter table public.security_events enable row level security;
 
 
 -- 2.5단계 2차 보완: 기존 프로젝트에 위 컬럼을 안전하게 추가합니다.
-alter table public.store_staff_pins add column if not exists contact_hint text null;
-alter table public.store_staff_pins add column if not exists approval_status text not null default 'approved';
-alter table public.store_staff_pins add column if not exists requested_at timestamptz null default now();
-alter table public.store_staff_pins add column if not exists approved_by uuid null;
-alter table public.store_staff_pins add column if not exists approved_at timestamptz null;
-alter table public.store_staff_pins add column if not exists rejected_at timestamptz null;
-
+-- Supabase SQL Editor에서 일부만 실행되거나 기존 테이블이 이미 있을 때도 안전하도록
+-- 컬럼 추가와 제약조건 추가를 동적 SQL로 분리했습니다.
 do $$
 begin
+  execute 'alter table public.store_staff_pins add column if not exists contact_hint text null';
+  execute 'alter table public.store_staff_pins add column if not exists approval_status text';
+  execute 'alter table public.store_staff_pins add column if not exists requested_at timestamptz null default now()';
+  execute 'alter table public.store_staff_pins add column if not exists approved_by uuid null';
+  execute 'alter table public.store_staff_pins add column if not exists approved_at timestamptz null';
+  execute 'alter table public.store_staff_pins add column if not exists rejected_at timestamptz null';
+
+  update public.store_staff_pins
+  set approval_status = 'approved'
+  where approval_status is null;
+
+  alter table public.store_staff_pins
+    alter column approval_status set default 'approved';
+
   if not exists (
     select 1 from pg_constraint
     where conname = 'store_staff_pins_approval_status_check'
       and conrelid = 'public.store_staff_pins'::regclass
   ) then
-    alter table public.store_staff_pins
-      add constraint store_staff_pins_approval_status_check
-      check (approval_status in ('pending', 'approved', 'rejected'));
+    execute 'alter table public.store_staff_pins add constraint store_staff_pins_approval_status_check check (approval_status in (''pending'', ''approved'', ''rejected''))';
   end if;
 end $$;
 
 update public.store_staff_pins
-set approval_status = 'approved',
-    requested_at = coalesce(requested_at, created_at),
+set requested_at = coalesce(requested_at, created_at),
     approved_at = coalesce(approved_at, created_at)
-where approval_status is null;
+where approval_status = 'approved';
