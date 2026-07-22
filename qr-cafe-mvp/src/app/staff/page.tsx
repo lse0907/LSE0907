@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -999,22 +1000,26 @@ function StaffPageInner() {
     const targets = targetItemId ? doneItems.filter((it) => it.id === targetItemId) : doneItems;
     if (!targets.length) return;
 
-    const nowIso = new Date().toISOString();
-    const rows = targets.map((it) => ({
-      store_id: sid,
-      order_id: order.id,
-      order_item_id: it.id,
-      checked: nextChecked,
-      checked_at: nextChecked ? nowIso : null,
-    }));
-
-    const { error } = await supabase.from("order_item_packing_checks").upsert(rows, { onConflict: "order_item_id" });
-    if (error) {
-      alert(`준비 확인 저장 실패: ${error.message}`);
-      return;
+    try {
+      const res = await fetch("/api/orders/items/packing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId: sid,
+          orderId: order.id,
+          itemIds: targets.map((it) => it.id),
+          checked: nextChecked,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(String(json?.message || "준비 확인 저장 실패"));
+      }
+      fetchOrdersFromDb(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`준비 확인 저장 실패: ${msg}`);
     }
-
-    fetchOrdersFromDb(true);
   };
 
   const canAdvanceSelected =
@@ -1024,62 +1029,31 @@ function StaffPageInner() {
 
   const updateOrderInDb = async (id: string, patch: Partial<OrderRecord>) => {
     const sid = storeIdRef.current || storeId;
+    if (!sid) return;
 
-    const payload: any = {};
-    if (typeof patch.buzzerNo !== "undefined") payload.buzzer_no = patch.buzzerNo || null;
+    const payload: Record<string, unknown> = { storeId: sid, orderId: id };
+    if (typeof patch.buzzerNo !== "undefined") payload.buzzerNo = patch.buzzerNo || null;
     if (typeof patch.status !== "undefined") payload.status = patch.status;
-    if (typeof patch.paymentStatus !== "undefined") payload.payment_status = patch.paymentStatus;
+    if (typeof patch.paymentStatus !== "undefined") payload.paymentStatus = patch.paymentStatus;
 
-    if (!Object.keys(payload).length) return;
+    if (Object.keys(payload).length <= 2) return;
 
-    const { error } = await supabase.from("orders").update(payload).eq("id", id).eq("store_id", sid);
-
-    if (error) {
-      const msg = String(error.message || "").toLowerCase();
-      const missingPaymentColumn =
-        typeof patch.paymentStatus !== "undefined" &&
-        msg.includes("payment_status") &&
-        (msg.includes("column") || msg.includes("schema cache"));
-
-      if (missingPaymentColumn) {
-        delete payload.payment_status;
-        const fallback = await supabase.from("orders").update(payload).eq("id", id).eq("store_id", sid);
-        if (!fallback.error) {
-          setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
-          return;
-        }
-      }
-    }
-
-    if (error) {
-      console.error("[staff] update order error:", error.message);
-      alert(`저장 실패: ${error.message}`);
-      return;
-    }
-
-    if (patch.status === "completed") {
-      const { error: finalizeErr } = await supabase.rpc("finalize_order_rewards", {
-        p_store_id: sid,
-        p_order_id: id,
+    try {
+      const res = await fetch("/api/orders/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      if (finalizeErr) {
-        console.error("[staff] finalize_order_rewards error:", finalizeErr.message);
-        alert(`보상 확정 처리 실패: ${finalizeErr.message}`);
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(String(json?.message || "주문 상태 저장 실패"));
       }
+      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[staff] update order error:", msg);
+      alert(`저장 실패: ${msg}`);
     }
-
-    if (patch.status === "cancelled") {
-      const { error: rollbackErr } = await supabase.rpc("rollback_order_rewards", {
-        p_store_id: sid,
-        p_order_id: id,
-      });
-      if (rollbackErr) {
-        console.error("[staff] rollback_order_rewards error:", rollbackErr.message);
-        alert(`보상 롤백 처리 실패: ${rollbackErr.message}`);
-      }
-    }
-
-    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
   };
 
   const updateOrderItemsInDb = async (itemIds: string[], patch: { status?: ItemStatus; batch?: number }) => {
@@ -1087,28 +1061,26 @@ function StaffPageInner() {
     if (!sid || !itemIds.length) return;
     if (typeof patch.status === "undefined") return;
 
-    const rpcPayload = {
-      p_store_id: sid,
-      p_item_ids: itemIds,
-      p_status: patch.status,
-      p_batch: typeof patch.batch === "undefined" ? null : patch.batch,
-    };
-
-    const rpcRes = await supabase.rpc("staff_update_order_items_status", rpcPayload);
-
-    // 마이그레이션 미반영 환경 대비 fallback
-    if (rpcRes.error) {
-      const payload: any = { status: patch.status };
-      if (typeof patch.batch !== "undefined") payload.batch = patch.batch;
-
-      const fallback = await supabase.from("order_items").update(payload).in("id", itemIds);
-      if (fallback.error) {
-        alert(`아이템 상태 저장 실패: ${fallback.error.message}`);
-        return;
+    try {
+      const res = await fetch("/api/orders/items/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId: sid,
+          itemIds,
+          status: patch.status,
+          batch: typeof patch.batch === "undefined" ? null : patch.batch,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(String(json?.message || "아이템 상태 저장 실패"));
       }
+      fetchOrdersFromDb(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`아이템 상태 저장 실패: ${msg}`);
     }
-
-    fetchOrdersFromDb(true);
   };
 
   const badgeClassByStatus = (s: OrderStatus) =>
