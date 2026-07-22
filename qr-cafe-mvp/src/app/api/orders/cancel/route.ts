@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
 
 type CancelBody = {
   storeId?: string;
@@ -107,17 +108,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "필수 파라미터(storeId, orderId)가 누락되었습니다." }, { status: 400 });
     }
 
-    const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
-    const serviceRole =
-      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_KEY || "").trim();
-
-    if (!supabaseUrl || !serviceRole) {
-      return NextResponse.json({ ok: false, message: "서버 환경변수(SUPABASE)가 필요합니다." }, { status: 500 });
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, serviceRole, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabaseAdmin = createSupabaseAdminClient();
 
     let orderQuery = await supabaseAdmin
       .from("orders")
@@ -158,6 +149,7 @@ export async function POST(req: NextRequest) {
         );
       }
     } else {
+      await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner", "manager"] });
       const status = String(order.status || "");
       if (status === "completed" || status === "cancelled") {
         return NextResponse.json({ ok: false, message: "완료/취소 주문은 취소할 수 없습니다." }, { status: 409 });
@@ -230,7 +222,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ ok: false, message }, { status: 500 });
+    return apiErrorResponse(e);
   }
 }
