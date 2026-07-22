@@ -170,7 +170,8 @@ export async function POST(req: NextRequest) {
           .select("id,pin_hash,is_active,pin_role")
           .eq("store_id", storeId)
           .eq("pin_role", "manager")
-          .eq("is_active", true);
+          .eq("is_active", true)
+          .eq("approval_status", "approved");
         if (pinErr) return NextResponse.json({ ok: false, message: `매니저 PIN 조회 실패: ${pinErr.message}` }, { status: 500 });
         const approvedPin = (managerPins || []).find((pinRow) => verifyPinHash(managerPin, String(pinRow.pin_hash || "")));
         if (!approvedPin) {

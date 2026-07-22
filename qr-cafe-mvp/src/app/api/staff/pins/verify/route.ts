@@ -17,9 +17,10 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("store_staff_pins")
-      .select("id,display_name,pin_role,pin_hash,is_active,failed_attempts,locked_until")
+      .select("id,display_name,pin_role,pin_hash,is_active,failed_attempts,locked_until,approval_status")
       .eq("store_id", storeId)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .eq("approval_status", "approved");
     if (error) return NextResponse.json({ ok: false, message: `PIN 조회 실패: ${error.message}` }, { status: 500 });
 
     const now = Date.now();

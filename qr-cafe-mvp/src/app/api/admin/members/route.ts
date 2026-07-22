@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
     const [members, pins, devices, events] = await Promise.all([
       safeSelect(supabaseAdmin, "store_members", "id,store_id,user_id,role,created_at", storeId),
-      safeSelect(supabaseAdmin, "store_staff_pins", "id,display_name,pin_role,is_active,failed_attempts,locked_until,last_used_at,created_at", storeId),
+      safeSelect(supabaseAdmin, "store_staff_pins", "id,display_name,contact_hint,pin_role,approval_status,is_active,failed_attempts,locked_until,last_used_at,requested_at,approved_at,rejected_at,created_at", storeId),
       safeSelect(supabaseAdmin, "store_devices", "id,user_id,device_name,device_type,browser,os,status,last_seen_at,approved_at,created_at", storeId),
       safeSelect(supabaseAdmin, "security_events", "id,event_type,user_id,device_id,metadata,created_at", storeId),
     ]);

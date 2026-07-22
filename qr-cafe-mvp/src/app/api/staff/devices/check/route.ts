@@ -13,7 +13,6 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = createSupabaseAdminClient();
     const actor = await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner", "manager", "staff"] });
-    if (actor.role === "owner") return NextResponse.json({ ok: true, status: "owner_bypass" });
 
     const fingerprintHash = hashDeviceFingerprint(fingerprint);
     const { data, error } = await supabaseAdmin
@@ -27,6 +26,7 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ ok: true, status: "setup_required", message: error.message });
 
     if (!data) {
+      const isOwner = actor.role === "owner";
       const ins = await supabaseAdmin.from("store_devices").insert({
         store_id: storeId,
         user_id: actor.userId,
@@ -35,11 +35,13 @@ export async function POST(req: NextRequest) {
         device_type: String(body.deviceType || "web").trim(),
         browser: String(body.browser || "").trim() || null,
         os: String(body.os || "").trim() || null,
-        status: "pending",
+        status: isOwner ? "approved" : "pending",
+        approved_by: isOwner ? actor.userId : null,
+        approved_at: isOwner ? new Date().toISOString() : null,
       }).select("id,status,device_name").single();
       if (ins.error) return NextResponse.json({ ok: true, status: "setup_required", message: ins.error.message });
-      await recordSecurityEvent(supabaseAdmin, { storeId, userId: actor.userId, deviceId: ins.data.id, eventType: "device_requested", metadata: { role: normalizeRole(actor.role) } });
-      return NextResponse.json({ ok: true, status: "pending", device: ins.data });
+      await recordSecurityEvent(supabaseAdmin, { storeId, userId: actor.userId, deviceId: ins.data.id, eventType: isOwner ? "owner_device_recorded" : "device_requested", metadata: { role: normalizeRole(actor.role) } });
+      return NextResponse.json({ ok: true, status: ins.data.status, device: ins.data });
     }
 
     if (data.status === "approved") {

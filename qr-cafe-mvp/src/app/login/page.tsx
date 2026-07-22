@@ -4,12 +4,14 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
+import { getCurrentStoreId } from "../lib/currentStore";
 
 function LoginPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const initialError = sp.get("error");
   const next = (sp.get("next") || "").trim();
+  const storeForLogin = resolveStoreId(sp.get("store"), next);
 
   const readSavedLoginId = () => {
     try {
@@ -32,6 +34,14 @@ function LoginPageInner() {
     return raw;
   };
 
+  const toAuthEmail = (raw: string) => {
+    const value = raw.trim().toLowerCase();
+    if (value.includes("@")) return value;
+    const safeStore = storeForLogin.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18) || "store";
+    const safeLogin = value.replace(/[^a-z0-9._-]/g, "-").replace(/-+/g, "-").slice(0, 48);
+    return `${safeStore}.${safeLogin}@internal.qrcafe.local`;
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg("");
@@ -42,8 +52,9 @@ function LoginPageInner() {
     }
 
     setLoading(true);
+    const authEmail = toAuthEmail(email);
     const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: authEmail,
       password,
     });
     setLoading(false);
@@ -102,9 +113,9 @@ function LoginPageInner() {
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          type="email"
+          type="text"
           required
-          placeholder="이메일"
+          placeholder="이메일 또는 매장 로그인 ID"
           style={inputStyle}
         />
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "#374151" }}>
@@ -114,7 +125,7 @@ function LoginPageInner() {
             type="checkbox"
             style={{ width: 18, height: 18 }}
           />
-          이 기기에 계정 ID 저장
+          이 기기에 로그인 ID 저장
         </label>
         <input
           value={password}
@@ -142,6 +153,20 @@ function LoginPageInner() {
       </div>
     </main>
   );
+}
+
+
+function resolveStoreId(rawStore: string | null, next: string) {
+  try {
+    const direct = String(rawStore || "").trim();
+    if (direct) return direct;
+    const current = getCurrentStoreId();
+    if (current) return current;
+    const url = new URL(next || "/", "https://local.invalid");
+    return String(url.searchParams.get("store") || "").trim();
+  } catch {
+    return "";
+  }
 }
 
 const inputStyle: React.CSSProperties = {

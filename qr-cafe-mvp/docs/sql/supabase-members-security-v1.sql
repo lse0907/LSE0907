@@ -5,12 +5,18 @@ create table if not exists public.store_staff_pins (
   id uuid primary key default gen_random_uuid(),
   store_id text not null,
   display_name text not null,
+  contact_hint text null,
   pin_role text not null default 'staff' check (pin_role in ('staff', 'manager')),
+  approval_status text not null default 'approved' check (approval_status in ('pending', 'approved', 'rejected')),
   pin_hash text not null,
   is_active boolean not null default true,
   failed_attempts integer not null default 0,
   locked_until timestamptz null,
   last_used_at timestamptz null,
+  requested_at timestamptz null default now(),
+  approved_by uuid null,
+  approved_at timestamptz null,
+  rejected_at timestamptz null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   disabled_at timestamptz null
@@ -18,6 +24,7 @@ create table if not exists public.store_staff_pins (
 
 create index if not exists idx_store_staff_pins_store_id on public.store_staff_pins(store_id);
 create index if not exists idx_store_staff_pins_role on public.store_staff_pins(store_id, pin_role, is_active);
+create index if not exists idx_store_staff_pins_approval on public.store_staff_pins(store_id, approval_status, created_at desc);
 
 create table if not exists public.store_devices (
   id uuid primary key default gen_random_uuid(),
@@ -80,3 +87,31 @@ alter table public.order_events enable row level security;
 alter table public.security_events enable row level security;
 
 -- 서비스 역할 API가 관리합니다. 클라이언트 직접 접근은 기본적으로 막습니다.
+
+
+-- 2.5단계 2차 보완: 기존 프로젝트에 위 컬럼을 안전하게 추가합니다.
+alter table public.store_staff_pins add column if not exists contact_hint text null;
+alter table public.store_staff_pins add column if not exists approval_status text not null default 'approved';
+alter table public.store_staff_pins add column if not exists requested_at timestamptz null default now();
+alter table public.store_staff_pins add column if not exists approved_by uuid null;
+alter table public.store_staff_pins add column if not exists approved_at timestamptz null;
+alter table public.store_staff_pins add column if not exists rejected_at timestamptz null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'store_staff_pins_approval_status_check'
+      and conrelid = 'public.store_staff_pins'::regclass
+  ) then
+    alter table public.store_staff_pins
+      add constraint store_staff_pins_approval_status_check
+      check (approval_status in ('pending', 'approved', 'rejected'));
+  end if;
+end $$;
+
+update public.store_staff_pins
+set approval_status = 'approved',
+    requested_at = coalesce(requested_at, created_at),
+    approved_at = coalesce(approved_at, created_at)
+where approval_status is null;

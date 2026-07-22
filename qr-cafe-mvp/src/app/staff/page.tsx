@@ -428,6 +428,13 @@ function StaffPageInner() {
   const [pinInput, setPinInput] = useState("");
   const [pinMsg, setPinMsg] = useState("");
   const [workerPinModalOpen, setWorkerPinModalOpen] = useState(false);
+  const [pinRequestOpen, setPinRequestOpen] = useState(false);
+  const [pinRequestForm, setPinRequestForm] = useState({ displayName: "", contactHint: "", pin: "", pinConfirm: "", requestedRole: "staff" as "staff" | "manager" });
+  const [pinRequestMsg, setPinRequestMsg] = useState("");
+  const [cancelReason, setCancelReason] = useState("고객 요청");
+  const [managerPinForCancel, setManagerPinForCancel] = useState("");
+  const [cancelNeedsManagerPin, setCancelNeedsManagerPin] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState("");
   const lastActivityAtRef = useRef(Date.now());
 
 
@@ -539,6 +546,41 @@ function StaffPageInner() {
   };
 
   const actorPinIdForEvent = currentWorker?.isOwnerBypass ? null : currentWorker?.id || null;
+
+  const requestStaffPin = async () => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid) return;
+    const displayName = pinRequestForm.displayName.trim();
+    const pin = pinRequestForm.pin.trim();
+    if (!displayName || !/^\d{4,8}$/.test(pin)) {
+      setPinRequestMsg("이름과 4~8자리 숫자 PIN을 입력해주세요.");
+      return;
+    }
+    if (pin !== pinRequestForm.pinConfirm.trim()) {
+      setPinRequestMsg("PIN 확인이 일치하지 않습니다.");
+      return;
+    }
+    setPinRequestMsg("");
+    try {
+      const res = await fetch("/api/staff/pins/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId: sid,
+          displayName,
+          contactHint: pinRequestForm.contactHint,
+          pin,
+          requestedRole: pinRequestForm.requestedRole,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.message || "PIN 등록 요청 실패");
+      setPinRequestMsg("등록 요청이 완료되었습니다. 오너가 승인하면 이 PIN으로 로그인할 수 있습니다.");
+      setPinRequestForm({ displayName: "", contactHint: "", pin: "", pinConfirm: "", requestedRole: "staff" });
+    } catch (e: unknown) {
+      setPinRequestMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   // ✅ 새 주문 NEW 뱃지 표시용
   const [newOrderIds, setNewOrderIds] = useState<Record<string, number>>({}); // id -> expireAt(ms)
@@ -943,6 +985,10 @@ function StaffPageInner() {
 
   const closeCancelModal = () => {
     setCancelTarget(null);
+    setCancelReason("고객 요청");
+    setManagerPinForCancel("");
+    setCancelNeedsManagerPin(false);
+    setCancelMsg("");
   };
 
   const confirmCancelOrder = async () => {
@@ -959,11 +1005,19 @@ function StaffPageInner() {
           actor: "staff",
           storeId: sid,
           orderId: id,
-          reason: "매장 주문 취소",
+          reason: cancelReason || "매장 주문 취소",
+          actorPinId: actorPinIdForEvent,
+          managerPin: managerPinForCancel || undefined,
         }),
       });
       const json = await res.json();
       if (!res.ok || !json?.ok) {
+        if (json?.code === "MANAGER_PIN_REQUIRED" || json?.code === "MANAGER_PIN_INVALID") {
+          setCancelTarget({ id, displayNo: cancelTarget.displayNo });
+          setCancelNeedsManagerPin(true);
+          setCancelMsg(String(json?.message || "매니저 PIN 승인이 필요합니다."));
+          return;
+        }
         throw new Error(String(json?.message || "주문 취소 처리 실패"));
       }
       setOrders((prev) =>
@@ -1347,6 +1401,9 @@ function StaffPageInner() {
           padding: 18px;
         }
 
+        .pinModalTextInput,
+        .modalInput,
+        .modalSelect,
         .pinModalInput {
           width: 100%;
           box-sizing: border-box;
@@ -1358,6 +1415,27 @@ function StaffPageInner() {
           font-size: 20px;
           font-weight: 900;
           letter-spacing: 0.12em;
+        }
+
+        .pinModalTextInput,
+        .modalInput,
+        .modalSelect {
+          margin-top: 8px;
+          font-size: 16px;
+          font-weight: 800;
+          letter-spacing: 0;
+        }
+
+        .modalFieldLabel {
+          font-size: 13px;
+          font-weight: 900;
+          color: var(--text);
+        }
+
+        .successMsg {
+          margin: 8px 0 0;
+          color: #047857;
+          font-weight: 900;
         }
 
         .pinModalActions {
@@ -2381,7 +2459,30 @@ function StaffPageInner() {
               {loginRole === "owner" ? <button className="btn" onClick={() => setWorkerPinModalOpen(false)}>오너로 계속하기</button> : null}
               <button className="btn btnPrimary" onClick={() => verifyWorkerPin("staff")}>확인</button>
             </div>
-            <p className="hint" style={{ marginTop: 10 }}>처음 사용하는 직원은 오너에게 PIN 등록 승인을 요청해주세요.</p>
+            <p className="hint" style={{ marginTop: 10 }}>처음 사용하는 직원은 아래 버튼으로 PIN 등록을 요청할 수 있습니다.</p>
+            <button type="button" className="btn" onClick={() => { setPinRequestOpen(true); setPinRequestMsg(""); }}>직원 PIN 등록 요청</button>
+          </div>
+        </div>
+      ) : null}
+
+      {pinRequestOpen ? (
+        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-label="직원 PIN 등록 요청">
+          <div className="pinModal">
+            <h2 className="h2" style={{ marginTop: 0 }}>직원 PIN 등록 요청</h2>
+            <p className="muted">본인이 사용할 PIN을 직접 만들고, 오너가 승인하면 직원 화면에서 사용할 수 있습니다.</p>
+            <input className="pinModalTextInput" value={pinRequestForm.displayName} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, displayName: e.target.value }))} placeholder="직원 이름 또는 구분명" />
+            <input className="pinModalTextInput" value={pinRequestForm.contactHint} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, contactHint: e.target.value }))} placeholder="연락처 뒷번호/메모 선택 입력" />
+            <select className="pinModalTextInput" value={pinRequestForm.requestedRole} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, requestedRole: e.target.value === "manager" ? "manager" : "staff" }))}>
+              <option value="staff">직원 권한 요청</option>
+              <option value="manager">매니저 권한 요청</option>
+            </select>
+            <input className="pinModalInput" value={pinRequestForm.pin} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, pin: e.target.value }))} placeholder="4~8자리 PIN" inputMode="numeric" />
+            <input className="pinModalInput" value={pinRequestForm.pinConfirm} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, pinConfirm: e.target.value }))} placeholder="PIN 다시 입력" inputMode="numeric" />
+            {pinRequestMsg ? <p className={pinRequestMsg.includes("완료") ? "successMsg" : "err"}>{pinRequestMsg}</p> : null}
+            <div className="pinModalActions">
+              <button type="button" className="btn" onClick={() => setPinRequestOpen(false)}>닫기</button>
+              <button type="button" className="btn btnPrimary" onClick={requestStaffPin}>등록 요청</button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -3098,6 +3199,21 @@ function StaffPageInner() {
               <br />
               취소는 삭제가 아닌 상태 변경입니다.
             </p>
+            <label className="modalFieldLabel">취소 사유</label>
+            <select className="modalSelect" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)}>
+              <option value="고객 요청">고객 요청</option>
+              <option value="품절">품절</option>
+              <option value="주문 오입력">주문 오입력</option>
+              <option value="매장 사정">매장 사정</option>
+              <option value="기타">기타</option>
+            </select>
+            {cancelNeedsManagerPin ? (
+              <>
+                <p className="err">{cancelMsg || "이 주문 취소는 매니저 PIN 승인이 필요합니다."}</p>
+                <label className="modalFieldLabel">매니저 PIN</label>
+                <input className="modalInput" value={managerPinForCancel} onChange={(e) => setManagerPinForCancel(e.target.value)} placeholder="매니저 PIN" inputMode="numeric" />
+              </>
+            ) : null}
             <div className="modalActions">
               <button type="button" className="btn" onClick={closeCancelModal}>닫기</button>
               <button type="button" className="btn actionCancel" onClick={confirmCancelOrder}>주문 취소</button>

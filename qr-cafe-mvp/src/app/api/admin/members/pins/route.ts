@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../../_lib/storeAuth";
 import { makePinHash, normalizePinRole, recordSecurityEvent } from "../_lib";
 
-type Body = { storeId?: string; displayName?: string; pin?: string; pinRole?: "staff" | "manager"; pinId?: string; action?: "create" | "disable" | "reset" | "enable" };
+type Body = { storeId?: string; displayName?: string; pin?: string; pinRole?: "staff" | "manager"; pinId?: string; action?: "create" | "disable" | "reset" | "enable" | "approve" | "reject" | "changeRole" };
 
 function validatePin(pin: string) {
   return /^\d{4,8}$/.test(pin);
@@ -18,13 +18,24 @@ export async function POST(req: NextRequest) {
     const supabaseAdmin = createSupabaseAdminClient();
     const actor = await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner"] });
 
-    if (action === "disable" || action === "enable") {
+    if (["disable", "enable", "approve", "reject", "changeRole"].includes(action)) {
       const pinId = String(body.pinId || "").trim();
       if (!pinId) return NextResponse.json({ ok: false, message: "PIN ID가 필요합니다." }, { status: 400 });
-      const patch = action === "disable" ? { is_active: false, disabled_at: new Date().toISOString() } : { is_active: true, disabled_at: null };
+      const now = new Date().toISOString();
+      const pinRole = normalizePinRole(body.pinRole);
+      const patch =
+        action === "disable"
+          ? { is_active: false, disabled_at: now, updated_at: now }
+          : action === "enable"
+            ? { is_active: true, disabled_at: null, approval_status: "approved", updated_at: now }
+            : action === "approve"
+              ? { is_active: true, approval_status: "approved", pin_role: pinRole, approved_by: actor.userId, approved_at: now, rejected_at: null, updated_at: now }
+              : action === "reject"
+                ? { is_active: false, approval_status: "rejected", rejected_at: now, disabled_at: now, updated_at: now }
+                : { pin_role: pinRole, updated_at: now };
       const { error } = await supabaseAdmin.from("store_staff_pins").update(patch).eq("id", pinId).eq("store_id", storeId);
       if (error) return NextResponse.json({ ok: false, message: `PIN 상태 변경 실패: ${error.message}` }, { status: 500 });
-      await recordSecurityEvent(supabaseAdmin, { storeId, userId: actor.userId, eventType: `pin_${action}`, metadata: { pinId } });
+      await recordSecurityEvent(supabaseAdmin, { storeId, userId: actor.userId, eventType: `pin_${action}`, metadata: { pinId, pinRole: action === "changeRole" || action === "approve" ? pinRole : undefined } });
       return NextResponse.json({ ok: true });
     }
 
@@ -44,7 +55,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    const { error } = await supabaseAdmin.from("store_staff_pins").insert({ store_id: storeId, display_name: displayName, pin_role: pinRole, pin_hash: makePinHash(pin), is_active: true });
+    const { error } = await supabaseAdmin.from("store_staff_pins").insert({ store_id: storeId, display_name: displayName, pin_role: pinRole, pin_hash: makePinHash(pin), approval_status: "approved", is_active: true, requested_at: new Date().toISOString(), approved_by: actor.userId, approved_at: new Date().toISOString() });
     if (error) return NextResponse.json({ ok: false, message: `PIN 생성 실패: ${error.message}` }, { status: 500 });
     await recordSecurityEvent(supabaseAdmin, { storeId, userId: actor.userId, eventType: "pin_created", metadata: { displayName, pinRole } });
     return NextResponse.json({ ok: true });
