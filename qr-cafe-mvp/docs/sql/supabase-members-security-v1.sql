@@ -24,7 +24,6 @@ create table if not exists public.store_staff_pins (
 
 create index if not exists idx_store_staff_pins_store_id on public.store_staff_pins(store_id);
 create index if not exists idx_store_staff_pins_role on public.store_staff_pins(store_id, pin_role, is_active);
-create index if not exists idx_store_staff_pins_approval on public.store_staff_pins(store_id, approval_status, created_at desc);
 
 create table if not exists public.store_devices (
   id uuid primary key default gen_random_uuid(),
@@ -90,8 +89,8 @@ alter table public.security_events enable row level security;
 
 
 -- 2.5단계 2차 보완: 기존 프로젝트에 위 컬럼을 안전하게 추가합니다.
--- Supabase SQL Editor에서 일부만 실행되거나 기존 테이블이 이미 있을 때도 안전하도록
--- 컬럼 추가와 제약조건 추가를 동적 SQL로 분리했습니다.
+-- 기존 테이블에 approval_status 컬럼이 없는 상태에서도 한 번에 실행되도록
+-- 컬럼 추가, 데이터 보정, 기본값/NOT NULL/제약조건/인덱스 생성을 모두 동적 SQL로 처리합니다.
 do $$
 begin
   execute 'alter table public.store_staff_pins add column if not exists contact_hint text null';
@@ -101,12 +100,10 @@ begin
   execute 'alter table public.store_staff_pins add column if not exists approved_at timestamptz null';
   execute 'alter table public.store_staff_pins add column if not exists rejected_at timestamptz null';
 
-  update public.store_staff_pins
-  set approval_status = 'approved'
-  where approval_status is null;
-
-  alter table public.store_staff_pins
-    alter column approval_status set default 'approved';
+  execute 'update public.store_staff_pins set approval_status = ''approved'' where approval_status is null';
+  execute 'update public.store_staff_pins set requested_at = coalesce(requested_at, created_at), approved_at = coalesce(approved_at, created_at) where approval_status = ''approved''';
+  execute 'alter table public.store_staff_pins alter column approval_status set default ''approved''';
+  execute 'alter table public.store_staff_pins alter column approval_status set not null';
 
   if not exists (
     select 1 from pg_constraint
@@ -115,9 +112,6 @@ begin
   ) then
     execute 'alter table public.store_staff_pins add constraint store_staff_pins_approval_status_check check (approval_status in (''pending'', ''approved'', ''rejected''))';
   end if;
-end $$;
 
-update public.store_staff_pins
-set requested_at = coalesce(requested_at, created_at),
-    approved_at = coalesce(approved_at, created_at)
-where approval_status = 'approved';
+  execute 'create index if not exists idx_store_staff_pins_approval on public.store_staff_pins(store_id, approval_status, created_at desc)';
+end $$;
