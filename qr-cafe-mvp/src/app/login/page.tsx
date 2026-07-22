@@ -1,17 +1,29 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
+import { getCurrentStoreId } from "../lib/currentStore";
 
 function LoginPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const initialError = sp.get("error");
   const next = (sp.get("next") || "").trim();
+  const storeForLogin = resolveStoreId(sp.get("store"), next);
 
-  const [email, setEmail] = useState("");
+  const readSavedLoginId = () => {
+    try {
+      if (typeof window === "undefined") return "";
+      return window.localStorage.getItem("qrCafeRememberedLoginId") || "";
+    } catch {
+      return "";
+    }
+  };
+  const [email, setEmail] = useState(() => readSavedLoginId());
   const [password, setPassword] = useState("");
+  const [rememberLoginId, setRememberLoginId] = useState(() => !!readSavedLoginId());
   const [msg, setMsg] = useState<string>(initialError || "");
   const [loading, setLoading] = useState(false);
 
@@ -20,6 +32,14 @@ function LoginPageInner() {
     if (!raw.startsWith("/")) return "";
     if (raw.startsWith("//")) return "";
     return raw;
+  };
+
+  const toAuthEmail = (raw: string) => {
+    const value = raw.trim().toLowerCase();
+    if (value.includes("@")) return value;
+    const safeStore = storeForLogin.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 18) || "store";
+    const safeLogin = value.replace(/[^a-z0-9._-]/g, "-").replace(/-+/g, "-").slice(0, 48);
+    return `${safeStore}.${safeLogin}@internal.qrcafe.local`;
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -32,8 +52,9 @@ function LoginPageInner() {
     }
 
     setLoading(true);
+    const authEmail = toAuthEmail(email);
     const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: authEmail,
       password,
     });
     setLoading(false);
@@ -41,6 +62,13 @@ function LoginPageInner() {
     if (error) {
       setMsg(error.message);
       return;
+    }
+
+    try {
+      if (rememberLoginId) window.localStorage.setItem("qrCafeRememberedLoginId", email.trim());
+      else window.localStorage.removeItem("qrCafeRememberedLoginId");
+    } catch {
+      // ignore saved login id write errors
     }
 
     const { data: userData } = await supabase.auth.getUser();
@@ -51,12 +79,16 @@ function LoginPageInner() {
       return;
     }
 
-    const { data: memberRow } = await supabase
+    const { data: memberRows } = await supabase
       .from("store_members")
-      .select("id")
+      .select("role")
       .eq("user_id", uid)
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
+
+    const roles = (memberRows || []).map((row) => String(row.role || "").trim().toLowerCase());
+    const hasOwnerRole = roles.includes("owner");
+    const hasManagerRole = roles.includes("manager");
+    const hasStaffRole = roles.includes("staff");
 
     const safeNext = resolveSafeNext(next);
     if (safeNext) {
@@ -64,7 +96,9 @@ function LoginPageInner() {
       return;
     }
 
-    router.push(memberRow ? "/admin" : "/me");
+    if (hasOwnerRole) router.push("/admin");
+    else if (hasManagerRole || hasStaffRole) router.push("/staff");
+    else router.push("/me");
   };
 
   return (
@@ -79,11 +113,20 @@ function LoginPageInner() {
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          type="email"
+          type="text"
           required
-          placeholder="이메일"
+          placeholder="이메일 또는 매장 로그인 ID"
           style={inputStyle}
         />
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "#374151" }}>
+          <input
+            checked={rememberLoginId}
+            onChange={(e) => setRememberLoginId(e.target.checked)}
+            type="checkbox"
+            style={{ width: 18, height: 18 }}
+          />
+          이 기기에 로그인 ID 저장
+        </label>
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -98,18 +141,32 @@ function LoginPageInner() {
       </form>
 
       <div style={{ marginTop: 14 }}>
-        <a href="/signup" style={{ fontWeight: 900 }}>
+        <Link href="/signup" style={{ fontWeight: 900 }}>
           회원가입
-        </a>
+        </Link>
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <a href="/" style={{ color: "#6b7280", fontWeight: 800 }}>
+        <Link href="/" style={{ color: "#6b7280", fontWeight: 800 }}>
           홈으로
-        </a>
+        </Link>
       </div>
     </main>
   );
+}
+
+
+function resolveStoreId(rawStore: string | null, next: string) {
+  try {
+    const direct = String(rawStore || "").trim();
+    if (direct) return direct;
+    const current = getCurrentStoreId();
+    if (current) return current;
+    const url = new URL(next || "/", "https://local.invalid");
+    return String(url.searchParams.get("store") || "").trim();
+  } catch {
+    return "";
+  }
 }
 
 const inputStyle: React.CSSProperties = {
