@@ -11,8 +11,17 @@ function LoginPageInner() {
   const initialError = sp.get("error");
   const next = (sp.get("next") || "").trim();
 
-  const [email, setEmail] = useState("");
+  const readSavedLoginId = () => {
+    try {
+      if (typeof window === "undefined") return "";
+      return window.localStorage.getItem("qrCafeRememberedLoginId") || "";
+    } catch {
+      return "";
+    }
+  };
+  const [email, setEmail] = useState(() => readSavedLoginId());
   const [password, setPassword] = useState("");
+  const [rememberLoginId, setRememberLoginId] = useState(() => !!readSavedLoginId());
   const [msg, setMsg] = useState<string>(initialError || "");
   const [loading, setLoading] = useState(false);
 
@@ -42,6 +51,13 @@ function LoginPageInner() {
     if (error) {
       setMsg(error.message);
       return;
+    }
+
+    try {
+      if (rememberLoginId) window.localStorage.setItem("qrCafeRememberedLoginId", email.trim());
+      else window.localStorage.removeItem("qrCafeRememberedLoginId");
+    } catch {
+      // ignore saved login id write errors
     }
 
     const { data: userData } = await supabase.auth.getUser();
@@ -91,6 +107,15 @@ function LoginPageInner() {
           placeholder="이메일"
           style={inputStyle}
         />
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "#374151" }}>
+          <input
+            checked={rememberLoginId}
+            onChange={(e) => setRememberLoginId(e.target.checked)}
+            type="checkbox"
+            style={{ width: 18, height: 18 }}
+          />
+          이 기기에 계정 ID 저장
+        </label>
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}

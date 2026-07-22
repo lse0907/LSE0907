@@ -146,7 +146,27 @@ function Row({ title, desc, meta, actions }: { title: string; desc: string; meta
 }
 
 const css = `
-body{background:#f6f7f9;color:#111827}.wrap{max-width:980px;margin:0 auto;padding:22px}.topbar{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:16px}.muted{color:#6b7280}.card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:16px}.alert{background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:12px;margin-bottom:12px;color:#9a3412;font-weight:800}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}.tab,.btn{border:1px solid #d1d5db;background:#fff;border-radius:12px;padding:10px 12px;font-weight:900;cursor:pointer}.tabOn,.dark{background:#111827;color:#fff;border-color:#111827}.panel{display:grid;gap:12px}.panelHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.actions{display:flex;gap:8px;flex-wrap:wrap}.rowCard{display:flex;justify-content:space-between;gap:12px;border:1px solid #e5e7eb;border-radius:14px;padding:12px}.rowCard p{margin:5px 0;color:#4b5563;word-break:break-all}.rowCard small{color:#6b7280}.rowActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.warn{color:#b45309;font-weight:800}@media(max-width:720px){.topbar,.panelHead,.rowCard{display:grid}.actions,.rowActions{width:100%}.btn,.tab{min-height:44px}}`;
+:root { color-scheme: light; }
+body { background: #f6f7f9; color: #111827; }
+button, input, select, textarea { color: #111827; background: #ffffff; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 22px; }
+.topbar { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
+.muted { color: #6b7280; }
+.card { background: #ffffff; color: #111827; border: 1px solid #e5e7eb; border-radius: 18px; padding: 16px; }
+.alert { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 14px; padding: 12px; margin-bottom: 12px; color: #9a3412; font-weight: 800; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.tab, .btn { border: 1px solid #d1d5db; background: #ffffff; color: #111827; border-radius: 12px; padding: 10px 12px; font-weight: 900; cursor: pointer; }
+.tabOn, .dark { background: #111827; color: #ffffff; border-color: #111827; }
+.panel { display: grid; gap: 12px; }
+.panelHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rowCard { display: flex; justify-content: space-between; gap: 12px; border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; background: #ffffff; color: #111827; }
+.rowCard p { margin: 5px 0; color: #4b5563; word-break: break-all; }
+.rowCard small { color: #6b7280; }
+.rowActions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.warn { color: #b45309; font-weight: 800; }
+@media (max-width: 720px) { .topbar, .panelHead, .rowCard { display: grid; } .actions, .rowActions { width: 100%; } .btn, .tab { min-height: 44px; } }
+`;
 
 export default function MembersPage() {
   return <Suspense fallback={<main className="wrap">직원/권한 관리 로딩 중...</main>}><MembersPageInner /></Suspense>;

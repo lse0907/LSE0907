@@ -119,6 +119,8 @@ type DbPackingCheckRow = {
 const LAST_SPOKEN_KEY = "qrCafeStaffLastSpokenOrderId";
 const STAFF_POLL_INTERVAL_MS = 5000;
 const STAFF_VIEW_MODE_OVERRIDE_KEY = "qrCafeStaffViewModeOverride";
+const STAFF_WORKER_AUTO_LOCK_MS = 30 * 60 * 1000;
+const STAFF_SESSION_AUTO_LOGOUT_MS = 120 * 60 * 1000;
 
 function normalizeStaffViewMode(v: any): StaffViewMode {
   return String(v || "").trim() === "station" ? "station" : "simple";
@@ -421,9 +423,12 @@ function StaffPageInner() {
 
   const [errMsg, setErrMsg] = useState("");
   const [deviceStatus, setDeviceStatus] = useState<"checking" | "approved" | "pending" | "rejected" | "disabled" | "setup_required" | "owner_bypass">("checking");
-  const [currentWorker, setCurrentWorker] = useState<{ id: string; displayName: string; pinRole: "staff" | "manager" } | null>(null);
+  const [loginRole, setLoginRole] = useState<"owner" | "manager" | "staff" | "viewer">("viewer");
+  const [currentWorker, setCurrentWorker] = useState<{ id: string; displayName: string; pinRole: "staff" | "manager"; isOwnerBypass?: boolean } | null>(null);
   const [pinInput, setPinInput] = useState("");
   const [pinMsg, setPinMsg] = useState("");
+  const [workerPinModalOpen, setWorkerPinModalOpen] = useState(false);
+  const lastActivityAtRef = useRef(Date.now());
 
 
   useEffect(() => {
@@ -470,10 +475,70 @@ function StaffPageInner() {
       setCurrentWorker({ id: json.pin.id, displayName: json.pin.displayName, pinRole: json.pin.pinRole });
       setPinInput("");
       setPinMsg("");
+      setWorkerPinModalOpen(false);
+      lastActivityAtRef.current = Date.now();
     } catch (e: unknown) {
       setPinMsg(e instanceof Error ? e.message : String(e));
     }
   };
+
+
+  useEffect(() => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid) return;
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData?.user?.id;
+      if (!uid) return;
+      const { data } = await supabase.from("store_members").select("role").eq("store_id", sid).eq("user_id", uid).limit(1).maybeSingle();
+      const role = String(data?.role || "viewer").trim().toLowerCase();
+      const normalizedRole = role === "owner" || role === "manager" || role === "staff" ? role : "viewer";
+      setLoginRole(normalizedRole);
+      if (normalizedRole === "owner") {
+        setCurrentWorker({ id: "", displayName: "오너 계정", pinRole: "manager", isOwnerBypass: true });
+        setWorkerPinModalOpen(false);
+      } else if (!currentWorker) {
+        setWorkerPinModalOpen(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    const markActive = () => {
+      lastActivityAtRef.current = Date.now();
+    };
+    const events: Array<keyof WindowEventMap> = ["click", "keydown", "touchstart", "scroll"];
+    events.forEach((eventName) => window.addEventListener(eventName, markActive, { passive: true }));
+    const timer = window.setInterval(async () => {
+      const idleMs = Date.now() - lastActivityAtRef.current;
+      if (idleMs >= STAFF_SESSION_AUTO_LOGOUT_MS) {
+        await supabase.auth.signOut();
+        const next = storeId ? `/staff?store=${encodeURIComponent(storeId)}` : "/staff";
+        window.location.href = `/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent("장시간 미사용으로 자동 로그아웃되었습니다.")}`;
+        return;
+      }
+      if (idleMs >= STAFF_WORKER_AUTO_LOCK_MS && loginRole !== "owner" && currentWorker) {
+        setCurrentWorker(null);
+        setWorkerPinModalOpen(true);
+        setPinMsg("30분 동안 조작이 없어 담당 직원이 잠금 처리되었습니다.");
+      }
+    }, 30 * 1000);
+    return () => {
+      events.forEach((eventName) => window.removeEventListener(eventName, markActive));
+      window.clearInterval(timer);
+    };
+  }, [currentWorker, loginRole, storeId]);
+
+  const requireWorkerPin = () => {
+    if (loginRole === "owner" || currentWorker) return true;
+    setWorkerPinModalOpen(true);
+    setPinMsg("주문 처리를 위해 담당 직원 PIN을 입력해주세요.");
+    return false;
+  };
+
+  const actorPinIdForEvent = currentWorker?.isOwnerBypass ? null : currentWorker?.id || null;
 
   // ✅ 새 주문 NEW 뱃지 표시용
   const [newOrderIds, setNewOrderIds] = useState<Record<string, number>>({}); // id -> expireAt(ms)
@@ -858,6 +923,7 @@ function StaffPageInner() {
   };
 
   const advanceOrder = async (order: OrderRecord) => {
+    if (!requireWorkerPin()) return;
     await updateOrderInDb(order.id, { status: nextStatusForView(order.status) });
     if (staffViewMode === "simple" && order.status === "ready_for_packing") {
       setListTab("active");
@@ -1085,8 +1151,9 @@ function StaffPageInner() {
     const sid = storeIdRef.current || storeId;
     if (!sid) return;
 
+    if (!requireWorkerPin()) return;
     const payload: Record<string, unknown> = { storeId: sid, orderId: id };
-    if (currentWorker) payload.actorPinId = currentWorker.id;
+    if (actorPinIdForEvent) payload.actorPinId = actorPinIdForEvent;
     if (typeof patch.buzzerNo !== "undefined") payload.buzzerNo = patch.buzzerNo || null;
     if (typeof patch.status !== "undefined") payload.status = patch.status;
     if (typeof patch.paymentStatus !== "undefined") payload.paymentStatus = patch.paymentStatus;
@@ -1114,6 +1181,7 @@ function StaffPageInner() {
   const updateOrderItemsInDb = async (itemIds: string[], patch: { status?: ItemStatus; batch?: number }) => {
     const sid = storeIdRef.current || storeId;
     if (!sid || !itemIds.length) return;
+    if (!requireWorkerPin()) return;
     if (typeof patch.status === "undefined") return;
 
     try {
@@ -1211,6 +1279,93 @@ function StaffPageInner() {
           font-weight: 800;
           font-size: 16px;
           line-height: 1.25;
+        }
+
+        .workerBar {
+          margin-top: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #fff;
+          padding: 10px 12px;
+        }
+
+        .workerInfo {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          min-width: 0;
+        }
+
+        .workerLabel {
+          color: var(--muted);
+          font-weight: 900;
+          font-size: 13px;
+        }
+
+        .workerBadge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 32px;
+          border-radius: 999px;
+          padding: 6px 12px;
+          background: #111827;
+          color: #fff;
+          font-weight: 900;
+          font-size: 14px;
+        }
+
+        .workerActions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .modalBackdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 80;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+          background: rgba(17, 24, 39, 0.48);
+        }
+
+        .pinModal {
+          width: min(420px, 100%);
+          border-radius: 20px;
+          border: 1px solid var(--line);
+          background: #fff;
+          color: var(--text);
+          box-shadow: 0 24px 80px rgba(15, 23, 42, 0.25);
+          padding: 18px;
+        }
+
+        .pinModalInput {
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: #fff;
+          color: var(--text);
+          padding: 14px;
+          font-size: 20px;
+          font-weight: 900;
+          letter-spacing: 0.12em;
+        }
+
+        .pinModalActions {
+          margin-top: 12px;
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          flex-wrap: wrap;
         }
 
         .storeInfo b {
@@ -2197,20 +2352,39 @@ function StaffPageInner() {
         </section>
       ) : null}
 
-      <section className="card" style={{ marginTop: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <div>
-            <h2 className="h2" style={{ margin: 0 }}>현재 작업자</h2>
-            <p className="muted" style={{ margin: "4px 0 0" }}>{currentWorker ? `${currentWorker.displayName} · ${currentWorker.pinRole === "manager" ? "매니저" : "직원"}` : "PIN으로 작업자를 선택하면 주문 처리 이력에 기록됩니다."}</p>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input value={pinInput} onChange={(e) => setPinInput(e.target.value)} placeholder="PIN" inputMode="numeric" style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "10px 12px", width: 120, fontWeight: 900 }} />
-            <button className="btn btnPrimary" onClick={() => verifyWorkerPin("staff")}>작업자 선택</button>
-            {currentWorker ? <button className="btn" onClick={() => setCurrentWorker(null)}>잠금</button> : null}
+      <section className="workerBar" aria-label="담당 직원 정보">
+        <div className="workerInfo">
+          <span className="workerLabel">담당 직원</span>
+          <span className="workerBadge">{currentWorker ? `${currentWorker.displayName}${currentWorker.pinRole === "manager" ? " · 매니저" : ""}` : "미선택"}</span>
+        </div>
+        <div className="workerActions">
+          <button className="btn btnSmall" onClick={() => setWorkerPinModalOpen(true)}>담당자 변경</button>
+          {currentWorker && !currentWorker.isOwnerBypass ? <button className="btn btnSmall" onClick={() => { setCurrentWorker(null); setWorkerPinModalOpen(true); }}>잠금</button> : null}
+        </div>
+      </section>
+
+      {workerPinModalOpen ? (
+        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-label="담당 직원 선택">
+          <div className="pinModal">
+            <h2 className="h2" style={{ marginTop: 0 }}>담당 직원 선택</h2>
+            <p className="muted">주문 처리 이력을 남기기 위해 직원 PIN 번호를 입력해주세요.</p>
+            <input
+              className="pinModalInput"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value)}
+              placeholder="PIN 번호"
+              inputMode="numeric"
+              autoFocus
+            />
+            {pinMsg ? <p className="err">{pinMsg}</p> : null}
+            <div className="pinModalActions">
+              {loginRole === "owner" ? <button className="btn" onClick={() => setWorkerPinModalOpen(false)}>오너로 계속하기</button> : null}
+              <button className="btn btnPrimary" onClick={() => verifyWorkerPin("staff")}>확인</button>
+            </div>
+            <p className="hint" style={{ marginTop: 10 }}>처음 사용하는 직원은 오너에게 PIN 등록 승인을 요청해주세요.</p>
           </div>
         </div>
-        {pinMsg ? <p className="err">{pinMsg}</p> : null}
-      </section>
+      ) : null}
 
       <div className="modeRow">
         <p className="modeLabel">운영 방식</p>
