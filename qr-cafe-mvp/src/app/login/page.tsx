@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 
@@ -51,12 +52,16 @@ function LoginPageInner() {
       return;
     }
 
-    const { data: memberRow } = await supabase
+    const { data: memberRows } = await supabase
       .from("store_members")
-      .select("id")
+      .select("role")
       .eq("user_id", uid)
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
+
+    const roles = (memberRows || []).map((row) => String(row.role || "").trim().toLowerCase());
+    const hasOwnerRole = roles.includes("owner");
+    const hasManagerRole = roles.includes("manager");
+    const hasStaffRole = roles.includes("staff");
 
     const safeNext = resolveSafeNext(next);
     if (safeNext) {
@@ -64,7 +69,9 @@ function LoginPageInner() {
       return;
     }
 
-    router.push(memberRow ? "/admin" : "/me");
+    if (hasOwnerRole) router.push("/admin");
+    else if (hasManagerRole || hasStaffRole) router.push("/staff");
+    else router.push("/me");
   };
 
   return (
@@ -98,15 +105,15 @@ function LoginPageInner() {
       </form>
 
       <div style={{ marginTop: 14 }}>
-        <a href="/signup" style={{ fontWeight: 900 }}>
+        <Link href="/signup" style={{ fontWeight: 900 }}>
           회원가입
-        </a>
+        </Link>
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <a href="/" style={{ color: "#6b7280", fontWeight: 800 }}>
+        <Link href="/" style={{ color: "#6b7280", fontWeight: 800 }}>
           홈으로
-        </a>
+        </Link>
       </div>
     </main>
   );
