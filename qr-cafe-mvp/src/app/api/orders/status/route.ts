@@ -10,6 +10,7 @@ type StatusBody = {
   status?: OrderStatus;
   buzzerNo?: string | null;
   paymentStatus?: PaymentStatus;
+  actorPinId?: string | null;
 };
 
 type OrderRow = {
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabaseAdmin = createSupabaseAdminClient();
-    await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner", "manager", "staff"] });
+    const auth = await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner", "manager", "staff"] });
 
     const { data, error } = await supabaseAdmin
       .from("orders")
@@ -89,6 +90,20 @@ export async function POST(req: NextRequest) {
 
     const updateRes = await supabaseAdmin.from("orders").update(payload).eq("id", orderId).eq("store_id", storeId);
     if (updateRes.error) return NextResponse.json({ ok: false, message: `주문 상태 업데이트 실패: ${updateRes.error.message}` }, { status: 500 });
+
+    if (payload.status || typeof body.buzzerNo !== "undefined" || paymentStatus) {
+      const eventRes = await supabaseAdmin.from("order_events").insert({
+        store_id: storeId,
+        order_id: orderId,
+        event_type: payload.status ? "order_status_changed" : "order_updated",
+        before_status: currentStatus,
+        after_status: payload.status || currentStatus,
+        actor_user_id: auth.userId,
+        actor_pin_id: body.actorPinId || null,
+        metadata: { patch: payload },
+      });
+      if (eventRes.error) console.warn("[order_events] insert skipped:", eventRes.error.message);
+    }
 
     if (payload.status === "completed") {
       const { error: finalizeErr } = await supabaseAdmin.rpc("finalize_order_rewards", {

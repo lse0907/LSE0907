@@ -420,6 +420,60 @@ function StaffPageInner() {
   const [initialLoading, setInitialLoading] = useState(true);
 
   const [errMsg, setErrMsg] = useState("");
+  const [deviceStatus, setDeviceStatus] = useState<"checking" | "approved" | "pending" | "rejected" | "disabled" | "setup_required" | "owner_bypass">("checking");
+  const [currentWorker, setCurrentWorker] = useState<{ id: string; displayName: string; pinRole: "staff" | "manager" } | null>(null);
+  const [pinInput, setPinInput] = useState("");
+  const [pinMsg, setPinMsg] = useState("");
+
+
+  useEffect(() => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid) return;
+    (async () => {
+      try {
+        let fingerprint = window.localStorage.getItem("qrCafeStaffDeviceFingerprint");
+        if (!fingerprint) {
+          fingerprint = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          window.localStorage.setItem("qrCafeStaffDeviceFingerprint", fingerprint);
+        }
+        const res = await fetch("/api/staff/devices/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId: sid,
+            fingerprint,
+            deviceName: navigator.userAgent.includes("Mobile") ? "모바일 기기" : "직원 기기",
+            deviceType: navigator.userAgent.includes("Mobile") ? "mobile" : "web",
+            browser: navigator.userAgent,
+          }),
+        });
+        const json = await res.json();
+        setDeviceStatus(json.status === "owner_bypass" || json.status === "approved" || json.status === "setup_required" ? json.status : json.status || "pending");
+      } catch {
+        setDeviceStatus("setup_required");
+      }
+    })();
+  }, [storeId]);
+
+  const verifyWorkerPin = async (requiredRole: "staff" | "manager" = "staff") => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid || !pinInput.trim()) return;
+    setPinMsg("");
+    try {
+      const res = await fetch("/api/staff/pins/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId: sid, pin: pinInput.trim(), requiredRole }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.message || "PIN 확인 실패");
+      setCurrentWorker({ id: json.pin.id, displayName: json.pin.displayName, pinRole: json.pin.pinRole });
+      setPinInput("");
+      setPinMsg("");
+    } catch (e: unknown) {
+      setPinMsg(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   // ✅ 새 주문 NEW 뱃지 표시용
   const [newOrderIds, setNewOrderIds] = useState<Record<string, number>>({}); // id -> expireAt(ms)
@@ -1032,6 +1086,7 @@ function StaffPageInner() {
     if (!sid) return;
 
     const payload: Record<string, unknown> = { storeId: sid, orderId: id };
+    if (currentWorker) payload.actorPinId = currentWorker.id;
     if (typeof patch.buzzerNo !== "undefined") payload.buzzerNo = patch.buzzerNo || null;
     if (typeof patch.status !== "undefined") payload.status = patch.status;
     if (typeof patch.paymentStatus !== "undefined") payload.paymentStatus = patch.paymentStatus;
@@ -2133,6 +2188,29 @@ function StaffPageInner() {
           {errMsg ? <p className="err">오류: {errMsg}</p> : null}
         </div>
       </header>
+
+      {deviceStatus !== "approved" && deviceStatus !== "owner_bypass" && deviceStatus !== "setup_required" ? (
+        <section className="card" style={{ marginTop: 12 }}>
+          <h2 className="h2">기기 승인 필요</h2>
+          <p className="muted">이 기기는 아직 직원 화면 사용 승인이 필요합니다. 오너가 관리자 &gt; 매장설정 &gt; 직원/권한 관리에서 승인하면 사용할 수 있습니다.</p>
+          <p className="err">현재 상태: {deviceStatus}</p>
+        </section>
+      ) : null}
+
+      <section className="card" style={{ marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div>
+            <h2 className="h2" style={{ margin: 0 }}>현재 작업자</h2>
+            <p className="muted" style={{ margin: "4px 0 0" }}>{currentWorker ? `${currentWorker.displayName} · ${currentWorker.pinRole === "manager" ? "매니저" : "직원"}` : "PIN으로 작업자를 선택하면 주문 처리 이력에 기록됩니다."}</p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input value={pinInput} onChange={(e) => setPinInput(e.target.value)} placeholder="PIN" inputMode="numeric" style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "10px 12px", width: 120, fontWeight: 900 }} />
+            <button className="btn btnPrimary" onClick={() => verifyWorkerPin("staff")}>작업자 선택</button>
+            {currentWorker ? <button className="btn" onClick={() => setCurrentWorker(null)}>잠금</button> : null}
+          </div>
+        </div>
+        {pinMsg ? <p className="err">{pinMsg}</p> : null}
+      </section>
 
       <div className="modeRow">
         <p className="modeLabel">운영 방식</p>
