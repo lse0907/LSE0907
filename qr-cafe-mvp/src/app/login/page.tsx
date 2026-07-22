@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 
@@ -10,8 +11,17 @@ function LoginPageInner() {
   const initialError = sp.get("error");
   const next = (sp.get("next") || "").trim();
 
-  const [email, setEmail] = useState("");
+  const readSavedLoginId = () => {
+    try {
+      if (typeof window === "undefined") return "";
+      return window.localStorage.getItem("qrCafeRememberedLoginId") || "";
+    } catch {
+      return "";
+    }
+  };
+  const [email, setEmail] = useState(() => readSavedLoginId());
   const [password, setPassword] = useState("");
+  const [rememberLoginId, setRememberLoginId] = useState(() => !!readSavedLoginId());
   const [msg, setMsg] = useState<string>(initialError || "");
   const [loading, setLoading] = useState(false);
 
@@ -43,6 +53,13 @@ function LoginPageInner() {
       return;
     }
 
+    try {
+      if (rememberLoginId) window.localStorage.setItem("qrCafeRememberedLoginId", email.trim());
+      else window.localStorage.removeItem("qrCafeRememberedLoginId");
+    } catch {
+      // ignore saved login id write errors
+    }
+
     const { data: userData } = await supabase.auth.getUser();
     const uid = userData?.user?.id;
 
@@ -51,12 +68,16 @@ function LoginPageInner() {
       return;
     }
 
-    const { data: memberRow } = await supabase
+    const { data: memberRows } = await supabase
       .from("store_members")
-      .select("id")
+      .select("role")
       .eq("user_id", uid)
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
+
+    const roles = (memberRows || []).map((row) => String(row.role || "").trim().toLowerCase());
+    const hasOwnerRole = roles.includes("owner");
+    const hasManagerRole = roles.includes("manager");
+    const hasStaffRole = roles.includes("staff");
 
     const safeNext = resolveSafeNext(next);
     if (safeNext) {
@@ -64,7 +85,9 @@ function LoginPageInner() {
       return;
     }
 
-    router.push(memberRow ? "/admin" : "/me");
+    if (hasOwnerRole) router.push("/admin");
+    else if (hasManagerRole || hasStaffRole) router.push("/staff");
+    else router.push("/me");
   };
 
   return (
@@ -84,6 +107,15 @@ function LoginPageInner() {
           placeholder="이메일"
           style={inputStyle}
         />
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "#374151" }}>
+          <input
+            checked={rememberLoginId}
+            onChange={(e) => setRememberLoginId(e.target.checked)}
+            type="checkbox"
+            style={{ width: 18, height: 18 }}
+          />
+          이 기기에 계정 ID 저장
+        </label>
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -98,15 +130,15 @@ function LoginPageInner() {
       </form>
 
       <div style={{ marginTop: 14 }}>
-        <a href="/signup" style={{ fontWeight: 900 }}>
+        <Link href="/signup" style={{ fontWeight: 900 }}>
           회원가입
-        </a>
+        </Link>
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <a href="/" style={{ color: "#6b7280", fontWeight: 800 }}>
+        <Link href="/" style={{ color: "#6b7280", fontWeight: 800 }}>
           홈으로
-        </a>
+        </Link>
       </div>
     </main>
   );
