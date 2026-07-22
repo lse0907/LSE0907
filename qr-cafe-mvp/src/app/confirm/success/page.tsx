@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { nextDailySequence, format4, todayKey } from "@/app/lib/orderNumber";
 import { supabase } from "@/app/lib/supabaseClient";
 import { lsLastOrderIdKey, lsLastOrderTokenKey } from "@/app/lib/storeScope";
 
@@ -48,21 +47,6 @@ type PendingPrepay = {
 
 const PREPAY_PENDING_KEY = "qrCafePrepayPending";
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
-
-function uuid() {
-  return globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-function isDuplicateDisplayNoError(msg: string) {
-  const m = String(msg || "").toLowerCase();
-  return (
-    m.includes("duplicate key value violates unique constraint") ||
-    m.includes("orders_display_no_unique") ||
-    m.includes("orders_store_date_display_no_unique") ||
-    m.includes("unique constraint") ||
-    m.includes("23505")
-  );
-}
 
 function ConfirmSuccessPageInner() {
   const router = useRouter();
@@ -131,119 +115,35 @@ function ConfirmSuccessPageInner() {
           loyaltyCustomerUserId = authData?.user?.id || null;
         }
 
-        const newOrderId = uuid();
-        const accessToken = uuid();
-        const createdAtIso = new Date().toISOString();
-        const orderDate = todayKey();
-
-        const MAX_TRY = 5;
-
-        for (let attempt = 0; attempt < MAX_TRY; attempt++) {
-          const seq = nextDailySequence();
-          const displayNo = format4(seq);
-          const orderRow: Record<string, unknown> = {
-            id: newOrderId,
-            access_token: accessToken,
-            created_at: createdAtIso,
-            order_date: orderDate,
-            display_no: displayNo,
+        const createRes = await fetch("/api/orders/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId,
+            cartLines: pending.cartLines,
             mode: pending.mode,
-            table_no: pending.mode === "dine-in" ? pending.table || null : null,
-            request_note: pending.requestNote?.trim() || "",
-            total_count: pending.totalCount,
-            total_price: Math.round(pending.totalPrice),
-            status: "new",
-            payment_status: "paid",
-            payment_key: paymentKey,
-            toss_order_id: orderId,
-            customer_user_id: loyaltyCustomerUserId,
-            used_points: Math.max(0, Number(pending.usedPoints || 0)),
-            used_coupon_id: pending.usedCouponId || null,
-            applied_discount_type: pending.usedCouponId
-              ? "coupon"
-              : (Math.max(0, Number(pending.usedPoints || 0)) > 0 ? "point" : null),
-            store_id: storeId,
-          };
-
-          let insertOrder = await supabase.from("orders").insert([orderRow]);
-          if (insertOrder.error) {
-            const low = String(insertOrder.error.message || "").toLowerCase();
-            const missingPaymentKeyColumn = low.includes("payment_key") && (low.includes("column") || low.includes("schema cache"));
-            const missingPaymentStatusColumn = low.includes("payment_status") && (low.includes("column") || low.includes("schema cache"));
-            const missingTossOrderIdColumn = low.includes("toss_order_id") && (low.includes("column") || low.includes("schema cache"));
-            if (missingPaymentKeyColumn || missingPaymentStatusColumn || missingTossOrderIdColumn) {
-              const fallbackRow = { ...orderRow };
-              if (missingPaymentKeyColumn) delete (fallbackRow as any).payment_key;
-              if (missingPaymentStatusColumn) delete (fallbackRow as any).payment_status;
-              if (missingTossOrderIdColumn) delete (fallbackRow as any).toss_order_id;
-              insertOrder = await supabase.from("orders").insert([fallbackRow]);
-            }
-          }
-          if (!insertOrder.error) break;
-
-          const msg = insertOrder.error.message || String(insertOrder.error);
-          const duplicated = isDuplicateDisplayNoError(msg);
-          if (!duplicated || attempt === MAX_TRY - 1) {
-            throw new Error(`[orders insert] ${msg}`);
-          }
-        }
-
-        const orderItemRows: Array<Record<string, unknown>> = pending.cartLines.map((ln) => {
-          const orderItemId = uuid();
-          (ln as unknown as { __orderItemId?: string }).__orderItemId = orderItemId;
-          return {
-            id: orderItemId,
-            order_id: newOrderId,
-            menu_id: ln.menuId,
-            name: ln.name,
-            price: Math.round(ln.basePrice),
-            qty: Math.round(ln.qty),
-            store_id: storeId,
-          };
+            table: pending.mode === "dine-in" ? pending.table || "" : "",
+            requestNote: pending.requestNote || "",
+            customerUserId: loyaltyCustomerUserId,
+            usedPoints: Math.max(0, Number(pending.usedPoints || 0)),
+            usedCouponId: pending.usedCouponId || null,
+            paymentStatus: "paid",
+            paymentKey,
+            tossOrderId: orderId,
+            paidAmount: amount,
+          }),
         });
 
-        const { error: oiErr } = await supabase.from("order_items").insert(orderItemRows);
-        if (oiErr) throw new Error(`[order_items insert] ${oiErr.message}`);
-
-        const optionRows: Array<Record<string, unknown>> = [];
-        for (const ln of pending.cartLines) {
-          const orderItemId = (ln as unknown as { __orderItemId?: string }).__orderItemId;
-          const groups = Array.isArray(ln.options) ? ln.options : [];
-
-          for (const g of groups) {
-            const items = Array.isArray(g.items) ? g.items : [];
-            for (const it of items) {
-              optionRows.push({
-                id: uuid(),
-                order_item_id: orderItemId,
-                group_id: g.groupId,
-                option_id: it.id,
-                name: it.name,
-                price_delta: Math.round(Number(it.priceDelta || 0)),
-                store_id: storeId,
-              });
-            }
-          }
+        const createJson = await createRes.json();
+        if (!createRes.ok || !createJson?.ok || !createJson?.order) {
+          throw new Error(String(createJson?.message || "결제는 승인되었지만 주문 생성에 실패했습니다."));
         }
 
-        if (optionRows.length) {
-          const { error: oioErr } = await supabase.from("order_item_options").insert(optionRows);
-          if (oioErr) throw new Error(`[order_item_options insert] ${oioErr.message}`);
-        }
-
-        if (loyaltyCustomerUserId) {
-          const { error: loyaltyErr } = await supabase.rpc("apply_loyalty_on_paid_order", {
-            p_order_id: newOrderId,
-            p_store_id: storeId,
-            p_customer_user_id: loyaltyCustomerUserId,
-            p_order_amount: Math.round(pending.totalPrice),
-            p_used_points: Math.max(0, Number(pending.usedPoints || 0)),
-            p_used_coupon_id: pending.usedCouponId || null,
-            p_idempotency_key: `${newOrderId}:loyalty`,
-          });
-          if (loyaltyErr) {
-            console.warn("[loyalty] apply failed:", loyaltyErr.message);
-          }
+        const created = createJson.order;
+        const newOrderId = String(created.orderId || "");
+        const accessToken = String(created.accessToken || "");
+        if (!newOrderId || !accessToken) {
+          throw new Error("주문 확인 정보가 누락되었습니다.");
         }
 
         localStorage.setItem(lsLastOrderIdKey(storeId), newOrderId);
