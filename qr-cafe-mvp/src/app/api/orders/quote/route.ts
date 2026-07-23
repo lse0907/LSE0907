@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as QuoteBody;
     const storeId = String(body?.storeId || "").trim();
-    if (!storeId) return NextResponse.json({ ok: false, message: "매장 정보가 없습니다." }, { status: 400 });
+    if (!storeId) return NextResponse.json({ ok: false, code: "STORE_REQUIRED", message: "매장 정보가 없습니다." }, { status: 400 });
 
     const requestUserId = await getRequestUserId(req);
     const validated = await validateOrderPayload({
@@ -59,6 +59,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, quote: validated });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ ok: false, message }, { status: 400 });
+    return NextResponse.json({ ok: false, code: "ORDER_QUOTE_FAILED", message }, { status: 400 });
   }
 }

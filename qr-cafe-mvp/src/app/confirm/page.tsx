@@ -103,6 +103,15 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString();
 }
 
+function checkoutErrorMessage(code?: string, fallback?: string) {
+  if (code === "AMOUNT_MISMATCH") return "금액이 변경됐어요. 다시 확인해주세요.";
+  if (code === "PAYMENT_IDENTIFIERS_MISSING") return "결제 정보가 부족합니다.";
+  if (code === "STORE_REQUIRED") return "매장 정보가 없습니다.";
+  if (code === "ORDER_QUOTE_FAILED") return fallback || "주문 금액 확인에 실패했습니다.";
+  if (code === "ORDER_CREATE_FAILED") return fallback || "주문 접수에 실패했습니다.";
+  return fallback || "처리에 실패했습니다. 다시 시도해주세요.";
+}
+
 function uuid() {
   return (
     globalThis.crypto?.randomUUID?.() ||
@@ -231,6 +240,7 @@ function ConfirmPageInner() {
 
   const [requestNote, setRequestNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [isPrepayStore, setIsPrepayStore] = useState(false);
   const [prepayLoading, setPrepayLoading] = useState(true);
   const [pgConfig, setPgConfig] = useState<PgConfig>({ clientKey: "", mid: "" });
@@ -480,6 +490,7 @@ function ConfirmPageInner() {
 
     try {
       setSubmitting(true);
+      setSubmitError("");
 
       let currentCustomerUserId = customerUserId;
       if (!currentCustomerUserId) {
@@ -512,7 +523,7 @@ function ConfirmPageInner() {
         });
         const quoteJson = await quoteRes.json();
         if (!quoteRes.ok || !quoteJson?.ok) {
-          throw new Error(String(quoteJson?.message || "주문 금액 검증에 실패했습니다."));
+          throw new Error(checkoutErrorMessage(quoteJson?.code, quoteJson?.message));
         }
 
         const serverQuote = quoteJson.quote;
@@ -561,7 +572,7 @@ function ConfirmPageInner() {
       });
       const createJson = await createRes.json();
       if (!createRes.ok || !createJson?.ok || !createJson?.order) {
-        throw new Error(String(createJson?.message || "주문 생성에 실패했습니다."));
+        throw new Error(checkoutErrorMessage(createJson?.code, createJson?.message || "주문 접수에 실패했습니다."));
       }
 
       const created = createJson.order;
@@ -581,7 +592,7 @@ function ConfirmPageInner() {
       );
     } catch (e: any) {
       console.error(e);
-      alert(String(e?.message || e));
+      setSubmitError(String(e?.message || e || "처리에 실패했습니다."));
       setSubmitting(false);
     }
   };
@@ -1068,6 +1079,23 @@ function ConfirmPageInner() {
           </div>
         )}
       </div>
+
+      {submitError ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: 14,
+            border: "1px solid #fecaca",
+            borderRadius: 12,
+            background: "#fef2f2",
+            color: "#991b1b",
+            padding: 12,
+            fontWeight: 900,
+          }}
+        >
+          {submitError}
+        </div>
+      ) : null}
 
       <div
         style={{
