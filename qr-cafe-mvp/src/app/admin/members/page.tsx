@@ -107,7 +107,12 @@ function MembersPageInner() {
   const pins = summary?.pins.rows || [];
   const pendingPins = pins.filter((p) => String(p.approval_status || "approved") === "pending");
   const activePins = pins.filter((p) => String(p.approval_status || "approved") !== "pending");
-  const pendingDevices = (summary?.devices.rows || []).filter((d) => d.status === "pending");
+  const devices = summary?.devices.rows || [];
+  const pendingDevices = devices.filter((d) => d.status === "pending");
+  const approvedDevices = devices.filter((d) => d.status === "approved");
+  const sharedAccounts = (summary?.members.rows || []).filter((m) => m.role === "staff" || m.role === "manager");
+  const staffAccount = sharedAccounts.find((m) => m.role === "staff");
+  const managerAccount = sharedAccounts.find((m) => m.role === "manager");
 
   const submitAccount = () => {
     if (!accountModal) return;
@@ -140,7 +145,7 @@ function MembersPageInner() {
           <h1>직원/권한 관리</h1>
           <p className="muted">공용 계정, 직원 PIN 승인, 승인 기기, 보안 로그를 관리합니다.</p>
         </div>
-        <button className="btn" onClick={() => router.push(`/admin?store=${encodeURIComponent(storeId)}`)}>← 관리자 홈</button>
+        <button className="btn homeBtn" onClick={() => router.push(`/admin?store=${encodeURIComponent(storeId)}`)}>관리자 홈</button>
       </header>
 
       {!storeId ? <div className="alert">먼저 관리자 홈에서 매장을 선택해주세요.</div> : null}
@@ -150,6 +155,7 @@ function MembersPageInner() {
         <Stat label="승인대기 PIN" value={pendingPins.length} />
         <Stat label="사용중 PIN" value={activePins.filter((p) => p.is_active).length} />
         <Stat label="승인대기 기기" value={pendingDevices.length} />
+        <Stat label="승인된 기기" value={approvedDevices.length} />
       </section>
 
       <section className="card">
@@ -160,8 +166,14 @@ function MembersPageInner() {
 
         {tab === "accounts" ? (
           <div className="panel">
-            <div className="panelHead"><div><h2>공용 계정</h2><p className="muted">직원 화면에 접속할 매장 공용 로그인 계정입니다.</p></div><div className="actions"><button className="btn" onClick={() => setAccountModal({ role: "staff", loginId: `${storeId.slice(0, 8).toLowerCase()}-staff`, password: "", displayName: "직원 공용 계정" })}>직원 계정 만들기</button><button className="btn dark" onClick={() => setAccountModal({ role: "manager", loginId: `${storeId.slice(0, 8).toLowerCase()}-manager`, password: "", displayName: "매니저 공용 계정" })}>매니저 계정 만들기</button></div></div>
-            {(summary?.members.rows || []).map((m) => <Row key={m.id || `${m.user_id}-${m.role}`} title={`${roleLabel(m.role)} 계정`} desc="내부 사용자 ID는 보안을 위해 기본 화면에 표시하지 않습니다." meta={m.created_at} />)}
+            <div className="panelHead">
+              <div><h2>공용 계정</h2><p className="muted">직원 화면에 접속할 매장 공용 로그인 계정입니다. 역할별로 1개씩 운영하는 것을 권장합니다.</p></div>
+              <div className="actions">
+                {!staffAccount ? <button className="btn" onClick={() => setAccountModal({ role: "staff", loginId: `${storeId.slice(0, 8).toLowerCase()}-staff`, password: "", displayName: "직원 공용 계정" })}>직원 계정 만들기</button> : <span className="doneBadge">직원 계정 생성 완료</span>}
+                {!managerAccount ? <button className="btn dark" onClick={() => setAccountModal({ role: "manager", loginId: `${storeId.slice(0, 8).toLowerCase()}-manager`, password: "", displayName: "매니저 공용 계정" })}>매니저 계정 만들기</button> : <span className="doneBadge darkBadge">매니저 계정 생성 완료</span>}
+              </div>
+            </div>
+            {(summary?.members.rows || []).map((m) => <Row key={m.id || `${m.user_id}-${m.role}`} title={`${m.display_name || roleLabel(m.role) + " 계정"}`} desc={accountDesc(m)} meta={m.created_at} />)}
             {summary?.members.rows?.length === 0 ? <Empty text="아직 공용 계정이 없습니다." /> : null}
             {summary?.members.error ? <p className="warn">store_members 조회 경고: {summary.members.error}</p> : null}
           </div>
@@ -169,7 +181,7 @@ function MembersPageInner() {
 
         {tab === "pins" ? (
           <div className="panel">
-            <div className="panelHead"><div><h2>직원 PIN</h2><p className="muted">PIN 번호는 저장 후 다시 표시하지 않습니다. 필요하면 재설정하세요.</p></div><button className="btn dark" onClick={() => setPinModal({ action: "create", displayName: "", pinRole: "staff", pin: "", pinConfirm: "" })}>오너가 직접 PIN 추가</button></div>
+            <div className="panelHead"><div><h2>직원 PIN</h2><p className="muted">PIN 번호는 저장 후 다시 표시하지 않습니다. 필요하면 재설정하세요.</p></div><button className="btn dark" onClick={() => setPinModal({ action: "create", displayName: "", pinRole: "staff", pin: "", pinConfirm: "" })}>직접 PIN 추가</button></div>
             {pendingPins.length ? <h3 className="subTitle">승인대기</h3> : null}
             {pendingPins.map((p) => <Row key={p.id} title={`${p.display_name} · ${roleLabel(p.pin_role)}`} desc={p.contact_hint ? `메모: ${p.contact_hint}` : "직원이 등록 승인을 요청했습니다."} meta={p.requested_at || p.created_at} actions={<><button className="btn dark" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "approve", pinId: p.id, pinRole: p.pin_role })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "reject", pinId: p.id })}>거절</button></>} />)}
             <h3 className="subTitle">등록된 PIN</h3>
@@ -204,6 +216,13 @@ function MembersPageInner() {
   );
 }
 
+function accountDesc(member: any) {
+  const loginId = String(member.login_id || "").trim();
+  const fallback = member.role === "owner" ? "오너 계정" : `${roleLabel(String(member.role || ""))} 권한`;
+  const parts = [loginId ? `로그인 ID: ${loginId}` : fallback, `권한: ${roleLabel(String(member.role || ""))}`, member.is_shared_store_account ? "공용 계정" : "개인/오너 계정"].filter(Boolean);
+  return parts.join(" · ");
+}
+
 function humanMeta(metadata: any) {
   if (!metadata || typeof metadata !== "object") return "상세 정보 없음";
   const parts = [metadata.displayName ? `대상: ${metadata.displayName}` : "", metadata.pinRole ? `권한: ${roleLabel(String(metadata.pinRole))}` : "", metadata.requiredRole ? `필요 권한: ${roleLabel(String(metadata.requiredRole))}` : ""].filter(Boolean);
@@ -222,9 +241,9 @@ button, input, select, textarea { color: #111827; background: #ffffff; }
 .topbar { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
 .eyebrow { margin: 0 0 6px; color: #2563eb; font-weight: 900; }
 h1 { margin: 0; font-size: 30px; letter-spacing: -0.03em; } h2 { margin: 0; font-size: 20px; } .muted, .hint { color: #6b7280; } .hint { font-size: 13px; }
-.statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+.statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
 .stat, .card { background: #ffffff; color: #111827; border: 1px solid #e5e7eb; border-radius: 18px; padding: 16px; box-shadow: 0 10px 28px rgba(15,23,42,.04); }
-.stat span { color: #6b7280; font-weight: 800; } .stat strong { display: block; margin-top: 6px; font-size: 28px; }
+.stat span { color: #6b7280; font-weight: 800; } .stat strong { display: block; margin-top: 6px; font-size: 28px; } .homeBtn { min-width: 116px; } .doneBadge { display: inline-flex; align-items: center; border: 1px solid #d1fae5; background: #ecfdf5; color: #047857; border-radius: 12px; padding: 10px 12px; font-weight: 900; } .darkBadge { border-color: #dbeafe; background: #eff6ff; color: #1d4ed8; }
 .alert { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 14px; padding: 12px; margin-bottom: 12px; color: #9a3412; font-weight: 800; }
 .loading, .empty { border: 1px dashed #d1d5db; border-radius: 14px; padding: 14px; color: #6b7280; background: #f9fafb; }
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -239,7 +258,7 @@ h1 { margin: 0; font-size: 30px; letter-spacing: -0.03em; } h2 { margin: 0; font
 .modal { width: min(460px, 100%); display: grid; gap: 14px; background: #fff; color: #111827; border-radius: 20px; border: 1px solid #e5e7eb; box-shadow: 0 24px 80px rgba(15,23,42,.25); padding: 18px; }
 .modalBody { display: grid; gap: 10px; } label { display: grid; gap: 6px; color: #374151; font-weight: 900; } input, select { border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; font-weight: 800; } input:disabled { background: #f3f4f6; color: #6b7280; }
 .modalActions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-@media (max-width: 720px) { .wrap { padding: 14px; } .topbar, .panelHead, .rowCard, .statsGrid { display: grid; grid-template-columns: 1fr; } .actions, .rowActions { width: 100%; justify-content: stretch; } .btn, .tab { min-height: 44px; } }
+@media (max-width: 720px) { .wrap { padding: 14px; } .topbar, .panelHead, .rowCard { display: grid; grid-template-columns: 1fr; } .topbar { gap: 10px; margin-bottom: 12px; } .homeBtn { width: 100%; min-height: 38px; padding: 8px 10px; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .stat { padding: 10px 12px; border-radius: 14px; } .stat span { font-size: 12px; } .stat strong { margin-top: 2px; font-size: 20px; } .actions, .rowActions { width: 100%; justify-content: stretch; } .btn, .tab, .doneBadge { min-height: 40px; padding: 8px 10px; } }
 `;
 
 export default function MembersPage() {
