@@ -11,6 +11,7 @@ type Summary = { members: ApiSection; pins: ApiSection; devices: ApiSection; eve
 
 type AccountModal = { role: "staff" | "manager"; loginId: string; password: string; displayName: string } | null;
 type PinActionModal = { action: "create" | "reset"; pinId?: string; displayName: string; pinRole: "staff" | "manager"; pin: string; pinConfirm: string } | null;
+type DeviceNameModal = { deviceId: string; deviceName: string } | null;
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: "accounts", label: "공용 계정" },
@@ -65,6 +66,7 @@ function MembersPageInner() {
   const [loading, setLoading] = useState(false);
   const [accountModal, setAccountModal] = useState<AccountModal>(null);
   const [pinModal, setPinModal] = useState<PinActionModal>(null);
+  const [deviceNameModal, setDeviceNameModal] = useState<DeviceNameModal>(null);
 
   const load = async () => {
     if (!storeId) return;
@@ -96,6 +98,7 @@ function MembersPageInner() {
       if (!res.ok || !json.ok) throw new Error(json.message || "요청 처리 실패");
       setAccountModal(null);
       setPinModal(null);
+      setDeviceNameModal(null);
       await load();
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -136,6 +139,16 @@ function MembersPageInner() {
     mutate("/api/admin/members/pins", { storeId, action: pinModal.action, pinId: pinModal.pinId, displayName: pinModal.displayName, pinRole: pinModal.pinRole, pin: pinModal.pin });
   };
 
+  const submitDeviceName = () => {
+    if (!deviceNameModal) return;
+    const deviceName = deviceNameModal.deviceName.trim();
+    if (!deviceName) {
+      setMsg("기기 이름을 입력해주세요.");
+      return;
+    }
+    mutate("/api/admin/members/devices", { storeId, deviceId: deviceNameModal.deviceId, action: "rename", deviceName });
+  };
+
   return (
     <main className="wrap">
       <style jsx global>{css}</style>
@@ -167,10 +180,10 @@ function MembersPageInner() {
         {tab === "accounts" ? (
           <div className="panel">
             <div className="panelHead">
-              <div><h2>공용 계정</h2><p className="muted">직원 화면에 접속할 매장 공용 로그인 계정입니다. 역할별로 1개씩 운영하는 것을 권장합니다.</p></div>
+              <div><h2>공용 계정</h2><p className="muted compactCopy">직원 화면 로그인 계정입니다. 역할별 1개를 권장합니다.</p></div>
               <div className="actions">
-                {!staffAccount ? <button className="btn" onClick={() => setAccountModal({ role: "staff", loginId: `${storeId.slice(0, 8).toLowerCase()}-staff`, password: "", displayName: "직원 공용 계정" })}>직원 계정 만들기</button> : <span className="doneBadge">직원 계정 생성 완료</span>}
-                {!managerAccount ? <button className="btn dark" onClick={() => setAccountModal({ role: "manager", loginId: `${storeId.slice(0, 8).toLowerCase()}-manager`, password: "", displayName: "매니저 공용 계정" })}>매니저 계정 만들기</button> : <span className="doneBadge darkBadge">매니저 계정 생성 완료</span>}
+                {!staffAccount ? <button className="btn" onClick={() => setAccountModal({ role: "staff", loginId: `${storeId.slice(0, 8).toLowerCase()}-staff`, password: "", displayName: "직원 공용 계정" })}>직원 계정 만들기</button> : <span className="doneBadge">직원 완료</span>}
+                {!managerAccount ? <button className="btn dark" onClick={() => setAccountModal({ role: "manager", loginId: `${storeId.slice(0, 8).toLowerCase()}-manager`, password: "", displayName: "매니저 공용 계정" })}>매니저 계정 만들기</button> : <span className="doneBadge darkBadge">매니저 완료</span>}
               </div>
             </div>
             {(summary?.members.rows || []).map((m) => <Row key={m.id || `${m.user_id}-${m.role}`} title={`${m.display_name || roleLabel(m.role) + " 계정"}`} desc={accountDesc(m)} meta={m.created_at} />)}
@@ -186,7 +199,7 @@ function MembersPageInner() {
             {pendingPins.map((p) => <Row key={p.id} title={`${p.display_name} · ${roleLabel(p.pin_role)}`} desc={p.contact_hint ? `메모: ${p.contact_hint}` : "직원이 등록 승인을 요청했습니다."} meta={p.requested_at || p.created_at} actions={<><button className="btn dark" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "approve", pinId: p.id, pinRole: p.pin_role })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "reject", pinId: p.id })}>거절</button></>} />)}
             <h3 className="subTitle">등록된 PIN</h3>
             {activePins.map((p) => <Row key={p.id} title={`${p.display_name} · ${roleLabel(p.pin_role)} · ${statusLabel(p.approval_status || "approved")}`} desc={p.is_active ? "사용 가능" : "잠금됨"} meta={p.last_used_at || p.created_at} actions={<><select className="miniSelect" value={p.pin_role} onChange={(e) => mutate("/api/admin/members/pins", { storeId, action: "changeRole", pinId: p.id, pinRole: e.target.value })}><option value="staff">직원</option><option value="manager">매니저</option></select><button className="btn" onClick={() => setPinModal({ action: "reset", pinId: p.id, displayName: p.display_name, pinRole: p.pin_role, pin: "", pinConfirm: "" })}>PIN 재설정</button><button className="btn" onClick={() => mutate("/api/admin/members/pins", { storeId, action: p.is_active ? "disable" : "enable", pinId: p.id })}>{p.is_active ? "잠금" : "잠금 해제"}</button></>} />)}
-            {pins.length === 0 ? <Empty text="등록된 PIN이 없습니다. 직원이 요청하거나 관리자가 직접 추가할 수 있습니다." /> : null}
+            {pins.length === 0 ? <Empty text="등록된 PIN이 없습니다." /> : null}
             {summary?.pins.error ? <p className="warn">PIN 테이블 SQL 적용 필요: {summary.pins.error}</p> : null}
           </div>
         ) : null}
@@ -194,8 +207,8 @@ function MembersPageInner() {
         {tab === "devices" ? (
           <div className="panel">
             <h2>승인 기기</h2>
-            {(summary?.devices.rows || []).map((d) => <Row key={d.id} title={`${d.device_name || "기기"} · ${statusLabel(d.status)}`} desc={`${d.device_type || "web"} · ${d.browser ? String(d.browser).slice(0, 80) : "기기 정보 없음"}`} meta={d.last_seen_at || d.created_at} actions={<><button className="btn dark" onClick={() => mutate("/api/admin/members/devices", { storeId, deviceId: d.id, action: "approve", deviceName: d.device_name })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/devices", { storeId, deviceId: d.id, action: "disable" })}>차단</button></>} />)}
-            {summary?.devices.rows?.length === 0 ? <Empty text="아직 등록된 기기가 없습니다. 직원 화면에 접속하면 기기 요청이 자동으로 기록됩니다." /> : null}
+            {(summary?.devices.rows || []).map((d) => <Row key={d.id} title={`${d.device_name || "기기"} · ${statusLabel(d.status)}`} desc={deviceDesc(d)} meta={d.last_seen_at || d.created_at} actions={<><button className="btn" onClick={() => setDeviceNameModal({ deviceId: d.id, deviceName: d.device_name || "" })}>이름 변경</button><button className="btn dark" onClick={() => mutate("/api/admin/members/devices", { storeId, deviceId: d.id, action: "approve", deviceName: d.device_name })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/devices", { storeId, deviceId: d.id, action: "disable" })}>차단</button></>} />)}
+            {summary?.devices.rows?.length === 0 ? <Empty text="등록된 기기가 없습니다." /> : null}
             {summary?.devices.error ? <p className="warn">기기 테이블 SQL 적용 필요: {summary.devices.error}</p> : null}
           </div>
         ) : null}
@@ -203,7 +216,7 @@ function MembersPageInner() {
         {tab === "logs" ? (
           <div className="panel">
             <h2>보안 로그</h2>
-            {(summary?.events.rows || []).slice(0, 50).map((e) => <Row key={e.id} title={eventLabel(e.event_type)} desc={humanMeta(e.metadata)} meta={e.created_at} />)}
+            {(summary?.events.rows || []).slice(0, 50).map((e) => <LogRow key={e.id} title={eventLabel(e.event_type)} desc={humanMeta(e.metadata)} meta={e.created_at} />)}
             {summary?.events.rows?.length === 0 ? <Empty text="아직 보안 로그가 없습니다." /> : null}
             {summary?.events.error ? <p className="warn">로그 테이블 SQL 적용 필요: {summary.events.error}</p> : null}
           </div>
@@ -212,6 +225,7 @@ function MembersPageInner() {
 
       {accountModal ? <Modal title={`${roleLabel(accountModal.role)} 공용 계정 만들기`} onClose={() => setAccountModal(null)} onSubmit={submitAccount} submitText="계정 만들기"><label>로그인 ID<input value={accountModal.loginId} onChange={(e) => setAccountModal({ ...accountModal, loginId: e.target.value })} /></label><label>표시 이름<input value={accountModal.displayName} onChange={(e) => setAccountModal({ ...accountModal, displayName: e.target.value })} /></label><label>비밀번호<input type="password" value={accountModal.password} onChange={(e) => setAccountModal({ ...accountModal, password: e.target.value })} placeholder="8자 이상" /></label><p className="hint">실제 Supabase Auth에는 내부 이메일이 자동 생성되고, 화면에는 로그인 ID 중심으로 안내됩니다.</p></Modal> : null}
       {pinModal ? <Modal title={pinModal.action === "reset" ? "PIN 재설정" : "PIN 직접 추가"} onClose={() => setPinModal(null)} onSubmit={submitPinModal} submitText={pinModal.action === "reset" ? "재설정" : "추가"}><label>이름<input value={pinModal.displayName} disabled={pinModal.action === "reset"} onChange={(e) => setPinModal({ ...pinModal, displayName: e.target.value })} /></label><label>권한<select value={pinModal.pinRole} onChange={(e) => setPinModal({ ...pinModal, pinRole: e.target.value === "manager" ? "manager" : "staff" })}><option value="staff">직원</option><option value="manager">매니저</option></select></label><label>새 PIN<input type="password" inputMode="numeric" value={pinModal.pin} onChange={(e) => setPinModal({ ...pinModal, pin: e.target.value })} placeholder="4~8자리 숫자" /></label><label>PIN 확인<input type="password" inputMode="numeric" value={pinModal.pinConfirm} onChange={(e) => setPinModal({ ...pinModal, pinConfirm: e.target.value })} /></label></Modal> : null}
+      {deviceNameModal ? <Modal title="기기 이름 변경" onClose={() => setDeviceNameModal(null)} onSubmit={submitDeviceName} submitText="저장"><label>기기 이름<input value={deviceNameModal.deviceName} onChange={(e) => setDeviceNameModal({ ...deviceNameModal, deviceName: e.target.value })} placeholder="예: 카운터 PC" /></label><p className="hint">매장에서 구분하기 쉬운 이름을 입력하세요.</p></Modal> : null}
     </main>
   );
 }
@@ -228,9 +242,15 @@ function humanMeta(metadata: any) {
   const parts = [metadata.displayName ? `대상: ${metadata.displayName}` : "", metadata.pinRole ? `권한: ${roleLabel(String(metadata.pinRole))}` : "", metadata.requiredRole ? `필요 권한: ${roleLabel(String(metadata.requiredRole))}` : ""].filter(Boolean);
   return parts.join(" · ") || "상세 정보 기록됨";
 }
+function deviceDesc(device: any) {
+  const type = String(device.device_type || "web");
+  const browser = String(device.browser || "").split(" ").slice(0, 4).join(" ");
+  return [type, browser || "기기 정보 없음"].join(" · ");
+}
 function Stat({ label, value }: { label: string; value: number }) { return <div className="stat"><span>{label}</span><strong>{value}</strong></div>; }
 function Empty({ text }: { text: string }) { return <div className="empty">{text}</div>; }
 function Row({ title, desc, meta, actions }: { title: string; desc: string; meta?: string; actions?: React.ReactNode }) { return <div className="rowCard"><div><strong>{title}</strong><p>{desc}</p>{meta ? <small>{new Date(meta).toLocaleString()}</small> : null}</div><div className="rowActions">{actions}</div></div>; }
+function LogRow({ title, desc, meta }: { title: string; desc: string; meta?: string }) { return <div className="logRow"><strong>{title}</strong><span>{desc}</span>{meta ? <time>{new Date(meta).toLocaleString()}</time> : null}</div>; }
 function Modal({ title, children, onClose, onSubmit, submitText }: { title: string; children: React.ReactNode; onClose: () => void; onSubmit: () => void; submitText: string }) { return <div className="modalBackdrop" role="dialog" aria-modal="true"><div className="modal"><h2>{title}</h2><div className="modalBody">{children}</div><div className="modalActions"><button className="btn" onClick={onClose}>닫기</button><button className="btn dark" onClick={onSubmit}>{submitText}</button></div></div></div>; }
 
 const css = `
@@ -243,7 +263,7 @@ button, input, select, textarea { color: #111827; background: #ffffff; }
 h1 { margin: 0; font-size: 30px; letter-spacing: -0.03em; } h2 { margin: 0; font-size: 20px; } .muted, .hint { color: #6b7280; } .hint { font-size: 13px; }
 .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
 .stat, .card { background: #ffffff; color: #111827; border: 1px solid #e5e7eb; border-radius: 18px; padding: 16px; box-shadow: 0 10px 28px rgba(15,23,42,.04); }
-.stat span { color: #6b7280; font-weight: 800; } .stat strong { display: block; margin-top: 6px; font-size: 28px; } .homeBtn { min-width: 116px; } .doneBadge { display: inline-flex; align-items: center; border: 1px solid #d1fae5; background: #ecfdf5; color: #047857; border-radius: 12px; padding: 10px 12px; font-weight: 900; } .darkBadge { border-color: #dbeafe; background: #eff6ff; color: #1d4ed8; }
+.stat span { color: #6b7280; font-weight: 800; } .stat strong { display: block; margin-top: 6px; font-size: 28px; } .homeBtn { min-width: 116px; } .compactCopy { max-width: 520px; line-height: 1.45; } .doneBadge { display: inline-flex; align-items: center; min-height: 28px; border: 1px solid #d1fae5; background: #ecfdf5; color: #047857; border-radius: 999px; padding: 5px 9px; font-size: 12px; font-weight: 900; white-space: nowrap; } .darkBadge { border-color: #dbeafe; background: #eff6ff; color: #1d4ed8; }
 .alert { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 14px; padding: 12px; margin-bottom: 12px; color: #9a3412; font-weight: 800; }
 .loading, .empty { border: 1px dashed #d1d5db; border-radius: 14px; padding: 14px; color: #6b7280; background: #f9fafb; }
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -252,13 +272,13 @@ h1 { margin: 0; font-size: 30px; letter-spacing: -0.03em; } h2 { margin: 0; font
 .panel { display: grid; gap: 12px; } .panelHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; } .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .subTitle { margin: 8px 0 0; font-size: 15px; color: #374151; }
 .rowCard { display: flex; justify-content: space-between; gap: 12px; border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; background: #ffffff; color: #111827; }
-.rowCard p { margin: 5px 0; color: #4b5563; word-break: break-word; } .rowCard small { color: #6b7280; } .rowActions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.rowCard p { margin: 5px 0; color: #4b5563; word-break: break-word; } .rowCard small { color: #6b7280; } .rowActions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; } .logRow { display: grid; grid-template-columns: minmax(130px, .8fr) minmax(0, 1.2fr) auto; gap: 10px; align-items: center; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; background: #fff; color: #111827; } .logRow strong { font-size: 14px; } .logRow span { min-width: 0; color: #4b5563; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .logRow time { color: #6b7280; font-size: 12px; white-space: nowrap; }
 .warn { color: #b45309; font-weight: 800; } .miniSelect { border: 1px solid #d1d5db; border-radius: 10px; padding: 9px; font-weight: 800; }
 .modalBackdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgba(15,23,42,.48); }
 .modal { width: min(460px, 100%); display: grid; gap: 14px; background: #fff; color: #111827; border-radius: 20px; border: 1px solid #e5e7eb; box-shadow: 0 24px 80px rgba(15,23,42,.25); padding: 18px; }
 .modalBody { display: grid; gap: 10px; } label { display: grid; gap: 6px; color: #374151; font-weight: 900; } input, select { border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; font-weight: 800; } input:disabled { background: #f3f4f6; color: #6b7280; }
 .modalActions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-@media (max-width: 720px) { .wrap { padding: 14px; } .topbar { position: relative; display: block; margin-bottom: 12px; padding-right: 92px; } .panelHead, .rowCard { display: grid; grid-template-columns: 1fr; } .homeBtn { position: absolute; top: 0; right: 0; width: auto; min-width: 78px; min-height: 32px; padding: 6px 9px; border-radius: 10px; font-size: 12px; } .pinAddBtn { width: auto; min-width: 96px; min-height: 32px; padding: 6px 10px; border-radius: 10px; font-size: 12px; justify-self: end; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .stat { padding: 10px 12px; border-radius: 14px; } .stat span { font-size: 12px; } .stat strong { margin-top: 2px; font-size: 20px; } .actions, .rowActions { width: 100%; justify-content: stretch; } .btn, .tab, .doneBadge { min-height: 40px; padding: 8px 10px; } }
+@media (max-width: 720px) { .wrap { padding: 14px; } .topbar { position: relative; display: block; margin-bottom: 12px; padding-right: 92px; } .panelHead, .rowCard { display: grid; grid-template-columns: 1fr; } .homeBtn { position: absolute; top: 0; right: 0; width: auto; min-width: 78px; min-height: 32px; padding: 6px 9px; border-radius: 10px; font-size: 12px; } .pinAddBtn { width: auto; min-width: 96px; min-height: 32px; padding: 6px 10px; border-radius: 10px; font-size: 12px; justify-self: end; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .stat { padding: 10px 12px; border-radius: 14px; } .stat span { font-size: 12px; } .stat strong { margin-top: 2px; font-size: 20px; } .actions, .rowActions { width: 100%; justify-content: flex-start; } .btn, .tab { min-height: 40px; padding: 8px 10px; } .doneBadge { min-height: 26px; padding: 4px 8px; } .logRow { grid-template-columns: 1fr; gap: 3px; } .logRow span { white-space: normal; } }
 `;
 
 export default function MembersPage() {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../../_lib/storeAuth";
 import { recordSecurityEvent } from "../_lib";
 
-type Body = { storeId?: string; deviceId?: string; action?: "approve" | "reject" | "disable"; deviceName?: string };
+type Body = { storeId?: string; deviceId?: string; action?: "approve" | "reject" | "disable" | "rename"; deviceName?: string };
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,13 +15,20 @@ export async function POST(req: NextRequest) {
     const supabaseAdmin = createSupabaseAdminClient();
     const actor = await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner"] });
 
-    const patch: Record<string, unknown> = { status: action === "approve" ? "approved" : action === "reject" ? "rejected" : "disabled" };
-    if (action === "approve") {
-      patch.approved_by = actor.userId;
-      patch.approved_at = new Date().toISOString();
-      if (body.deviceName) patch.device_name = String(body.deviceName).trim();
+    const patch: Record<string, unknown> = {};
+    if (action === "rename") {
+      const deviceName = String(body.deviceName || "").trim();
+      if (!deviceName) return NextResponse.json({ ok: false, message: "기기 이름을 입력해주세요." }, { status: 400 });
+      patch.device_name = deviceName;
+    } else {
+      patch.status = action === "approve" ? "approved" : action === "reject" ? "rejected" : "disabled";
+      if (action === "approve") {
+        patch.approved_by = actor.userId;
+        patch.approved_at = new Date().toISOString();
+        if (body.deviceName) patch.device_name = String(body.deviceName).trim();
+      }
+      if (action === "disable") patch.disabled_at = new Date().toISOString();
     }
-    if (action === "disable") patch.disabled_at = new Date().toISOString();
 
     const { error } = await supabaseAdmin.from("store_devices").update(patch).eq("id", deviceId).eq("store_id", storeId);
     if (error) return NextResponse.json({ ok: false, message: `기기 상태 변경 실패: ${error.message}` }, { status: 500 });

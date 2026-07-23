@@ -364,9 +364,10 @@ function StaffPageInner() {
     (async () => {
       const { data } = await supabase
         .from("stores")
-        .select("staff_view_mode")
+        .select("staff_view_mode,store_name")
         .eq("store_id", sid)
         .maybeSingle();
+      setStoreName(String(data?.store_name || "").trim());
       const baseMode = normalizeStaffViewMode(data?.staff_view_mode);
       const overrideMode = getStaffViewModeOverride(sid);
       setStaffViewMode(overrideMode || baseMode);
@@ -423,6 +424,7 @@ function StaffPageInner() {
 
   const [errMsg, setErrMsg] = useState("");
   const [deviceStatus, setDeviceStatus] = useState<"checking" | "approved" | "pending" | "rejected" | "disabled" | "setup_required" | "owner_bypass">("checking");
+  const [storeName, setStoreName] = useState("");
   const [loginRole, setLoginRole] = useState<"owner" | "manager" | "staff" | "viewer">("viewer");
   const [currentWorker, setCurrentWorker] = useState<{ id: string; displayName: string; pinRole: "staff" | "manager"; isOwnerBypass?: boolean } | null>(null);
   const [pinInput, setPinInput] = useState("");
@@ -562,6 +564,16 @@ function StaffPageInner() {
         ? "workerBadge workerBadgeStaff"
         : "workerBadge workerBadgePending";
   const workerChangeLabel = currentWorker ? "변경" : "PIN 입력";
+  const storeDisplayName = storeName || storeId || "미선택";
+  const deviceNoticeText = deviceStatus === "checking"
+    ? "기기 확인 중..."
+    : deviceStatus === "pending"
+      ? "기기 승인 대기 중입니다."
+      : deviceStatus === "rejected"
+        ? "기기 승인이 거절되었습니다."
+        : deviceStatus === "disabled"
+          ? "이 기기는 비활성화되었습니다."
+          : "기기 상태를 확인해 주세요.";
 
   const requestStaffPin = async () => {
     const sid = storeIdRef.current || storeId;
@@ -1371,18 +1383,45 @@ function StaffPageInner() {
           line-height: 1.25;
         }
 
-        .workerBar {
-          margin-top: 12px;
+        .contextLine {
+          margin-top: 10px;
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
+        }
+
+        .contextLabel {
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 950;
+        }
+
+        .storeBadge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 28px;
           border: 1px solid #dbeafe;
-          border-radius: 16px;
-          background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
-          padding: 9px 10px 9px 12px;
-          box-shadow: 0 8px 22px rgba(15, 23, 42, 0.035);
+          border-radius: 999px;
+          background: #eff6ff;
+          color: #1d4ed8;
+          padding: 5px 10px;
+          font-size: 13px;
+          font-weight: 950;
+          line-height: 1;
+        }
+
+        .deviceNotice {
+          margin-top: 10px;
+          display: inline-flex;
+          align-items: center;
+          border: 1px solid #fde68a;
+          border-radius: 999px;
+          background: #fffbeb;
+          color: #92400e;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 900;
         }
 
         .workerInfo {
@@ -2346,11 +2385,14 @@ function StaffPageInner() {
             font-size: 15px;
           }
 
-          .workerBar {
-            margin-top: 10px;
-            padding: 8px 9px;
-            border-radius: 14px;
-            gap: 8px;
+          .contextLine {
+            margin-top: 8px;
+            gap: 6px;
+          }
+
+          .deviceNotice {
+            margin-top: 8px;
+            border-radius: 12px;
           }
 
           .workerLabel {
@@ -2508,36 +2550,24 @@ function StaffPageInner() {
             </div>
           </div>
 
-          {/* ✅ 현재 매장 표시 */}
-          <p className="muted storeInfo">
-            현재 매장: <b>{storeId || "미선택"}</b>
-          </p>
+          <div className="contextLine" aria-label="매장과 담당 직원">
+            <span className="contextLabel">매장</span>
+            <span className="storeBadge">{storeDisplayName}</span>
+            <span className="contextLabel">담당</span>
+            <span className={workerBadgeClass}>{workerRoleText}</span>
+            <button className="btn btnSmall workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
+          </div>
 
           {/* ✅ 최초 로드에서만 표시 */}
-          {initialLoading ? <p className="muted" style={{ margin: 0 }}>불러오는 중...</p> : null}
+          {initialLoading ? <p className="muted" style={{ margin: "8px 0 0" }}>불러오는 중...</p> : null}
 
           {errMsg ? <p className="err">오류: {errMsg}</p> : null}
         </div>
       </header>
 
       {deviceStatus !== "approved" && deviceStatus !== "owner_bypass" && deviceStatus !== "setup_required" ? (
-        <section className="card" style={{ marginTop: 12 }}>
-          <h2 className="h2">기기 승인 필요</h2>
-          <p className="muted">직원/권한 관리에서 승인해 주세요.</p>
-          <p className="err">현재 상태: {deviceStatus}</p>
-        </section>
+        <div className="deviceNotice" role="status">{deviceNoticeText}</div>
       ) : null}
-
-      <section className="workerBar" aria-label="담당 직원 정보">
-        <div className="workerInfo">
-          <span className="workerLabel">{workerLabelText}</span>
-          <span className={workerBadgeClass}>{workerRoleText}</span>
-        </div>
-        <div className="workerActions">
-          <button className="btn btnSmall workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
-          {currentWorker && !currentWorker.isOwnerBypass ? <button className="btn btnSmall workerActionBtn" onClick={() => { setCurrentWorker(null); setWorkerPinModalOpen(true); }}>잠금</button> : null}
-        </div>
-      </section>
 
       {workerPinModalOpen ? (
         <div className="modalBackdrop" role="dialog" aria-modal="true" aria-label="직원 PIN">
@@ -2554,6 +2584,7 @@ function StaffPageInner() {
             />
             {pinMsg ? <p className="err">{pinMsg}</p> : null}
             <div className="pinModalActions">
+              {currentWorker && !currentWorker.isOwnerBypass ? <button className="btn" onClick={() => { setCurrentWorker(null); setPinMsg("담당이 해제되었습니다."); }}>담당 해제</button> : null}
               {loginRole === "owner" ? <button className="btn" onClick={() => setWorkerPinModalOpen(false)}>대표자 계정으로 계속</button> : null}
               <button className="btn btnPrimary" onClick={() => verifyWorkerPin("staff")}>확인</button>
             </div>
