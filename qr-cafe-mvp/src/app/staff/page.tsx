@@ -2551,10 +2551,8 @@ function StaffPageInner() {
           </div>
 
           <div className="contextLine" aria-label="매장과 담당 직원">
-            <span className="contextLabel">매장</span>
-            <span className="storeBadge">{storeDisplayName}</span>
-            <span className="contextLabel">담당</span>
-            <span className={workerBadgeClass}>{workerRoleText}</span>
+            <span className="storeBadge">매장 · {storeDisplayName}</span>
+            <span className={workerBadgeClass}>담당 · {workerRoleText}</span>
             <button className="btn btnSmall workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
           </div>
 
@@ -2585,19 +2583,19 @@ function StaffPageInner() {
             {pinMsg ? <p className="err">{pinMsg}</p> : null}
             <div className="pinModalActions">
               {currentWorker && !currentWorker.isOwnerBypass ? <button className="btn" onClick={() => { setCurrentWorker(null); setPinMsg("담당이 해제되었습니다."); }}>담당 해제</button> : null}
-              {loginRole === "owner" ? <button className="btn" onClick={() => setWorkerPinModalOpen(false)}>대표자 계정으로 계속</button> : null}
+              {loginRole === "owner" ? <button className="btn" onClick={() => setWorkerPinModalOpen(false)}>관리자로 계속</button> : null}
               <button className="btn btnPrimary" onClick={() => verifyWorkerPin("staff")}>확인</button>
             </div>
-            <p className="hint" style={{ marginTop: 10 }}>처음이면 PIN 등록을 요청하세요.</p>
-            <button type="button" className="btn" onClick={() => { setPinRequestOpen(true); setPinRequestMsg(""); }}>PIN 등록 요청</button>
+            <p className="hint" style={{ marginTop: 10 }}>처음 사용하시나요?</p>
+            <button type="button" className="btn" onClick={() => { setPinRequestOpen(true); setPinRequestMsg(""); }}>신규 PIN 등록</button>
           </div>
         </div>
       ) : null}
 
       {pinRequestOpen ? (
-        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-label="PIN 등록 요청">
+        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-label="신규 PIN 등록">
           <div className="pinModal">
-            <h2 className="h2" style={{ marginTop: 0 }}>PIN 등록 요청</h2>
+            <h2 className="h2" style={{ marginTop: 0 }}>신규 PIN 등록</h2>
             <p className="muted">사용할 PIN을 요청합니다. 관리자 승인 후 사용 가능합니다.</p>
             <input className="pinModalTextInput" value={pinRequestForm.displayName} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, displayName: e.target.value }))} placeholder="이름" />
             <input className="pinModalTextInput" value={pinRequestForm.contactHint} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, contactHint: e.target.value }))} placeholder="연락처 뒷번호/메모" />

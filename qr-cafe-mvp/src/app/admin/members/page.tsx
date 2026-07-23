@@ -196,9 +196,9 @@ function MembersPageInner() {
           <div className="panel">
             <div className="panelHead"><div><h2>직원 PIN</h2><p className="muted">PIN 번호는 저장 후 다시 표시하지 않습니다. 필요하면 재설정하세요.</p></div><button className="btn dark pinAddBtn" onClick={() => setPinModal({ action: "create", displayName: "", pinRole: "staff", pin: "", pinConfirm: "" })}>직접 PIN 추가</button></div>
             {pendingPins.length ? <h3 className="subTitle">승인대기</h3> : null}
-            {pendingPins.map((p) => <Row key={p.id} title={`${p.display_name} · ${roleLabel(p.pin_role)}`} desc={p.contact_hint ? `메모: ${p.contact_hint}` : "직원이 등록 승인을 요청했습니다."} meta={p.requested_at || p.created_at} actions={<><button className="btn dark" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "approve", pinId: p.id, pinRole: p.pin_role })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "reject", pinId: p.id })}>거절</button></>} />)}
+            {pendingPins.length ? <ScrollList>{pendingPins.map((p) => <Row key={p.id} title={`${p.display_name} · ${roleLabel(p.pin_role)}`} desc={p.contact_hint ? `메모: ${p.contact_hint}` : "등록 승인을 요청했습니다."} meta={p.requested_at || p.created_at} actions={<><button className="btn dark" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "approve", pinId: p.id, pinRole: p.pin_role })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "reject", pinId: p.id })}>거절</button></>} />)}</ScrollList> : null}
             <h3 className="subTitle">등록된 PIN</h3>
-            {activePins.map((p) => <Row key={p.id} title={`${p.display_name} · ${roleLabel(p.pin_role)} · ${statusLabel(p.approval_status || "approved")}`} desc={p.is_active ? "사용 가능" : "잠금됨"} meta={p.last_used_at || p.created_at} actions={<><select className="miniSelect" value={p.pin_role} onChange={(e) => mutate("/api/admin/members/pins", { storeId, action: "changeRole", pinId: p.id, pinRole: e.target.value })}><option value="staff">직원</option><option value="manager">매니저</option></select><button className="btn" onClick={() => setPinModal({ action: "reset", pinId: p.id, displayName: p.display_name, pinRole: p.pin_role, pin: "", pinConfirm: "" })}>PIN 재설정</button><button className="btn" onClick={() => mutate("/api/admin/members/pins", { storeId, action: p.is_active ? "disable" : "enable", pinId: p.id })}>{p.is_active ? "잠금" : "잠금 해제"}</button></>} />)}
+            {activePins.length ? <ScrollList>{activePins.map((p) => <PinRow key={p.id} pin={p} onRoleChange={(pinRole) => mutate("/api/admin/members/pins", { storeId, action: "changeRole", pinId: p.id, pinRole })} onReset={() => setPinModal({ action: "reset", pinId: p.id, displayName: p.display_name, pinRole: p.pin_role, pin: "", pinConfirm: "" })} onToggle={() => mutate("/api/admin/members/pins", { storeId, action: p.is_active ? "disable" : "enable", pinId: p.id })} />)}</ScrollList> : null}
             {pins.length === 0 ? <Empty text="등록된 PIN이 없습니다." /> : null}
             {summary?.pins.error ? <p className="warn">PIN 테이블 SQL 적용 필요: {summary.pins.error}</p> : null}
           </div>
@@ -207,7 +207,7 @@ function MembersPageInner() {
         {tab === "devices" ? (
           <div className="panel">
             <h2>승인 기기</h2>
-            {(summary?.devices.rows || []).map((d) => <Row key={d.id} title={`${d.device_name || "기기"} · ${statusLabel(d.status)}`} desc={deviceDesc(d)} meta={d.last_seen_at || d.created_at} actions={<><button className="btn" onClick={() => setDeviceNameModal({ deviceId: d.id, deviceName: d.device_name || "" })}>이름 변경</button><button className="btn dark" onClick={() => mutate("/api/admin/members/devices", { storeId, deviceId: d.id, action: "approve", deviceName: d.device_name })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/devices", { storeId, deviceId: d.id, action: "disable" })}>차단</button></>} />)}
+            {(summary?.devices.rows || []).length ? <ScrollList>{(summary?.devices.rows || []).map((d) => <Row key={d.id} title={`${d.device_name || "기기"} · ${statusLabel(d.status)}`} desc={deviceDesc(d)} meta={d.last_seen_at || d.created_at} actions={<><button className="btn" onClick={() => setDeviceNameModal({ deviceId: d.id, deviceName: d.device_name || "" })}>이름 변경</button><button className="btn dark" onClick={() => mutate("/api/admin/members/devices", { storeId, deviceId: d.id, action: "approve", deviceName: d.device_name })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/devices", { storeId, deviceId: d.id, action: "disable" })}>차단</button></>} />)}</ScrollList> : null}
             {summary?.devices.rows?.length === 0 ? <Empty text="등록된 기기가 없습니다." /> : null}
             {summary?.devices.error ? <p className="warn">기기 테이블 SQL 적용 필요: {summary.devices.error}</p> : null}
           </div>
@@ -216,7 +216,7 @@ function MembersPageInner() {
         {tab === "logs" ? (
           <div className="panel">
             <h2>보안 로그</h2>
-            {(summary?.events.rows || []).slice(0, 50).map((e) => <LogRow key={e.id} title={eventLabel(e.event_type)} desc={humanMeta(e.metadata)} meta={e.created_at} />)}
+            {(summary?.events.rows || []).length ? <ScrollList className="logScroll">{(summary?.events.rows || []).slice(0, 50).map((e) => <LogRow key={e.id} title={eventLabel(e.event_type)} desc={humanMeta(e.metadata)} meta={e.created_at} />)}</ScrollList> : null}
             {summary?.events.rows?.length === 0 ? <Empty text="아직 보안 로그가 없습니다." /> : null}
             {summary?.events.error ? <p className="warn">로그 테이블 SQL 적용 필요: {summary.events.error}</p> : null}
           </div>
@@ -239,18 +239,30 @@ function accountDesc(member: any) {
 
 function humanMeta(metadata: any) {
   if (!metadata || typeof metadata !== "object") return "상세 정보 없음";
-  const parts = [metadata.displayName ? `대상: ${metadata.displayName}` : "", metadata.pinRole ? `권한: ${roleLabel(String(metadata.pinRole))}` : "", metadata.requiredRole ? `필요 권한: ${roleLabel(String(metadata.requiredRole))}` : ""].filter(Boolean);
-  return parts.join(" · ") || "상세 정보 기록됨";
+  const parts = [metadata.displayName ? `대상 ${metadata.displayName}` : "", metadata.pinRole ? roleLabel(String(metadata.pinRole)) : "", metadata.requiredRole ? `필요 ${roleLabel(String(metadata.requiredRole))}` : ""].filter(Boolean);
+  return parts.join(" · ") || "상세 기록";
 }
 function deviceDesc(device: any) {
   const type = String(device.device_type || "web");
   const browser = String(device.browser || "").split(" ").slice(0, 4).join(" ");
   return [type, browser || "기기 정보 없음"].join(" · ");
 }
+function shortDate(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const mm = date.getMonth() + 1;
+  const dd = date.getDate();
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mi = String(date.getMinutes()).padStart(2, "0");
+  return `${mm}.${dd} ${hh}:${mi}`;
+}
 function Stat({ label, value }: { label: string; value: number }) { return <div className="stat"><span>{label}</span><strong>{value}</strong></div>; }
 function Empty({ text }: { text: string }) { return <div className="empty">{text}</div>; }
-function Row({ title, desc, meta, actions }: { title: string; desc: string; meta?: string; actions?: React.ReactNode }) { return <div className="rowCard"><div><strong>{title}</strong><p>{desc}</p>{meta ? <small>{new Date(meta).toLocaleString()}</small> : null}</div><div className="rowActions">{actions}</div></div>; }
-function LogRow({ title, desc, meta }: { title: string; desc: string; meta?: string }) { return <div className="logRow"><strong>{title}</strong><span>{desc}</span>{meta ? <time>{new Date(meta).toLocaleString()}</time> : null}</div>; }
+function Row({ title, desc, meta, actions }: { title: string; desc: string; meta?: string; actions?: React.ReactNode }) { return <div className="rowCard"><div><strong>{title}</strong><p>{desc}</p>{meta ? <small>{shortDate(meta)}</small> : null}</div><div className="rowActions">{actions}</div></div>; }
+function PinRow({ pin, onRoleChange, onReset, onToggle }: { pin: any; onRoleChange: (pinRole: string) => void; onReset: () => void; onToggle: () => void }) { return <div className="pinRow"><div className="pinText"><strong>{pin.display_name} · {roleLabel(pin.pin_role)} · {statusLabel(pin.approval_status || "approved")}</strong><span>{pin.is_active ? "사용 가능" : "잠금됨"}{pin.last_used_at || pin.created_at ? ` · ${shortDate(pin.last_used_at || pin.created_at)}` : ""}</span></div><div className="rowActions"><select className="miniSelect" value={pin.pin_role} onChange={(e) => onRoleChange(e.target.value)}><option value="staff">직원</option><option value="manager">매니저</option></select><button className="btn" onClick={onReset}>재설정</button><button className="btn" onClick={onToggle}>{pin.is_active ? "잠금" : "해제"}</button></div></div>; }
+function LogRow({ title, desc, meta }: { title: string; desc: string; meta?: string }) { return <div className="logRow"><strong>{title}</strong>{desc ? <span>· {desc}</span> : null}{meta ? <time>· {shortDate(meta)}</time> : null}</div>; }
+function ScrollList({ children, className = "" }: { children: React.ReactNode; className?: string }) { return <div className={`listScroll ${className}`.trim()}>{children}</div>; }
 function Modal({ title, children, onClose, onSubmit, submitText }: { title: string; children: React.ReactNode; onClose: () => void; onSubmit: () => void; submitText: string }) { return <div className="modalBackdrop" role="dialog" aria-modal="true"><div className="modal"><h2>{title}</h2><div className="modalBody">{children}</div><div className="modalActions"><button className="btn" onClick={onClose}>닫기</button><button className="btn dark" onClick={onSubmit}>{submitText}</button></div></div></div>; }
 
 const css = `
@@ -271,14 +283,18 @@ h1 { margin: 0; font-size: 30px; letter-spacing: -0.03em; } h2 { margin: 0; font
 .tabOn, .dark { background: #111827; color: #ffffff; border-color: #111827; }
 .panel { display: grid; gap: 12px; } .panelHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; } .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .subTitle { margin: 8px 0 0; font-size: 15px; color: #374151; }
-.rowCard { display: flex; justify-content: space-between; gap: 12px; border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; background: #ffffff; color: #111827; }
-.rowCard p { margin: 5px 0; color: #4b5563; word-break: break-word; } .rowCard small { color: #6b7280; } .rowActions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; } .logRow { display: grid; grid-template-columns: minmax(130px, .8fr) minmax(0, 1.2fr) auto; gap: 10px; align-items: center; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; background: #fff; color: #111827; } .logRow strong { font-size: 14px; } .logRow span { min-width: 0; color: #4b5563; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .logRow time { color: #6b7280; font-size: 12px; white-space: nowrap; }
-.warn { color: #b45309; font-weight: 800; } .miniSelect { border: 1px solid #d1d5db; border-radius: 10px; padding: 9px; font-weight: 800; }
+.listScroll { display: grid; gap: 8px; max-height: min(620px, calc(100vh - 360px)); overflow-y: auto; padding: 0 4px 2px 0; scrollbar-width: thin; }
+.logScroll { max-height: min(680px, calc(100vh - 320px)); }
+.rowCard, .pinRow { display: flex; justify-content: space-between; gap: 12px; border: 1px solid #e5e7eb; border-radius: 14px; padding: 10px 12px; background: #ffffff; color: #111827; }
+.rowCard p { margin: 3px 0; color: #4b5563; word-break: break-word; } .rowCard small { color: #6b7280; } .rowActions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; } .pinText { display: grid; gap: 4px; min-width: 0; } .pinText strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .pinText span { color: #4b5563; font-size: 13px; font-weight: 800; } .logRow { display: flex; align-items: center; gap: 4px; min-width: 0; border: 1px solid #e5e7eb; border-radius: 12px; padding: 9px 12px; background: #fff; color: #111827; line-height: 1.25; } .logRow strong { flex: 0 0 auto; font-size: 14px; } .logRow span { min-width: 0; color: #4b5563; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .logRow time { flex: 0 0 auto; color: #6b7280; font-size: 12px; white-space: nowrap; }
+.warn { color: #b45309; font-weight: 800; } .miniSelect { border: 1px solid #d1d5db; border-radius: 10px; padding: 8px; font-weight: 800; }
 .modalBackdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgba(15,23,42,.48); }
 .modal { width: min(460px, 100%); display: grid; gap: 14px; background: #fff; color: #111827; border-radius: 20px; border: 1px solid #e5e7eb; box-shadow: 0 24px 80px rgba(15,23,42,.25); padding: 18px; }
 .modalBody { display: grid; gap: 10px; } label { display: grid; gap: 6px; color: #374151; font-weight: 900; } input, select { border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; font-weight: 800; } input:disabled { background: #f3f4f6; color: #6b7280; }
 .modalActions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-@media (max-width: 720px) { .wrap { padding: 14px; } .topbar { position: relative; display: block; margin-bottom: 12px; padding-right: 92px; } .panelHead, .rowCard { display: grid; grid-template-columns: 1fr; } .homeBtn { position: absolute; top: 0; right: 0; width: auto; min-width: 78px; min-height: 32px; padding: 6px 9px; border-radius: 10px; font-size: 12px; } .pinAddBtn { width: auto; min-width: 96px; min-height: 32px; padding: 6px 10px; border-radius: 10px; font-size: 12px; justify-self: end; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .stat { padding: 10px 12px; border-radius: 14px; } .stat span { font-size: 12px; } .stat strong { margin-top: 2px; font-size: 20px; } .actions, .rowActions { width: 100%; justify-content: flex-start; } .btn, .tab { min-height: 40px; padding: 8px 10px; } .doneBadge { min-height: 26px; padding: 4px 8px; } .logRow { grid-template-columns: 1fr; gap: 3px; } .logRow span { white-space: normal; } }
+@media (max-width: 1024px) { .listScroll { max-height: 500px; } .logScroll { max-height: 560px; } }
+@media (max-width: 720px) { .wrap { padding: 14px; } .topbar { position: relative; display: block; margin-bottom: 12px; padding-right: 92px; } .panelHead, .rowCard, .pinRow { display: grid; grid-template-columns: 1fr; } .homeBtn { position: absolute; top: 0; right: 0; width: auto; min-width: 78px; min-height: 32px; padding: 6px 9px; border-radius: 10px; font-size: 12px; } .pinAddBtn { width: auto; min-width: 96px; min-height: 32px; padding: 6px 10px; border-radius: 10px; font-size: 12px; justify-self: end; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .stat { padding: 10px 12px; border-radius: 14px; } .stat span { font-size: 12px; } .stat strong { margin-top: 2px; font-size: 20px; } .listScroll { max-height: 360px; } .logScroll { max-height: 420px; } .actions, .rowActions { width: 100%; justify-content: flex-start; } .btn, .tab { min-height: 40px; padding: 8px 10px; } .doneBadge { min-height: 26px; padding: 4px 8px; } .logRow { flex-wrap: wrap; row-gap: 2px; } .logRow strong, .logRow span, .logRow time { font-size: 12px; } .pinText strong { white-space: normal; } }
+@media (max-width: 720px) and (max-height: 740px) { .listScroll { max-height: 300px; } .logScroll { max-height: 340px; } }
 `;
 
 export default function MembersPage() {
