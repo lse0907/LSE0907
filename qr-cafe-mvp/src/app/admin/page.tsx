@@ -839,6 +839,9 @@ function AdminPageInner() {
               <button className="subBtn" onClick={() => go("/admin/store")}>
                 매장정보
               </button>
+              <button className="subBtn" onClick={() => go("/admin/members")}>
+                직원/권한 관리
+              </button>
               <button className="subBtn" onClick={() => go("/admin/billing")}>
                 결제 설정
               </button>
