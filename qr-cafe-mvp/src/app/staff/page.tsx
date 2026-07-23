@@ -503,7 +503,7 @@ function StaffPageInner() {
       const normalizedRole = role === "owner" || role === "manager" || role === "staff" ? role : "viewer";
       setLoginRole(normalizedRole);
       if (normalizedRole === "owner") {
-        setCurrentWorker({ id: "", displayName: "오너 계정", pinRole: "manager", isOwnerBypass: true });
+        setCurrentWorker({ id: "", displayName: "대표자 계정", pinRole: "manager", isOwnerBypass: true });
         setWorkerPinModalOpen(false);
       } else if (!currentWorker) {
         setWorkerPinModalOpen(true);
@@ -524,13 +524,13 @@ function StaffPageInner() {
       if (idleMs >= STAFF_SESSION_AUTO_LOGOUT_MS) {
         await supabase.auth.signOut();
         const next = storeId ? `/staff?store=${encodeURIComponent(storeId)}` : "/staff";
-        window.location.href = `/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent("장시간 미사용으로 자동 로그아웃되었습니다.")}`;
+        window.location.href = `/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent("120분 미사용으로 로그아웃되었습니다.")}`;
         return;
       }
       if (idleMs >= STAFF_WORKER_AUTO_LOCK_MS && loginRole !== "owner" && currentWorker) {
         setCurrentWorker(null);
         setWorkerPinModalOpen(true);
-        setPinMsg("30분 동안 조작이 없어 담당 직원이 잠금 처리되었습니다.");
+        setPinMsg("30분 미사용으로 잠겼습니다.");
       }
     }, 30 * 1000);
     return () => {
@@ -542,11 +542,26 @@ function StaffPageInner() {
   const requireWorkerPin = () => {
     if (loginRole === "owner" || currentWorker) return true;
     setWorkerPinModalOpen(true);
-    setPinMsg("주문 처리를 위해 담당 직원 PIN을 입력해주세요.");
+    setPinMsg("담당 직원 확인이 필요합니다.");
     return false;
   };
 
   const actorPinIdForEvent = currentWorker?.isOwnerBypass ? null : currentWorker?.id || null;
+
+  const workerRoleText = currentWorker?.isOwnerBypass
+    ? "대표자 계정"
+    : currentWorker
+      ? `${currentWorker.displayName} · ${currentWorker.pinRole === "manager" ? "매니저" : "직원"}`
+      : "PIN 필요";
+  const workerLabelText = currentWorker?.isOwnerBypass ? "작업 권한" : "담당 직원";
+  const workerBadgeClass = currentWorker?.isOwnerBypass
+    ? "workerBadge workerBadgeOwner"
+    : currentWorker?.pinRole === "manager"
+      ? "workerBadge workerBadgeManager"
+      : currentWorker
+        ? "workerBadge workerBadgeStaff"
+        : "workerBadge workerBadgePending";
+  const workerChangeLabel = currentWorker ? "변경" : "PIN 입력";
 
   const requestStaffPin = async () => {
     const sid = storeIdRef.current || storeId;
@@ -576,7 +591,7 @@ function StaffPageInner() {
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.message || "PIN 등록 요청 실패");
-      setPinRequestMsg("등록 요청이 완료되었습니다. 오너가 승인하면 이 PIN으로 로그인할 수 있습니다.");
+      setPinRequestMsg("요청 완료. 관리자 승인 후 사용 가능합니다.");
       setPinRequestForm({ displayName: "", contactHint: "", pin: "", pinConfirm: "", requestedRole: "staff" });
     } catch (e: unknown) {
       setPinRequestMsg(e instanceof Error ? e.message : String(e));
@@ -987,7 +1002,7 @@ function StaffPageInner() {
     const needsManagerPin = cancelRequiresManagerPin(order);
     setCancelTarget({ id: order.id, displayNo: order.displayNo, status: order.status });
     setCancelNeedsManagerPin(needsManagerPin);
-    setCancelMsg(needsManagerPin ? "매니저 PIN이 필요합니다." : "");
+    setCancelMsg("");
   };
 
   const closeCancelModal = () => {
@@ -1005,7 +1020,7 @@ function StaffPageInner() {
     const sid = storeIdRef.current || storeId;
     if (!sid) return;
     if (cancelNeedsManagerPin && !managerPinForCancel.trim()) {
-      setCancelMsg("매니저 PIN을 입력해주세요.");
+      setCancelMsg("매니저 PIN을 입력하세요.");
       return;
     }
     try {
@@ -1028,10 +1043,15 @@ function StaffPageInner() {
         if (json?.code === "MANAGER_PIN_REQUIRED" || json?.code === "MANAGER_PIN_INVALID") {
           setCancelTarget({ id, displayNo: cancelTarget.displayNo, status: cancelTarget.status });
           setCancelNeedsManagerPin(true);
-          setCancelMsg(String(json?.message || "매니저 PIN을 확인해주세요."));
+          setCancelMsg(String(json?.code === "MANAGER_PIN_REQUIRED" ? "제조 이후 취소는 매니저 PIN이 필요합니다." : json?.message || "매니저 PIN을 확인하세요."));
           return;
         }
-        throw new Error(String(json?.message || "주문 취소 처리 실패"));
+        const friendlyCancelMessage: Record<string, string> = {
+          PG_CANCEL_FAILED: "결제 취소에 실패했습니다. 관리자 확인이 필요합니다.",
+          PAYMENT_IDENTIFIER_MISSING: "결제 정보를 찾지 못했습니다. 관리자 확인이 필요합니다.",
+          PG_SECRET_MISSING: "결제 취소 설정이 필요합니다.",
+        };
+        throw new Error(String(friendlyCancelMessage[String(json?.code || "")] || json?.message || "주문 취소 처리 실패"));
       }
       setOrders((prev) =>
         prev.map((o) => (o.id === id ? { ...o, status: "cancelled" } : o))
@@ -1358,10 +1378,11 @@ function StaffPageInner() {
           justify-content: space-between;
           gap: 10px;
           flex-wrap: wrap;
-          border: 1px solid var(--line);
-          border-radius: 14px;
-          background: #fff;
-          padding: 10px 12px;
+          border: 1px solid #dbeafe;
+          border-radius: 16px;
+          background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
+          padding: 9px 10px 9px 12px;
+          box-shadow: 0 8px 22px rgba(15, 23, 42, 0.035);
         }
 
         .workerInfo {
@@ -1373,27 +1394,61 @@ function StaffPageInner() {
         }
 
         .workerLabel {
-          color: var(--muted);
-          font-weight: 900;
-          font-size: 13px;
+          color: #64748b;
+          font-weight: 950;
+          font-size: 12px;
+          letter-spacing: -0.01em;
         }
 
         .workerBadge {
           display: inline-flex;
           align-items: center;
-          min-height: 32px;
+          min-height: 28px;
           border-radius: 999px;
-          padding: 6px 12px;
+          padding: 5px 10px;
+          border: 1px solid transparent;
+          font-weight: 950;
+          font-size: 13px;
+          line-height: 1;
+          letter-spacing: -0.01em;
+        }
+
+        .workerBadgeOwner {
           background: #111827;
+          border-color: #111827;
           color: #fff;
-          font-weight: 900;
-          font-size: 14px;
+        }
+
+        .workerBadgeManager {
+          background: #eff6ff;
+          border-color: #bfdbfe;
+          color: #1d4ed8;
+        }
+
+        .workerBadgeStaff {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
+          color: #334155;
+        }
+
+        .workerBadgePending {
+          background: #fffbeb;
+          border-color: #fde68a;
+          color: #92400e;
         }
 
         .workerActions {
           display: flex;
-          gap: 8px;
+          gap: 6px;
           flex-wrap: wrap;
+          margin-left: auto;
+        }
+
+        .workerActionBtn {
+          min-height: 32px;
+          padding: 7px 10px;
+          border-radius: 11px;
+          font-size: 12px;
         }
 
         .modalBackdrop {
@@ -2291,6 +2346,33 @@ function StaffPageInner() {
             font-size: 15px;
           }
 
+          .workerBar {
+            margin-top: 10px;
+            padding: 8px 9px;
+            border-radius: 14px;
+            gap: 8px;
+          }
+
+          .workerLabel {
+            font-size: 11px;
+          }
+
+          .workerBadge {
+            min-height: 26px;
+            padding: 5px 9px;
+            font-size: 12px;
+          }
+
+          .workerActions {
+            gap: 5px;
+          }
+
+          .workerActionBtn {
+            min-height: 30px;
+            padding: 6px 9px;
+            font-size: 11px;
+          }
+
           .orderMetaRight {
             gap: 4px;
           }
@@ -2441,59 +2523,59 @@ function StaffPageInner() {
       {deviceStatus !== "approved" && deviceStatus !== "owner_bypass" && deviceStatus !== "setup_required" ? (
         <section className="card" style={{ marginTop: 12 }}>
           <h2 className="h2">기기 승인 필요</h2>
-          <p className="muted">이 기기는 아직 직원 화면 사용 승인이 필요합니다. 오너가 관리자 &gt; 매장설정 &gt; 직원/권한 관리에서 승인하면 사용할 수 있습니다.</p>
+          <p className="muted">직원/권한 관리에서 승인해 주세요.</p>
           <p className="err">현재 상태: {deviceStatus}</p>
         </section>
       ) : null}
 
       <section className="workerBar" aria-label="담당 직원 정보">
         <div className="workerInfo">
-          <span className="workerLabel">담당 직원</span>
-          <span className="workerBadge">{currentWorker ? `${currentWorker.displayName}${currentWorker.pinRole === "manager" ? " · 매니저" : ""}` : "미선택"}</span>
+          <span className="workerLabel">{workerLabelText}</span>
+          <span className={workerBadgeClass}>{workerRoleText}</span>
         </div>
         <div className="workerActions">
-          <button className="btn btnSmall" onClick={() => setWorkerPinModalOpen(true)}>담당자 변경</button>
-          {currentWorker && !currentWorker.isOwnerBypass ? <button className="btn btnSmall" onClick={() => { setCurrentWorker(null); setWorkerPinModalOpen(true); }}>잠금</button> : null}
+          <button className="btn btnSmall workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
+          {currentWorker && !currentWorker.isOwnerBypass ? <button className="btn btnSmall workerActionBtn" onClick={() => { setCurrentWorker(null); setWorkerPinModalOpen(true); }}>잠금</button> : null}
         </div>
       </section>
 
       {workerPinModalOpen ? (
-        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-label="담당 직원 선택">
+        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-label="직원 PIN">
           <div className="pinModal">
-            <h2 className="h2" style={{ marginTop: 0 }}>담당 직원 선택</h2>
-            <p className="muted">주문 처리 이력을 남기기 위해 직원 PIN 번호를 입력해주세요.</p>
+            <h2 className="h2" style={{ marginTop: 0 }}>직원 PIN</h2>
+            <p className="muted">담당 직원 확인이 필요합니다.</p>
             <input
               className="pinModalInput"
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value)}
-              placeholder="PIN 번호"
+              placeholder="PIN"
               inputMode="numeric"
               autoFocus
             />
             {pinMsg ? <p className="err">{pinMsg}</p> : null}
             <div className="pinModalActions">
-              {loginRole === "owner" ? <button className="btn" onClick={() => setWorkerPinModalOpen(false)}>오너로 계속하기</button> : null}
+              {loginRole === "owner" ? <button className="btn" onClick={() => setWorkerPinModalOpen(false)}>대표자 계정으로 계속</button> : null}
               <button className="btn btnPrimary" onClick={() => verifyWorkerPin("staff")}>확인</button>
             </div>
-            <p className="hint" style={{ marginTop: 10 }}>처음 사용하는 직원은 아래 버튼으로 PIN 등록을 요청할 수 있습니다.</p>
-            <button type="button" className="btn" onClick={() => { setPinRequestOpen(true); setPinRequestMsg(""); }}>직원 PIN 등록 요청</button>
+            <p className="hint" style={{ marginTop: 10 }}>처음이면 PIN 등록을 요청하세요.</p>
+            <button type="button" className="btn" onClick={() => { setPinRequestOpen(true); setPinRequestMsg(""); }}>PIN 등록 요청</button>
           </div>
         </div>
       ) : null}
 
       {pinRequestOpen ? (
-        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-label="직원 PIN 등록 요청">
+        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-label="PIN 등록 요청">
           <div className="pinModal">
-            <h2 className="h2" style={{ marginTop: 0 }}>직원 PIN 등록 요청</h2>
-            <p className="muted">본인이 사용할 PIN을 직접 만들고, 오너가 승인하면 직원 화면에서 사용할 수 있습니다.</p>
-            <input className="pinModalTextInput" value={pinRequestForm.displayName} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, displayName: e.target.value }))} placeholder="직원 이름 또는 구분명" />
-            <input className="pinModalTextInput" value={pinRequestForm.contactHint} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, contactHint: e.target.value }))} placeholder="연락처 뒷번호/메모 선택 입력" />
+            <h2 className="h2" style={{ marginTop: 0 }}>PIN 등록 요청</h2>
+            <p className="muted">사용할 PIN을 요청합니다. 관리자 승인 후 사용 가능합니다.</p>
+            <input className="pinModalTextInput" value={pinRequestForm.displayName} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, displayName: e.target.value }))} placeholder="이름" />
+            <input className="pinModalTextInput" value={pinRequestForm.contactHint} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, contactHint: e.target.value }))} placeholder="연락처 뒷번호/메모" />
             <select className="pinModalTextInput" value={pinRequestForm.requestedRole} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, requestedRole: e.target.value === "manager" ? "manager" : "staff" }))}>
-              <option value="staff">직원 권한 요청</option>
-              <option value="manager">매니저 권한 요청</option>
+              <option value="staff">직원</option>
+              <option value="manager">매니저</option>
             </select>
             <input className="pinModalInput" value={pinRequestForm.pin} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, pin: e.target.value }))} placeholder="4~8자리 PIN" inputMode="numeric" />
-            <input className="pinModalInput" value={pinRequestForm.pinConfirm} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, pinConfirm: e.target.value }))} placeholder="PIN 다시 입력" inputMode="numeric" />
+            <input className="pinModalInput" value={pinRequestForm.pinConfirm} onChange={(e) => setPinRequestForm((prev) => ({ ...prev, pinConfirm: e.target.value }))} placeholder="PIN 확인" inputMode="numeric" />
             {pinRequestMsg ? <p className={pinRequestMsg.includes("완료") ? "successMsg" : "err"}>{pinRequestMsg}</p> : null}
             <div className="pinModalActions">
               <button type="button" className="btn" onClick={() => setPinRequestOpen(false)}>닫기</button>
@@ -3209,11 +3291,11 @@ function StaffPageInner() {
       {cancelTarget ? (
         <div className="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="cancel-modal-title">
           <div className="modalCard">
-            <h3 id="cancel-modal-title" className="modalTitle">주문 취소 확인</h3>
+            <h3 id="cancel-modal-title" className="modalTitle">주문 취소</h3>
             <p className="modalDesc">
-              주문번호 {cancelTarget.displayNo}를 취소 처리할까요?
+              주문 {cancelTarget.displayNo}를 취소할까요?
               <br />
-              취소 후 목록에 기록됩니다.
+              취소 이력이 저장됩니다.
             </p>
             <label className="modalFieldLabel">취소 사유</label>
             <select className="modalSelect" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)}>
@@ -3226,13 +3308,14 @@ function StaffPageInner() {
             {cancelMsg ? <p className="err">{cancelMsg}</p> : null}
             {cancelNeedsManagerPin ? (
               <>
+                <p className="hint" style={{ marginTop: 8 }}>제조 이후 취소는 매니저 PIN이 필요합니다.</p>
                 <label className="modalFieldLabel">매니저 PIN</label>
                 <input className="modalInput" value={managerPinForCancel} onChange={(e) => setManagerPinForCancel(e.target.value.replace(/[^\d]/g, ""))} placeholder="매니저 PIN" inputMode="numeric" />
               </>
             ) : null}
             <div className="modalActions">
               <button type="button" className="btn" onClick={closeCancelModal} disabled={cancelSubmitting}>닫기</button>
-              <button type="button" className="btn actionCancel" onClick={confirmCancelOrder} disabled={cancelSubmitting}>{cancelSubmitting ? "처리 중..." : "주문 취소"}</button>
+              <button type="button" className="btn actionCancel" onClick={confirmCancelOrder} disabled={cancelSubmitting}>{cancelSubmitting ? "처리 중..." : "취소 처리"}</button>
             </div>
           </div>
         </div>

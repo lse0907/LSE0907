@@ -20,7 +20,7 @@ const tabs: { key: TabKey; label: string }[] = [
 ];
 
 function roleLabel(role: string) {
-  if (role === "owner") return "오너";
+  if (role === "owner") return "대표자";
   if (role === "manager") return "매니저";
   if (role === "staff") return "직원";
   return role || "권한 없음";
@@ -47,7 +47,7 @@ function eventLabel(type: string) {
     pin_verified: "PIN 확인 성공",
     pin_failed: "PIN 확인 실패",
     device_requested: "기기 승인 요청",
-    owner_device_recorded: "오너 기기 기록",
+    owner_device_recorded: "대표자 기기 기록",
     device_approve: "기기 승인",
     device_disable: "기기 차단",
     shared_account_created: "공용 계정 생성",
@@ -186,7 +186,7 @@ function MembersPageInner() {
             {pendingPins.map((p) => <Row key={p.id} title={`${p.display_name} · ${roleLabel(p.pin_role)}`} desc={p.contact_hint ? `메모: ${p.contact_hint}` : "직원이 등록 승인을 요청했습니다."} meta={p.requested_at || p.created_at} actions={<><button className="btn dark" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "approve", pinId: p.id, pinRole: p.pin_role })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "reject", pinId: p.id })}>거절</button></>} />)}
             <h3 className="subTitle">등록된 PIN</h3>
             {activePins.map((p) => <Row key={p.id} title={`${p.display_name} · ${roleLabel(p.pin_role)} · ${statusLabel(p.approval_status || "approved")}`} desc={p.is_active ? "사용 가능" : "잠금됨"} meta={p.last_used_at || p.created_at} actions={<><select className="miniSelect" value={p.pin_role} onChange={(e) => mutate("/api/admin/members/pins", { storeId, action: "changeRole", pinId: p.id, pinRole: e.target.value })}><option value="staff">직원</option><option value="manager">매니저</option></select><button className="btn" onClick={() => setPinModal({ action: "reset", pinId: p.id, displayName: p.display_name, pinRole: p.pin_role, pin: "", pinConfirm: "" })}>PIN 재설정</button><button className="btn" onClick={() => mutate("/api/admin/members/pins", { storeId, action: p.is_active ? "disable" : "enable", pinId: p.id })}>{p.is_active ? "잠금" : "잠금 해제"}</button></>} />)}
-            {pins.length === 0 ? <Empty text="아직 등록된 PIN이 없습니다. 직원 화면에서 등록 요청하거나 오너가 직접 추가할 수 있습니다." /> : null}
+            {pins.length === 0 ? <Empty text="등록된 PIN이 없습니다. 직원이 요청하거나 관리자가 직접 추가할 수 있습니다." /> : null}
             {summary?.pins.error ? <p className="warn">PIN 테이블 SQL 적용 필요: {summary.pins.error}</p> : null}
           </div>
         ) : null}
@@ -218,8 +218,8 @@ function MembersPageInner() {
 
 function accountDesc(member: any) {
   const loginId = String(member.login_id || "").trim();
-  const fallback = member.role === "owner" ? "오너 계정" : `${roleLabel(String(member.role || ""))} 권한`;
-  const parts = [loginId ? `로그인 ID: ${loginId}` : fallback, `권한: ${roleLabel(String(member.role || ""))}`, member.is_shared_store_account ? "공용 계정" : "개인/오너 계정"].filter(Boolean);
+  const fallback = member.role === "owner" ? "대표자 계정" : `${roleLabel(String(member.role || ""))} 권한`;
+  const parts = [loginId ? `로그인 ID: ${loginId}` : fallback, `권한: ${roleLabel(String(member.role || ""))}`, member.is_shared_store_account ? "공용 계정" : "개인/대표자 계정"].filter(Boolean);
   return parts.join(" · ");
 }
 
