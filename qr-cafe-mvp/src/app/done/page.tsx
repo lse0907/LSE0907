@@ -41,6 +41,15 @@ type OrderView = {
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 
+const DONE_STATUS_COPY: Record<OrderStatus, { title: string; desc: string }> = {
+  new: { title: "주문이 접수됐어요", desc: "주문번호를 확인해 주세요." },
+  checked: { title: "매장이 확인했어요", desc: "상태 화면에서 진행 상황을 볼 수 있어요." },
+  making: { title: "메뉴를 준비 중이에요", desc: "상태 화면에서 진행 상황을 볼 수 있어요." },
+  ready_for_packing: { title: "준비가 완료됐어요", desc: "픽업/수령해 주세요." },
+  completed: { title: "수령 완료", desc: "이용해 주셔서 감사합니다." },
+  cancelled: { title: "주문이 취소됐어요", desc: "필요하면 다시 주문해 주세요." },
+};
+
 function fmt(n: number) {
   return Math.round(n).toLocaleString();
 }
@@ -256,7 +265,10 @@ function DonePageInner() {
     <>
       {globalPageStyle}
       <main style={{ padding: 24, maxWidth: 520, margin: "0 auto", color: "#111827" }}>
-      <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>주문 접수 완료</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>{DONE_STATUS_COPY[order.status].title}</h1>
+      <p style={{ margin: "8px 0 0", color: "#4b5563", fontWeight: 850 }}>
+        {DONE_STATUS_COPY[order.status].desc}
+      </p>
 
       <div style={{ marginTop: 10, color: "#444" }}>
         {order.mode === "dine-in" ? (
@@ -307,8 +319,11 @@ function DonePageInner() {
         </div>
 
         <div style={{ marginTop: 6, lineHeight: 1.5, fontWeight: 850, color: "#374151" }}>
-          이 주문번호는 자동 저장됩니다. <br />
-          페이지를 나갔다가 다시 들어와도 <b>메뉴 화면 상단</b>에서 상태를 다시 볼 수 있어요.
+          {order.status === "completed"
+            ? "수령 처리가 완료되었습니다."
+            : order.status === "cancelled"
+              ? "취소된 주문입니다."
+              : "상태 화면에서 준비 완료 알림을 확인할 수 있어요."}
         </div>
       </div>
 
@@ -366,7 +381,7 @@ function DonePageInner() {
         </button>
       ) : (
         <p style={{ marginTop: 10, color: "#6b7280", fontWeight: 800 }}>
-          매장에서 주문 확인 후에는 앱에서 직접 취소할 수 없어요.
+          매장 확인 후에는 앱에서 직접 취소할 수 없어요.
         </p>
       )}
 
