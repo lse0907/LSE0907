@@ -181,7 +181,7 @@ function MembersPageInner() {
 
         {tab === "pins" ? (
           <div className="panel">
-            <div className="panelHead"><div><h2>직원 PIN</h2><p className="muted">PIN 번호는 저장 후 다시 표시하지 않습니다. 필요하면 재설정하세요.</p></div><button className="btn dark" onClick={() => setPinModal({ action: "create", displayName: "", pinRole: "staff", pin: "", pinConfirm: "" })}>직접 PIN 추가</button></div>
+            <div className="panelHead"><div><h2>직원 PIN</h2><p className="muted">PIN 번호는 저장 후 다시 표시하지 않습니다. 필요하면 재설정하세요.</p></div><button className="btn dark pinAddBtn" onClick={() => setPinModal({ action: "create", displayName: "", pinRole: "staff", pin: "", pinConfirm: "" })}>직접 PIN 추가</button></div>
             {pendingPins.length ? <h3 className="subTitle">승인대기</h3> : null}
             {pendingPins.map((p) => <Row key={p.id} title={`${p.display_name} · ${roleLabel(p.pin_role)}`} desc={p.contact_hint ? `메모: ${p.contact_hint}` : "직원이 등록 승인을 요청했습니다."} meta={p.requested_at || p.created_at} actions={<><button className="btn dark" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "approve", pinId: p.id, pinRole: p.pin_role })}>승인</button><button className="btn" onClick={() => mutate("/api/admin/members/pins", { storeId, action: "reject", pinId: p.id })}>거절</button></>} />)}
             <h3 className="subTitle">등록된 PIN</h3>
@@ -258,7 +258,7 @@ h1 { margin: 0; font-size: 30px; letter-spacing: -0.03em; } h2 { margin: 0; font
 .modal { width: min(460px, 100%); display: grid; gap: 14px; background: #fff; color: #111827; border-radius: 20px; border: 1px solid #e5e7eb; box-shadow: 0 24px 80px rgba(15,23,42,.25); padding: 18px; }
 .modalBody { display: grid; gap: 10px; } label { display: grid; gap: 6px; color: #374151; font-weight: 900; } input, select { border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; font-weight: 800; } input:disabled { background: #f3f4f6; color: #6b7280; }
 .modalActions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-@media (max-width: 720px) { .wrap { padding: 14px; } .topbar, .panelHead, .rowCard { display: grid; grid-template-columns: 1fr; } .topbar { gap: 10px; margin-bottom: 12px; } .homeBtn { width: 100%; min-height: 38px; padding: 8px 10px; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .stat { padding: 10px 12px; border-radius: 14px; } .stat span { font-size: 12px; } .stat strong { margin-top: 2px; font-size: 20px; } .actions, .rowActions { width: 100%; justify-content: stretch; } .btn, .tab, .doneBadge { min-height: 40px; padding: 8px 10px; } }
+@media (max-width: 720px) { .wrap { padding: 14px; } .topbar { position: relative; display: block; margin-bottom: 12px; padding-right: 92px; } .panelHead, .rowCard { display: grid; grid-template-columns: 1fr; } .homeBtn { position: absolute; top: 0; right: 0; width: auto; min-width: 78px; min-height: 32px; padding: 6px 9px; border-radius: 10px; font-size: 12px; } .pinAddBtn { width: auto; min-width: 96px; min-height: 32px; padding: 6px 10px; border-radius: 10px; font-size: 12px; justify-self: end; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .stat { padding: 10px 12px; border-radius: 14px; } .stat span { font-size: 12px; } .stat strong { margin-top: 2px; font-size: 20px; } .actions, .rowActions { width: 100%; justify-content: stretch; } .btn, .tab, .doneBadge { min-height: 40px; padding: 8px 10px; } }
 `;
 
 export default function MembersPage() {
