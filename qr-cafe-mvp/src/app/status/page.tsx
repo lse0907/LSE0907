@@ -40,11 +40,11 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   cancelled: "취소",
 };
 
-function normalizeMode(v: any): OrderMode {
+function normalizeMode(v: unknown): OrderMode {
   return v === "takeout" ? "takeout" : "dine-in";
 }
 
-function normalizeStatus(v: any): OrderStatus {
+function normalizeStatus(v: unknown): OrderStatus {
   const s = String(v || "").trim();
   if (s === "checked" || s === "making" || s === "ready_for_packing" || s === "completed" || s === "cancelled") return s;
   if (s === "ready") return "ready_for_packing";
@@ -99,6 +99,7 @@ function StatusPageInner() {
   const [errMsg, setErrMsg] = useState<string>("");
 
   const [showReadyPopup, setShowReadyPopup] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
   const readyShownRef = useRef<Record<string, boolean>>({});
@@ -252,11 +253,10 @@ function StatusPageInner() {
 
   const onCancelOrder = async () => {
     if (!visibleOrder || !storeId || !accessToken || cancelling) return;
-    const ok = window.confirm("주문을 취소할까요? 매장에서 주문 확인 전까지만 취소할 수 있어요.");
-    if (!ok) return;
 
     try {
       setCancelling(true);
+      setErrMsg("");
       const res = await fetch("/api/orders/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -272,10 +272,11 @@ function StatusPageInner() {
       if (!res.ok || !json?.ok) {
         throw new Error(String(json?.message || "주문 취소에 실패했습니다."));
       }
+      setShowCancelConfirm(false);
       await onRefresh();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      alert(msg);
+      setErrMsg(msg || "취소에 실패했습니다.");
     } finally {
       setCancelling(false);
     }
@@ -442,7 +443,7 @@ function StatusPageInner() {
         </button>
 
         {visibleOrder?.status === "new" ? (
-          <button className="btn" onClick={onCancelOrder} disabled={cancelling}>
+          <button className="btn" onClick={() => setShowCancelConfirm(true)} disabled={cancelling}>
             {cancelling ? "취소 처리 중..." : "주문 취소"}
           </button>
         ) : null}
@@ -500,7 +501,7 @@ function StatusPageInner() {
             </div>
             <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {visibleOrder.status === "new" ? (
-                <button className="btn" onClick={onCancelOrder} disabled={cancelling}>
+                <button className="btn" onClick={() => setShowCancelConfirm(true)} disabled={cancelling}>
                   {cancelling ? "취소 처리 중..." : "주문 취소"}
                 </button>
               ) : (
@@ -514,6 +515,25 @@ function StatusPageInner() {
           {errMsg ? <div className="err">오류: {errMsg}</div> : null}
         </>
       )}
+
+
+      {showCancelConfirm && visibleOrder ? (
+        <div className="dim" role="dialog" aria-modal="true">
+          <div className="popup">
+            <h2 className="popupTitle">주문을 취소할까요?</h2>
+            <p className="popupDesc">매장 확인 전까지만 취소할 수 있어요.</p>
+            {errMsg ? <div className="err">{errMsg}</div> : null}
+            <div className="popupBtnRow">
+              <button className="popupBtn" onClick={() => setShowCancelConfirm(false)} disabled={cancelling}>
+                닫기
+              </button>
+              <button className="popupBtn popupBtnPrimary" onClick={onCancelOrder} disabled={cancelling}>
+                {cancelling ? "처리 중..." : "취소하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showReadyPopup ? (
         <div

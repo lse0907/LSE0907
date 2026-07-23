@@ -45,11 +45,11 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString();
 }
 
-function normalizeMode(v: any): OrderMode {
+function normalizeMode(v: unknown): OrderMode {
   return v === "takeout" ? "takeout" : "dine-in";
 }
 
-function normalizeStatus(v: any): OrderStatus {
+function normalizeStatus(v: unknown): OrderStatus {
   const s = String(v || "").trim();
   if (s === "checked" || s === "making" || s === "ready_for_packing" || s === "completed" || s === "cancelled") return s;
   if (s === "ready") return "ready_for_packing";
@@ -85,6 +85,7 @@ function DonePageInner() {
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<OrderView | null>(null);
   const [errMsg, setErrMsg] = useState<string>("");
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
   const storeIdForLinks = useMemo(() => {
@@ -174,8 +175,34 @@ function DonePageInner() {
     };
 
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderIdFromQuery, storeFromQuery, accessTokenFromQuery]);
+
+  const cancelOrder = async () => {
+    if (!order || cancelling) return;
+    try {
+      setCancelling(true);
+      setErrMsg("");
+      const res = await fetch("/api/orders/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actor: "customer",
+          storeId: storeIdForLinks,
+          orderId: order.id,
+          accessToken: accessTokenForLinks,
+          reason: "고객 앱 주문 취소",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(String(json?.message || "주문 취소 실패"));
+      window.location.href = `/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(order.id)}&accessToken=${encodeURIComponent(accessTokenForLinks)}`;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrMsg(msg || "취소에 실패했습니다.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -323,33 +350,8 @@ function DonePageInner() {
       </div>
       {order.status === "new" ? (
         <button
-          onClick={async () => {
-            if (cancelling) return;
-            const ok = window.confirm("주문을 취소할까요? 매장에서 주문 확인 전까지만 취소할 수 있어요.");
-            if (!ok) return;
-            try {
-              setCancelling(true);
-              const res = await fetch("/api/orders/cancel", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  actor: "customer",
-                  storeId: storeIdForLinks,
-                  orderId: order.id,
-                  accessToken: accessTokenForLinks,
-                  reason: "고객 앱 주문 취소",
-                }),
-              });
-              const json = await res.json();
-              if (!res.ok || !json?.ok) throw new Error(String(json?.message || "주문 취소 실패"));
-              window.location.href = `/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(order.id)}&accessToken=${encodeURIComponent(accessTokenForLinks)}`;
-            } catch (e: unknown) {
-              const msg = e instanceof Error ? e.message : String(e);
-              alert(msg);
-            } finally {
-              setCancelling(false);
-            }
-          }}
+          onClick={() => setShowCancelConfirm(true)}
+          disabled={cancelling}
           style={{
             marginTop: 10,
             width: "100%",
@@ -367,6 +369,35 @@ function DonePageInner() {
           매장에서 주문 확인 후에는 앱에서 직접 취소할 수 없어요.
         </p>
       )}
+
+      {errMsg ? (
+        <p style={{ marginTop: 10, color: "#b91c1c", fontWeight: 900 }}>{errMsg}</p>
+      ) : null}
+
+      {showCancelConfirm ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.45)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            zIndex: 50,
+          }}
+        >
+          <div style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 18, padding: 16 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>주문을 취소할까요?</h2>
+            <p style={{ margin: "10px 0 0", color: "#374151", fontWeight: 800 }}>매장 확인 전까지만 취소할 수 있어요.</p>
+            <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
+              <button onClick={() => setShowCancelConfirm(false)} disabled={cancelling} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #d1d5db", background: "#fff", fontWeight: 950 }}>닫기</button>
+              <button onClick={cancelOrder} disabled={cancelling} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid #111827", background: "#111827", color: "#fff", fontWeight: 950 }}>{cancelling ? "처리 중..." : "취소하기"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       </main>
     </>
   );

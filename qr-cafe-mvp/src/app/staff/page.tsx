@@ -435,6 +435,7 @@ function StaffPageInner() {
   const [managerPinForCancel, setManagerPinForCancel] = useState("");
   const [cancelNeedsManagerPin, setCancelNeedsManagerPin] = useState(false);
   const [cancelMsg, setCancelMsg] = useState("");
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const lastActivityAtRef = useRef(Date.now());
 
 
@@ -882,7 +883,7 @@ function StaffPageInner() {
   }, [orders]);
 
   const selected = useMemo(() => orders.find((o) => o.id === selectedId) || null, [orders, selectedId]);
-  const [cancelTarget, setCancelTarget] = useState<{ id: string; displayNo: string } | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; displayNo: string; status: OrderStatus } | null>(null);
 
   const moveToOrderCheckTab = () => {
     if (staffViewMode === "station") setStationTab("order");
@@ -979,8 +980,14 @@ function StaffPageInner() {
     setMobileView("detail");
   };
 
+  const cancelRequiresManagerPin = (order: OrderRecord) =>
+    loginRole === "staff" && !(order.status === "new" || order.status === "checked");
+
   const openCancelModal = (order: OrderRecord) => {
-    setCancelTarget({ id: order.id, displayNo: order.displayNo });
+    const needsManagerPin = cancelRequiresManagerPin(order);
+    setCancelTarget({ id: order.id, displayNo: order.displayNo, status: order.status });
+    setCancelNeedsManagerPin(needsManagerPin);
+    setCancelMsg(needsManagerPin ? "매니저 PIN이 필요합니다." : "");
   };
 
   const closeCancelModal = () => {
@@ -989,15 +996,21 @@ function StaffPageInner() {
     setManagerPinForCancel("");
     setCancelNeedsManagerPin(false);
     setCancelMsg("");
+    setCancelSubmitting(false);
   };
 
   const confirmCancelOrder = async () => {
-    if (!cancelTarget) return;
+    if (!cancelTarget || cancelSubmitting) return;
     const id = cancelTarget.id;
-    closeCancelModal();
     const sid = storeIdRef.current || storeId;
     if (!sid) return;
+    if (cancelNeedsManagerPin && !managerPinForCancel.trim()) {
+      setCancelMsg("매니저 PIN을 입력해주세요.");
+      return;
+    }
     try {
+      setCancelSubmitting(true);
+      setCancelMsg("");
       const res = await fetch("/api/orders/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1013,9 +1026,9 @@ function StaffPageInner() {
       const json = await res.json();
       if (!res.ok || !json?.ok) {
         if (json?.code === "MANAGER_PIN_REQUIRED" || json?.code === "MANAGER_PIN_INVALID") {
-          setCancelTarget({ id, displayNo: cancelTarget.displayNo });
+          setCancelTarget({ id, displayNo: cancelTarget.displayNo, status: cancelTarget.status });
           setCancelNeedsManagerPin(true);
-          setCancelMsg(String(json?.message || "매니저 PIN 승인이 필요합니다."));
+          setCancelMsg(String(json?.message || "매니저 PIN을 확인해주세요."));
           return;
         }
         throw new Error(String(json?.message || "주문 취소 처리 실패"));
@@ -1023,9 +1036,12 @@ function StaffPageInner() {
       setOrders((prev) =>
         prev.map((o) => (o.id === id ? { ...o, status: "cancelled" } : o))
       );
+      closeCancelModal();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      alert(`주문 취소 실패: ${msg}`);
+      setCancelMsg(`취소 실패: ${msg}`);
+    } finally {
+      setCancelSubmitting(false);
     }
   };
 
@@ -1192,7 +1208,7 @@ function StaffPageInner() {
       fetchOrdersFromDb(true);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      alert(`준비 확인 저장 실패: ${msg}`);
+      setErrMsg(`준비 확인 실패: ${msg}`);
     }
   };
 
@@ -1228,7 +1244,7 @@ function StaffPageInner() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[staff] update order error:", msg);
-      alert(`저장 실패: ${msg}`);
+      setErrMsg(`저장 실패: ${msg}`);
     }
   };
 
@@ -1256,7 +1272,7 @@ function StaffPageInner() {
       fetchOrdersFromDb(true);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      alert(`아이템 상태 저장 실패: ${msg}`);
+      setErrMsg(`아이템 저장 실패: ${msg}`);
     }
   };
 
@@ -3147,7 +3163,7 @@ function StaffPageInner() {
               <div className="dockSpacer" />
 
               <p className="hint">
-                * 주문 취소는 삭제가 아닌 상태 변경입니다.
+                * 준비 완료: 고객 알림 · 전달 완료: 수령 완료
               </p>
             </>
           )}
@@ -3197,7 +3213,7 @@ function StaffPageInner() {
             <p className="modalDesc">
               주문번호 {cancelTarget.displayNo}를 취소 처리할까요?
               <br />
-              취소는 삭제가 아닌 상태 변경입니다.
+              취소 후 목록에 기록됩니다.
             </p>
             <label className="modalFieldLabel">취소 사유</label>
             <select className="modalSelect" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)}>
@@ -3207,16 +3223,16 @@ function StaffPageInner() {
               <option value="매장 사정">매장 사정</option>
               <option value="기타">기타</option>
             </select>
+            {cancelMsg ? <p className="err">{cancelMsg}</p> : null}
             {cancelNeedsManagerPin ? (
               <>
-                <p className="err">{cancelMsg || "이 주문 취소는 매니저 PIN 승인이 필요합니다."}</p>
                 <label className="modalFieldLabel">매니저 PIN</label>
-                <input className="modalInput" value={managerPinForCancel} onChange={(e) => setManagerPinForCancel(e.target.value)} placeholder="매니저 PIN" inputMode="numeric" />
+                <input className="modalInput" value={managerPinForCancel} onChange={(e) => setManagerPinForCancel(e.target.value.replace(/[^\d]/g, ""))} placeholder="매니저 PIN" inputMode="numeric" />
               </>
             ) : null}
             <div className="modalActions">
-              <button type="button" className="btn" onClick={closeCancelModal}>닫기</button>
-              <button type="button" className="btn actionCancel" onClick={confirmCancelOrder}>주문 취소</button>
+              <button type="button" className="btn" onClick={closeCancelModal} disabled={cancelSubmitting}>닫기</button>
+              <button type="button" className="btn actionCancel" onClick={confirmCancelOrder} disabled={cancelSubmitting}>{cancelSubmitting ? "처리 중..." : "주문 취소"}</button>
             </div>
           </div>
         </div>

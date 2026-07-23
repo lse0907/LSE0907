@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     const reasonCode = String(body?.reasonCode || "").trim() || "other";
 
     if (!storeId || !orderId) {
-      return NextResponse.json({ ok: false, message: "필수 파라미터(storeId, orderId)가 누락되었습니다." }, { status: 400 });
+      return NextResponse.json({ ok: false, code: "MISSING_REQUIRED_FIELDS", message: "필수 정보가 없습니다." }, { status: 400 });
     }
 
     const supabaseAdmin = createSupabaseAdminClient();
@@ -137,15 +137,15 @@ export async function POST(req: NextRequest) {
     const { data: order, error: orderErr } = orderQuery;
 
     if (orderErr) {
-      return NextResponse.json({ ok: false, message: `주문 조회 실패: ${orderErr.message}` }, { status: 500 });
+      return NextResponse.json({ ok: false, code: "ORDER_LOOKUP_FAILED", message: `주문 조회 실패: ${orderErr.message}` }, { status: 500 });
     }
     if (!order) {
-      return NextResponse.json({ ok: false, message: "주문을 찾을 수 없습니다." }, { status: 404 });
+      return NextResponse.json({ ok: false, code: "ORDER_NOT_FOUND", message: "주문을 찾을 수 없습니다." }, { status: 404 });
     }
 
     if (actor === "customer") {
       if (!accessToken || accessToken !== String(order.access_token || "").trim()) {
-        return NextResponse.json({ ok: false, message: "주문 취소 권한이 없습니다." }, { status: 403 });
+        return NextResponse.json({ ok: false, code: "CANCEL_FORBIDDEN", message: "취소 권한이 없습니다." }, { status: 403 });
       }
       if (String(order.status || "") !== "new") {
         return NextResponse.json(
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
       const auth = await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner", "manager", "staff"] });
       const status = String(order.status || "");
       if (status === "completed" || status === "cancelled") {
-        return NextResponse.json({ ok: false, message: "완료/취소 주문은 취소할 수 없습니다." }, { status: 409 });
+        return NextResponse.json({ ok: false, code: "ORDER_LOCKED", message: "이미 끝난 주문입니다." }, { status: 409 });
       }
       const staffCanCancelDirectly = auth.role === "staff" && (status === "new" || status === "checked");
       if (auth.role === "staff" && !staffCanCancelDirectly) {
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
           .eq("pin_role", "manager")
           .eq("is_active", true)
           .eq("approval_status", "approved");
-        if (pinErr) return NextResponse.json({ ok: false, message: `매니저 PIN 조회 실패: ${pinErr.message}` }, { status: 500 });
+        if (pinErr) return NextResponse.json({ ok: false, code: "MANAGER_PIN_LOOKUP_FAILED", message: `PIN 조회 실패: ${pinErr.message}` }, { status: 500 });
         const approvedPin = (managerPins || []).find((pinRow) => verifyPinHash(managerPin, String(pinRow.pin_hash || "")));
         if (!approvedPin) {
           return NextResponse.json({ ok: false, code: "MANAGER_PIN_INVALID", message: "매니저 PIN이 올바르지 않습니다." }, { status: 403 });
@@ -195,12 +195,12 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
 
       if (pgErr) {
-        return NextResponse.json({ ok: false, message: `PG 조회 실패: ${pgErr.message}` }, { status: 500 });
+        return NextResponse.json({ ok: false, code: "PG_LOOKUP_FAILED", message: `결제 설정 조회 실패: ${pgErr.message}` }, { status: 500 });
       }
 
       const secretKey = String(pgRow?.secret_key || "").trim();
       if (!secretKey) {
-        return NextResponse.json({ ok: false, message: "매장 Secret Key가 없습니다." }, { status: 400 });
+        return NextResponse.json({ ok: false, code: "PG_SECRET_MISSING", message: "결제 취소 설정이 없습니다." }, { status: 400 });
       }
 
       const tossOrderId = String((order as any)?.toss_order_id || "").trim();
@@ -209,7 +209,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             ok: false,
-            message: "결제 취소 식별자(payment_key / toss_order_id)가 없어 취소할 수 없습니다. DB 마이그레이션 반영이 필요합니다.",
+            code: "PAYMENT_IDENTIFIER_MISSING",
+            message: "결제 취소 정보가 없습니다.",
           },
           { status: 409 }
         );
@@ -223,7 +224,7 @@ export async function POST(req: NextRequest) {
       );
       if (!cancelRes.ok) {
         return NextResponse.json(
-          { ok: false, message: cancelRes.message, toss: cancelRes.toss },
+          { ok: false, code: "PG_CANCEL_FAILED", message: cancelRes.message, toss: cancelRes.toss },
           { status: cancelRes.status || 500 }
         );
       }
@@ -236,7 +237,7 @@ export async function POST(req: NextRequest) {
       .eq("id", orderId)
       .eq("store_id", storeId);
     if (updateErr) {
-      return NextResponse.json({ ok: false, message: `주문 상태 업데이트 실패: ${updateErr.message}` }, { status: 500 });
+      return NextResponse.json({ ok: false, code: "ORDER_CANCEL_UPDATE_FAILED", message: `취소 저장 실패: ${updateErr.message}` }, { status: 500 });
     }
 
     const eventRes = await supabaseAdmin.from("order_events").insert({
@@ -259,7 +260,7 @@ export async function POST(req: NextRequest) {
       p_order_id: orderId,
     });
     if (rollbackErr) {
-      return NextResponse.json({ ok: false, message: `보상 롤백 실패: ${rollbackErr.message}` }, { status: 500 });
+      return NextResponse.json({ ok: false, code: "REWARD_ROLLBACK_FAILED", message: `보상 롤백 실패: ${rollbackErr.message}` }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
