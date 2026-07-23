@@ -1,19 +1,17 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/app/confirm/page.tsx
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { nextDailySequence, format4, todayKey } from "../lib/orderNumber";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   getStoreIdFromSearchParams,
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
-  lsOrdersKey,
 } from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
-type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 type PaymentStatus = "not_required" | "pending" | "paid";
 
 type PgConfig = {
@@ -46,32 +44,6 @@ type CartLine = {
   image?: string;
   options: SelectedGroup[];
   optionTotal: number;
-};
-
-type OrderRecord = {
-  id: string;
-  createdAt: number;
-  orderDate: string;
-  displayNo: string;
-  mode: OrderMode;
-  table?: string;
-  buzzerNo?: string;
-  requestNote: string;
-
-  items: Array<{
-    id: string;
-    name: string;
-    price: number;
-    qty: number;
-    options?: SelectedGroup[];
-    optionTotal?: number;
-    lineTotal?: number;
-  }>;
-
-  totalCount: number;
-  totalPrice: number;
-  status: OrderStatus;
-  paymentStatus?: PaymentStatus;
 };
 
 type WalletSummary = {
@@ -131,6 +103,15 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString();
 }
 
+function checkoutErrorMessage(code?: string, fallback?: string) {
+  if (code === "AMOUNT_MISMATCH") return "금액이 변경됐어요. 다시 확인해주세요.";
+  if (code === "PAYMENT_IDENTIFIERS_MISSING") return "결제 정보가 부족합니다.";
+  if (code === "STORE_REQUIRED") return "매장 정보가 없습니다.";
+  if (code === "ORDER_QUOTE_FAILED") return fallback || "주문 금액 확인에 실패했습니다.";
+  if (code === "ORDER_CREATE_FAILED") return fallback || "주문 접수에 실패했습니다.";
+  return fallback || "처리에 실패했습니다. 다시 시도해주세요.";
+}
+
 function uuid() {
   return (
     globalThis.crypto?.randomUUID?.() ||
@@ -178,32 +159,6 @@ function parseCart(cartParam: string | null): CartLine[] {
   } catch {
     return [];
   }
-}
-
-function loadOrders(storeId: string): OrderRecord[] {
-  try {
-    const raw = localStorage.getItem(lsOrdersKey(storeId));
-    if (!raw) return [];
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? list : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveOrders(storeId: string, list: OrderRecord[]) {
-  localStorage.setItem(lsOrdersKey(storeId), JSON.stringify(list));
-}
-
-function isDuplicateDisplayNoError(msg: string) {
-  const m = String(msg || "").toLowerCase();
-  return (
-    m.includes("duplicate key value violates unique constraint") ||
-    m.includes("orders_display_no_unique") ||
-    m.includes("orders_store_date_display_no_unique") ||
-    m.includes("unique constraint") ||
-    m.includes("23505")
-  );
 }
 
 function paymentOrderId() {
@@ -285,6 +240,7 @@ function ConfirmPageInner() {
 
   const [requestNote, setRequestNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [isPrepayStore, setIsPrepayStore] = useState(false);
   const [prepayLoading, setPrepayLoading] = useState(true);
   const [pgConfig, setPgConfig] = useState<PgConfig>({ clientKey: "", mid: "" });
@@ -515,22 +471,6 @@ function ConfirmPageInner() {
   const effectiveDiscount = selectedCouponIdForApply ? couponDiscount : usedPoints;
   const payableAmount = Math.max(0, Math.round(totalPrice) - effectiveDiscount);
 
-  // NOTE: helper name intentionally unique to avoid duplicate-declaration merge regressions.
-  const insertOrderRowWithPaymentFallback = async (row: Record<string, unknown>) => {
-    const first = await supabase.from("orders").insert([row]);
-    if (!first.error) return first;
-
-    const msg = String(first.error.message || "").toLowerCase();
-    const missingPaymentColumn =
-      msg.includes("payment_status") && (msg.includes("column") || msg.includes("schema cache"));
-
-    if (!missingPaymentColumn) return first;
-
-    const fallbackRow = { ...row } as Record<string, unknown>;
-    delete fallbackRow.payment_status;
-    return supabase.from("orders").insert([fallbackRow]);
-  };
-
   const loadTossScript = async () => {
     if (typeof window === "undefined") throw new Error("브라우저 환경에서만 결제창을 열 수 있습니다.");
     if ((window as any).TossPayments) return;
@@ -550,11 +490,8 @@ function ConfirmPageInner() {
 
     try {
       setSubmitting(true);
+      setSubmitError("");
 
-      const orderId = uuid();
-      const accessToken = uuid();
-      const createdAtIso = new Date().toISOString();
-      const orderDate = todayKey();
       let currentCustomerUserId = customerUserId;
       if (!currentCustomerUserId) {
         const { data: authData } = await supabase.auth.getUser();
@@ -563,12 +500,33 @@ function ConfirmPageInner() {
       }
 
       const paymentStatus = await resolvePaymentStatus();
+      const commonPayload = {
+        storeId,
+        cartLines,
+        mode: effectiveMode,
+        table: effectiveMode === "dine-in" ? effectiveTable : "",
+        requestNote,
+        customerUserId: currentCustomerUserId,
+        usedPoints: selectedCouponIdForApply ? 0 : usedPoints,
+        usedCouponId: selectedCouponIdForApply,
+      };
 
       if (paymentStatus === "paid") {
         if (!pgConfig.clientKey) {
           throw new Error("선결재 테스트용 Client Key가 없습니다. 관리자 결제/구독에서 키를 먼저 저장해주세요.");
         }
 
+        const quoteRes = await fetch("/api/orders/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(commonPayload),
+        });
+        const quoteJson = await quoteRes.json();
+        if (!quoteRes.ok || !quoteJson?.ok) {
+          throw new Error(checkoutErrorMessage(quoteJson?.code, quoteJson?.message));
+        }
+
+        const serverQuote = quoteJson.quote;
         const payOrderId = paymentOrderId();
         const pending = {
           createdAt: Date.now(),
@@ -578,10 +536,11 @@ function ConfirmPageInner() {
           mode: effectiveMode,
           table: effectiveMode === "dine-in" ? effectiveTable : "",
           requestNote,
-          totalCount,
-          totalPrice,
-          usedPoints: selectedCouponIdForApply ? 0 : usedPoints,
-          usedCouponId: selectedCouponIdForApply,
+          totalCount: Number(serverQuote?.totalCount || totalCount),
+          totalPrice: Number(serverQuote?.totalPrice || totalPrice),
+          payableAmount: Number(serverQuote?.payableAmount || payableAmount),
+          usedPoints: Number(serverQuote?.usedPoints || 0),
+          usedCouponId: serverQuote?.usedCouponId || null,
         };
 
         localStorage.setItem(`${PREPAY_PENDING_KEY}:${payOrderId}`, JSON.stringify(pending));
@@ -595,7 +554,7 @@ function ConfirmPageInner() {
         const failUrl = `${base}/confirm/fail?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}`;
 
         await tossPayments.requestPayment("카드", {
-          amount: payableAmount,
+          amount: pending.payableAmount,
           orderId: payOrderId,
           orderName,
           customerName: customerPayName,
@@ -606,144 +565,21 @@ function ConfirmPageInner() {
         return;
       }
 
-      let finalDisplayNo = "";
-      const MAX_TRY = 5;
-
-      for (let attempt = 0; attempt < MAX_TRY; attempt++) {
-        const seq = nextDailySequence();
-        const displayNo = format4(seq);
-        finalDisplayNo = displayNo;
-
-        const orderRow: any = {
-          id: orderId,
-          access_token: accessToken,
-          created_at: createdAtIso,
-          order_date: orderDate,
-          display_no: displayNo,
-          mode: effectiveMode,
-          table_no:
-            effectiveMode === "dine-in" ? (effectiveTable || null) : null,
-          request_note: requestNote.trim() || "",
-          total_count: totalCount,
-          total_price: Math.round(totalPrice),
-          status: "new",
-          payment_status: paymentStatus,
-          customer_user_id: currentCustomerUserId,
-          used_points: selectedCouponIdForApply ? 0 : usedPoints,
-          used_coupon_id: selectedCouponIdForApply,
-          applied_discount_type: selectedCouponIdForApply
-            ? "coupon"
-            : (usedPoints > 0 ? "point" : null),
-          store_id: storeId,
-        };
-
-        const { error: oErr } = await insertOrderRowWithPaymentFallback(orderRow);
-
-        if (!oErr) break;
-
-        const msg = oErr.message || String(oErr);
-        const duplicated = isDuplicateDisplayNoError(msg);
-
-        if (!duplicated || attempt === MAX_TRY - 1) {
-          throw new Error(`[orders insert] ${msg}`);
-        }
-      }
-
-      // order_items
-      const orderItemRows: any[] = cartLines.map((ln) => {
-        const orderItemId = uuid();
-        (ln as any).__orderItemId = orderItemId;
-
-        return {
-          id: orderItemId,
-          order_id: orderId,
-          menu_id: ln.menuId,
-          name: ln.name,
-          price: Math.round(ln.basePrice),
-          qty: Math.round(ln.qty),
-          store_id: storeId,
-        };
+      const createRes = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...commonPayload, paymentStatus }),
       });
-
-      const { error: oiErr } = await supabase.from("order_items").insert(orderItemRows);
-      if (oiErr) throw new Error(`[order_items insert] ${oiErr.message}`);
-
-      // order_item_options
-      const optionRows: any[] = [];
-      for (const ln of cartLines) {
-        const orderItemId = (ln as any).__orderItemId;
-        const groups = Array.isArray(ln.options) ? ln.options : [];
-
-        for (const g of groups) {
-          const items = Array.isArray(g.items) ? g.items : [];
-          for (const it of items) {
-            optionRows.push({
-              id: uuid(),
-              order_item_id: orderItemId,
-              group_id: g.groupId,
-              option_id: it.id,
-              name: it.name,
-              price_delta: Math.round(Number(it.priceDelta || 0)),
-              qty: Math.max(1, Math.round(Number(it.qty || 1))),
-              store_id: storeId,
-            });
-          }
-        }
+      const createJson = await createRes.json();
+      if (!createRes.ok || !createJson?.ok || !createJson?.order) {
+        throw new Error(checkoutErrorMessage(createJson?.code, createJson?.message || "주문 접수에 실패했습니다."));
       }
 
-      if (optionRows.length) {
-        const { error: oioErr } = await supabase.from("order_item_options").insert(optionRows);
-        if (oioErr) throw new Error(`[order_item_options insert] ${oioErr.message}`);
-      }
+      const created = createJson.order;
+      const orderId = String(created.orderId || "");
+      const accessToken = String(created.accessToken || "");
+      if (!orderId || !accessToken) throw new Error("주문 확인 정보가 누락되었습니다.");
 
-      if (currentCustomerUserId) {
-        const { error: loyaltyErr } = await supabase.rpc("apply_loyalty_on_paid_order", {
-          p_order_id: orderId,
-          p_store_id: storeId,
-          p_customer_user_id: currentCustomerUserId,
-          p_order_amount: Math.round(totalPrice),
-          p_used_points: selectedCouponIdForApply ? 0 : usedPoints,
-          p_used_coupon_id: selectedCouponIdForApply,
-          p_idempotency_key: `${orderId}:loyalty`,
-        });
-        if (loyaltyErr) {
-          console.warn("[loyalty] apply failed:", loyaltyErr.message);
-        }
-      }
-
-      // 로컬 저장(임시 유지)
-      const order: OrderRecord = {
-        id: orderId,
-        createdAt: Date.now(),
-        orderDate,
-        displayNo: finalDisplayNo,
-        mode: effectiveMode,
-        table:
-          effectiveMode === "dine-in" ? (effectiveTable || undefined) : undefined,
-        requestNote: requestNote.trim(),
-        items: cartLines.map((ln) => {
-          const unit = ln.basePrice + ln.optionTotal;
-          return {
-            id: ln.menuId,
-            name: ln.name,
-            price: ln.basePrice,
-            qty: ln.qty,
-            options: ln.options,
-            optionTotal: ln.optionTotal,
-            lineTotal: unit * ln.qty,
-          };
-        }),
-        totalCount,
-        totalPrice,
-        status: "new",
-        paymentStatus,
-      };
-
-      const list = loadOrders(storeId);
-      list.unshift(order);
-      saveOrders(storeId, list);
-
-      // ✅ 핵심: lastOrderId + lastStoreId 함께 저장
       localStorage.setItem(lsLastOrderIdKey(storeId), orderId);
       localStorage.setItem(lsLastOrderTokenKey(storeId), accessToken);
       localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
@@ -756,7 +592,7 @@ function ConfirmPageInner() {
       );
     } catch (e: any) {
       console.error(e);
-      alert(String(e?.message || e));
+      setSubmitError(String(e?.message || e || "처리에 실패했습니다."));
       setSubmitting(false);
     }
   };
@@ -1243,6 +1079,23 @@ function ConfirmPageInner() {
           </div>
         )}
       </div>
+
+      {submitError ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: 14,
+            border: "1px solid #fecaca",
+            borderRadius: 12,
+            background: "#fef2f2",
+            color: "#991b1b",
+            padding: 12,
+            fontWeight: 900,
+          }}
+        >
+          {submitError}
+        </div>
+      ) : null}
 
       <div
         style={{
