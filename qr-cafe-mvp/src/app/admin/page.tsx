@@ -35,6 +35,11 @@ type StoreBillingSummary = {
   lastPaidAt: string | null;
 };
 
+type StoreAddonSummary = {
+  prepayAddonStatus: string;
+  addonPaidUntil: string | null;
+};
+
 type OrderSummaryRow = {
   order_date?: string | null;
   total_price?: number | string | null;
@@ -75,6 +80,12 @@ function calcRemainingDays(createdAt?: string | null) {
   return Math.max(0, FREE_TRIAL_DAYS - usedDays);
 }
 
+function hasActivePrepayAddon(addon?: StoreAddonSummary | null) {
+  if (!addon) return false;
+  const paidUntilMs = addon.addonPaidUntil ? new Date(addon.addonPaidUntil).getTime() : NaN;
+  return addon.prepayAddonStatus === "active" || (Number.isFinite(paidUntilMs) && paidUntilMs > Date.now());
+}
+
 function AdminPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -101,6 +112,9 @@ function AdminPageInner() {
   });
   const [billingByStore, setBillingByStore] = useState<
     Record<string, StoreBillingSummary>
+  >({});
+  const [addonByStore, setAddonByStore] = useState<
+    Record<string, StoreAddonSummary>
   >({});
   const [
     hideSetupBannerForCurrentSelection,
@@ -195,10 +209,14 @@ function AdminPageInner() {
         .in("store_id", ids);
     }
 
-    const [billingRes, paymentRes] = await Promise.all([
+    const [billingRes, addonRes, paymentRes] = await Promise.all([
       supabase
         .from("store_billing")
         .select("store_id, base_plan_status, paid_until")
+        .in("store_id", ids),
+      supabase
+        .from("store_addons")
+        .select("store_id, prepay_addon_status, addon_paid_until")
         .in("store_id", ids),
       supabase
         .from("billing_payments")
@@ -210,6 +228,7 @@ function AdminPageInner() {
 
     if (storeRes.error) throw storeRes.error;
     if (billingRes.error) throw billingRes.error;
+    if (addonRes.error) throw addonRes.error;
     if (paymentRes.error) throw paymentRes.error;
 
     const list = (storeRes.data || []) as StoreRow[];
@@ -218,6 +237,7 @@ function AdminPageInner() {
     );
 
     const nextBilling: Record<string, StoreBillingSummary> = {};
+    const nextAddons: Record<string, StoreAddonSummary> = {};
     for (const row of billingRes.data || []) {
       const storeId = String((row as { store_id: string }).store_id || "");
       if (!storeId) continue;
@@ -231,6 +251,21 @@ function AdminPageInner() {
             (row as { paid_until?: string | null }).paid_until || "",
           ).trim() || null,
         lastPaidAt: null,
+      };
+    }
+
+    for (const row of addonRes.data || []) {
+      const storeId = String((row as { store_id: string }).store_id || "");
+      if (!storeId) continue;
+      nextAddons[storeId] = {
+        prepayAddonStatus: String(
+          (row as { prepay_addon_status?: string | null }).prepay_addon_status ||
+            "inactive",
+        ),
+        addonPaidUntil:
+          String(
+            (row as { addon_paid_until?: string | null }).addon_paid_until || "",
+          ).trim() || null,
       };
     }
 
@@ -250,6 +285,7 @@ function AdminPageInner() {
 
     setStores(list);
     setBillingByStore(nextBilling);
+    setAddonByStore(nextAddons);
     setStoresLoaded(true);
   };
 
@@ -471,6 +507,10 @@ function AdminPageInner() {
   const selectedBilling = selectedStoreId
     ? billingByStore[selectedStoreId]
     : null;
+  const selectedAddon = selectedStoreId
+    ? addonByStore[selectedStoreId]
+    : null;
+  const canOpenOnlinePaymentSettings = hasActivePrepayAddon(selectedAddon);
   const selectedFreeRemaining = selectedStore
     ? calcRemainingDays(selectedStore.created_at)
     : null;
@@ -842,14 +882,27 @@ function AdminPageInner() {
               <button className="subBtn" onClick={() => go("/admin/members")}>
                 직원/권한 관리
               </button>
-              <button className="subBtn" onClick={() => go("/admin/billing")}>
-                결제 설정
-              </button>
               <button className="subBtn" onClick={() => go("/admin/qr")}>
                 매장 QR 생성
               </button>
               <button className="subBtn" onClick={() => go("/admin/loyalty")}>
                 포인트/쿠폰 설정
+              </button>
+              <button
+                className={`subBtn ${canOpenOnlinePaymentSettings ? "" : "subBtnDisabled"}`}
+                onClick={() => {
+                  if (canOpenOnlinePaymentSettings) {
+                    go("/admin/billing");
+                    return;
+                  }
+                  setMsg("온라인 결제 설정은 선결제 옵션 구독 후 사용할 수 있습니다.");
+                }}
+                type="button"
+              >
+                <span>온라인 결제 설정{canOpenOnlinePaymentSettings ? "" : " 🔒"}</span>
+                {!canOpenOnlinePaymentSettings ? (
+                  <small className="subBtnHint">선결제 옵션 구독 후 사용 가능</small>
+                ) : null}
               </button>
             </div>
           ) : null}
@@ -1288,10 +1341,19 @@ body {
   cursor:pointer;
   font-weight:900;
   text-align:left;
+  display:grid;
+  gap:4px;
 }
 .subBtnDisabled{
-  opacity:.6;
+  opacity:.72;
   cursor:not-allowed;
+  background:#f8fafc;
+}
+.subBtnHint{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  line-height:1.35;
 }
 .statsSummary{
   border:1px solid var(--line);

@@ -14,6 +14,11 @@ type SavedPgView = {
   updatedAt: string | null;
 };
 
+type PrepayAddonAccess = {
+  status: string;
+  paidUntil: string | null;
+};
+
 const EMPTY_BILLING: BillingSettings = {
   baseApproved: false,
   addonApproved: false,
@@ -22,6 +27,26 @@ const EMPTY_BILLING: BillingSettings = {
   pgSecretKey: "",
   updatedAt: null,
 };
+
+function hasActivePrepayAddon(access: PrepayAddonAccess | null) {
+  if (!access) return false;
+  const paidUntilMs = access.paidUntil ? new Date(access.paidUntil).getTime() : NaN;
+  return access.status === "active" || (Number.isFinite(paidUntilMs) && paidUntilMs > Date.now());
+}
+
+async function loadPrepayAddonAccess(storeId: string): Promise<PrepayAddonAccess | null> {
+  const { data, error } = await supabase
+    .from("store_addons")
+    .select("prepay_addon_status, addon_paid_until")
+    .eq("store_id", storeId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return {
+    status: String(data.prepay_addon_status || "inactive"),
+    paidUntil: String(data.addon_paid_until || "").trim() || null,
+  };
+}
 
 async function loadBillingFromDb(storeId: string): Promise<BillingSettings | null> {
   try {
@@ -148,7 +173,7 @@ function BillingForm({ storeId }: { storeId: string }) {
             저장 상태: {saveMode === "db" ? "Supabase(DB) 동기화 완료" : "DB 미동기화"}
           </div>
         </div>
-        <p className="muted">이 페이지는 매장 PG 연결 정보 저장과 연결 상태 확인 전용입니다.</p>
+        <p className="muted">선결제 주문을 받을 매장의 토스페이먼츠 PG 정보를 연결합니다.</p>
       </section>
 
       {saveMode !== "db" ? (
@@ -178,7 +203,7 @@ function BillingForm({ storeId }: { storeId: string }) {
 
       <section className="card">
         <h2 className="h2">토스페이먼츠 PG 연결</h2>
-        <p className="muted">토스페이먼츠를 아직 사용하지 않는 매장은 먼저 가맹점 가입/심사를 완료해 주세요.</p>
+        <p className="muted">선결제 옵션 구독 중인 매장에서 고객 온라인 결제를 받으려면 토스페이먼츠 가맹점 가입/심사를 완료해 주세요.</p>
         <div className="links">
           <a href="https://www.tosspayments.com/" target="_blank" rel="noreferrer" className="linkBtn">
             토스페이먼츠 홈페이지
@@ -251,6 +276,8 @@ function BillingForm({ storeId }: { storeId: string }) {
 function AdminBillingPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
+  const [prepayAccess, setPrepayAccess] = useState<PrepayAddonAccess | null>(null);
+  const [accessLoading, setAccessLoading] = useState(true);
 
   const storeId = useMemo(() => {
     const queryStore = (sp.get("store") || "").trim();
@@ -266,21 +293,55 @@ function AdminBillingPageInner() {
     setCurrentStoreId(storeId);
   }, [router, storeId]);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!storeId) return;
+      setAccessLoading(true);
+      const access = await loadPrepayAddonAccess(storeId);
+      if (!mounted) return;
+      setPrepayAccess(access);
+      setAccessLoading(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [storeId]);
+
+  const canUseOnlinePaymentSettings = hasActivePrepayAddon(prepayAccess);
+
   return (
     <main className="wrap">
       <style jsx global>{css}</style>
 
       <header className="topbar">
-        <h1 className="h1">PG 설정</h1>
+        <h1 className="h1">온라인 결제 설정</h1>
         <button className="btn" type="button" onClick={() => router.back()}>
           관리자 홈
         </button>
       </header>
 
       {storeId ? (
-       <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
-        <BillingForm key={storeId} storeId={storeId} />
-       </Suspense>
+        accessLoading ? (
+          <div className="card"><p className="muted">선결제 옵션 구독 상태 확인 중...</p></div>
+        ) : canUseOnlinePaymentSettings ? (
+          <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+            <BillingForm key={storeId} storeId={storeId} />
+          </Suspense>
+        ) : (
+          <section className="card warningCard">
+            <h2 className="h2">선결제 옵션 구독 후 설정할 수 있습니다.</h2>
+            <p className="muted">온라인 결제 설정은 고객이 주문 시 바로 결제하는 선결제 기능을 위한 설정입니다.</p>
+            <p className="muted">구독 관리에서 선결제 옵션을 추가한 뒤 토스페이먼츠 PG 정보를 연결해 주세요.</p>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}
+            >
+              구독 관리로 이동
+            </button>
+          </section>
+        )
       ) : null}
     </main>
   );
