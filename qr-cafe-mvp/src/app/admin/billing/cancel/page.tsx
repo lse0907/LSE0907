@@ -160,7 +160,7 @@ function BillingCancelPageInner() {
     <main className="wrap">
       <style jsx global>{css}</style>
       <header className="topbar">
-        <h1 className="h1">구독 해지/취소</h1>
+        <h1 className="h1">최근 결제 취소/환불</h1>
         <div className="row">
           <button className="btn" type="button" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>
             구독 결제
