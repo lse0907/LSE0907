@@ -118,15 +118,6 @@ function LoginPageInner() {
           placeholder="이메일 또는 매장 로그인 ID"
           style={inputStyle}
         />
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "#374151" }}>
-          <input
-            checked={rememberLoginId}
-            onChange={(e) => setRememberLoginId(e.target.checked)}
-            type="checkbox"
-            style={{ width: 18, height: 18 }}
-          />
-          이 기기에 로그인 ID 저장
-        </label>
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
