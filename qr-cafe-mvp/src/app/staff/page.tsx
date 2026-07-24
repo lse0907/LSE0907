@@ -1383,12 +1383,26 @@ function StaffPageInner() {
           line-height: 1.25;
         }
 
-        .contextLine {
+        .staffToolbar {
           margin-top: 10px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 10px 14px;
+          width: 100%;
+          padding: 12px;
+          border: 1px solid var(--line);
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.78);
+          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+        }
+
+        .contextLine {
           display: flex;
           align-items: center;
           gap: 8px;
           flex-wrap: wrap;
+          min-width: 0;
         }
 
         .contextLabel {
@@ -1651,9 +1665,9 @@ function StaffPageInner() {
         }
 
         .modeRow {
-          margin-top: 10px;
           display: flex;
           align-items: center;
+          justify-content: flex-end;
           gap: 8px;
           flex-wrap: wrap;
         }
@@ -2385,8 +2399,15 @@ function StaffPageInner() {
             font-size: 15px;
           }
 
-          .contextLine {
+          .staffToolbar {
             margin-top: 8px;
+            grid-template-columns: 1fr;
+            padding: 10px;
+            gap: 8px;
+            border-radius: 16px;
+          }
+
+          .contextLine {
             gap: 6px;
           }
 
@@ -2438,7 +2459,7 @@ function StaffPageInner() {
           }
 
           .modeRow {
-            margin-top: 8px;
+            justify-content: flex-start;
             gap: 6px;
           }
 
@@ -2550,10 +2571,34 @@ function StaffPageInner() {
             </div>
           </div>
 
-          <div className="contextLine" aria-label="매장과 담당 직원">
-            <span className="storeBadge">매장 · {storeDisplayName}</span>
-            <span className={workerBadgeClass}>담당 · {workerRoleText}</span>
-            <button className="btn btnSmall workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
+          <div className="staffToolbar" aria-label="직원 화면 작업 상태">
+            <div className="contextLine" aria-label="매장과 담당 직원">
+              <span className="storeBadge">매장 · {storeDisplayName}</span>
+              <span className={workerBadgeClass}>담당 · {workerRoleText}</span>
+              <button className="btn btnSmall workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
+            </div>
+
+            <div className="modeRow">
+              <p className="modeLabel">운영 방식</p>
+              <div className="modeSwitch" role="group" aria-label="모드전환">
+                <button
+                  type="button"
+                  className={`modeSwitchBtn ${staffViewMode === "simple" ? "modeSwitchBtnOn" : ""}`}
+                  aria-pressed={staffViewMode === "simple"}
+                  onClick={() => updateStaffViewMode("simple")}
+                >
+                  기본 모드
+                </button>
+                <button
+                  type="button"
+                  className={`modeSwitchBtn ${staffViewMode === "station" ? "modeSwitchBtnOn" : ""}`}
+                  aria-pressed={staffViewMode === "station"}
+                  onClick={() => updateStaffViewMode("station")}
+                >
+                  분업 모드
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* ✅ 최초 로드에서만 표시 */}
@@ -2613,28 +2658,6 @@ function StaffPageInner() {
           </div>
         </div>
       ) : null}
-
-      <div className="modeRow">
-        <p className="modeLabel">운영 방식</p>
-        <div className="modeSwitch" role="group" aria-label="모드전환">
-          <button
-            type="button"
-            className={`modeSwitchBtn ${staffViewMode === "simple" ? "modeSwitchBtnOn" : ""}`}
-            aria-pressed={staffViewMode === "simple"}
-            onClick={() => updateStaffViewMode("simple")}
-          >
-            기본 모드
-          </button>
-          <button
-            type="button"
-            className={`modeSwitchBtn ${staffViewMode === "station" ? "modeSwitchBtnOn" : ""}`}
-            aria-pressed={staffViewMode === "station"}
-            onClick={() => updateStaffViewMode("station")}
-          >
-            분업 모드
-          </button>
-        </div>
-      </div>
 
       {staffViewMode === "simple" ? (
         <div className="tabsRow">
