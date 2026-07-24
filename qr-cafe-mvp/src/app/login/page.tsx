@@ -135,15 +135,6 @@ function LoginPageInner() {
           placeholder="비밀번호"
           style={inputStyle}
         />
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "#374151" }}>
-          <input
-            checked={rememberLoginId}
-            onChange={(e) => setRememberLoginId(e.target.checked)}
-            type="checkbox"
-            style={{ width: 18, height: 18 }}
-          />
-          이 기기에 로그인 ID 저장
-        </label>
         <button type="submit" disabled={loading} style={btnStyle}>
           {loading ? "로그인 중..." : "로그인"}
         </button>
