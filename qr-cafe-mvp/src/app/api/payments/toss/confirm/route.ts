@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../../_lib/storeAuth";
 
 type ConfirmBody = {
   paymentKey?: string;
@@ -9,40 +9,38 @@ type ConfirmBody = {
   pgMode?: "store" | "platform" | string;
 };
 
+type PgMode = "store" | "platform";
+
+function parsePgMode(rawPgMode: unknown, defaultMode: PgMode): PgMode | null {
+  const pgMode = String(rawPgMode || defaultMode).trim();
+  return pgMode === "store" || pgMode === "platform" ? pgMode : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as ConfirmBody;
     const paymentKey = String(body?.paymentKey || "").trim();
     const orderId = String(body?.orderId || "").trim();
     const storeId = String(body?.storeId || "").trim();
-    const pgMode = String(body?.pgMode || "store").trim();
+    const pgMode = parsePgMode(body?.pgMode, "store");
     const amount = Number(body?.amount || 0);
 
     if (!paymentKey || !orderId || !storeId || !Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json({ ok: false, message: "필수 파라미터가 누락되었습니다." }, { status: 400 });
     }
 
-    const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
-    const serviceRole =
-      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_KEY || "").trim();
-
-    if (!supabaseUrl || !serviceRole) {
-      const missing: string[] = [];
-      if (!supabaseUrl) missing.push("NEXT_PUBLIC_SUPABASE_URL(or SUPABASE_URL)");
-      if (!serviceRole) missing.push("SUPABASE_SERVICE_ROLE_KEY(or SUPABASE_SECRET_KEY)");
-
-      return NextResponse.json(
-        {
-          ok: false,
-          message: `서버 환경변수가 필요합니다: ${missing.join(", ")}`,
-        },
-        { status: 500 }
-      );
+    if (!pgMode) {
+      return NextResponse.json({ ok: false, message: "지원하지 않는 PG 결제 모드입니다." }, { status: 400 });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRole, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const supabaseAdmin = createSupabaseAdminClient();
+    if (pgMode === "platform") {
+      await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner"] });
+    }
 
     const pgRes =
       pgMode === "platform"
@@ -101,9 +99,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const toss = asRecord(parsed);
+    const tossPaymentKey = String(toss.paymentKey || "").trim();
+    const tossOrderId = String(toss.orderId || "").trim();
+    const tossStatus = String(toss.status || "").trim();
+    const tossTotalAmount = Number(toss.totalAmount ?? toss.amount ?? NaN);
+
+    if (
+      tossPaymentKey !== paymentKey ||
+      tossOrderId !== orderId ||
+      !Number.isFinite(tossTotalAmount) ||
+      Math.round(tossTotalAmount) !== Math.round(amount) ||
+      tossStatus !== "DONE"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "토스 승인 응답이 요청한 결제 정보와 일치하지 않습니다.",
+          toss: parsed,
+        },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json({ ok: true, toss: parsed });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ ok: false, message }, { status: 500 });
+    return apiErrorResponse(e);
   }
 }
