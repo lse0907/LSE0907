@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../../_lib/storeAuth";
 
 type CancelBody = {
   paymentId?: number;
@@ -8,7 +8,15 @@ type CancelBody = {
   pgMode?: "store" | "platform" | string;
 };
 
+type PgMode = "store" | "platform";
+
 const CANCEL_WINDOW_MINUTES = 10;
+const MAX_CANCEL_REASON_LENGTH = 120;
+
+function parsePgMode(rawPgMode: unknown, defaultMode: PgMode): PgMode | null {
+  const pgMode = String(rawPgMode || defaultMode).trim();
+  return pgMode === "store" || pgMode === "platform" ? pgMode : null;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,23 +24,24 @@ export async function POST(req: NextRequest) {
     const paymentId = Number(body?.paymentId || 0);
     const storeId = String(body?.storeId || "").trim();
     const reason = String(body?.reason || "").trim();
-    const pgMode = String(body?.pgMode || "platform").trim();
+    const pgMode = parsePgMode(body?.pgMode, "platform");
 
     if (!Number.isFinite(paymentId) || paymentId <= 0 || !storeId) {
       return NextResponse.json({ ok: false, message: "필수 파라미터가 누락되었습니다." }, { status: 400 });
     }
 
-    const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
-    const serviceRole =
-      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_KEY || "").trim();
-
-    if (!supabaseUrl || !serviceRole) {
-      return NextResponse.json({ ok: false, message: "서버 환경변수 설정이 필요합니다." }, { status: 500 });
+    if (!pgMode) {
+      return NextResponse.json({ ok: false, message: "지원하지 않는 PG 결제 모드입니다." }, { status: 400 });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRole, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    if (reason.length > MAX_CANCEL_REASON_LENGTH) {
+      return NextResponse.json({ ok: false, message: `취소 사유는 ${MAX_CANCEL_REASON_LENGTH}자 이하로 입력해 주세요.` }, { status: 400 });
+    }
+
+    const supabaseAdmin = createSupabaseAdminClient();
+    if (pgMode === "platform") {
+      await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner"] });
+    }
 
     const paymentRes = await supabaseAdmin
       .from("billing_payments")
@@ -73,6 +82,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "PG 취소에 필요한 키 정보가 없습니다." }, { status: 400 });
     }
 
+    const cancelReason = reason || "관리자 즉시 취소";
     const basicToken = Buffer.from(`${secretKey}:`).toString("base64");
     const cancelRes = await fetch(`https://api.tosspayments.com/v1/payments/${encodeURIComponent(paymentKey)}/cancel`, {
       method: "POST",
@@ -80,7 +90,7 @@ export async function POST(req: NextRequest) {
         Authorization: `Basic ${basicToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ cancelReason: reason || "관리자 즉시 취소" }),
+      body: JSON.stringify({ cancelReason }),
       cache: "no-store",
     });
 
@@ -146,7 +156,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, toss: parsed });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ ok: false, message }, { status: 500 });
+    return apiErrorResponse(e);
   }
 }
