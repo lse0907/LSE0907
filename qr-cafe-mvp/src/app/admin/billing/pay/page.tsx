@@ -106,7 +106,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         .order("paid_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-      supabase.from("platform_pg_config").select("client_key").eq("id", 1).maybeSingle(),
+      fetch(`/api/billing/platform-client-key?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" }),
     ]);
 
     setRuntime({
@@ -122,7 +122,8 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       lastAfterPaidUntil: String(paymentRes.data?.after_paid_until || "").trim() || null,
       lastPlanMonths: Number.isFinite(Number(paymentRes.data?.plan_months)) ? Number(paymentRes.data?.plan_months) : null,
     });
-    setPgClientKey(String(pgRes.data?.client_key || "").trim());
+    const pgJson = await pgRes.json().catch(() => ({}));
+    setPgClientKey(pgRes.ok && pgJson?.ok ? String(pgJson.clientKey || "").trim() : "");
   }, [storeId]);
 
   useEffect(() => {
