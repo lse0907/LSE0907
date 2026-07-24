@@ -152,6 +152,12 @@ create table if not exists public.billing_payments (
 );
 
 create index if not exists idx_billing_payments_store_paid_at on public.billing_payments(store_id, paid_at desc);
+create unique index if not exists uq_billing_payments_payment_key
+on public.billing_payments(payment_key)
+where payment_key is not null;
+create unique index if not exists uq_billing_payments_order_id
+on public.billing_payments(order_id)
+where order_id is not null;
 
 -- 6) 결제 적용 함수: 남은 기간 누적(rollover)
 -- 규칙:
@@ -213,6 +219,9 @@ begin
     into v_addon_price
   from public.store_addons sa
   where sa.store_id = p_store_id;
+
+  v_base_price := coalesce(v_base_price, 8900);
+  v_addon_price := coalesce(v_addon_price, 5000);
 
   v_expected_amount := p_plan_months * (
     (case when coalesce(p_base_paid, false) then v_base_price else 0 end)
@@ -305,6 +314,182 @@ begin
   return v_row;
 end;
 $$;
+
+-- 6-1) 서버 검증 완료 결제 적용 함수: API에서 Toss 승인/owner 검증 후 service_role로만 호출
+create or replace function public.apply_store_billing_payment_verified(
+  p_store_id text,
+  p_payer_user_id uuid,
+  p_plan_months integer,
+  p_base_paid boolean,
+  p_addon_paid boolean,
+  p_payment_key text,
+  p_order_id text,
+  p_amount_krw integer default null,
+  p_note text default null
+)
+returns public.billing_payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_now timestamptz := now();
+  v_before_paid_until timestamptz;
+  v_anchor timestamptz;
+  v_after_paid_until timestamptz;
+  v_base_price integer := 8900;
+  v_addon_price integer := 5000;
+  v_expected_amount integer;
+  v_row public.billing_payments;
+begin
+  if nullif(trim(coalesce(p_store_id, '')), '') is null then
+    raise exception 'store_id가 필요합니다.';
+  end if;
+
+  if p_payer_user_id is null then
+    raise exception 'payer_user_id가 필요합니다.';
+  end if;
+
+  if p_plan_months not in (1, 3, 6, 12) then
+    raise exception 'plan_months는 1/3/6/12만 허용됩니다.';
+  end if;
+
+  if coalesce(p_base_paid, false) = false and coalesce(p_addon_paid, false) = false then
+    raise exception 'base_paid 또는 addon_paid 중 하나는 true여야 합니다.';
+  end if;
+
+  if nullif(trim(coalesce(p_payment_key, '')), '') is null or nullif(trim(coalesce(p_order_id, '')), '') is null then
+    raise exception 'payment_key와 order_id가 필요합니다.';
+  end if;
+
+  select bp.*
+    into v_row
+  from public.billing_payments bp
+  where bp.store_id = p_store_id
+    and (bp.payment_key = nullif(trim(coalesce(p_payment_key, '')), '')
+      or bp.order_id = nullif(trim(coalesce(p_order_id, '')), ''))
+  order by bp.paid_at desc
+  limit 1;
+
+  if found then
+    return v_row;
+  end if;
+
+  select sb.paid_until
+    into v_before_paid_until
+  from public.store_billing sb
+  where sb.store_id = p_store_id;
+
+  v_anchor := greatest(coalesce(v_before_paid_until, v_now), v_now);
+  v_after_paid_until := v_anchor + make_interval(months => p_plan_months);
+
+  select coalesce(sb.base_price_krw, 8900)
+    into v_base_price
+  from public.store_billing sb
+  where sb.store_id = p_store_id;
+
+  select coalesce(sa.prepay_addon_price_krw, 5000)
+    into v_addon_price
+  from public.store_addons sa
+  where sa.store_id = p_store_id;
+
+  v_base_price := coalesce(v_base_price, 8900);
+  v_addon_price := coalesce(v_addon_price, 5000);
+
+  v_expected_amount := p_plan_months * (
+    (case when coalesce(p_base_paid, false) then v_base_price else 0 end)
+    + (case when coalesce(p_addon_paid, false) then v_addon_price else 0 end)
+  );
+
+  if p_amount_krw is not null and p_amount_krw <> v_expected_amount then
+    raise exception 'amount_krw 불일치: expected=% provided=%', v_expected_amount, p_amount_krw;
+  end if;
+
+  if coalesce(p_base_paid, false) then
+    insert into public.store_billing (
+      store_id,
+      base_plan_status,
+      paid_until,
+      current_plan_months,
+      updated_at
+    ) values (
+      p_store_id,
+      'active',
+      v_after_paid_until,
+      p_plan_months,
+      now()
+    )
+    on conflict (store_id)
+    do update set
+      base_plan_status = 'active',
+      paid_until = excluded.paid_until,
+      current_plan_months = excluded.current_plan_months,
+      updated_at = now();
+  end if;
+
+  if coalesce(p_addon_paid, false) then
+    insert into public.store_addons (
+      store_id,
+      prepay_addon_status,
+      addon_paid_until,
+      current_plan_months,
+      updated_at
+    ) values (
+      p_store_id,
+      'active',
+      v_after_paid_until,
+      p_plan_months,
+      now()
+    )
+    on conflict (store_id)
+    do update set
+      prepay_addon_status = 'active',
+      addon_paid_until = excluded.addon_paid_until,
+      current_plan_months = excluded.current_plan_months,
+      updated_at = now();
+  end if;
+
+  insert into public.billing_payments (
+    store_id,
+    payer_user_id,
+    plan_months,
+    base_paid,
+    addon_paid,
+    amount_krw,
+    paid_at,
+    before_paid_until,
+    after_paid_until,
+    payment_provider,
+    payment_key,
+    order_id,
+    status,
+    note
+  ) values (
+    p_store_id,
+    p_payer_user_id,
+    p_plan_months,
+    coalesce(p_base_paid, false),
+    coalesce(p_addon_paid, false),
+    v_expected_amount,
+    now(),
+    v_before_paid_until,
+    v_after_paid_until,
+    'tosspayments',
+    nullif(trim(coalesce(p_payment_key, '')), ''),
+    nullif(trim(coalesce(p_order_id, '')), ''),
+    'paid',
+    p_note
+  )
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+revoke all on function public.apply_store_billing_payment_verified(text, uuid, integer, boolean, boolean, text, text, integer, text) from public;
+revoke all on function public.apply_store_billing_payment_verified(text, uuid, integer, boolean, boolean, text, text, integer, text) from anon;
+revoke all on function public.apply_store_billing_payment_verified(text, uuid, integer, boolean, boolean, text, text, integer, text) from authenticated;
+grant execute on function public.apply_store_billing_payment_verified(text, uuid, integer, boolean, boolean, text, text, integer, text) to service_role;
 
 -- 7) updated_at 트리거
 

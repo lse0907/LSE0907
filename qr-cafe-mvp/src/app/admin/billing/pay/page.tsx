@@ -162,7 +162,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         return;
       }
 
-      const confirmRes = await fetch("/api/payments/toss/confirm", {
+      const confirmRes = await fetch("/api/billing/confirm-subscription-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -170,32 +170,16 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
           orderId,
           amount,
           storeId,
-          pgMode: "platform",
+          planMonths: pending.planMonths,
+          payBase: pending.payBase,
+          payAddon: pending.payAddon,
         }),
       });
 
       const confirmJson = await confirmRes.json().catch(() => ({}));
       if (!confirmRes.ok || !confirmJson?.ok) {
         if (cancelled) return;
-        setPayMsg(`토스 승인 실패: ${String(confirmJson?.message || "알 수 없는 오류")}`);
-        onConsumeReturnParams();
-        return;
-      }
-
-      const { error } = await supabase.rpc("apply_store_billing_payment", {
-        p_store_id: storeId,
-        p_plan_months: pending.planMonths,
-        p_base_paid: pending.payBase,
-        p_addon_paid: pending.payAddon,
-        p_payment_key: paymentKey,
-        p_order_id: orderId,
-        p_amount_krw: amount,
-        p_note: `플랫폼 PG 결제 ${pending.planMonths}개월`,
-      });
-
-      if (error) {
-        if (cancelled) return;
-        setPayMsg(`결제 반영 실패: ${error.message}`);
+        setPayMsg(`결제 승인/반영 실패: ${String(confirmJson?.message || "알 수 없는 오류")}`);
         onConsumeReturnParams();
         return;
       }
