@@ -397,8 +397,8 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
 
       <div className="benefitCard">
         <div className="benefitTitle">구독 기능 안내</div>
-        <p className="benefitText"><b>기본 구독</b>: QR 주문, 메뉴 관리, 직원 주문 처리</p>
-        <p className="benefitText"><b>선결제 옵션</b>: 고객 온라인 결제</p>
+        <p className="benefitText"><b>기본 구독</b>: QR 주문, 메뉴 관리, 직원 주문 처리 등 매장 운영 기능</p>
+        <p className="benefitText"><b>선결제 옵션</b>: 고객이 주문할 때 바로 온라인 결제하는 기능</p>
       </div>
 
       <div className="payGrid">

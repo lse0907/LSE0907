@@ -645,12 +645,15 @@ with check (public.is_ops_user() or auth.role() = 'service_role');
 -- 11) 권한 부여
 grant select, insert, update, delete on public.store_billing to authenticated;
 grant select, insert, update, delete on public.store_addons to authenticated;
-grant select, insert, update, delete on public.store_pg_config to authenticated;
+-- 매장 PG Secret Key는 owner 권한을 확인하는 서버 API에서만 읽고 씁니다.
+-- 브라우저의 authenticated 클라이언트가 테이블을 직접 조회해 Secret Key 원문을 받지 못하도록 차단합니다.
+revoke select, insert, update, delete on public.store_pg_config from authenticated;
 grant select, insert, update, delete on public.platform_pg_config to authenticated;
 grant select, insert, update on public.support_tickets to authenticated;
 grant select on public.billing_payments to authenticated;
 grant usage, select on sequence public.billing_payments_id_seq to authenticated;
-grant execute on function public.apply_store_billing_payment(text, integer, boolean, boolean, text, text, integer, text) to authenticated;
+-- 구독 반영은 토스 승인값을 서버에서 검증한 뒤 service_role 전용 함수를 통해서만 처리합니다.
+revoke execute on function public.apply_store_billing_payment(text, integer, boolean, boolean, text, text, integer, text) from authenticated;
 
 commit;
 

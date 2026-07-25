@@ -14,6 +14,10 @@ type SavedPgView = {
   updatedAt: string | null;
 };
 
+type LoadedBillingSettings = BillingSettings & {
+  hasPgSecret: boolean;
+};
+
 type PrepayAddonAccess = {
   status: string;
   paidUntil: string | null;
@@ -48,25 +52,24 @@ async function loadPrepayAddonAccess(storeId: string): Promise<PrepayAddonAccess
   };
 }
 
-async function loadBillingFromDb(storeId: string): Promise<BillingSettings | null> {
+async function loadBillingFromDb(storeId: string): Promise<LoadedBillingSettings | null> {
   try {
-    const { data: pgRow, error } = await supabase
-      .from("store_pg_config")
-      .select("mid, client_key, secret_key, updated_at")
-      .eq("store_id", storeId)
-      .maybeSingle();
-
-    if (error) return null;
-    if (!pgRow) return null;
+    const response = await fetch(`/api/billing/store-pg-config?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" });
+    const result = (await response.json()) as {
+      ok?: boolean;
+      config?: { mid?: string; clientKey?: string; hasSecret?: boolean; updatedAt?: string | null } | null;
+    };
+    if (!response.ok || !result.ok || !result.config) return null;
 
     return {
       baseApproved: false,
       addonApproved: false,
-      pgMid: String(pgRow?.mid || ""),
-      pgClientKey: String(pgRow?.client_key || ""),
-      pgSecretKey: String(pgRow?.secret_key || ""),
-      updatedAt: Number.isFinite(new Date(String(pgRow?.updated_at || "")).getTime())
-        ? new Date(String(pgRow?.updated_at || "")).getTime()
+      pgMid: String(result.config.mid || ""),
+      pgClientKey: String(result.config.clientKey || ""),
+      pgSecretKey: "",
+      hasPgSecret: Boolean(result.config.hasSecret),
+      updatedAt: Number.isFinite(new Date(String(result.config.updatedAt || "")).getTime())
+        ? new Date(String(result.config.updatedAt || "")).getTime()
         : null,
     };
   } catch {
@@ -76,22 +79,17 @@ async function loadBillingFromDb(storeId: string): Promise<BillingSettings | nul
 
 async function saveBillingToDb(storeId: string, form: BillingSettings): Promise<boolean> {
   try {
-    const pgPayload: {
-      store_id: string;
-      mid: string;
-      client_key: string;
-      updated_at: string;
-      secret_key?: string;
-    } = {
-      store_id: storeId,
-      mid: form.pgMid.trim(),
-      client_key: form.pgClientKey.trim(),
-      updated_at: new Date().toISOString(),
-    };
-    if (form.pgSecretKey.trim()) pgPayload.secret_key = form.pgSecretKey.trim();
-
-    const { error } = await supabase.from("store_pg_config").upsert(pgPayload, { onConflict: "store_id" });
-    return !error;
+    const response = await fetch("/api/billing/store-pg-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        storeId,
+        mid: form.pgMid,
+        clientKey: form.pgClientKey,
+        secretKey: form.pgSecretKey,
+      }),
+    });
+    return response.ok;
   } catch {
     return false;
   }
@@ -114,7 +112,7 @@ function BillingForm({ storeId }: { storeId: string }) {
         setSavedPg({
           mid: dbData.pgMid,
           clientKey: dbData.pgClientKey,
-          hasSecret: !!dbData.pgSecretKey,
+          hasSecret: dbData.hasPgSecret,
           updatedAt: dbData.updatedAt ? new Date(dbData.updatedAt).toISOString() : null,
         });
         setSaveMode("db");
@@ -130,7 +128,10 @@ function BillingForm({ storeId }: { storeId: string }) {
     };
   }, [storeId]);
 
-  const activationReady = useMemo(() => !!form.pgMid && !!form.pgClientKey && !!form.pgSecretKey, [form]);
+  const activationReady = useMemo(
+    () => !!form.pgMid && !!form.pgClientKey && (!!form.pgSecretKey || !!savedPg?.hasSecret),
+    [form, savedPg?.hasSecret],
+  );
 
   const onSave = async () => {
     const savedToDb = await saveBillingToDb(storeId, form);
@@ -140,7 +141,7 @@ function BillingForm({ storeId }: { storeId: string }) {
         setSavedPg({
           mid: latest.pgMid,
           clientKey: latest.pgClientKey,
-          hasSecret: !!latest.pgSecretKey,
+          hasSecret: latest.hasPgSecret,
           updatedAt: latest.updatedAt ? new Date(latest.updatedAt).toISOString() : null,
         });
       }
