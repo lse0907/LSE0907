@@ -8,6 +8,8 @@ type CancelBody = {
   pgMode?: "platform" | string;
 };
 
+type PgMode = "store" | "platform";
+
 const CANCEL_WINDOW_MINUTES = 10;
 const MAX_CANCEL_REASON_LENGTH = 120;
 
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
     const paymentId = Number(body?.paymentId || 0);
     const storeId = String(body?.storeId || "").trim();
     const reason = String(body?.reason || "").trim();
-    const pgMode = String(body?.pgMode || "platform").trim();
+    const pgMode = parsePgMode(body?.pgMode, "platform");
 
     if (!Number.isFinite(paymentId) || paymentId <= 0 || !storeId) {
       return publicCancelError("INVALID_CANCEL_REQUEST", "취소할 결제 정보가 올바르지 않습니다.", 400);
