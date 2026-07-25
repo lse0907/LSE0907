@@ -60,6 +60,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
   const [payBase, setPayBase] = useState(true);
   const [payAddon, setPayAddon] = useState(true);
   const [paying, setPaying] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [payMsg, setPayMsg] = useState("");
   const [addonToggling, setAddonToggling] = useState(false);
   const [addonFeatureMsg, setAddonFeatureMsg] = useState("");
@@ -105,7 +106,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         .order("paid_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-      supabase.from("platform_pg_config").select("client_key").eq("id", 1).maybeSingle(),
+      fetch(`/api/billing/platform-client-key?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" }),
     ]);
 
     setRuntime({
@@ -121,7 +122,8 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       lastAfterPaidUntil: String(paymentRes.data?.after_paid_until || "").trim() || null,
       lastPlanMonths: Number.isFinite(Number(paymentRes.data?.plan_months)) ? Number(paymentRes.data?.plan_months) : null,
     });
-    setPgClientKey(String(pgRes.data?.client_key || "").trim());
+    const pgJson = await pgRes.json().catch(() => ({}));
+    setPgClientKey(pgRes.ok && pgJson?.ok ? String(pgJson.clientKey || "").trim() : "");
   }, [storeId]);
 
   useEffect(() => {
@@ -160,7 +162,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         return;
       }
 
-      const confirmRes = await fetch("/api/payments/toss/confirm", {
+      const confirmRes = await fetch("/api/billing/confirm-subscription-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -168,32 +170,16 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
           orderId,
           amount,
           storeId,
-          pgMode: "platform",
+          planMonths: pending.planMonths,
+          payBase: pending.payBase,
+          payAddon: pending.payAddon,
         }),
       });
 
       const confirmJson = await confirmRes.json().catch(() => ({}));
       if (!confirmRes.ok || !confirmJson?.ok) {
         if (cancelled) return;
-        setPayMsg(`토스 승인 실패: ${String(confirmJson?.message || "알 수 없는 오류")}`);
-        onConsumeReturnParams();
-        return;
-      }
-
-      const { error } = await supabase.rpc("apply_store_billing_payment", {
-        p_store_id: storeId,
-        p_plan_months: pending.planMonths,
-        p_base_paid: pending.payBase,
-        p_addon_paid: pending.payAddon,
-        p_payment_key: paymentKey,
-        p_order_id: orderId,
-        p_amount_krw: amount,
-        p_note: `플랫폼 PG 결제 ${pending.planMonths}개월`,
-      });
-
-      if (error) {
-        if (cancelled) return;
-        setPayMsg(`결제 반영 실패: ${error.message}`);
+        setPayMsg(`결제 승인/반영 실패: ${String(confirmJson?.message || "알 수 없는 오류")}`);
         onConsumeReturnParams();
         return;
       }
@@ -284,6 +270,23 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       document.head.appendChild(script);
     });
 
+  const onRequestPayment = () => {
+    setPayMsg("");
+    if (!payBase && !payAddon) {
+      setPayMsg("기본 또는 옵션 중 하나 이상 선택해 주세요.");
+      return;
+    }
+    if (!payBase && payAddon && !canAddonOnlyPayment) {
+      setPayMsg("옵션 단독 결제는 기본 기능 구독이 활성 상태일 때만 가능합니다.");
+      return;
+    }
+    if (!pgClientKey) {
+      setPayMsg("현재 구독 결제 설정이 완료되지 않았습니다. 리온오더 고객센터에 문의해 주세요.");
+      return;
+    }
+    setConfirmOpen(true);
+  };
+
   const onStartPayment = async () => {
     setPayMsg("");
     if (!payBase && !payAddon) {
@@ -295,7 +298,7 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       return;
     }
     if (!pgClientKey) {
-      setPayMsg("플랫폼 PG Client Key가 없습니다. OPS 페이지에서 먼저 저장해 주세요.");
+      setPayMsg("현재 구독 결제 설정이 완료되지 않았습니다. 리온오더 고객센터에 문의해 주세요.");
       return;
     }
 
@@ -392,6 +395,12 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
         {addonFeatureMsg ? <div className="muted">{addonFeatureMsg}</div> : null}
       </div>
 
+      <div className="benefitCard">
+        <div className="benefitTitle">구독 기능 안내</div>
+        <p className="benefitText"><b>기본 구독</b>: QR 주문, 메뉴 관리, 직원 주문 처리 등 매장 운영 기능</p>
+        <p className="benefitText"><b>선결제 옵션</b>: 고객이 주문할 때 바로 온라인 결제하는 기능</p>
+      </div>
+
       <div className="payGrid">
         <label className="toggleRow">
           <input type="checkbox" checked={payBase} onChange={(e) => setPayBase(e.target.checked)} />
@@ -421,11 +430,11 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
       </div>
 
       <div className="row">
-        <button className="btn primary" type="button" onClick={onStartPayment} disabled={paying}>
+        <button className="btn primary" type="button" onClick={onRequestPayment} disabled={paying}>
           {paying ? "결제창 준비 중..." : "구독 결제"}
         </button>
         <button className="btn" type="button" onClick={onGoCancelPage} style={{ color: "#dc2626", borderColor: "#fecaca" }}>
-          구독 해지
+          최근 결제 취소
         </button>
         {(payMsg || failCode || failMessage) ? (
           <span className="muted">
@@ -436,6 +445,34 @@ function BillingPayForm({ storeId, storeName, paymentKey, orderId, amount, failC
           <button className="btn" type="button" onClick={onConsumeReturnParams}>다시 시도</button>
         ) : null}
       </div>
+
+      {confirmOpen ? (
+        <div className="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="billing-confirm-title">
+          <div className="modalCard">
+            <h3 id="billing-confirm-title" className="modalTitle">구독 결제를 진행할까요?</h3>
+            <div className="confirmList">
+              {payBase ? <div className="confirmRow"><span>기본 구독 {planMonths}개월</span><b>{(runtime.basePrice * planMonths).toLocaleString()}원</b></div> : null}
+              {payAddon ? <div className="confirmRow"><span>선결제 옵션 {planMonths}개월</span><b>{(runtime.addonPrice * planMonths).toLocaleString()}원</b></div> : null}
+            </div>
+            <div className="confirmTotal"><span>총 결제금액</span><b>{totalAmount.toLocaleString()}원</b></div>
+            <p className="muted">결제 후 선택한 이용권 기간이 연장됩니다.</p>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={() => setConfirmOpen(false)} disabled={paying}>취소</button>
+              <button
+                className="btn primary"
+                type="button"
+                onClick={() => {
+                  setConfirmOpen(false);
+                  void onStartPayment();
+                }}
+                disabled={paying}
+              >
+                {paying ? "결제창 준비 중..." : "결제 진행"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -534,6 +571,21 @@ const css = `
   .input { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px; }
   .payGrid { display:grid; gap:8px; }
   .toggleRow { display:flex; align-items:center; gap:8px; font-weight:700; }
+  .benefitCard { border:1px solid #dbeafe; background:#eff6ff; border-radius:12px; padding:12px; display:grid; gap:6px; }
+  .benefitTitle { color:#1d4ed8; font-size:13px; font-weight:900; }
+  .benefitText { margin:0; color:#1e3a8a; font-size:13px; line-height:1.45; }
+  .modalBackdrop { position:fixed; inset:0; z-index:80; display:grid; place-items:center; padding:16px; background:rgba(15,23,42,.48); }
+  .modalCard { width:min(420px, 100%); border:1px solid var(--line); border-radius:18px; background:#fff; padding:16px; display:grid; gap:12px; box-shadow:0 24px 80px rgba(15,23,42,.24); }
+  .modalTitle { margin:0; font-size:18px; font-weight:900; }
+  .confirmList { display:grid; gap:8px; }
+  .confirmRow, .confirmTotal { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .confirmTotal { border-top:1px solid var(--line); padding-top:10px; font-weight:900; }
+  .confirmTotal b { font-size:20px; }
+  .modalActions { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+  @media (max-width:640px) {
+    .topbar { align-items:flex-start; flex-direction:column; }
+    .btn { min-height:42px; }
+  }
 `;
 
 export default function AdminBillingPayPage() {
