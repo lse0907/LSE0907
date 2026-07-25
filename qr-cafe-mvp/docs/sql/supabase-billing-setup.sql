@@ -145,11 +145,16 @@ create table if not exists public.billing_payments (
   payment_provider text not null default 'tosspayments',
   payment_key text,
   order_id text,
-  status text not null default 'paid' check (status in ('paid', 'failed', 'canceled', 'refunded')),
+  status text not null default 'paid' check (status in ('paid', 'canceling', 'failed', 'canceled', 'refunded')),
   note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.billing_payments drop constraint if exists billing_payments_status_check;
+alter table public.billing_payments
+  add constraint billing_payments_status_check
+  check (status in ('paid', 'canceling', 'failed', 'canceled', 'refunded'));
 
 create index if not exists idx_billing_payments_store_paid_at on public.billing_payments(store_id, paid_at desc);
 create unique index if not exists uq_billing_payments_payment_key
@@ -490,6 +495,157 @@ revoke all on function public.apply_store_billing_payment_verified(text, uuid, i
 revoke all on function public.apply_store_billing_payment_verified(text, uuid, integer, boolean, boolean, text, text, integer, text) from anon;
 revoke all on function public.apply_store_billing_payment_verified(text, uuid, integer, boolean, boolean, text, text, integer, text) from authenticated;
 grant execute on function public.apply_store_billing_payment_verified(text, uuid, integer, boolean, boolean, text, text, integer, text) to service_role;
+
+-- 6-2) 구독 결제 환불 예약: 중복 요청을 막고 현재 구독이 해당 결제의 연장 결과인지 원자적으로 확인
+create or replace function public.claim_store_billing_refund(
+  p_payment_id bigint,
+  p_store_id text
+)
+returns public.billing_payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_payment public.billing_payments;
+  v_current_until timestamptz;
+begin
+  select * into v_payment
+  from public.billing_payments
+  where id = p_payment_id and store_id = p_store_id
+  for update;
+
+  if not found then
+    raise exception 'PAYMENT_NOT_FOUND';
+  end if;
+  if v_payment.status <> 'paid' then
+    raise exception 'PAYMENT_NOT_CANCELABLE';
+  end if;
+
+  if v_payment.base_paid then
+    select paid_until into v_current_until
+    from public.store_billing
+    where store_id = p_store_id
+    for update;
+    if v_current_until is distinct from v_payment.after_paid_until then
+      raise exception 'SUBSCRIPTION_CHANGED_AFTER_PAYMENT';
+    end if;
+  end if;
+
+  if v_payment.addon_paid then
+    select addon_paid_until into v_current_until
+    from public.store_addons
+    where store_id = p_store_id
+    for update;
+    if v_current_until is distinct from v_payment.after_paid_until then
+      raise exception 'SUBSCRIPTION_CHANGED_AFTER_PAYMENT';
+    end if;
+  end if;
+
+  update public.billing_payments
+  set status = 'canceling', updated_at = now()
+  where id = p_payment_id and store_id = p_store_id
+  returning * into v_payment;
+
+  return v_payment;
+end;
+$$;
+
+-- 토스 취소 실패 시 예약 상태를 결제 완료 상태로 되돌립니다.
+create or replace function public.release_store_billing_refund(
+  p_payment_id bigint,
+  p_store_id text
+)
+returns public.billing_payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_payment public.billing_payments;
+begin
+  update public.billing_payments
+  set status = 'paid', updated_at = now()
+  where id = p_payment_id and store_id = p_store_id and status = 'canceling'
+  returning * into v_payment;
+  return v_payment;
+end;
+$$;
+
+-- 토스 취소 성공 후 결제 상태와 기본/옵션 구독 기간을 하나의 DB 트랜잭션으로 복구합니다.
+create or replace function public.finalize_store_billing_refund(
+  p_payment_id bigint,
+  p_store_id text,
+  p_cancel_reason text
+)
+returns public.billing_payments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_payment public.billing_payments;
+  v_previous_status text;
+  v_updated_count integer;
+begin
+  select * into v_payment
+  from public.billing_payments
+  where id = p_payment_id and store_id = p_store_id
+  for update;
+
+  if not found then
+    raise exception 'PAYMENT_NOT_FOUND';
+  end if;
+  if v_payment.status <> 'canceling' then
+    raise exception 'REFUND_NOT_CLAIMED';
+  end if;
+
+  v_previous_status := case
+    when v_payment.before_paid_until is not null and v_payment.before_paid_until > now() then 'active'
+    else 'inactive'
+  end;
+
+  if v_payment.base_paid then
+    update public.store_billing
+    set paid_until = v_payment.before_paid_until,
+        base_plan_status = v_previous_status,
+        updated_at = now()
+    where store_id = p_store_id and paid_until = v_payment.after_paid_until;
+    get diagnostics v_updated_count = row_count;
+    if v_updated_count <> 1 then
+      raise exception 'BASE_SUBSCRIPTION_ROLLBACK_FAILED';
+    end if;
+  end if;
+
+  if v_payment.addon_paid then
+    update public.store_addons
+    set addon_paid_until = v_payment.before_paid_until,
+        prepay_addon_status = v_previous_status,
+        updated_at = now()
+    where store_id = p_store_id and addon_paid_until = v_payment.after_paid_until;
+    get diagnostics v_updated_count = row_count;
+    if v_updated_count <> 1 then
+      raise exception 'ADDON_SUBSCRIPTION_ROLLBACK_FAILED';
+    end if;
+  end if;
+
+  update public.billing_payments
+  set status = 'refunded',
+      note = trim(concat_ws(' ', nullif(trim(coalesce(note, '')), ''), '[결제취소] ' || left(trim(coalesce(p_cancel_reason, '사유 미입력')), 120))),
+      updated_at = now()
+  where id = p_payment_id and store_id = p_store_id and status = 'canceling'
+  returning * into v_payment;
+
+  return v_payment;
+end;
+$$;
+
+revoke all on function public.claim_store_billing_refund(bigint, text) from public, anon, authenticated;
+revoke all on function public.release_store_billing_refund(bigint, text) from public, anon, authenticated;
+revoke all on function public.finalize_store_billing_refund(bigint, text, text) from public, anon, authenticated;
+grant execute on function public.claim_store_billing_refund(bigint, text) to service_role;
+grant execute on function public.release_store_billing_refund(bigint, text) to service_role;
+grant execute on function public.finalize_store_billing_refund(bigint, text, text) to service_role;
 
 -- 7) updated_at 트리거
 
