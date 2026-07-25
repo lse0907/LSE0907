@@ -513,7 +513,7 @@ function ConfirmPageInner() {
 
       if (paymentStatus === "paid") {
         if (!pgConfig.clientKey) {
-          throw new Error("선결재 테스트용 Client Key가 없습니다. 관리자 결제/구독에서 키를 먼저 저장해주세요.");
+          throw new Error("선결제 테스트용 Client Key가 없습니다. 관리자 결제/구독에서 키를 먼저 저장해주세요.");
         }
 
         const quoteRes = await fetch("/api/orders/quote", {
