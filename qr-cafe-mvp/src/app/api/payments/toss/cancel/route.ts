@@ -7,6 +7,8 @@ type CancelBody = {
   reason?: string;
 };
 
+type PgMode = "store" | "platform";
+
 const CANCEL_WINDOW_MINUTES = 10;
 const MAX_CANCEL_REASON_LENGTH = 120;
 
