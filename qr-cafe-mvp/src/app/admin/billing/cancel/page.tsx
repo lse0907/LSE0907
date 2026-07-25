@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -44,14 +44,28 @@ function BillingCancelPageInner() {
   const [reasonDetail, setReasonDetail] = useState("");
   const [canceling, setCanceling] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+
+  const remainingMs = (row: BillingPaymentRow) => {
+    const paidAtMs = new Date(row.paid_at).getTime();
+    if (!Number.isFinite(paidAtMs)) return 0;
+    return Math.max(0, CANCEL_WINDOW_MINUTES * 60_000 - (nowMs - paidAtMs));
+  };
 
   const canCancel = (row: BillingPaymentRow) => {
     if (row.status !== "paid") return { ok: false, reason: "이미 취소/환불 또는 실패 상태입니다." };
     const paidAtMs = new Date(row.paid_at).getTime();
     if (!Number.isFinite(paidAtMs)) return { ok: false, reason: "결제 시간 정보가 유효하지 않습니다." };
-    const diffMin = Math.floor((nowMs - paidAtMs) / 60000);
-    if (diffMin > CANCEL_WINDOW_MINUTES) return { ok: false, reason: `결제 후 ${CANCEL_WINDOW_MINUTES}분이 지나 즉시 취소가 불가합니다.` };
+    if (nowMs - paidAtMs >= CANCEL_WINDOW_MINUTES * 60_000) return { ok: false, reason: "취소 가능 시간이 종료되었습니다." };
     return { ok: true, reason: "" };
+  };
+
+  const formatRemaining = (row: BillingPaymentRow) => {
+    const ms = remainingMs(row);
+    if (!canCancel(row).ok || ms <= 0) return "취소 가능 시간 종료";
+    if (ms < 60_000) return "1분 미만";
+    return `${Math.ceil(ms / 60_000)}분 남음`;
   };
 
   const loadPayments = async () => {
@@ -95,19 +109,50 @@ function BillingCancelPageInner() {
   }, [router, storeId]);
 
   useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+    const timer = setInterval(() => setNowMs(Date.now()), 10_000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!confirmOpen) return;
+    confirmButtonRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !canceling) setConfirmOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirmOpen, canceling]);
 
   const selected = rows.find((r) => r.id === selectedId) || null;
   const selectedCheck = selected ? canCancel(selected) : { ok: false, reason: "취소할 결제건을 선택해 주세요." };
   const fmtPaymentStatus = (status: string) => {
     const s = String(status || "").toLowerCase();
-    if (s === "paid") return "지불";
-    if (s === "canceled" || s === "cancelled") return "해지";
-    if (s === "refunded") return "환불";
-    if (s === "failed") return "실패";
+    if (s === "paid") return "결제 완료";
+    if (s === "canceling") return "취소 처리 중";
+    if (s === "canceled" || s === "cancelled") return "결제 취소";
+    if (s === "refunded") return "취소·환불 완료";
+    if (s === "failed") return "결제 실패";
     return status || "-";
+  };
+
+  const paymentLabel = (row: BillingPaymentRow) => {
+    if (row.base_paid && row.addon_paid) return "기본 구독 + 선결제 옵션";
+    if (row.base_paid) return "기본 구독";
+    if (row.addon_paid) return "선결제 옵션";
+    return "구독 결제";
+  };
+
+  const onRequestCancel = () => {
+    if (!selected || !selectedCheck.ok) {
+      setMsg(selectedCheck.reason);
+      return;
+    }
+    if (reasonCode === "other" && !reasonDetail.trim()) {
+      setMsg("기타 사유는 상세 내용을 입력해 주세요.");
+      return;
+    }
+    setMsg("");
+    setConfirmOpen(true);
   };
 
   const onSubmitCancel = async () => {
@@ -132,35 +177,37 @@ function BillingCancelPageInner() {
     setMsg("");
     const reasonLabel = REASON_OPTIONS.find((x) => x.code === reasonCode)?.label || "기타";
     const reason = `${reasonLabel}${reasonDetail.trim() ? `: ${reasonDetail.trim()}` : ""}`;
-    const res = await fetch("/api/payments/toss/cancel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        paymentId: selected.id,
-        storeId,
-        pgMode: "platform",
-        reason,
-      }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || !json?.ok) {
-      setMsg(`즉시 취소 실패: ${String(json?.message || "알 수 없는 오류")}`);
-      setCanceling(false);
-      return;
-    }
+    try {
+      const res = await fetch("/api/payments/toss/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId: selected.id, storeId, reason }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        setMsg(String(json?.message || "환불 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."));
+        setConfirmOpen(false);
+        return;
+      }
 
-    setMsg("즉시 취소(환불) 처리 완료 ✅");
-    setReasonCode("mistake");
-    setReasonDetail("");
-    await loadPayments();
-    setCanceling(false);
+      setMsg("결제 취소 및 환불이 완료되었습니다. 구독 기간도 결제 전 상태로 복구되었습니다.");
+      setConfirmOpen(false);
+      setReasonCode("mistake");
+      setReasonDetail("");
+      await loadPayments();
+    } catch {
+      setMsg("네트워크 오류로 환불 결과를 확인하지 못했습니다. 결제 내역을 새로 확인해 주세요.");
+      setConfirmOpen(false);
+    } finally {
+      setCanceling(false);
+    }
   };
 
   return (
     <main className="wrap">
       <style jsx global>{css}</style>
       <header className="topbar">
-        <h1 className="h1">구독 해지/취소</h1>
+        <h1 className="h1">최근 구독 결제 취소</h1>
         <div className="row">
           <button className="btn" type="button" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>
             구독 결제
@@ -175,11 +222,11 @@ function BillingCancelPageInner() {
         <div className="pill">{storeName} ({storeId})</div>
         <p className="warn">결제 직후 {CANCEL_WINDOW_MINUTES}분 이내 결제건만 즉시 취소(환불) 가능합니다.</p>
         <p className="warn">기간이 소요된 결제 건의 취소/환불은 지원센터로 문의해 주세요.</p>
-        {msg ? <p className="muted">{msg}</p> : null}
+        {msg ? <p className="notice" role="status">{msg}</p> : null}
       </section>
 
       <section className="card">
-        <h2 className="h2">결제/구독 목록</h2>
+        <h2 className="h2">구독 결제 내역</h2>
         {loading ? <p className="muted">로딩 중...</p> : null}
         {!loading && rows.length === 0 ? <p className="muted">결제 이력이 없습니다.</p> : null}
         {!loading && rows.length > 0 ? (
@@ -191,7 +238,7 @@ function BillingCancelPageInner() {
                   <th>결제일시</th>
                   <th>구독</th>
                   <th>상태</th>
-                  <th>해지가능</th>
+                  <th>취소 가능 여부</th>
                 </tr>
               </thead>
               <tbody>
@@ -212,18 +259,44 @@ function BillingCancelPageInner() {
                         <div className="muted" style={{ fontSize: 12 }}>{paidTime}</div>
                       </td>
                       <td>
-                        {row.base_paid ? "기본" : ""}{row.base_paid && row.addon_paid ? " + " : ""}{row.addon_paid ? "옵션" : ""}
+                        {paymentLabel(row)}
                         <div className="muted">{Number(row.amount_krw || 0).toLocaleString()}원 / {row.plan_months || "-"}개월</div>
                       </td>
-                      <td className="cellNowrap">{fmtPaymentStatus(row.status)}</td>
+                      <td className="cellNowrap"><span className={`status status-${row.status}`}>{fmtPaymentStatus(row.status)}</span></td>
                       <td className="cellNowrap">
-                        {check.ok ? <span className="ok">가능</span> : <span className="warn">불가</span>}
+                        {check.ok ? <span className="ok">{formatRemaining(row)}</span> : <span className="warn">{row.status === "paid" ? "시간 종료" : fmtPaymentStatus(row.status)}</span>}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        ) : null}
+        {!loading && rows.length > 0 ? (
+          <div className="mobilePayments" role="radiogroup" aria-label="취소할 구독 결제 선택">
+            {rows.map((row) => {
+              const check = canCancel(row);
+              const selectedRow = selectedId === row.id;
+              return (
+                <button
+                  key={row.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selectedRow}
+                  className={`paymentCard ${selectedRow ? "selected" : ""}`}
+                  onClick={() => setSelectedId(row.id)}
+                >
+                  <span className="paymentCardTop">
+                    <span className={`status status-${row.status}`}>{fmtPaymentStatus(row.status)}</span>
+                    <span className={check.ok ? "ok" : "warn"}>{check.ok ? formatRemaining(row) : row.status === "paid" ? "시간 종료" : fmtPaymentStatus(row.status)}</span>
+                  </span>
+                  <strong>{paymentLabel(row)}</strong>
+                  <span>{Number(row.amount_krw || 0).toLocaleString()}원 · {row.plan_months || "-"}개월</span>
+                  <span className="muted">{new Date(row.paid_at).toLocaleString("ko-KR", { hour12: false })}</span>
+                </button>
+              );
+            })}
           </div>
         ) : null}
       </section>
@@ -242,24 +315,54 @@ function BillingCancelPageInner() {
           <textarea
             className="input"
             rows={4}
+            maxLength={120}
             placeholder={reasonCode === "other" ? "기타 사유를 자세히 입력해 주세요(필수)." : "필요 시 상세 내용을 입력해 주세요."}
             value={reasonDetail}
             onChange={(e) => setReasonDetail(e.target.value)}
           />
+          <span className="charCount">{reasonDetail.length} / 120자</span>
         </label>
         <div className="row">
-          <button className="btn primary" type="button" onClick={onSubmitCancel} disabled={canceling || !selectedCheck.ok}>
-            {canceling ? "취소 처리 중..." : "선택한 결제 즉시 취소"}
+          <button className="btn primary" type="button" onClick={onRequestCancel} disabled={canceling || !selectedCheck.ok}>
+            선택한 결제 취소하기
           </button>
           {!selectedCheck.ok ? <span className="muted">{selectedCheck.reason}</span> : null}
         </div>
       </section>
+
+      {confirmOpen && selected ? (
+        <div className="modalBackdrop" role="presentation" onMouseDown={() => !canceling && setConfirmOpen(false)}>
+          <section
+            className="modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="cancel-confirm-title"
+            aria-describedby="cancel-confirm-description"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id="cancel-confirm-title" className="h2">결제 취소를 확정할까요?</h2>
+            <p id="cancel-confirm-description" className="muted">환불이 완료되면 이 결제로 연장된 구독 기간이 결제 전 상태로 복구됩니다.</p>
+            <dl className="summaryList">
+              <div><dt>매장</dt><dd>{storeName}</dd></div>
+              <div><dt>취소 대상</dt><dd>{paymentLabel(selected)}</dd></div>
+              <div><dt>환불 금액</dt><dd>{Number(selected.amount_krw || 0).toLocaleString()}원</dd></div>
+              <div><dt>취소 사유</dt><dd>{REASON_OPTIONS.find((x) => x.code === reasonCode)?.label}{reasonDetail.trim() ? ` · ${reasonDetail.trim()}` : ""}</dd></div>
+            </dl>
+            <div className="modalActions">
+              <button className="btn" type="button" onClick={() => setConfirmOpen(false)} disabled={canceling}>돌아가기</button>
+              <button ref={confirmButtonRef} className="btn danger" type="button" onClick={onSubmitCancel} disabled={canceling}>
+                {canceling ? "취소 처리 중..." : "취소 및 환불 확정"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
 
 const css = `
-  :root { --bg:#f7f8fc; --card:#fff; --line:#e6e8f0; --txt:#111827; --muted:#6b7280; --primary:#2563eb; --ok:#047857; --warn:#b45309; --radius:14px; }
+  :root { --bg:#f7f8fc; --card:#fff; --line:#e6e8f0; --txt:#111827; --muted:#6b7280; --primary:#2563eb; --ok:#047857; --warn:#b45309; --danger:#dc2626; --radius:14px; }
   * { box-sizing:border-box; }
   body { margin:0; color:var(--txt); background:var(--bg); }
   .wrap { max-width:1000px; margin:0 auto; padding:16px; display:grid; gap:12px; }
@@ -269,15 +372,22 @@ const css = `
   .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; display:grid; gap:10px; }
   .pill { border:1px solid #dbeafe; background:#eff6ff; color:#1e3a8a; border-radius:999px; padding:4px 8px; font-weight:800; font-size:12px; width:fit-content; }
   .muted { color:var(--muted); margin:0; font-size:13px; }
+  .notice { margin:0; border-radius:10px; background:#eff6ff; color:#1e40af; padding:10px 12px; font-size:13px; font-weight:700; }
   .row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .btn { border:1px solid var(--line); background:#fff; color:var(--txt); border-radius:10px; padding:10px 12px; font-weight:800; cursor:pointer; }
   .btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .btn.danger { background:var(--danger); color:#fff; border-color:var(--danger); }
   .btn:disabled { opacity:.5; cursor:not-allowed; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   th, td { border-bottom:1px solid #eef2f7; padding:8px; text-align:left; vertical-align:top; }
   tr.sel { background:#eff6ff; }
   .ok { color:var(--ok); font-weight:800; }
   .warn { color:var(--warn); font-weight:800; font-size:12px; }
+  .status { display:inline-flex; align-items:center; min-height:24px; border-radius:999px; padding:3px 8px; font-size:12px; font-weight:800; background:#f3f4f6; color:#4b5563; }
+  .status-paid { background:#ecfdf5; color:#047857; }
+  .status-canceling { background:#fff7ed; color:#c2410c; }
+  .status-refunded, .status-canceled, .status-cancelled { background:#f3f4f6; color:#4b5563; }
+  .status-failed { background:#fef2f2; color:#b91c1c; }
   .tableWrap { overflow:auto; max-height:52vh; min-height:240px; border:1px solid #eef2f7; border-radius:10px; }
   .cellNowrap { white-space:nowrap; }
   thead th { position:sticky; top:0; background:#fff; z-index:1; }
@@ -289,10 +399,30 @@ const css = `
   .chip.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; }
   .field { display:grid; gap:6px; }
   .input { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px; }
+  .charCount { justify-self:end; color:var(--muted); font-size:12px; }
+  .mobilePayments { display:none; }
+  .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:20px; background:rgba(15,23,42,.56); }
+  .modal { width:min(100%, 460px); border:1px solid var(--line); border-radius:16px; background:#fff; box-shadow:0 24px 64px rgba(15,23,42,.24); padding:20px; display:grid; gap:16px; }
+  .summaryList { margin:0; display:grid; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; }
+  .summaryList > div { display:grid; grid-template-columns:90px 1fr; gap:12px; padding:10px 12px; border-bottom:1px solid #eef2f7; }
+  .summaryList > div:last-child { border-bottom:0; }
+  .summaryList dt { color:var(--muted); font-size:13px; }
+  .summaryList dd { margin:0; text-align:right; font-size:13px; font-weight:800; overflow-wrap:anywhere; }
+  .modalActions { display:flex; justify-content:flex-end; gap:8px; }
   @media (max-width: 640px) {
-    table { font-size:12px; }
-    th, td { padding:6px; }
-    .tableWrap { max-height:48vh; min-height:220px; }
+    .wrap { padding:12px; }
+    .topbar { align-items:flex-start; flex-direction:column; }
+    .topbar .row, .topbar .btn { width:100%; }
+    .topbar .btn { flex:1; }
+    .tableWrap { display:none; }
+    .mobilePayments { display:grid; gap:10px; }
+    .paymentCard { width:100%; display:grid; gap:7px; text-align:left; border:1px solid var(--line); border-radius:12px; background:#fff; color:var(--txt); padding:12px; cursor:pointer; }
+    .paymentCard.selected { border:2px solid var(--primary); padding:11px; background:#eff6ff; }
+    .paymentCardTop { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .modalBackdrop { padding:12px; align-items:end; }
+    .modal { border-radius:18px 18px 12px 12px; padding:18px; }
+    .modalActions { display:grid; grid-template-columns:1fr 1fr; }
+    .modalActions .btn { width:100%; }
   }
 `;
 
