@@ -26,10 +26,14 @@ export async function GET(req: NextRequest) {
     if (cases.error) throw new Error(`환불 요청을 불러오지 못했습니다: ${cases.error.message}`);
     const paymentIds = [...new Set((cases.data || []).map((row) => Number(row.billing_payment_id)).filter((id) => Number.isInteger(id) && id > 0))];
     const paymentStatuses = new Map<number, string>();
+    const paymentAmounts = new Map<number, number>();
     if (paymentIds.length) {
-      const payments = await admin.from("billing_payments").select("id,status").in("id", paymentIds);
+      const payments = await admin.from("billing_payments").select("id,status,amount_krw").in("id", paymentIds);
       if (payments.error) throw new Error(`내부 결제 상태를 불러오지 못했습니다: ${payments.error.message}`);
-      for (const payment of payments.data || []) paymentStatuses.set(Number(payment.id), String(payment.status || ""));
+      for (const payment of payments.data || []) {
+        paymentStatuses.set(Number(payment.id), String(payment.status || ""));
+        paymentAmounts.set(Number(payment.id), Number(payment.amount_krw || 0));
+      }
     }
 
     const storeIds = [...new Set([...(data || []), ...(cases.data || [])].map((row) => String(row.store_id || "")).filter(Boolean))];
@@ -40,13 +44,39 @@ export async function GET(req: NextRequest) {
       for (const store of stores.data || []) storeNames.set(String(store.store_id), String(store.store_name || ""));
     }
 
+    const manualHistory = (cases.data || [])
+      .filter((row) => ["completed", "rejected", "reconcile_required"].includes(String(row.status)))
+      .map((row) => ({
+        id: `manual-${row.id}`,
+        billing_payment_id: row.billing_payment_id,
+        store_id: row.store_id,
+        amount_krw: paymentAmounts.get(Number(row.billing_payment_id)) || 0,
+        reason: row.reason,
+        status: row.status === "rejected" ? "failed" : row.status,
+        public_error_code: row.status === "rejected"
+          ? "MANUAL_REFUND_REJECTED"
+          : row.status === "reconcile_required"
+            ? "MANUAL_RECONCILE_REQUIRED"
+            : null,
+        internal_error: null,
+        pg_status: row.toss_status,
+        requested_at: row.requested_at,
+        completed_at: row.completed_at || row.handled_at,
+        source: "manual",
+        store_name: storeNames.get(String(row.store_id)) || null,
+      }));
+    const automatedHistory = (data || []).map((row) => ({
+      ...row,
+      source: "automatic",
+      internal_error: safeInternalError(row.internal_error),
+      store_name: storeNames.get(String(row.store_id)) || null,
+    }));
+
     return NextResponse.json({
       ok: true,
-      rows: (data || []).map((row) => ({
-        ...row,
-        internal_error: safeInternalError(row.internal_error),
-        store_name: storeNames.get(String(row.store_id)) || null,
-      })),
+      rows: [...manualHistory, ...automatedHistory].sort((a, b) =>
+        String(b.requested_at).localeCompare(String(a.requested_at)),
+      ),
       cases: (cases.data || []).map((row) => ({ ...row, local_payment_status: paymentStatuses.get(Number(row.billing_payment_id)) || row.local_payment_status_snapshot || null, store_name: storeNames.get(String(row.store_id)) || null })),
     });
   } catch (error: unknown) {

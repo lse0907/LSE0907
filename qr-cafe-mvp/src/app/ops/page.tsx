@@ -73,7 +73,7 @@ type PaymentBaseRow = {
   status?: string | null;
 };
 type RefundHistoryRow = {
-  id: number;
+  id: number | string;
   billing_payment_id: number;
   store_id: string;
   store_name: string | null;
@@ -85,6 +85,7 @@ type RefundHistoryRow = {
   pg_status: string | null;
   requested_at: string;
   completed_at: string | null;
+  source: "automatic" | "manual";
 };
 type RefundCaseRow = {
   id: number; billing_payment_id: number; store_id: string; store_name: string | null;
@@ -363,6 +364,10 @@ export default function OpsPage() {
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundStatusFilter, setRefundStatusFilter] = useState("all");
   const [refundActionNotice, setRefundActionNotice] = useState<{ paymentId: number; tossStatus: string; localStatus: string; kind: "info" | "success" } | null>(null);
+  const [refundSyncTarget, setRefundSyncTarget] = useState<RefundCaseRow | null>(null);
+  const [refundSyncReason, setRefundSyncReason] = useState("");
+  const [refundActionId, setRefundActionId] = useState<number | null>(null);
+  const [subscriptionActivityOpen, setSubscriptionActivityOpen] = useState(false);
   const isOpsMaster = opsIdentity.role === "master";
   const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
 
@@ -591,19 +596,24 @@ export default function OpsPage() {
     setRefundLoading(false);
   }, [canManageBilling, isOps]);
 
-  const reconcileRefund = async (paymentId: number, action: "inspect" | "sync") => {
-    const reason = action === "sync" ? window.prompt("Toss 수동 취소 확인 및 내부 동기화 사유를 입력해 주세요.", "Toss 개발자센터 수동 취소 확인") : "";
-    if (action === "sync" && !reason?.trim()) return;
+  const reconcileRefund = async (paymentId: number, action: "inspect" | "sync", reason = "") => {
+    if (action === "sync" && reason.trim().length < 2) return;
+    setRefundActionId(paymentId);
     const response = await fetch("/api/ops/refund-reconcile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paymentId, action, reason }) });
     const result = await response.json().catch(() => ({}));
     if (response.ok && result?.ok) {
       setRefundActionNotice({ paymentId, tossStatus: String(result.tossStatus || ""), localStatus: String(result.localStatus || ""), kind: action === "sync" ? "success" : "info" });
       setMsg("");
       await loadRefundHistory();
+      if (action === "sync") {
+        setRefundSyncTarget(null);
+        setRefundSyncReason("");
+      }
     } else {
       setRefundActionNotice(null);
       setMsg(String(result?.message || "결제 상태 확인에 실패했습니다."));
     }
+    setRefundActionId(null);
   };
 
   useEffect(() => {
@@ -1142,12 +1152,6 @@ export default function OpsPage() {
             <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "창립 멤버" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
             <div className="benefitSummary"><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
             <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "창립 멤버 혜택 변경" : "조회 전용"}</button>
-            <div className="trialControls">
-              <label><span>무료 체험 종료일</span><input className="input" type="date" value={benefitForm.trialEndAt} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialEndAt: e.target.value }))}/></label>
-              <textarea className="input" rows={2} maxLength={240} placeholder="무료 체험 조정 사유(필수)" value={benefitForm.trialReason} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialReason: e.target.value }))}/>
-              <button className="btn" disabled={!canManageBilling || benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onClick={() => void saveTrial()}>무료 체험 기간 저장</button>
-              {benefit?.baseStatus === "active" || benefit?.paidUntil ? <small className="muted">유료 매장은 무료 체험을 변경할 수 없습니다. 별도의 구독 보상 절차를 사용해야 합니다.</small> : null}
-            </div>
           </div>
 
           <div className="quickLinks">
@@ -1192,6 +1196,57 @@ export default function OpsPage() {
     </aside>
   );
 
+  const renderSubscriptionTable = () => (
+    <div className="tableWrap subscriptionTableWrap">
+      <table className="opsTable subscriptionTable">
+        <thead><tr><th>매장·점주</th><th>구독 상태</th><th>구독 기간</th><th>이번 달 결제</th><th>운영 확인</th></tr></thead>
+        <tbody>
+          {filteredRows.map((r) => {
+            const days = remainingDays(r.paid_until);
+            return (
+              <tr key={r.store_id} className={r.store_id === selectedStore?.store_id ? "sel" : ""} tabIndex={0} onClick={() => { setSelectedStoreId(r.store_id); setSubscriptionActivityOpen(false); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedStoreId(r.store_id); setSubscriptionActivityOpen(false); } }}>
+                <td data-label="매장"><div className="cellMain"><strong>{r.store_name || r.store_id}</strong><small>매장 ID {r.store_id} · 점주 {shortId(r.owner_user_id)}</small></div></td>
+                <td data-label="구독 상태"><span className={`pill ${r.base_plan_status === "active" ? "ok" : "warn"}`}>{r.base_plan_status === "active" ? "유료 구독 중" : "무료·비활성"}</span></td>
+                <td data-label="구독 기간"><div className="cellMain"><strong>{fmtDate(r.paid_until)}</strong><small>{days != null ? days < 0 ? `만료 ${Math.abs(days)}일 경과` : `D-${days}` : "기간 없음"}</small></div></td>
+                <td data-label="이번 달 결제"><div className="cellMain"><strong>{fmtMoney(r.monthly_revenue)}</strong><small>{r.paid_count.toLocaleString()}건</small></div></td>
+                <td data-label="운영 확인"><span className={`pill ${storeRiskLabel(r) === "정상" ? "ok" : "warn"}`}>{storeRiskLabel(r)}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {filteredRows.length === 0 ? <p className="emptyState">조건에 맞는 구독 매장이 없습니다. 필터를 초기화해 다시 확인해 주세요.</p> : null}
+    </div>
+  );
+
+  const renderSubscriptionDetail = () => (
+    <aside className="card detailCard subscriptionDetail">
+      {selectedStore ? (
+        <>
+          <div className="storeDetailHeader">
+            <div><div className="eyebrow">구독 상세</div><h3>{selectedStore.store_name || selectedStore.store_id}</h3><p className="muted">매장 ID {selectedStore.store_id} · 점주 {shortId(selectedStore.owner_user_id)}</p></div>
+            <div className="pillStack right"><span className={`pill ${selectedStore.base_plan_status === "active" ? "ok" : "warn"}`}>{selectedStore.base_plan_status === "active" ? "유료 구독 중" : "무료·비활성"}</span></div>
+          </div>
+          <div className={`insight ${storeRiskLabel(selectedStore) === "정상" ? "ok" : "warn"}`}><strong>구독 운영 판단</strong><span>{selectedStore.base_plan_status === "active" ? `구독 중이며 만료일까지 ${Math.max(0, remainingDays(selectedStore.paid_until) || 0)}일 남았습니다.` : "유료 구독이 아닙니다. 무료 체험 또는 구독 상태를 확인해 주세요."}</span></div>
+          <dl className="subscriptionFacts">
+            <div><dt>현재 상태</dt><dd>{selectedStore.base_plan_status === "active" ? "유료 구독 중" : "무료·비활성"}</dd></div>
+            <div><dt>구독 만료일</dt><dd>{fmtDate(selectedStore.paid_until)}</dd></div>
+            <div><dt>남은 기간</dt><dd>{remainingDays(selectedStore.paid_until) != null ? `D-${Math.max(0, Number(remainingDays(selectedStore.paid_until)))}` : "-"}</dd></div>
+            <div><dt>이번 달 결제</dt><dd>{fmtMoney(selectedStore.monthly_revenue)} · {selectedStore.paid_count.toLocaleString()}건</dd></div>
+          </dl>
+          <section className="benefitSummaryCard">
+            <div className="panelHeader"><div><div className="sectionTitle">혜택 및 무료 체험</div><p>현재 적용 상태를 확인하고 필요한 경우에만 변경합니다.</p></div></div>
+            <div className="benefitSummary"><span>창립 멤버</span><strong>{benefit?.founderMember ? "적용" : "미적용"}</strong><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong><span>무료 체험 종료</span><strong>{fmtDate(benefit?.trialEndAt || null)}</strong></div>
+            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "혜택·무료 체험 관리" : "조회 전용"}</button>
+          </section>
+          <button className="activityToggle" type="button" aria-expanded={subscriptionActivityOpen} onClick={() => setSubscriptionActivityOpen((open) => !open)}><span>매장 활동 참고 정보</span><strong>{subscriptionActivityOpen ? "접기" : "펼치기"}</strong></button>
+          {subscriptionActivityOpen ? <div className="activityGrid"><div><span>오늘 주문</span><strong>{selectedStore.today_order_count.toLocaleString()}건</strong></div><div><span>이번 달 주문</span><strong>{selectedStore.monthly_order_count.toLocaleString()}건</strong></div><div><span>미처리 문의</span><strong>{selectedStore.open_ticket_count.toLocaleString()}건</strong></div><div><span>최근 주문</span><strong>{fmtDateTime(selectedStore.last_order_at)}</strong></div></div> : null}
+          <div className="subscriptionLinks"><button className="btn" onClick={() => setActiveTab("payments")}>결제·환불 보기</button><button className="btn" onClick={() => setActiveTab("tickets")}>문의 보기</button></div>
+        </>
+      ) : <p className="muted">선택된 매장이 없습니다.</p>}
+    </aside>
+  );
+
   return (
     <main className="wrap">
       <style jsx global>{`
@@ -1217,6 +1272,30 @@ export default function OpsPage() {
         .checkRow input { width:18px; height:18px; }
         .trialControls { display:grid; gap:8px; padding-top:10px; border-top:1px solid #dbeafe; }
         .trialControls label { display:grid; gap:6px; font-size:12px; font-weight:800; }
+        .subscriptionShell { display:grid; grid-template-columns:minmax(0,1.75fr) minmax(330px,.75fr); gap:16px; align-items:start; }
+        .subscriptionMain { display:grid; gap:14px; min-width:0; }
+        .subscriptionKpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+        .subscriptionKpi { border:1px solid #e2e8f0; border-radius:14px; padding:13px 14px; background:linear-gradient(145deg,#fff,#f8fafc); display:grid; gap:5px; }
+        .subscriptionKpi span { color:#64748b; font-size:12px; font-weight:800; }
+        .subscriptionKpi strong { font-size:20px; }
+        .subscriptionKpi small { color:#64748b; }
+        .subscriptionToolbar { display:grid; grid-template-columns:minmax(220px,1fr) 170px 170px auto; gap:9px; }
+        .subscriptionResult { display:flex; justify-content:space-between; gap:10px; align-items:center; color:#64748b; font-size:12px; font-weight:800; }
+        .subscriptionDetail { display:grid; gap:14px; }
+        .eyebrow { color:#2563eb; font-size:11px; font-weight:950; letter-spacing:.08em; text-transform:uppercase; }
+        .subscriptionFacts { margin:0; display:grid; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; }
+        .subscriptionFacts div { display:flex; justify-content:space-between; gap:16px; padding:11px 12px; border-bottom:1px solid #eef2f7; }
+        .subscriptionFacts div:last-child { border-bottom:0; }
+        .subscriptionFacts dt { color:#64748b; font-size:12px; font-weight:800; }
+        .subscriptionFacts dd { margin:0; text-align:right; font-size:13px; font-weight:900; }
+        .benefitSummaryCard { display:grid; gap:11px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
+        .activityToggle { width:100%; display:flex; justify-content:space-between; padding:12px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; cursor:pointer; }
+        .activityGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+        .activityGrid div { display:grid; gap:4px; padding:10px; border-radius:11px; background:#f8fafc; }
+        .activityGrid span { color:#64748b; font-size:11px; font-weight:800; }
+        .activityGrid strong { font-size:12px; word-break:break-word; }
+        .subscriptionLinks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding-top:12px; border-top:1px solid #eef2f7; }
+        .emptyState { margin:0; padding:24px; text-align:center; color:#64748b; }
         .opsAccount > div { display:grid; gap:2px; text-align:right; }
         .opsAccount small { color:#6b7280; font-size:10px; font-weight:900; }
         .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
@@ -1730,20 +1809,33 @@ export default function OpsPage() {
         .refundActions { display:grid; gap:6px; min-width:170px; }
         .refundActions .btn { width:100%; }
         .refundActions small { color:#6b7280; line-height:1.35; }
+        .refundSummary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+        .refundSummary .notice { min-height:68px; }
+        .refundSummary strong { font-size:20px; }
+        .actionComplete { display:grid; gap:5px; justify-items:start; min-width:130px; }
+        .historySource { white-space:nowrap; }
+        .refundConfirmSummary { display:grid; gap:8px; padding:12px; border:1px solid #dbeafe; border-radius:14px; background:#f8fbff; }
+        .refundConfirmSummary div { display:flex; justify-content:space-between; gap:16px; }
+        .refundConfirmSummary span { color:#64748b; }
+        .modalActions { display:flex; justify-content:flex-end; gap:8px; }
         @media (max-width: 1100px) {
           .kpis {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
           .grid2,
+          .subscriptionShell,
           .settingsGrid,
           .dashboardGrid,
           .ticketShell {
             grid-template-columns: 1fr;
           }
           .businessGrid,
-          .ticketStats {
+          .ticketStats,
+          .refundSummary,
+          .subscriptionKpis {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+          .subscriptionToolbar { grid-template-columns:1fr 1fr; }
           .detailCard {
             position: static;
           }
@@ -1775,6 +1867,23 @@ export default function OpsPage() {
           .quickLinks {
             grid-template-columns: 1fr;
           }
+          .refundSummary { grid-template-columns:1fr; }
+          .subscriptionKpis,
+          .subscriptionToolbar,
+          .subscriptionLinks { grid-template-columns:1fr; }
+          .subscriptionTable { min-width:0; }
+          .subscriptionTable thead { display:none; }
+          .subscriptionTable tbody { display:grid; gap:10px; padding:10px; }
+          .subscriptionTable tr { display:grid; gap:9px; border:1px solid #e2e8f0; border-radius:14px; padding:13px; }
+          .subscriptionTable tr.sel { box-shadow:inset 4px 0 0 #2563eb; }
+          .subscriptionTable td { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:0; border:0; text-align:right; }
+          .subscriptionTable td::before { content:attr(data-label); color:#64748b; font-size:11px; font-weight:900; text-align:left; }
+          .subscriptionTable td:first-child { display:block; text-align:left; padding-bottom:9px; border-bottom:1px solid #eef2f7; }
+          .subscriptionTable td:first-child::before { display:none; }
+          .refundActionNotice { position:static; align-items:flex-start; }
+          .refundActions { min-width:150px; }
+          .modalActions { display:grid; grid-template-columns:1fr; }
+          .modalActions .btn { width:100%; }
           .opsAccount { width:100%; }
           .opsAccount > div { text-align:left; width:100%; }
           .modalBackdrop { align-items:end; padding:10px; }
@@ -2254,69 +2363,138 @@ export default function OpsPage() {
       ) : null}
 
       {!loading && activeTab === "subscriptions" ? (
-        <section className="grid2">
-          <article className="card">
-            <div className="panelHeader">
-              <div><div className="sectionTitle">구독 현황</div><p>플랜 상태, 만료일과 구독 매출을 중심으로 확인합니다.</p></div>
-              <span className="pill ok">구독 운영</span>
+        <section className="subscriptionShell">
+          <div className="subscriptionMain">
+            <div className="subscriptionKpis" aria-label="구독 운영 요약">
+              <div className="subscriptionKpi"><span>유료 구독</span><strong>{kpi.paidStores.toLocaleString()}개</strong><small>전체 {kpi.totalStores.toLocaleString()}개 중 {kpi.totalStores ? Math.round(kpi.paidStores / kpi.totalStores * 100) : 0}%</small></div>
+              <div className="subscriptionKpi"><span>무료·비활성</span><strong>{freeOrInactiveStores.toLocaleString()}개</strong><small>혜택 또는 체험 상태 확인</small></div>
+              <div className="subscriptionKpi"><span>7일 내 만료</span><strong>{kpi.expiringSoonStores.toLocaleString()}개</strong><small>구독 기간 사전 확인</small></div>
+              <div className="subscriptionKpi"><span>점검 필요</span><strong>{noPaymentPaidStores.length.toLocaleString()}개</strong><small>유료 상태·결제 이력 불일치</small></div>
             </div>
-            <div className="filters" style={{ marginTop: 12 }}>
-              <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="매장명 / store_id 검색" />
+            <article className="card">
+              <div className="panelHeader"><div><div className="sectionTitle">구독 현황</div><p>매장별 구독 상태, 기간과 결제 현황을 확인합니다.</p></div><span className="pill">총 {filteredRows.length.toLocaleString()}개</span></div>
+              <div className="subscriptionToolbar">
+                <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="매장명·매장 ID·점주 계정 검색" aria-label="구독 매장 검색" />
               <select className="select" value={subFilter} onChange={(event) => setSubFilter(event.target.value)}><option value="all">구독 전체</option><option value="active">활성 구독</option><option value="inactive">비활성/미구독</option><option value="expiring">만료 임박</option></select>
               <select className="select" value={sortBy} onChange={(event) => setSortBy(event.target.value as StoreSort)}><option value="expiring">만료 임박순</option><option value="monthlyRevenue">구독매출 높은순</option><option value="risk">점검 우선순</option></select>
-            </div>
-            {renderStoreTable("billing")}
-          </article>
-          {renderSelectedStore()}
+                <button className="btn" disabled={!query && subFilter === "all" && sortBy === "expiring"} onClick={() => { setQuery(""); setSubFilter("all"); setSortBy("expiring"); }}>필터 초기화</button>
+              </div>
+              <div className="subscriptionResult"><span>검색 결과 {filteredRows.length.toLocaleString()}개</span><span>매장을 선택하면 구독 상세를 확인할 수 있습니다.</span></div>
+              <div style={{ marginTop: 12 }}>{renderSubscriptionTable()}</div>
+            </article>
+          </div>
+          {renderSubscriptionDetail()}
         </section>
       ) : null}
 
       {!loading && activeTab === "payments" && canManageBilling ? (
         <section className="noticeList">
-        {refundActionNotice ? <div className={`refundActionNotice ${refundActionNotice.kind}`} role="status" aria-live="polite"><div><strong>결제 #{refundActionNotice.paymentId} 상태 확인 완료</strong><p>Toss <b>{tossStatusLabel(refundActionNotice.tossStatus)}</b> · 내부 <b>{localPaymentStatusLabel(refundActionNotice.localStatus)}</b></p><small>{refundActionNotice.tossStatus === "CANCELED" && refundActionNotice.localStatus !== "refunded" ? "해당 행의 ‘취소 결과 내부 반영’을 진행해 주세요." : refundActionNotice.localStatus === "refunded" ? "Toss와 내부 환불 상태가 동기화되었습니다." : "Toss에서 전체 취소를 완료한 뒤 상태를 다시 확인해 주세요."}</small></div><button className="btn" onClick={() => setRefundActionNotice(null)}>닫기</button></div> : null}
-        <article className="card">
-          <div className="panelHeader"><div><div className="sectionTitle">수동 환불 요청</div><p>즉시 취소 시간이 지난 요청의 Toss 취소 결과를 확인하고 내부 구독과 동기화합니다.</p></div><span className="pill warn">대기 {refundCases.filter((item) => item.status === "requested").length}건</span></div>
-          <div className="tableWrap"><table className="opsTable"><thead><tr><th>요청일시</th><th>매장·결제</th><th>요청 상태</th><th>Toss 상태</th><th>내부 상태</th><th>사유·문의</th><th>처리</th></tr></thead><tbody>{refundCases.map((item) => { const canSync = item.toss_status === "CANCELED" && item.local_payment_status !== "refunded" && item.status !== "completed"; return <tr key={item.id} className={refundActionNotice?.paymentId === item.billing_payment_id ? "checkedRow" : ""}><td>{fmtDateTime(item.requested_at)}</td><td><div className="cellMain"><strong>{item.store_name || item.store_id}</strong><small>결제 #{item.billing_payment_id} · {item.store_id}</small></div></td><td><span className={`pill ${item.status === "completed" ? "ok" : item.status === "rejected" || item.status === "reconcile_required" ? "danger" : "warn"}`}>{refundCaseStatusLabel(item.status)}</span></td><td><div className="cellMain"><span className={`pill ${item.toss_status === "CANCELED" ? "ok" : item.toss_status === "DONE" ? "warn" : ""}`}>{tossStatusLabel(item.toss_status)}</span><small>{item.toss_checked_at ? `${fmtDateTime(item.toss_checked_at)} 확인` : "상태 확인 필요"}</small></div></td><td><span className={`pill ${item.local_payment_status === "refunded" ? "ok" : "warn"}`}>{localPaymentStatusLabel(item.local_payment_status)}</span></td><td><div className="cellMain"><strong>{item.reason}</strong><small>{item.support_ticket_id ? `문의 #${item.support_ticket_id}` : "연결 문의 없음"}</small></div></td><td><div className="refundActions"><button className="btn" onClick={() => void reconcileRefund(item.billing_payment_id,"inspect")}>결제 상태 확인</button><button className="btn primary" disabled={!canSync} title={canSync ? "Toss 취소 결과를 내부 구독에 반영합니다." : "Toss 상태가 취소 완료일 때만 사용할 수 있습니다."} onClick={() => void reconcileRefund(item.billing_payment_id,"sync")}>취소 결과 내부 반영</button>{!canSync && item.status !== "completed" ? <small>{item.toss_status === "DONE" ? "Toss에서 먼저 전체 취소해 주세요." : item.toss_status ? "현재 상태에서는 내부 반영할 수 없습니다." : "결제 상태를 먼저 확인해 주세요."}</small> : null}</div></td></tr>; })}</tbody></table></div>
-          {!refundLoading && refundCases.length === 0 ? <p className="muted">접수된 기간 경과 환불 요청이 없습니다.</p> : null}
-        </article>
-        <article className="card">
-          <div className="panelHeader">
-            <div>
-              <div className="sectionTitle">구독 결제 취소·환불 이력</div>
-              <p>PG 취소 결과와 내부 구독 복구 상태를 함께 확인합니다.</p>
-            </div>
-            <div className="row">
-              <select className="select" value={refundStatusFilter} onChange={(event) => setRefundStatusFilter(event.target.value)}>
-                <option value="all">상태 전체</option>
-                <option value="processing">처리 중</option>
-                <option value="completed">취소 완료</option>
-                <option value="failed">취소 실패</option>
-                <option value="reconcile_required">확인 필요</option>
-              </select>
-              <button className="btn" disabled={refundLoading} onClick={() => void loadRefundHistory()}>{refundLoading ? "불러오는 중" : "새로고침"}</button>
-            </div>
+          <div className="refundSummary" aria-label="환불 처리 현황">
+            <div className="notice"><span>처리 필요</span><strong>{refundCases.filter((item) => ["requested", "reviewing", "approved", "processing"].includes(item.status)).length}건</strong></div>
+            <div className="notice"><span>확인 필요</span><strong>{refundCases.filter((item) => item.status === "reconcile_required").length}건</strong></div>
+            <div className="notice"><span>완료된 수동 환불</span><strong>{refundCases.filter((item) => item.status === "completed").length}건</strong></div>
           </div>
-          <div className="tableWrap">
-            <table className="opsTable">
-              <thead><tr><th>요청일시</th><th>매장</th><th>환불금액</th><th>상태</th><th>PG 상태</th><th>취소 사유·오류</th><th>완료일시</th></tr></thead>
-              <tbody>
-                {refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).map((row) => (
-                  <tr key={row.id}>
-                    <td>{fmtDateTime(row.requested_at)}</td>
-                    <td><div className="cellMain"><strong>{row.store_name || row.store_id}</strong><small>{row.store_id}</small></div></td>
-                    <td className="num">{fmtMoney(row.amount_krw)}</td>
-                    <td><span className={`pill ${row.status === "completed" ? "ok" : row.status === "failed" || row.status === "reconcile_required" ? "danger" : "warn"}`}>{refundStatusLabel(row.status)}</span></td>
-                    <td><span className={`pill ${row.pg_status === "CANCELED" ? "ok" : row.pg_status ? "warn" : ""}`}>{tossStatusLabel(row.pg_status)}</span></td>
-                    <td><div className="cellMain"><strong>{row.reason}</strong><small>{row.public_error_code || "오류 없음"}</small>{row.internal_error ? <small title={row.internal_error}>{row.internal_error}</small> : null}</div></td>
-                    <td>{fmtDateTime(row.completed_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!refundLoading && refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).length === 0 ? <p className="muted">조건에 맞는 환불 이력이 없습니다.</p> : null}
-        </article>
+          {refundActionNotice ? (
+            <div className={`refundActionNotice ${refundActionNotice.kind}`} role="status" aria-live="polite">
+              <div>
+                <strong>결제 #{refundActionNotice.paymentId} 상태 확인 완료</strong>
+                <p>Toss <b>{tossStatusLabel(refundActionNotice.tossStatus)}</b> · 내부 <b>{localPaymentStatusLabel(refundActionNotice.localStatus)}</b></p>
+                <small>{refundActionNotice.tossStatus === "CANCELED" && refundActionNotice.localStatus !== "refunded" ? "해당 행에서 2단계 내부 환불 처리를 진행해 주세요." : refundActionNotice.localStatus === "refunded" ? "Toss와 내부 환불 상태가 동기화되었습니다." : "Toss에서 전체 취소를 완료한 뒤 상태를 다시 확인해 주세요."}</small>
+              </div>
+              <button className="btn" onClick={() => setRefundActionNotice(null)}>닫기</button>
+            </div>
+          ) : null}
+          <article className="card">
+            <div className="panelHeader">
+              <div><div className="sectionTitle">수동 환불 요청</div><p>Toss 취소 확인 후 내부 결제 상태와 구독 기간을 안전하게 동기화합니다.</p></div>
+              <span className="pill warn">처리 필요 {refundCases.filter((item) => ["requested", "reviewing", "approved", "processing", "reconcile_required"].includes(item.status)).length}건</span>
+            </div>
+            <div className="tableWrap">
+              <table className="opsTable">
+                <thead><tr><th>요청일시</th><th>매장·결제</th><th>요청 상태</th><th>Toss 상태</th><th>내부 상태</th><th>사유·문의</th><th>처리</th></tr></thead>
+                <tbody>
+                  {refundCases.map((item) => {
+                    const canSync = item.toss_status === "CANCELED" && item.local_payment_status !== "refunded" && item.status !== "completed";
+                    const isWorking = refundActionId === item.billing_payment_id;
+                    return (
+                      <tr key={item.id} className={refundActionNotice?.paymentId === item.billing_payment_id ? "checkedRow" : ""}>
+                        <td>{fmtDateTime(item.requested_at)}</td>
+                        <td><div className="cellMain"><strong>{item.store_name || item.store_id}</strong><small>결제 #{item.billing_payment_id} · {item.store_id}</small></div></td>
+                        <td><span className={`pill ${item.status === "completed" ? "ok" : item.status === "rejected" || item.status === "reconcile_required" ? "danger" : "warn"}`}>{refundCaseStatusLabel(item.status)}</span></td>
+                        <td><div className="cellMain"><span className={`pill ${item.toss_status === "CANCELED" ? "ok" : item.toss_status === "DONE" ? "warn" : ""}`}>{tossStatusLabel(item.toss_status)}</span><small>{item.toss_checked_at ? `${fmtDateTime(item.toss_checked_at)} 확인` : "상태 확인 필요"}</small></div></td>
+                        <td><span className={`pill ${item.local_payment_status === "refunded" ? "ok" : "warn"}`}>{localPaymentStatusLabel(item.local_payment_status)}</span></td>
+                        <td><div className="cellMain"><strong>{item.reason}</strong><small>{item.support_ticket_id ? `문의 #${item.support_ticket_id}` : "연결 문의 없음"}</small></div></td>
+                        <td>
+                          {item.status === "completed" ? (
+                            <div className="actionComplete"><span className="pill ok">처리 완료</span><small>{fmtDateTime(item.completed_at)}</small></div>
+                          ) : (
+                            <div className="refundActions">
+                              <button className="btn" disabled={isWorking} onClick={() => void reconcileRefund(item.billing_payment_id, "inspect")}>{isWorking ? "확인 중..." : "1. Toss 상태 확인"}</button>
+                              <button className="btn primary" disabled={!canSync || isWorking} title={canSync ? "내부 결제를 환불 완료로 변경하고 구독 기간을 조정합니다." : "Toss 상태가 취소 완료일 때만 사용할 수 있습니다."} onClick={() => { setRefundSyncTarget(item); setRefundSyncReason(""); }}>2. 내부 환불 처리</button>
+                              {!canSync ? <small>{item.toss_status === "DONE" ? "Toss에서 먼저 전체 취소해 주세요." : item.toss_status ? "현재 상태에서는 내부 처리할 수 없습니다." : "먼저 Toss 상태를 확인해 주세요."}</small> : null}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!refundLoading && refundCases.length === 0 ? <p className="muted">접수된 기간 경과 환불 요청이 없습니다.</p> : null}
+          </article>
+          <article className="card">
+            <div className="panelHeader">
+              <div><div className="sectionTitle">통합 환불 이력</div><p>자동 취소와 OPS 수동 처리 결과를 한곳에서 확인합니다.</p></div>
+              <div className="row">
+                <select className="select" aria-label="환불 상태 필터" value={refundStatusFilter} onChange={(event) => setRefundStatusFilter(event.target.value)}>
+                  <option value="all">상태 전체</option><option value="processing">처리 중</option><option value="completed">취소 완료</option><option value="failed">취소 실패</option><option value="reconcile_required">확인 필요</option>
+                </select>
+                <button className="btn" disabled={refundLoading} onClick={() => void loadRefundHistory()}>{refundLoading ? "불러오는 중" : "이력 새로고침"}</button>
+              </div>
+            </div>
+            <div className="tableWrap">
+              <table className="opsTable">
+                <thead><tr><th>요청일시</th><th>처리 방식</th><th>매장</th><th>환불금액</th><th>상태</th><th>PG 상태</th><th>취소 사유·오류</th><th>완료일시</th></tr></thead>
+                <tbody>
+                  {refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).map((row) => (
+                    <tr key={row.id}>
+                      <td>{fmtDateTime(row.requested_at)}</td>
+                      <td className="historySource"><span className={`pill ${row.source === "manual" ? "ok" : ""}`}>{row.source === "manual" ? "OPS 수동" : "자동 취소"}</span></td>
+                      <td><div className="cellMain"><strong>{row.store_name || row.store_id}</strong><small>{row.store_id}</small></div></td>
+                      <td className="num">{fmtMoney(row.amount_krw)}</td>
+                      <td><span className={`pill ${row.status === "completed" ? "ok" : row.status === "failed" || row.status === "reconcile_required" ? "danger" : "warn"}`}>{refundStatusLabel(row.status)}</span></td>
+                      <td><span className={`pill ${row.pg_status === "CANCELED" ? "ok" : row.pg_status ? "warn" : ""}`}>{tossStatusLabel(row.pg_status)}</span></td>
+                      <td><div className="cellMain"><strong>{row.reason}</strong><small>{row.public_error_code || "오류 없음"}</small>{row.internal_error ? <small title={row.internal_error}>{row.internal_error}</small> : null}</div></td>
+                      <td>{fmtDateTime(row.completed_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!refundLoading && refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).length === 0 ? <p className="muted">조건에 맞는 환불 이력이 없습니다.</p> : null}
+          </article>
         </section>
+      ) : null}
+
+      {refundSyncTarget ? (
+        <div className="modalBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && refundActionId == null) setRefundSyncTarget(null); }}>
+          <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="refund-sync-title">
+            <div><div className="sectionTitle" id="refund-sync-title">내부 환불 처리 확인</div><p className="muted">이 작업은 내부 결제를 환불 완료로 변경하고 해당 구독 기간을 조정합니다.</p></div>
+            <div className="refundConfirmSummary">
+              <div><span>매장</span><strong>{refundSyncTarget.store_name || refundSyncTarget.store_id}</strong></div>
+              <div><span>결제 번호</span><strong>#{refundSyncTarget.billing_payment_id}</strong></div>
+              <div><span>Toss 상태</span><strong>{tossStatusLabel(refundSyncTarget.toss_status)}</strong></div>
+              <div><span>현재 내부 상태</span><strong>{localPaymentStatusLabel(refundSyncTarget.local_payment_status)}</strong></div>
+              <div><span>변경 후 상태</span><strong>환불 완료</strong></div>
+            </div>
+            <label><span className="muted">처리 사유 (필수)</span><textarea className="textarea" maxLength={240} value={refundSyncReason} onChange={(event) => setRefundSyncReason(event.target.value)} placeholder="Toss 수동 취소 확인 등 처리 근거를 입력해 주세요." /></label>
+            <div className="modalActions">
+              <button className="btn" disabled={refundActionId != null} onClick={() => setRefundSyncTarget(null)}>취소</button>
+              <button className="btn primary" disabled={refundSyncReason.trim().length < 2 || refundActionId != null} onClick={() => void reconcileRefund(refundSyncTarget.billing_payment_id, "sync", refundSyncReason)}>{refundActionId != null ? "처리 중..." : "확인 후 내부 환불 처리"}</button>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {!loading && activeTab === "tickets" ? (
@@ -2594,12 +2772,21 @@ export default function OpsPage() {
       {benefitEditorOpen && selectedStore ? (
         <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setBenefitEditorOpen(false)}>
           <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="founder-editor-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div><div className="sectionTitle" id="founder-editor-title">창립 멤버 혜택 변경</div><p className="muted">{selectedStore.store_name || selectedStore.store_id}</p></div>
+            <div><div className="sectionTitle" id="founder-editor-title">혜택·무료 체험 관리</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 현재 상태 {benefit?.baseStatus || "-"}</p></div>
+            <div className="sectionTitle">창립 멤버 혜택</div>
             <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>창립 멤버로 지정</span></label>
             <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 40% 할인</span></label>
             <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>선결제 옵션 40% 할인</span></label>
             <textarea className="input" rows={3} maxLength={240} placeholder="창립 멤버 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
-            <div className="row"><button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>취소</button><button className="btn primary" disabled={benefitSaving} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "변경 저장"}</button></div>
+            <button className="btn primary" disabled={benefitSaving || !benefitForm.founderReason.trim()} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "창립 멤버 혜택 저장"}</button>
+            <div className="trialControls">
+              <div className="sectionTitle">무료 체험 기간</div>
+              <label><span>무료 체험 종료일</span><input className="input" type="date" value={benefitForm.trialEndAt} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialEndAt: event.target.value }))}/></label>
+              <textarea className="textarea" rows={2} maxLength={240} placeholder="무료 체험 조정 사유(필수)" value={benefitForm.trialReason} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialReason: event.target.value }))}/>
+              <button className="btn" disabled={!canManageBilling || benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil) || !benefitForm.trialReason.trim()} onClick={() => void saveTrial()}>{benefitSaving ? "저장 중..." : "무료 체험 기간 저장"}</button>
+              {benefit?.baseStatus === "active" || benefit?.paidUntil ? <small className="muted">유료 매장은 무료 체험을 변경할 수 없습니다. 별도의 구독 보상 절차를 사용해야 합니다.</small> : null}
+            </div>
+            <button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>닫기</button>
           </section>
         </div>
       ) : null}
