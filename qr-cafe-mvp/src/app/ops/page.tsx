@@ -1164,7 +1164,7 @@ export default function OpsPage() {
           </div>
 
           <div className="benefitBox">
-            <div className="sectionTitle">창립 멤버·무료 체험</div>
+            <div className="sectionTitle">창립 멤버 혜택</div>
             <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "창립 멤버" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
             <div className="benefitSummary"><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
             <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "창립 멤버 혜택 변경" : "조회 전용"}</button>
@@ -1250,15 +1250,9 @@ export default function OpsPage() {
             <div><dt>남은 기간</dt><dd>{remainingDays(selectedStore.paid_until) != null ? `D-${Math.max(0, Number(remainingDays(selectedStore.paid_until)))}` : "-"}</dd></div>
             <div><dt>이번 달 결제</dt><dd>{fmtMoney(selectedStore.monthly_revenue)} · {selectedStore.paid_count.toLocaleString()}건</dd></div>
           </dl>
-          <section className="trialManagementCard">
-            <div className="trialCardHeader"><div><div className="sectionTitle">무료 체험</div><p>무료 매장의 체험 기간을 확인하고 마스터 권한으로 연장합니다.</p></div><span className={`pill ${benefit?.baseStatus === "trialing" ? "ok" : "warn"}`}>{benefit?.baseStatus === "trialing" ? "체험 중" : "미적용"}</span></div>
-            <div className="trialFacts"><div><span>현재 종료일</span><strong>{fmtDate(benefit?.trialEndAt || null)}</strong></div><div><span>남은 기간</span><strong>{remainingDays(benefit?.trialEndAt || null) != null ? `${Math.max(0, Number(remainingDays(benefit?.trialEndAt || null)))}일` : "-"}</strong></div></div>
-            {benefit?.baseStatus === "active" || benefit?.paidUntil ? <p className="trialHelp">유료 구독 매장은 무료 체험 대신 별도의 구독 보상 절차로 조정해야 합니다.</p> : <button className="btn primary" disabled={!isOpsMaster} title={isOpsMaster ? "무료 체험 종료일을 연장합니다." : "마스터 권한만 무료 체험 기간을 연장할 수 있습니다."} onClick={() => setTrialEditorOpen(true)}>{isOpsMaster ? "무료 체험 기간 연장" : "마스터 권한으로 연장 가능"}</button>}
-          </section>
-          <section className="benefitSummaryCard">
-            <div className="panelHeader"><div><div className="sectionTitle">창립 멤버 혜택</div><p>할인 적용 상태를 별도로 관리합니다.</p></div></div>
-            <div className="benefitSummary"><span>창립 멤버</span><strong>{benefit?.founderMember ? "적용" : "미적용"}</strong><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
-            <button className="btn" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "창립 멤버 혜택 관리" : "조회 전용"}</button>
+          <section className="trialManagementRow">
+            <div><div className="sectionTitle">무료 체험</div><p>{benefit?.baseStatus === "trialing" ? `${fmtDate(benefit.trialEndAt)}까지 · ${Math.max(0, Number(remainingDays(benefit.trialEndAt)))}일 남음` : benefit?.baseStatus === "active" || benefit?.paidUntil ? "유료 구독 중인 매장은 무료 체험을 변경할 수 없습니다." : "현재 적용된 무료 체험 기간이 없습니다."}</p></div>
+            {benefit?.baseStatus === "active" || benefit?.paidUntil ? <span className="pill ok">유료 구독 중</span> : isOpsMaster ? <button className="btn primary" onClick={() => setTrialEditorOpen(true)}>{benefit?.trialEndAt ? "기간 연장" : "무료 체험 시작"}</button> : <span className="lockedHint">마스터 권한에서 관리</span>}
           </section>
           <button className="activityToggle" type="button" aria-expanded={subscriptionActivityOpen} onClick={() => setSubscriptionActivityOpen((open) => !open)}><span>매장 활동 참고 정보</span><strong>{subscriptionActivityOpen ? "접기" : "펼치기"}</strong></button>
           {subscriptionActivityOpen ? <div className="activityGrid"><div><span>오늘 주문</span><strong>{selectedStore.today_order_count.toLocaleString()}건</strong></div><div><span>이번 달 주문</span><strong>{selectedStore.monthly_order_count.toLocaleString()}건</strong></div><div><span>미처리 문의</span><strong>{selectedStore.open_ticket_count.toLocaleString()}건</strong></div><div><span>최근 주문</span><strong>{fmtDateTime(selectedStore.last_order_at)}</strong></div></div> : null}
@@ -1323,14 +1317,11 @@ export default function OpsPage() {
         .subscriptionFacts dt { color:#64748b; font-size:12px; font-weight:800; }
         .subscriptionFacts dd { margin:0; text-align:right; font-size:13px; font-weight:900; }
         .benefitSummaryCard { display:grid; gap:11px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
-        .trialManagementCard { display:grid; gap:13px; padding:16px; border:1px solid #b8d5ff; background:linear-gradient(145deg,#f7fbff,#eef6ff); border-radius:14px; }
-        .trialCardHeader { display:flex;justify-content:space-between;align-items:flex-start;gap:12px; }
-        .trialCardHeader .sectionTitle { margin-bottom:4px; }
-        .trialCardHeader p,.trialHelp { margin:0;color:#64748b;font-size:12px;line-height:1.5; }
-        .trialFacts { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
-        .trialFacts div { display:grid;gap:5px;padding:11px 12px;border:1px solid #dbe7f5;border-radius:11px;background:#fff; }
-        .trialFacts span { color:#64748b;font-size:11px;font-weight:800; }
-        .trialFacts strong { font-size:14px; }
+        .trialManagementRow { display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 16px;border:1px solid #b8d5ff;background:linear-gradient(145deg,#f7fbff,#eef6ff);border-radius:14px; }
+        .trialManagementRow .sectionTitle { margin-bottom:4px; }
+        .trialManagementRow p { margin:0;color:#64748b;font-size:12px;line-height:1.5; }
+        .trialManagementRow .btn { flex:0 0 auto; }
+        .lockedHint { color:#64748b;font-size:11px;font-weight:800;white-space:nowrap; }
         .trialPresetGrid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
         .trialPresetGrid .btn { width:100%; }
         .trialPreview { display:grid;gap:8px;padding:13px;border:1px solid #b8d5ff;border-radius:12px;background:#f3f8ff; }
@@ -1928,7 +1919,6 @@ export default function OpsPage() {
           .subscriptionKpis,
           .subscriptionToolbar,
           .subscriptionLinks { grid-template-columns:1fr; }
-          .trialFacts,
           .trialPresetGrid { grid-template-columns:1fr; }
           .subscriptionTable { min-width:0; }
           .subscriptionTable thead { display:none; }
@@ -2336,11 +2326,8 @@ export default function OpsPage() {
           <article className="card">
             <div className="panelHeader">
               <div>
-                <div className="sectionTitle">고객·구독 관리</div>
-                <p>
-                  점주 계정, 매장, 구독/결제, 주문 사용량, 문의 상태를 한
-                  화면에서 함께 확인합니다.
-                </p>
+                <div className="sectionTitle">점주·매장 관리</div>
+                <p>점주 계정과 매장 상태, 운영 현황 및 적용 혜택을 한곳에서 확인합니다.</p>
               </div>
               <span className="pill ok">계정 → 매장</span>
             </div>

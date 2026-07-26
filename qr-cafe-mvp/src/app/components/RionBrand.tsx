@@ -15,9 +15,9 @@ export default function RionBrand({ compact = false, inverse = false, product = 
         {!compact ? <span>{product ? "통합 운영 콘솔" : "Realize Innovation ON"}</span> : null}
       </div>
       <style jsx>{`
-        .rionBrand { display:flex; align-items:center; gap:12px; color:#0f1f3d; min-width:0; }
+        .rionBrand { display:flex; align-items:center; gap:11px; color:#0f1f3d; min-width:0; }
         .rionBrand.inverse { color:#fff; }
-        .rionBrand img { width:52px; height:52px; flex:0 0 auto; object-fit:contain; }
+        .rionBrand img { width:48px; height:48px; flex:0 0 auto; object-fit:contain; }
         .rionBrandCopy { display:grid; gap:2px; min-width:0; }
         .rionBrandCopy strong { font-family:Inter,"Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size:23px; line-height:1; letter-spacing:-.045em; white-space:nowrap; }
         .rionBrandCopy strong b { font-weight:500; }
