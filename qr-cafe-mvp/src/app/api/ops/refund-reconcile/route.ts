@@ -31,12 +31,17 @@ export async function POST(req: NextRequest) {
     const tossStatus = String(toss.status || "").toUpperCase();
     const matches = String(toss.paymentKey || "") === paymentKey && String(toss.orderId || "") === String(payment.data.order_id || "");
     if (!matches) throw new ApiError(409, "Toss 결제 정보가 내부 결제와 일치하지 않습니다.", "TOSS_PAYMENT_MISMATCH");
-    if (action === "inspect") return NextResponse.json({ ok: true, paymentId, localStatus: payment.data.status, tossStatus });
+    const checkedAt = new Date().toISOString();
+    if (action === "inspect") {
+      await admin.from("billing_refund_cases").update({ toss_status: tossStatus, toss_checked_at: checkedAt, toss_checked_by: actor.userId, local_payment_status_snapshot: payment.data.status, updated_at: checkedAt }).eq("billing_payment_id", paymentId).neq("status", "completed");
+      await admin.from("billing_admin_audit_logs").insert({ actor_user_id: actor.userId, action: "refund_toss_status_checked", store_id: payment.data.store_id, reason: "OPS Toss 결제 상태 확인", after_data: { payment_id: paymentId, toss_status: tossStatus, local_status: payment.data.status } });
+      return NextResponse.json({ ok: true, paymentId, localStatus: payment.data.status, tossStatus, checkedAt });
+    }
     if (tossStatus !== "CANCELED") throw new ApiError(409, "Toss에서 취소 완료된 결제만 내부 상태를 동기화할 수 있습니다.", "TOSS_NOT_CANCELED");
 
     const synced = await admin.rpc("sync_verified_historical_billing_refund", { p_payment_id: paymentId, p_store_id: payment.data.store_id, p_actor_user_id: actor.userId, p_reason: reason });
     if (synced.error || !synced.data) throw new ApiError(500, "내부 구독 상태를 동기화하지 못했습니다.", "REFUND_SYNC_FAILED");
-    await admin.from("billing_refund_cases").update({ status: "completed", toss_status: tossStatus, ops_note: reason, handled_by: actor.userId, handled_at: new Date().toISOString(), completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("billing_payment_id", paymentId).neq("status", "completed");
+    await admin.from("billing_refund_cases").update({ status: "completed", toss_status: tossStatus, toss_checked_at: checkedAt, toss_checked_by: actor.userId, local_payment_status_snapshot: "refunded", ops_note: reason, handled_by: actor.userId, handled_at: checkedAt, completed_at: checkedAt, updated_at: checkedAt }).eq("billing_payment_id", paymentId).neq("status", "completed");
     await admin.from("billing_admin_audit_logs").insert({ actor_user_id: actor.userId, action: "historical_refund_synced", store_id: payment.data.store_id, reason, after_data: { payment_id: paymentId, toss_status: tossStatus } });
     return NextResponse.json({ ok: true, paymentId, localStatus: "refunded", tossStatus });
   } catch (error: unknown) {

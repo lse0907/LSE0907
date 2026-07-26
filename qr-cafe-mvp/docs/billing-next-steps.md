@@ -44,8 +44,9 @@
 4. `docs/sql/supabase-billing-live-v2-2.sql` 전체를 실행해 환불 이력, 실패 복구 RPC, OPS 환불 추적을 적용.
 5. `docs/sql/supabase-billing-live-v2-3.sql` 전체를 실행해 과거 결제 상태 제약조건을 정리하고 `canceling` 전환을 허용.
 6. `docs/sql/supabase-billing-live-v2-4.sql` 전체를 실행해 기간 경과 환불 요청, 문의 연결과 구독 조정 원장을 적용.
-7. 현재 운영 계정을 마스터로 쓸 때만 `docs/sql/supabase-ops-master-account.sql`의 이메일을 바꿔 전체 실행.
-8. OPS 권한 변경 후 로그아웃·재로그인하고 owner 계정으로 서버 견적 → 토스 승인 → 즉시 취소/환불 문의 → OPS 이력 확인 흐름을 테스트.
+7. `docs/sql/supabase-billing-live-v2-5.sql` 전체를 실행해 OPS Toss 상태 확인 결과와 확인자·확인 시각을 저장.
+8. 현재 운영 계정을 마스터로 쓸 때만 `docs/sql/supabase-ops-master-account.sql`의 이메일을 바꿔 전체 실행.
+9. OPS 권한 변경 후 로그아웃·재로그인하고 owner 계정으로 서버 견적 → 토스 승인 → 즉시 취소/환불 문의 → OPS 이력 확인 흐름을 테스트.
 3. UI에서 남은 기간/만료 상태를 읽어 노출.
 4. owner 전용 결제 페이지(1/3/6/12개월 선택) 연결.
 

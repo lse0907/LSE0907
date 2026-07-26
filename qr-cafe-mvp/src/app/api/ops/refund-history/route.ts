@@ -21,9 +21,16 @@ export async function GET(req: NextRequest) {
       .limit(limit);
     if (error) throw new Error(`환불 이력을 불러오지 못했습니다: ${error.message}`);
     const cases = await admin.from("billing_refund_cases")
-      .select("id,billing_payment_id,store_id,support_ticket_id,reason,status,toss_status,ops_note,requested_at,handled_at,completed_at,updated_at")
+      .select("id,billing_payment_id,store_id,support_ticket_id,reason,status,toss_status,toss_checked_at,local_payment_status_snapshot,ops_note,requested_at,handled_at,completed_at,updated_at")
       .order("requested_at", { ascending: false }).limit(limit);
     if (cases.error) throw new Error(`환불 요청을 불러오지 못했습니다: ${cases.error.message}`);
+    const paymentIds = [...new Set((cases.data || []).map((row) => Number(row.billing_payment_id)).filter((id) => Number.isInteger(id) && id > 0))];
+    const paymentStatuses = new Map<number, string>();
+    if (paymentIds.length) {
+      const payments = await admin.from("billing_payments").select("id,status").in("id", paymentIds);
+      if (payments.error) throw new Error(`내부 결제 상태를 불러오지 못했습니다: ${payments.error.message}`);
+      for (const payment of payments.data || []) paymentStatuses.set(Number(payment.id), String(payment.status || ""));
+    }
 
     const storeIds = [...new Set([...(data || []), ...(cases.data || [])].map((row) => String(row.store_id || "")).filter(Boolean))];
     const storeNames = new Map<string, string>();
@@ -40,7 +47,7 @@ export async function GET(req: NextRequest) {
         internal_error: safeInternalError(row.internal_error),
         store_name: storeNames.get(String(row.store_id)) || null,
       })),
-      cases: (cases.data || []).map((row) => ({ ...row, store_name: storeNames.get(String(row.store_id)) || null })),
+      cases: (cases.data || []).map((row) => ({ ...row, local_payment_status: paymentStatuses.get(Number(row.billing_payment_id)) || row.local_payment_status_snapshot || null, store_name: storeNames.get(String(row.store_id)) || null })),
     });
   } catch (error: unknown) {
     return apiErrorResponse(error);
