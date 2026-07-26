@@ -10,7 +10,11 @@ declare
   v_user_id uuid;
   v_count integer;
 begin
-  if v_email='CHANGE_ME@example.com' then raise exception '먼저 v_email을 실제 마스터 계정 이메일로 변경하세요.'; end if;
+  -- 이메일 형식만 검사합니다. 파일 전체 찾기/바꾸기로 이메일을 교체해도
+  -- 안전장치의 비교값까지 함께 바뀌어 실행이 막히지 않도록 고정 문자열 비교를 사용하지 않습니다.
+  if v_email is null or position('@' in v_email)=0 then
+    raise exception 'v_email을 실제 마스터 계정 이메일로 변경하세요.';
+  end if;
   select count(*) into v_count from auth.users where lower(email)=lower(trim(v_email));
   if v_count=0 then raise exception '해당 이메일 사용자를 찾지 못했습니다: %',v_email; end if;
   if v_count<>1 then raise exception '동일 이메일 사용자가 1명이 아닙니다: %',v_email; end if;
