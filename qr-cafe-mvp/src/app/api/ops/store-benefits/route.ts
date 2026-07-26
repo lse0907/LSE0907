@@ -39,7 +39,8 @@ export async function POST(req: NextRequest) {
     const founderReason = String(body.founderReason || "").trim();
     const trialReason = String(body.trialReason || "").trim();
     if (!storeId) return NextResponse.json({ ok: false, message: "매장을 선택해 주세요." }, { status: 400 });
-    const admin = createSupabaseAdminClient(); const actor = await requireOpsUser(req, admin, ["master", "billing"]);
+    const admin = createSupabaseAdminClient();
+    const actor = await requireOpsUser(req, admin, body.trialEndAt !== undefined ? ["master"] : ["master", "billing"]);
     const before = await load(admin, storeId);
     if (typeof body.founderMember === "boolean") {
       if (!founderReason) return NextResponse.json({ ok: false, message: "창립 멤버 설정 사유를 입력해 주세요." }, { status: 400 });
@@ -54,6 +55,9 @@ export async function POST(req: NextRequest) {
       if (!trialReason) return NextResponse.json({ ok: false, message: "무료 체험 조정 사유를 입력해 주세요." }, { status: 400 });
       const trialEndAt = String(body.trialEndAt || "").trim() || null;
       if (before.baseStatus === "active" || before.paidUntil) return NextResponse.json({ ok: false, message: "유료 매장은 무료 체험이 아니라 구독 보상 기능으로 조정해야 합니다." }, { status: 409 });
+      const nextTrialTime = trialEndAt ? new Date(trialEndAt).getTime() : Number.NaN;
+      const currentTrialTime = before.trialEndAt ? new Date(before.trialEndAt).getTime() : Date.now();
+      if (!Number.isFinite(nextTrialTime) || nextTrialTime <= Math.max(Date.now(), currentTrialTime)) return NextResponse.json({ ok: false, message: "현재 무료 체험 종료일보다 이후 날짜로 연장해 주세요." }, { status: 400 });
       const adjusted = await admin.from("store_billing").upsert({ store_id: storeId, base_plan_status: trialEndAt && new Date(trialEndAt).getTime() > Date.now() ? "trialing" : "inactive", trial_end_at: trialEndAt, base_price_krw: 14900, price_version: "standard", updated_at: new Date().toISOString() }, { onConflict: "store_id" });
       if (adjusted.error) return NextResponse.json({ ok: false, code: "TRIAL_SAVE_FAILED", message: `무료 체험 저장 실패: ${adjusted.error.message}` }, { status: 500 });
     }
