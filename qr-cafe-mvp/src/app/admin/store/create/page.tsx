@@ -7,6 +7,7 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { setCurrentStoreId } from "@/app/lib/currentStore";
 import { DEFAULT_STORE_PROFILE, saveStoreProfile } from "@/app/lib/storeProfile";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
+import { prepareStoreImage } from "@/app/lib/storeImageUpload";
 
 const STORE_IMAGE_BUCKET = "store-assets";
 
@@ -90,9 +91,13 @@ export default function AdminStoreCreatePage() {
       return "";
     }
 
-    const ext = getFileExt(file.name) || "png";
+    const uploadFile = await prepareStoreImage(file);
+    const ext = getFileExt(uploadFile.name) || "png";
     const path = `${trimmedStoreId}/${kind}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from(STORE_IMAGE_BUCKET).upload(path, file, { upsert: true });
+    const { error } = await supabase.storage.from(STORE_IMAGE_BUCKET).upload(path, uploadFile, {
+      upsert: true,
+      contentType: uploadFile.type || undefined,
+    });
     if (error) throw error;
 
     const { data } = supabase.storage.from(STORE_IMAGE_BUCKET).getPublicUrl(path);
@@ -706,7 +711,11 @@ export default function AdminStoreCreatePage() {
                   className="input"
                   type="file"
                   accept="image/*"
-                  onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
+                  onChange={async (e) => {
+                    const input = e.currentTarget;
+                    await onUploadMain(input.files?.[0] || null);
+                    input.value = "";
+                  }}
                   disabled={uploadingMain}
                 />
                 <div className="hint hintWrap">
@@ -723,7 +732,11 @@ export default function AdminStoreCreatePage() {
                   className="input"
                   type="file"
                   accept="image/*"
-                  onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
+                  onChange={async (e) => {
+                    const input = e.currentTarget;
+                    await onUploadLogo(input.files?.[0] || null);
+                    input.value = "";
+                  }}
                   disabled={uploadingLogo}
                 />
                 <div className="hint hintWrap">
