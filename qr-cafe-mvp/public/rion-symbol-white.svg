@@ -1,0 +1,12 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>RION Labs white symbol</title>
+  <defs>
+    <mask id="rion-power-cutout">
+      <rect width="96" height="96" fill="black"/>
+      <path d="M15 9H49C69.435 9 86 25.565 86 46C86 60.283 77.901 72.674 66.046 78.844L88 91H62L44 70H39V91H15V9Z" fill="white"/>
+      <path d="M45 19V42" stroke="black" stroke-width="11" stroke-linecap="round"/>
+      <path d="M29 29C23.464 33.591 20 40.234 20 47.5C20 61.031 30.969 72 44.5 72S69 61.031 69 47.5C69 40.234 65.536 33.591 60 29" stroke="black" stroke-width="11" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <rect width="96" height="96" fill="white" mask="url(#rion-power-cutout)"/>
+</svg>
