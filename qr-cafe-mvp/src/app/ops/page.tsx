@@ -73,7 +73,7 @@ type PaymentBaseRow = {
   status?: string | null;
 };
 type RefundHistoryRow = {
-  id: number;
+  id: number | string;
   billing_payment_id: number;
   store_id: string;
   store_name: string | null;
@@ -85,6 +85,7 @@ type RefundHistoryRow = {
   pg_status: string | null;
   requested_at: string;
   completed_at: string | null;
+  source: "automatic" | "manual";
 };
 type RefundCaseRow = {
   id: number; billing_payment_id: number; store_id: string; store_name: string | null;
@@ -363,6 +364,9 @@ export default function OpsPage() {
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundStatusFilter, setRefundStatusFilter] = useState("all");
   const [refundActionNotice, setRefundActionNotice] = useState<{ paymentId: number; tossStatus: string; localStatus: string; kind: "info" | "success" } | null>(null);
+  const [refundSyncTarget, setRefundSyncTarget] = useState<RefundCaseRow | null>(null);
+  const [refundSyncReason, setRefundSyncReason] = useState("");
+  const [refundActionId, setRefundActionId] = useState<number | null>(null);
   const isOpsMaster = opsIdentity.role === "master";
   const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
 
@@ -591,19 +595,24 @@ export default function OpsPage() {
     setRefundLoading(false);
   }, [canManageBilling, isOps]);
 
-  const reconcileRefund = async (paymentId: number, action: "inspect" | "sync") => {
-    const reason = action === "sync" ? window.prompt("Toss 수동 취소 확인 및 내부 동기화 사유를 입력해 주세요.", "Toss 개발자센터 수동 취소 확인") : "";
-    if (action === "sync" && !reason?.trim()) return;
+  const reconcileRefund = async (paymentId: number, action: "inspect" | "sync", reason = "") => {
+    if (action === "sync" && reason.trim().length < 2) return;
+    setRefundActionId(paymentId);
     const response = await fetch("/api/ops/refund-reconcile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paymentId, action, reason }) });
     const result = await response.json().catch(() => ({}));
     if (response.ok && result?.ok) {
       setRefundActionNotice({ paymentId, tossStatus: String(result.tossStatus || ""), localStatus: String(result.localStatus || ""), kind: action === "sync" ? "success" : "info" });
       setMsg("");
       await loadRefundHistory();
+      if (action === "sync") {
+        setRefundSyncTarget(null);
+        setRefundSyncReason("");
+      }
     } else {
       setRefundActionNotice(null);
       setMsg(String(result?.message || "결제 상태 확인에 실패했습니다."));
     }
+    setRefundActionId(null);
   };
 
   useEffect(() => {
@@ -1730,6 +1739,15 @@ export default function OpsPage() {
         .refundActions { display:grid; gap:6px; min-width:170px; }
         .refundActions .btn { width:100%; }
         .refundActions small { color:#6b7280; line-height:1.35; }
+        .refundSummary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+        .refundSummary .notice { min-height:68px; }
+        .refundSummary strong { font-size:20px; }
+        .actionComplete { display:grid; gap:5px; justify-items:start; min-width:130px; }
+        .historySource { white-space:nowrap; }
+        .refundConfirmSummary { display:grid; gap:8px; padding:12px; border:1px solid #dbeafe; border-radius:14px; background:#f8fbff; }
+        .refundConfirmSummary div { display:flex; justify-content:space-between; gap:16px; }
+        .refundConfirmSummary span { color:#64748b; }
+        .modalActions { display:flex; justify-content:flex-end; gap:8px; }
         @media (max-width: 1100px) {
           .kpis {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1741,7 +1759,8 @@ export default function OpsPage() {
             grid-template-columns: 1fr;
           }
           .businessGrid,
-          .ticketStats {
+          .ticketStats,
+          .refundSummary {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
           .detailCard {
@@ -1775,6 +1794,11 @@ export default function OpsPage() {
           .quickLinks {
             grid-template-columns: 1fr;
           }
+          .refundSummary { grid-template-columns:1fr; }
+          .refundActionNotice { position:static; align-items:flex-start; }
+          .refundActions { min-width:150px; }
+          .modalActions { display:grid; grid-template-columns:1fr; }
+          .modalActions .btn { width:100%; }
           .opsAccount { width:100%; }
           .opsAccount > div { text-align:left; width:100%; }
           .modalBackdrop { align-items:end; padding:10px; }
@@ -2273,50 +2297,112 @@ export default function OpsPage() {
 
       {!loading && activeTab === "payments" && canManageBilling ? (
         <section className="noticeList">
-        {refundActionNotice ? <div className={`refundActionNotice ${refundActionNotice.kind}`} role="status" aria-live="polite"><div><strong>결제 #{refundActionNotice.paymentId} 상태 확인 완료</strong><p>Toss <b>{tossStatusLabel(refundActionNotice.tossStatus)}</b> · 내부 <b>{localPaymentStatusLabel(refundActionNotice.localStatus)}</b></p><small>{refundActionNotice.tossStatus === "CANCELED" && refundActionNotice.localStatus !== "refunded" ? "해당 행의 ‘취소 결과 내부 반영’을 진행해 주세요." : refundActionNotice.localStatus === "refunded" ? "Toss와 내부 환불 상태가 동기화되었습니다." : "Toss에서 전체 취소를 완료한 뒤 상태를 다시 확인해 주세요."}</small></div><button className="btn" onClick={() => setRefundActionNotice(null)}>닫기</button></div> : null}
-        <article className="card">
-          <div className="panelHeader"><div><div className="sectionTitle">수동 환불 요청</div><p>즉시 취소 시간이 지난 요청의 Toss 취소 결과를 확인하고 내부 구독과 동기화합니다.</p></div><span className="pill warn">대기 {refundCases.filter((item) => item.status === "requested").length}건</span></div>
-          <div className="tableWrap"><table className="opsTable"><thead><tr><th>요청일시</th><th>매장·결제</th><th>요청 상태</th><th>Toss 상태</th><th>내부 상태</th><th>사유·문의</th><th>처리</th></tr></thead><tbody>{refundCases.map((item) => { const canSync = item.toss_status === "CANCELED" && item.local_payment_status !== "refunded" && item.status !== "completed"; return <tr key={item.id} className={refundActionNotice?.paymentId === item.billing_payment_id ? "checkedRow" : ""}><td>{fmtDateTime(item.requested_at)}</td><td><div className="cellMain"><strong>{item.store_name || item.store_id}</strong><small>결제 #{item.billing_payment_id} · {item.store_id}</small></div></td><td><span className={`pill ${item.status === "completed" ? "ok" : item.status === "rejected" || item.status === "reconcile_required" ? "danger" : "warn"}`}>{refundCaseStatusLabel(item.status)}</span></td><td><div className="cellMain"><span className={`pill ${item.toss_status === "CANCELED" ? "ok" : item.toss_status === "DONE" ? "warn" : ""}`}>{tossStatusLabel(item.toss_status)}</span><small>{item.toss_checked_at ? `${fmtDateTime(item.toss_checked_at)} 확인` : "상태 확인 필요"}</small></div></td><td><span className={`pill ${item.local_payment_status === "refunded" ? "ok" : "warn"}`}>{localPaymentStatusLabel(item.local_payment_status)}</span></td><td><div className="cellMain"><strong>{item.reason}</strong><small>{item.support_ticket_id ? `문의 #${item.support_ticket_id}` : "연결 문의 없음"}</small></div></td><td><div className="refundActions"><button className="btn" onClick={() => void reconcileRefund(item.billing_payment_id,"inspect")}>결제 상태 확인</button><button className="btn primary" disabled={!canSync} title={canSync ? "Toss 취소 결과를 내부 구독에 반영합니다." : "Toss 상태가 취소 완료일 때만 사용할 수 있습니다."} onClick={() => void reconcileRefund(item.billing_payment_id,"sync")}>취소 결과 내부 반영</button>{!canSync && item.status !== "completed" ? <small>{item.toss_status === "DONE" ? "Toss에서 먼저 전체 취소해 주세요." : item.toss_status ? "현재 상태에서는 내부 반영할 수 없습니다." : "결제 상태를 먼저 확인해 주세요."}</small> : null}</div></td></tr>; })}</tbody></table></div>
-          {!refundLoading && refundCases.length === 0 ? <p className="muted">접수된 기간 경과 환불 요청이 없습니다.</p> : null}
-        </article>
-        <article className="card">
-          <div className="panelHeader">
-            <div>
-              <div className="sectionTitle">구독 결제 취소·환불 이력</div>
-              <p>PG 취소 결과와 내부 구독 복구 상태를 함께 확인합니다.</p>
-            </div>
-            <div className="row">
-              <select className="select" value={refundStatusFilter} onChange={(event) => setRefundStatusFilter(event.target.value)}>
-                <option value="all">상태 전체</option>
-                <option value="processing">처리 중</option>
-                <option value="completed">취소 완료</option>
-                <option value="failed">취소 실패</option>
-                <option value="reconcile_required">확인 필요</option>
-              </select>
-              <button className="btn" disabled={refundLoading} onClick={() => void loadRefundHistory()}>{refundLoading ? "불러오는 중" : "새로고침"}</button>
-            </div>
+          <div className="refundSummary" aria-label="환불 처리 현황">
+            <div className="notice"><span>처리 필요</span><strong>{refundCases.filter((item) => ["requested", "reviewing", "approved", "processing"].includes(item.status)).length}건</strong></div>
+            <div className="notice"><span>확인 필요</span><strong>{refundCases.filter((item) => item.status === "reconcile_required").length}건</strong></div>
+            <div className="notice"><span>완료된 수동 환불</span><strong>{refundCases.filter((item) => item.status === "completed").length}건</strong></div>
           </div>
-          <div className="tableWrap">
-            <table className="opsTable">
-              <thead><tr><th>요청일시</th><th>매장</th><th>환불금액</th><th>상태</th><th>PG 상태</th><th>취소 사유·오류</th><th>완료일시</th></tr></thead>
-              <tbody>
-                {refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).map((row) => (
-                  <tr key={row.id}>
-                    <td>{fmtDateTime(row.requested_at)}</td>
-                    <td><div className="cellMain"><strong>{row.store_name || row.store_id}</strong><small>{row.store_id}</small></div></td>
-                    <td className="num">{fmtMoney(row.amount_krw)}</td>
-                    <td><span className={`pill ${row.status === "completed" ? "ok" : row.status === "failed" || row.status === "reconcile_required" ? "danger" : "warn"}`}>{refundStatusLabel(row.status)}</span></td>
-                    <td><span className={`pill ${row.pg_status === "CANCELED" ? "ok" : row.pg_status ? "warn" : ""}`}>{tossStatusLabel(row.pg_status)}</span></td>
-                    <td><div className="cellMain"><strong>{row.reason}</strong><small>{row.public_error_code || "오류 없음"}</small>{row.internal_error ? <small title={row.internal_error}>{row.internal_error}</small> : null}</div></td>
-                    <td>{fmtDateTime(row.completed_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!refundLoading && refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).length === 0 ? <p className="muted">조건에 맞는 환불 이력이 없습니다.</p> : null}
-        </article>
+          {refundActionNotice ? (
+            <div className={`refundActionNotice ${refundActionNotice.kind}`} role="status" aria-live="polite">
+              <div>
+                <strong>결제 #{refundActionNotice.paymentId} 상태 확인 완료</strong>
+                <p>Toss <b>{tossStatusLabel(refundActionNotice.tossStatus)}</b> · 내부 <b>{localPaymentStatusLabel(refundActionNotice.localStatus)}</b></p>
+                <small>{refundActionNotice.tossStatus === "CANCELED" && refundActionNotice.localStatus !== "refunded" ? "해당 행에서 2단계 내부 환불 처리를 진행해 주세요." : refundActionNotice.localStatus === "refunded" ? "Toss와 내부 환불 상태가 동기화되었습니다." : "Toss에서 전체 취소를 완료한 뒤 상태를 다시 확인해 주세요."}</small>
+              </div>
+              <button className="btn" onClick={() => setRefundActionNotice(null)}>닫기</button>
+            </div>
+          ) : null}
+          <article className="card">
+            <div className="panelHeader">
+              <div><div className="sectionTitle">수동 환불 요청</div><p>Toss 취소 확인 후 내부 결제 상태와 구독 기간을 안전하게 동기화합니다.</p></div>
+              <span className="pill warn">처리 필요 {refundCases.filter((item) => ["requested", "reviewing", "approved", "processing", "reconcile_required"].includes(item.status)).length}건</span>
+            </div>
+            <div className="tableWrap">
+              <table className="opsTable">
+                <thead><tr><th>요청일시</th><th>매장·결제</th><th>요청 상태</th><th>Toss 상태</th><th>내부 상태</th><th>사유·문의</th><th>처리</th></tr></thead>
+                <tbody>
+                  {refundCases.map((item) => {
+                    const canSync = item.toss_status === "CANCELED" && item.local_payment_status !== "refunded" && item.status !== "completed";
+                    const isWorking = refundActionId === item.billing_payment_id;
+                    return (
+                      <tr key={item.id} className={refundActionNotice?.paymentId === item.billing_payment_id ? "checkedRow" : ""}>
+                        <td>{fmtDateTime(item.requested_at)}</td>
+                        <td><div className="cellMain"><strong>{item.store_name || item.store_id}</strong><small>결제 #{item.billing_payment_id} · {item.store_id}</small></div></td>
+                        <td><span className={`pill ${item.status === "completed" ? "ok" : item.status === "rejected" || item.status === "reconcile_required" ? "danger" : "warn"}`}>{refundCaseStatusLabel(item.status)}</span></td>
+                        <td><div className="cellMain"><span className={`pill ${item.toss_status === "CANCELED" ? "ok" : item.toss_status === "DONE" ? "warn" : ""}`}>{tossStatusLabel(item.toss_status)}</span><small>{item.toss_checked_at ? `${fmtDateTime(item.toss_checked_at)} 확인` : "상태 확인 필요"}</small></div></td>
+                        <td><span className={`pill ${item.local_payment_status === "refunded" ? "ok" : "warn"}`}>{localPaymentStatusLabel(item.local_payment_status)}</span></td>
+                        <td><div className="cellMain"><strong>{item.reason}</strong><small>{item.support_ticket_id ? `문의 #${item.support_ticket_id}` : "연결 문의 없음"}</small></div></td>
+                        <td>
+                          {item.status === "completed" ? (
+                            <div className="actionComplete"><span className="pill ok">처리 완료</span><small>{fmtDateTime(item.completed_at)}</small></div>
+                          ) : (
+                            <div className="refundActions">
+                              <button className="btn" disabled={isWorking} onClick={() => void reconcileRefund(item.billing_payment_id, "inspect")}>{isWorking ? "확인 중..." : "1. Toss 상태 확인"}</button>
+                              <button className="btn primary" disabled={!canSync || isWorking} title={canSync ? "내부 결제를 환불 완료로 변경하고 구독 기간을 조정합니다." : "Toss 상태가 취소 완료일 때만 사용할 수 있습니다."} onClick={() => { setRefundSyncTarget(item); setRefundSyncReason(""); }}>2. 내부 환불 처리</button>
+                              {!canSync ? <small>{item.toss_status === "DONE" ? "Toss에서 먼저 전체 취소해 주세요." : item.toss_status ? "현재 상태에서는 내부 처리할 수 없습니다." : "먼저 Toss 상태를 확인해 주세요."}</small> : null}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!refundLoading && refundCases.length === 0 ? <p className="muted">접수된 기간 경과 환불 요청이 없습니다.</p> : null}
+          </article>
+          <article className="card">
+            <div className="panelHeader">
+              <div><div className="sectionTitle">통합 환불 이력</div><p>자동 취소와 OPS 수동 처리 결과를 한곳에서 확인합니다.</p></div>
+              <div className="row">
+                <select className="select" aria-label="환불 상태 필터" value={refundStatusFilter} onChange={(event) => setRefundStatusFilter(event.target.value)}>
+                  <option value="all">상태 전체</option><option value="processing">처리 중</option><option value="completed">취소 완료</option><option value="failed">취소 실패</option><option value="reconcile_required">확인 필요</option>
+                </select>
+                <button className="btn" disabled={refundLoading} onClick={() => void loadRefundHistory()}>{refundLoading ? "불러오는 중" : "이력 새로고침"}</button>
+              </div>
+            </div>
+            <div className="tableWrap">
+              <table className="opsTable">
+                <thead><tr><th>요청일시</th><th>처리 방식</th><th>매장</th><th>환불금액</th><th>상태</th><th>PG 상태</th><th>취소 사유·오류</th><th>완료일시</th></tr></thead>
+                <tbody>
+                  {refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).map((row) => (
+                    <tr key={row.id}>
+                      <td>{fmtDateTime(row.requested_at)}</td>
+                      <td className="historySource"><span className={`pill ${row.source === "manual" ? "ok" : ""}`}>{row.source === "manual" ? "OPS 수동" : "자동 취소"}</span></td>
+                      <td><div className="cellMain"><strong>{row.store_name || row.store_id}</strong><small>{row.store_id}</small></div></td>
+                      <td className="num">{fmtMoney(row.amount_krw)}</td>
+                      <td><span className={`pill ${row.status === "completed" ? "ok" : row.status === "failed" || row.status === "reconcile_required" ? "danger" : "warn"}`}>{refundStatusLabel(row.status)}</span></td>
+                      <td><span className={`pill ${row.pg_status === "CANCELED" ? "ok" : row.pg_status ? "warn" : ""}`}>{tossStatusLabel(row.pg_status)}</span></td>
+                      <td><div className="cellMain"><strong>{row.reason}</strong><small>{row.public_error_code || "오류 없음"}</small>{row.internal_error ? <small title={row.internal_error}>{row.internal_error}</small> : null}</div></td>
+                      <td>{fmtDateTime(row.completed_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!refundLoading && refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).length === 0 ? <p className="muted">조건에 맞는 환불 이력이 없습니다.</p> : null}
+          </article>
         </section>
+      ) : null}
+
+      {refundSyncTarget ? (
+        <div className="modalBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && refundActionId == null) setRefundSyncTarget(null); }}>
+          <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="refund-sync-title">
+            <div><div className="sectionTitle" id="refund-sync-title">내부 환불 처리 확인</div><p className="muted">이 작업은 내부 결제를 환불 완료로 변경하고 해당 구독 기간을 조정합니다.</p></div>
+            <div className="refundConfirmSummary">
+              <div><span>매장</span><strong>{refundSyncTarget.store_name || refundSyncTarget.store_id}</strong></div>
+              <div><span>결제 번호</span><strong>#{refundSyncTarget.billing_payment_id}</strong></div>
+              <div><span>Toss 상태</span><strong>{tossStatusLabel(refundSyncTarget.toss_status)}</strong></div>
+              <div><span>현재 내부 상태</span><strong>{localPaymentStatusLabel(refundSyncTarget.local_payment_status)}</strong></div>
+              <div><span>변경 후 상태</span><strong>환불 완료</strong></div>
+            </div>
+            <label><span className="muted">처리 사유 (필수)</span><textarea className="textarea" maxLength={240} value={refundSyncReason} onChange={(event) => setRefundSyncReason(event.target.value)} placeholder="Toss 수동 취소 확인 등 처리 근거를 입력해 주세요." /></label>
+            <div className="modalActions">
+              <button className="btn" disabled={refundActionId != null} onClick={() => setRefundSyncTarget(null)}>취소</button>
+              <button className="btn primary" disabled={refundSyncReason.trim().length < 2 || refundActionId != null} onClick={() => void reconcileRefund(refundSyncTarget.billing_payment_id, "sync", refundSyncReason)}>{refundActionId != null ? "처리 중..." : "확인 후 내부 환불 처리"}</button>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {!loading && activeTab === "tickets" ? (
