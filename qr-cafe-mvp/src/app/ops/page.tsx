@@ -72,6 +72,20 @@ type PaymentBaseRow = {
   paid_at?: string | null;
   status?: string | null;
 };
+type RefundHistoryRow = {
+  id: number;
+  billing_payment_id: number;
+  store_id: string;
+  store_name: string | null;
+  amount_krw: number;
+  reason: string;
+  status: string;
+  public_error_code: string | null;
+  internal_error: string | null;
+  pg_status: string | null;
+  requested_at: string;
+  completed_at: string | null;
+};
 type OrderBaseRow = {
   store_id: string | null;
   order_date: string | null;
@@ -101,6 +115,19 @@ type SavedPlatformPg = {
   clientKey: string;
   hasSecret: boolean;
   updatedAt: string | null;
+};
+type StoreBenefit = {
+  billingAccountId: number | null;
+  ownerUserId: string | null;
+  founderMember: boolean;
+  founderBase: boolean;
+  founderAddon: boolean;
+  founderReason: string;
+  founderDesignatedAt: string | null;
+  storeSequence: number;
+  baseStatus: string;
+  trialEndAt: string | null;
+  paidUntil: string | null;
 };
 
 type KpiSummary = {
@@ -204,6 +231,15 @@ function ticketCategoryLabel(category: string) {
   return category || "-";
 }
 
+function refundStatusLabel(status: string) {
+  if (status === "requested") return "요청됨";
+  if (status === "processing") return "처리 중";
+  if (status === "completed") return "취소 완료";
+  if (status === "failed") return "취소 실패";
+  if (status === "reconcile_required") return "확인 필요";
+  return status || "-";
+}
+
 function storeStatusLabel(row: StoreOpsRow) {
   if (row.status === "deleted") return "삭제";
   if (row.status === "inactive") return "비활성";
@@ -277,6 +313,17 @@ export default function OpsPage() {
     secretKey: "",
   });
   const [savedPg, setSavedPg] = useState<SavedPlatformPg | null>(null);
+  const [pgReason, setPgReason] = useState("");
+  const [benefit, setBenefit] = useState<StoreBenefit | null>(null);
+  const [benefitForm, setBenefitForm] = useState({ founderMember: false, founderBase: false, founderAddon: false, founderReason: "", trialEndAt: "", trialReason: "" });
+  const [benefitSaving, setBenefitSaving] = useState(false);
+  const [opsIdentity, setOpsIdentity] = useState({ email: "", role: "viewer" });
+  const [benefitEditorOpen, setBenefitEditorOpen] = useState(false);
+  const [refundRows, setRefundRows] = useState<RefundHistoryRow[]>([]);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundStatusFilter, setRefundStatusFilter] = useState("all");
+  const isOpsMaster = opsIdentity.role === "master";
+  const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
 
   const loadOps = useCallback(async () => {
     setLoading(true);
@@ -458,8 +505,8 @@ export default function OpsPage() {
     (async () => {
       const { data } = await supabase.auth.getUser();
       const roleFromApp = String(data?.user?.app_metadata?.role || "");
-      const roleFromUser = String(data?.user?.user_metadata?.role || "");
-      const allowed = roleFromApp === "ops" || roleFromUser === "ops";
+      const allowed = roleFromApp === "ops";
+      setOpsIdentity({ email: String(data?.user?.email || ""), role: String(data?.user?.app_metadata?.ops_role || "viewer") });
       setIsOps(allowed);
       if (!allowed) {
         setLoading(false);
@@ -479,21 +526,35 @@ export default function OpsPage() {
   useEffect(() => {
     if (isOps !== true) return;
     (async () => {
-      const { data, error } = await supabase
-        .from("platform_pg_config")
-        .select("mid, client_key, secret_key, updated_at")
-        .eq("id", 1)
-        .maybeSingle();
-      if (error) return;
-      setPgForm({ mid: String(data?.mid || ""), clientKey: String(data?.client_key || ""), secretKey: "" });
+      const response = await fetch("/api/ops/platform-pg", { cache: "no-store" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.ok) return;
+      const data = result.config;
+      setPgForm({ mid: String(data?.mid || ""), clientKey: String(data?.clientKey || ""), secretKey: "" });
       setSavedPg({
         mid: String(data?.mid || ""),
-        clientKey: String(data?.client_key || ""),
-        hasSecret: !!String(data?.secret_key || "").trim(),
-        updatedAt: String(data?.updated_at || "").trim() || null,
+        clientKey: String(data?.clientKey || ""),
+        hasSecret: data?.hasSecret === true,
+        updatedAt: String(data?.updatedAt || "").trim() || null,
       });
     })();
   }, [isOps]);
+
+  const loadRefundHistory = useCallback(async () => {
+    if (isOps !== true || !canManageBilling) return;
+    setRefundLoading(true);
+    const response = await fetch("/api/ops/refund-history?limit=100", { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result?.ok) setRefundRows((result.rows || []) as RefundHistoryRow[]);
+    else setMsg(String(result?.message || "환불 이력을 불러오지 못했습니다."));
+    setRefundLoading(false);
+  }, [canManageBilling, isOps]);
+
+  useEffect(() => {
+    if (activeTab !== "customers") return;
+    const timer = window.setTimeout(() => void loadRefundHistory(), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, loadRefundHistory]);
 
   const selectedStore = useMemo(
     () => rows.find((r) => r.store_id === selectedStoreId) || rows[0] || null,
@@ -667,27 +728,60 @@ export default function OpsPage() {
       "플랫폼 PG 정보를 변경하시겠습니까? 이 설정은 전체 점주 구독 결제에 영향을 줄 수 있습니다.",
     );
     if (!ok) return;
-    const payload: {
-      id: number;
-      mid: string;
-      client_key: string;
-      secret_key?: string;
-      updated_at: string;
-    } = {
-      id: 1,
-      mid: pgForm.mid.trim(),
-      client_key: pgForm.clientKey.trim(),
-      updated_at: new Date().toISOString(),
-    };
-    if (pgForm.secretKey.trim()) payload.secret_key = pgForm.secretKey.trim();
-    const { error } = await supabase
-      .from("platform_pg_config")
-      .upsert(payload, { onConflict: "id" });
-    setMsg(error ? `PG 저장 실패: ${error.message}` : "PG 저장 완료");
-    if (!error) {
-      setSavedPg({ mid: payload.mid, clientKey: payload.client_key, hasSecret: payload.secret_key ? true : savedPg?.hasSecret || false, updatedAt: payload.updated_at });
+    if (!pgReason.trim()) { setMsg("PG 변경 사유를 입력해 주세요."); return; }
+    const response = await fetch("/api/ops/platform-pg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mid: pgForm.mid, clientKey: pgForm.clientKey, secretKey: pgForm.secretKey, reason: pgReason }) });
+    const result = await response.json().catch(() => ({}));
+    setMsg(response.ok && result?.ok ? "PG 저장 완료" : String(result?.message || "PG 저장 실패"));
+    if (response.ok && result?.ok) {
+      setSavedPg(result.config);
       setPgForm((prev) => ({ ...prev, secretKey: "" }));
+      setPgReason("");
     }
+  };
+
+  const loadBenefit = useCallback(async (storeId: string) => {
+    if (!storeId || isOps !== true) return;
+    const response = await fetch(`/api/ops/store-benefits?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.ok) { setMsg(String(result?.message || "구독 혜택을 불러오지 못했습니다.")); return; }
+    const next = result.benefit as StoreBenefit;
+    setBenefit(next);
+    setBenefitForm({
+      founderMember: next.founderMember,
+      founderBase: next.founderBase,
+      founderAddon: next.founderAddon,
+      founderReason: next.founderReason || "",
+      trialEndAt: next.trialEndAt ? new Date(next.trialEndAt).toISOString().slice(0, 10) : "",
+      trialReason: "",
+    });
+  }, [isOps]);
+
+  useEffect(() => {
+    if (!selectedStoreId) return;
+    const timer = window.setTimeout(() => void loadBenefit(selectedStoreId), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadBenefit, selectedStoreId]);
+
+  const saveFounderBenefit = async () => {
+    if (!selectedStoreId || !benefitForm.founderReason.trim()) { setMsg("창립 멤버 설정 사유를 입력해 주세요."); return; }
+    if (benefitForm.founderAddon && !window.confirm("선결제 베타 테스트 참여를 확인했습니까? 옵션 구독 40% 할인이 적용됩니다.")) return;
+    setBenefitSaving(true);
+    const response = await fetch("/api/ops/store-benefits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, founderMember: benefitForm.founderMember, founderBase: benefitForm.founderBase, founderAddon: benefitForm.founderAddon, founderReason: benefitForm.founderReason }) });
+    const result = await response.json().catch(() => ({}));
+    setMsg(response.ok && result?.ok ? "창립 멤버 혜택을 저장했습니다." : String(result?.message || "혜택 저장에 실패했습니다."));
+    if (response.ok && result?.ok) { setBenefit(result.benefit); setBenefitEditorOpen(false); }
+    setBenefitSaving(false);
+  };
+
+  const saveTrial = async () => {
+    if (!selectedStoreId || !benefitForm.trialReason.trim()) { setMsg("무료 체험 조정 사유를 입력해 주세요."); return; }
+    setBenefitSaving(true);
+    const trialEndAt = benefitForm.trialEndAt ? new Date(`${benefitForm.trialEndAt}T23:59:59+09:00`).toISOString() : null;
+    const response = await fetch("/api/ops/store-benefits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, trialEndAt, trialReason: benefitForm.trialReason }) });
+    const result = await response.json().catch(() => ({}));
+    setMsg(response.ok && result?.ok ? "무료 체험 기간을 조정했습니다." : String(result?.message || "무료 체험 조정에 실패했습니다."));
+    if (response.ok && result?.ok) { setBenefit(result.benefit); setBenefitForm((prev) => ({ ...prev, trialReason: "" })); }
+    setBenefitSaving(false);
   };
 
   const updateTicket = async (
@@ -987,6 +1081,19 @@ export default function OpsPage() {
             </div>
           </div>
 
+          <div className="benefitBox">
+            <div className="sectionTitle">창립 멤버·무료 체험</div>
+            <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "창립 멤버" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
+            <div className="benefitSummary"><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
+            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "창립 멤버 혜택 변경" : "조회 전용"}</button>
+            <div className="trialControls">
+              <label><span>무료 체험 종료일</span><input className="input" type="date" value={benefitForm.trialEndAt} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialEndAt: e.target.value }))}/></label>
+              <textarea className="input" rows={2} maxLength={240} placeholder="무료 체험 조정 사유(필수)" value={benefitForm.trialReason} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialReason: e.target.value }))}/>
+              <button className="btn" disabled={!canManageBilling || benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onClick={() => void saveTrial()}>무료 체험 기간 저장</button>
+              {benefit?.baseStatus === "active" || benefit?.paidUntil ? <small className="muted">유료 매장은 무료 체험을 변경할 수 없습니다. 별도의 구독 보상 절차를 사용해야 합니다.</small> : null}
+            </div>
+          </div>
+
           <div className="quickLinks">
             <button
               className="btn"
@@ -1047,6 +1154,17 @@ export default function OpsPage() {
           align-items: flex-start;
           gap: 16px;
         }
+        .benefitBox { display:grid; gap:9px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
+        .benefitSummary { display:grid; grid-template-columns:1fr auto; gap:7px 12px; font-size:12px; }
+        .benefitSummary strong { color:#1d4ed8; }
+        .checkRow { display:flex; align-items:center; gap:9px; font-weight:800; font-size:13px; }
+        .checkRow input { width:18px; height:18px; }
+        .trialControls { display:grid; gap:8px; padding-top:10px; border-top:1px solid #dbeafe; }
+        .trialControls label { display:grid; gap:6px; font-size:12px; font-weight:800; }
+        .opsAccount > div { display:grid; gap:2px; text-align:right; }
+        .opsAccount small { color:#6b7280; font-size:10px; font-weight:900; }
+        .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
+        .opsModal { width:min(460px,100%); display:grid; gap:14px; border-radius:18px; background:#fff; padding:22px; box-shadow:0 28px 80px rgba(15,23,42,.28); }
         .h1 {
           margin: 0;
           font-size: clamp(24px, 2vw, 30px);
@@ -1590,6 +1708,10 @@ export default function OpsPage() {
           .quickLinks {
             grid-template-columns: 1fr;
           }
+          .opsAccount { width:100%; }
+          .opsAccount > div { text-align:left; width:100%; }
+          .modalBackdrop { align-items:end; padding:10px; }
+          .opsModal { border-radius:18px 18px 12px 12px; padding:18px; }
         }
       `}</style>
 
@@ -1603,10 +1725,12 @@ export default function OpsPage() {
             마지막 업데이트: {lastLoadedAt ? fmtDateTime(lastLoadedAt) : "-"}
           </p>
         </div>
-        <div className="row">
+        <div className="row opsAccount">
+          <div><strong>{opsIdentity.email || "OPS 사용자"}</strong><small>{opsIdentity.role.toUpperCase()}</small></div>
           <button className="btn" onClick={loadOps}>
             새로고침
           </button>
+          <button className="btn" onClick={() => void supabase.auth.signOut().then(() => router.replace("/ops/login"))}>로그아웃</button>
         </div>
       </header>
 
@@ -1654,7 +1778,7 @@ export default function OpsPage() {
       </section>
 
       <nav className="tabs" aria-label="OPS 탭">
-        {TABS.map((tab) => (
+        {TABS.filter((tab) => tab.id !== "settings" || isOpsMaster).map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -2062,6 +2186,46 @@ export default function OpsPage() {
         </section>
       ) : null}
 
+      {!loading && activeTab === "customers" && canManageBilling ? (
+        <section className="card">
+          <div className="panelHeader">
+            <div>
+              <div className="sectionTitle">구독 결제 취소·환불 이력</div>
+              <p>PG 취소 결과와 내부 구독 복구 상태를 함께 확인합니다.</p>
+            </div>
+            <div className="row">
+              <select className="select" value={refundStatusFilter} onChange={(event) => setRefundStatusFilter(event.target.value)}>
+                <option value="all">상태 전체</option>
+                <option value="processing">처리 중</option>
+                <option value="completed">취소 완료</option>
+                <option value="failed">취소 실패</option>
+                <option value="reconcile_required">확인 필요</option>
+              </select>
+              <button className="btn" disabled={refundLoading} onClick={() => void loadRefundHistory()}>{refundLoading ? "불러오는 중" : "새로고침"}</button>
+            </div>
+          </div>
+          <div className="tableWrap">
+            <table className="opsTable">
+              <thead><tr><th>요청일시</th><th>매장</th><th>환불금액</th><th>상태</th><th>PG 상태</th><th>취소 사유·오류</th><th>완료일시</th></tr></thead>
+              <tbody>
+                {refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).map((row) => (
+                  <tr key={row.id}>
+                    <td>{fmtDateTime(row.requested_at)}</td>
+                    <td><div className="cellMain"><strong>{row.store_name || row.store_id}</strong><small>{row.store_id}</small></div></td>
+                    <td className="num">{fmtMoney(row.amount_krw)}</td>
+                    <td><span className={`pill ${row.status === "completed" ? "ok" : row.status === "failed" || row.status === "reconcile_required" ? "danger" : "warn"}`}>{refundStatusLabel(row.status)}</span></td>
+                    <td>{row.pg_status || "-"}</td>
+                    <td><div className="cellMain"><strong>{row.reason}</strong><small>{row.public_error_code || "오류 없음"}</small>{row.internal_error ? <small title={row.internal_error}>{row.internal_error}</small> : null}</div></td>
+                    <td>{fmtDateTime(row.completed_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!refundLoading && refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).length === 0 ? <p className="muted">조건에 맞는 환불 이력이 없습니다.</p> : null}
+        </section>
+      ) : null}
+
       {!loading && activeTab === "tickets" ? (
         <section className="card">
           <div className="panelHeader">
@@ -2266,7 +2430,7 @@ export default function OpsPage() {
         </section>
       ) : null}
 
-      {!loading && activeTab === "settings" ? (
+      {!loading && activeTab === "settings" && isOpsMaster ? (
         <section className="settingsGrid">
           <article className="card">
             <div className="sectionTitle">등록된 플랫폼 PG</div>
@@ -2318,12 +2482,33 @@ export default function OpsPage() {
                   setPgForm((p) => ({ ...p, secretKey: e.target.value }))
                 }
               />
+              <textarea
+                className="input"
+                rows={2}
+                maxLength={240}
+                placeholder="PG 변경 사유(필수)"
+                value={pgReason}
+                onChange={(e) => setPgReason(e.target.value)}
+              />
               <button className="btn primary" onClick={savePg}>
                 PG 저장
               </button>
             </div>
           </article>
         </section>
+      ) : null}
+
+      {benefitEditorOpen && selectedStore ? (
+        <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setBenefitEditorOpen(false)}>
+          <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="founder-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div><div className="sectionTitle" id="founder-editor-title">창립 멤버 혜택 변경</div><p className="muted">{selectedStore.store_name || selectedStore.store_id}</p></div>
+            <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>창립 멤버로 지정</span></label>
+            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 40% 할인</span></label>
+            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>선결제 옵션 40% 할인</span></label>
+            <textarea className="input" rows={3} maxLength={240} placeholder="창립 멤버 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
+            <div className="row"><button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>취소</button><button className="btn primary" disabled={benefitSaving} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "변경 저장"}</button></div>
+          </section>
+        </div>
       ) : null}
     </main>
   );
