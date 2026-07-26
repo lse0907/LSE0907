@@ -20,8 +20,12 @@ export async function GET(req: NextRequest) {
       .order("requested_at", { ascending: false })
       .limit(limit);
     if (error) throw new Error(`환불 이력을 불러오지 못했습니다: ${error.message}`);
+    const cases = await admin.from("billing_refund_cases")
+      .select("id,billing_payment_id,store_id,support_ticket_id,reason,status,toss_status,ops_note,requested_at,handled_at,completed_at,updated_at")
+      .order("requested_at", { ascending: false }).limit(limit);
+    if (cases.error) throw new Error(`환불 요청을 불러오지 못했습니다: ${cases.error.message}`);
 
-    const storeIds = [...new Set((data || []).map((row) => String(row.store_id || "")).filter(Boolean))];
+    const storeIds = [...new Set([...(data || []), ...(cases.data || [])].map((row) => String(row.store_id || "")).filter(Boolean))];
     const storeNames = new Map<string, string>();
     if (storeIds.length) {
       const stores = await admin.from("stores").select("store_id,store_name").in("store_id", storeIds);
@@ -36,6 +40,7 @@ export async function GET(req: NextRequest) {
         internal_error: safeInternalError(row.internal_error),
         store_name: storeNames.get(String(row.store_id)) || null,
       })),
+      cases: (cases.data || []).map((row) => ({ ...row, store_name: storeNames.get(String(row.store_id)) || null })),
     });
   } catch (error: unknown) {
     return apiErrorResponse(error);

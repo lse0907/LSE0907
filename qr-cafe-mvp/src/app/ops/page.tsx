@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { maskToken } from "@/app/lib/billingSettings";
 
-type OpsTab = "overview" | "customers" | "tickets" | "settings";
+type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "tickets" | "settings";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
 type StoreSort =
   | "risk"
@@ -86,6 +86,11 @@ type RefundHistoryRow = {
   requested_at: string;
   completed_at: string | null;
 };
+type RefundCaseRow = {
+  id: number; billing_payment_id: number; store_id: string; store_name: string | null;
+  support_ticket_id: number | null; reason: string; status: string; toss_status: string | null;
+  requested_at: string; completed_at: string | null;
+};
 type OrderBaseRow = {
   store_id: string | null;
   order_date: string | null;
@@ -149,7 +154,9 @@ type KpiSummary = {
 
 const TABS: Array<{ id: OpsTab; label: string }> = [
   { id: "overview", label: "대시보드" },
-  { id: "customers", label: "고객·구독 관리" },
+  { id: "stores", label: "점주·매장" },
+  { id: "subscriptions", label: "구독" },
+  { id: "payments", label: "결제·환불" },
   { id: "tickets", label: "문의/장애" },
   { id: "settings", label: "시스템 설정" },
 ];
@@ -320,6 +327,7 @@ export default function OpsPage() {
   const [opsIdentity, setOpsIdentity] = useState({ email: "", role: "viewer" });
   const [benefitEditorOpen, setBenefitEditorOpen] = useState(false);
   const [refundRows, setRefundRows] = useState<RefundHistoryRow[]>([]);
+  const [refundCases, setRefundCases] = useState<RefundCaseRow[]>([]);
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundStatusFilter, setRefundStatusFilter] = useState("all");
   const isOpsMaster = opsIdentity.role === "master";
@@ -545,13 +553,22 @@ export default function OpsPage() {
     setRefundLoading(true);
     const response = await fetch("/api/ops/refund-history?limit=100", { cache: "no-store" });
     const result = await response.json().catch(() => ({}));
-    if (response.ok && result?.ok) setRefundRows((result.rows || []) as RefundHistoryRow[]);
+    if (response.ok && result?.ok) { setRefundRows((result.rows || []) as RefundHistoryRow[]); setRefundCases((result.cases || []) as RefundCaseRow[]); }
     else setMsg(String(result?.message || "환불 이력을 불러오지 못했습니다."));
     setRefundLoading(false);
   }, [canManageBilling, isOps]);
 
+  const reconcileRefund = async (paymentId: number, action: "inspect" | "sync") => {
+    const reason = action === "sync" ? window.prompt("Toss 수동 취소 확인 및 내부 동기화 사유를 입력해 주세요.", "Toss 개발자센터 수동 취소 확인") : "";
+    if (action === "sync" && !reason?.trim()) return;
+    const response = await fetch("/api/ops/refund-reconcile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paymentId, action, reason }) });
+    const result = await response.json().catch(() => ({}));
+    setMsg(response.ok && result?.ok ? `결제 #${paymentId}: Toss ${result.tossStatus} / 내부 ${result.localStatus}` : String(result?.message || "결제 상태 확인에 실패했습니다."));
+    if (response.ok && action === "sync") await loadRefundHistory();
+  };
+
   useEffect(() => {
-    if (activeTab !== "customers") return;
+    if (activeTab !== "payments") return;
     const timer = window.setTimeout(() => void loadRefundHistory(), 0);
     return () => window.clearTimeout(timer);
   }, [activeTab, loadRefundHistory]);
@@ -1847,7 +1864,7 @@ export default function OpsPage() {
                   </strong>
                   <button
                     className="btn"
-                    onClick={() => setActiveTab("customers")}
+                    onClick={() => setActiveTab("stores")}
                   >
                     매장 보기
                   </button>
@@ -1868,7 +1885,7 @@ export default function OpsPage() {
                   </strong>
                   <button
                     className="btn"
-                    onClick={() => setActiveTab("customers")}
+                    onClick={() => setActiveTab("stores")}
                   >
                     전환 후보
                   </button>
@@ -1893,7 +1910,7 @@ export default function OpsPage() {
                   </strong>
                   <button
                     className="btn"
-                    onClick={() => setActiveTab("customers")}
+                    onClick={() => setActiveTab("stores")}
                   >
                     결제 확인
                   </button>
@@ -1957,12 +1974,12 @@ export default function OpsPage() {
                   tabIndex={0}
                   onClick={() => {
                     setSelectedStoreId(r.store_id);
-                    setActiveTab("customers");
+                    setActiveTab("stores");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       setSelectedStoreId(r.store_id);
-                      setActiveTab("customers");
+                      setActiveTab("stores");
                     }
                   }}
                 >
@@ -1995,12 +2012,12 @@ export default function OpsPage() {
                   tabIndex={0}
                   onClick={() => {
                     setSelectedStoreId(r.store_id);
-                    setActiveTab("customers");
+                    setActiveTab("stores");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       setSelectedStoreId(r.store_id);
-                      setActiveTab("customers");
+                      setActiveTab("stores");
                     }
                   }}
                 >
@@ -2036,12 +2053,12 @@ export default function OpsPage() {
                   tabIndex={0}
                   onClick={() => {
                     setSelectedStoreId(r.store_id);
-                    setActiveTab("customers");
+                    setActiveTab("stores");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       setSelectedStoreId(r.store_id);
-                      setActiveTab("customers");
+                      setActiveTab("stores");
                     }
                   }}
                 >
@@ -2097,7 +2114,7 @@ export default function OpsPage() {
         </section>
       ) : null}
 
-      {!loading && activeTab === "customers" ? (
+      {!loading && activeTab === "stores" ? (
         <section className="grid2">
           <article className="card">
             <div className="panelHeader">
@@ -2186,8 +2203,32 @@ export default function OpsPage() {
         </section>
       ) : null}
 
-      {!loading && activeTab === "customers" && canManageBilling ? (
-        <section className="card">
+      {!loading && activeTab === "subscriptions" ? (
+        <section className="grid2">
+          <article className="card">
+            <div className="panelHeader">
+              <div><div className="sectionTitle">구독 현황</div><p>플랜 상태, 만료일과 구독 매출을 중심으로 확인합니다.</p></div>
+              <span className="pill ok">구독 운영</span>
+            </div>
+            <div className="filters" style={{ marginTop: 12 }}>
+              <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="매장명 / store_id 검색" />
+              <select className="select" value={subFilter} onChange={(event) => setSubFilter(event.target.value)}><option value="all">구독 전체</option><option value="active">활성 구독</option><option value="inactive">비활성/미구독</option><option value="expiring">만료 임박</option></select>
+              <select className="select" value={sortBy} onChange={(event) => setSortBy(event.target.value as StoreSort)}><option value="expiring">만료 임박순</option><option value="monthlyRevenue">구독매출 높은순</option><option value="risk">점검 우선순</option></select>
+            </div>
+            {renderStoreTable("billing")}
+          </article>
+          {renderSelectedStore()}
+        </section>
+      ) : null}
+
+      {!loading && activeTab === "payments" && canManageBilling ? (
+        <section className="noticeList">
+        <article className="card">
+          <div className="panelHeader"><div><div className="sectionTitle">기간 경과 환불 요청</div><p>점주가 즉시 취소 시간 이후 접수한 검토 요청입니다.</p></div><span className="pill warn">대기 {refundCases.filter((item) => item.status === "requested").length}건</span></div>
+          <div className="tableWrap"><table className="opsTable"><thead><tr><th>요청일시</th><th>매장</th><th>결제</th><th>상태</th><th>사유</th><th>문의</th><th>처리</th></tr></thead><tbody>{refundCases.map((item) => <tr key={item.id}><td>{fmtDateTime(item.requested_at)}</td><td><div className="cellMain"><strong>{item.store_name || item.store_id}</strong><small>{item.store_id}</small></div></td><td>#{item.billing_payment_id}</td><td><span className={`pill ${item.status === "completed" ? "ok" : "warn"}`}>{item.status}</span></td><td>{item.reason}</td><td>{item.support_ticket_id ? `#${item.support_ticket_id}` : "-"}</td><td><div className="row"><button className="btn" onClick={() => void reconcileRefund(item.billing_payment_id,"inspect")}>Toss 상태 확인</button>{item.status !== "completed" ? <button className="btn primary" onClick={() => void reconcileRefund(item.billing_payment_id,"sync")}>수동 취소 동기화</button> : null}</div></td></tr>)}</tbody></table></div>
+          {!refundLoading && refundCases.length === 0 ? <p className="muted">접수된 기간 경과 환불 요청이 없습니다.</p> : null}
+        </article>
+        <article className="card">
           <div className="panelHeader">
             <div>
               <div className="sectionTitle">구독 결제 취소·환불 이력</div>
@@ -2223,6 +2264,7 @@ export default function OpsPage() {
             </table>
           </div>
           {!refundLoading && refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).length === 0 ? <p className="muted">조건에 맞는 환불 이력이 없습니다.</p> : null}
+        </article>
         </section>
       ) : null}
 

@@ -45,6 +45,9 @@ function BillingCancelPageInner() {
   const [canceling, setCanceling] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "cancelable" | "completed">("all");
+  const [visibleCount, setVisibleCount] = useState(5);
+  const [refundRequesting, setRefundRequesting] = useState(false);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
   const remainingMs = (row: BillingPaymentRow) => {
@@ -125,6 +128,12 @@ function BillingCancelPageInner() {
 
   const selected = rows.find((r) => r.id === selectedId) || null;
   const selectedCheck = selected ? canCancel(selected) : { ok: false, reason: "취소할 결제건을 선택해 주세요." };
+  const filteredRows = rows.filter((row) => {
+    if (statusFilter === "cancelable") return canCancel(row).ok;
+    if (statusFilter === "completed") return ["refunded", "canceled", "cancelled"].includes(row.status);
+    return true;
+  });
+  const visibleRows = filteredRows.slice(0, visibleCount);
   const fmtPaymentStatus = (status: string) => {
     const s = String(status || "").toLowerCase();
     if (s === "paid") return "결제 완료";
@@ -203,10 +212,28 @@ function BillingCancelPageInner() {
     }
   };
 
+  const onRequestRefundReview = async () => {
+    if (!selected || selected.status !== "paid") return;
+    if (!reasonDetail.trim()) { setMsg("환불 검토 요청 사유를 입력해 주세요."); return; }
+    setRefundRequesting(true);
+    setMsg("");
+    const reasonLabel = REASON_OPTIONS.find((x) => x.code === reasonCode)?.label || "기타";
+    const response = await fetch("/api/billing/refund-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeId, paymentId: selected.id, reason: `${reasonLabel}: ${reasonDetail.trim()}` }),
+    });
+    const result = await response.json().catch(() => ({}));
+    setMsg(response.ok && result?.ok
+      ? result?.alreadyRequested ? "이미 접수된 환불 요청입니다. 지원센터에서 처리 상태를 확인해 주세요." : "환불 검토 요청을 접수했습니다. OPS 확인 후 지원센터에서 답변드릴게요."
+      : String(result?.message || "환불 요청을 접수하지 못했습니다."));
+    setRefundRequesting(false);
+  };
+
   return (
     <main className="wrap">
       <header className="topbar">
-        <h1 className="h1">최근 구독 결제 취소</h1>
+        <div><h1 className="h1">구독 결제 내역</h1><p className="muted">결제 내역을 확인하고 취소 또는 환불을 요청할 수 있어요.</p></div>
         <div className="row">
           <button className="btn" type="button" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>
             구독 결제
@@ -225,7 +252,7 @@ function BillingCancelPageInner() {
       </section>
 
       <section className="card">
-        <h2 className="h2">구독 결제 내역</h2>
+        <div className="listHeader"><h2 className="h2">결제 내역</h2><div className="chips"><button className={statusFilter === "all" ? "chip active" : "chip"} onClick={() => { setStatusFilter("all"); setVisibleCount(5); }}>전체</button><button className={statusFilter === "cancelable" ? "chip active" : "chip"} onClick={() => { setStatusFilter("cancelable"); setVisibleCount(5); }}>취소 가능</button><button className={statusFilter === "completed" ? "chip active" : "chip"} onClick={() => { setStatusFilter("completed"); setVisibleCount(5); }}>취소 완료</button></div></div>
         {loading ? <p className="muted">로딩 중...</p> : null}
         {!loading && rows.length === 0 ? <p className="muted">결제 이력이 없습니다.</p> : null}
         {!loading && rows.length > 0 ? (
@@ -241,7 +268,7 @@ function BillingCancelPageInner() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {visibleRows.map((row) => {
                   const check = canCancel(row);
                   const paidAt = new Date(row.paid_at);
                   const paidDate = Number.isFinite(paidAt.getTime()) ? paidAt.toLocaleDateString("ko-KR") : "-";
@@ -274,7 +301,7 @@ function BillingCancelPageInner() {
         ) : null}
         {!loading && rows.length > 0 ? (
           <div className="mobilePayments" role="radiogroup" aria-label="취소할 구독 결제 선택">
-            {rows.map((row) => {
+            {visibleRows.map((row) => {
               const check = canCancel(row);
               const selectedRow = selectedId === row.id;
               return (
@@ -298,9 +325,11 @@ function BillingCancelPageInner() {
             })}
           </div>
         ) : null}
+        {!loading && visibleRows.length === 0 ? <p className="muted">조건에 맞는 결제 내역이 없습니다.</p> : null}
+        {visibleCount < filteredRows.length ? <button className="btn moreButton" type="button" onClick={() => setVisibleCount((count) => count + 10)}>이전 결제 더보기 ({filteredRows.length - visibleCount}건)</button> : null}
       </section>
 
-      <section className="card">
+      {selected && selected.status === "paid" ? <section className="card">
         <h2 className="h2">취소 사유 선택</h2>
         <div className="chips">
           {REASON_OPTIONS.map((opt) => (
@@ -322,12 +351,10 @@ function BillingCancelPageInner() {
           <span className="charCount">{reasonDetail.length} / 120자</span>
         </label>
         <div className="row">
-          <button className="btn primary" type="button" onClick={onRequestCancel} disabled={canceling || !selectedCheck.ok}>
-            선택한 결제 취소하기
-          </button>
-          {!selectedCheck.ok ? <span className="muted">{selectedCheck.reason}</span> : null}
+          {selectedCheck.ok ? <button className="btn primary" type="button" onClick={onRequestCancel} disabled={canceling}>즉시 취소하기</button> : <button className="btn primary" type="button" onClick={() => void onRequestRefundReview()} disabled={refundRequesting || !reasonDetail.trim()}>{refundRequesting ? "접수 중..." : "환불 검토 요청"}</button>}
+          {!selectedCheck.ok ? <span className="muted">즉시 취소 시간이 지났습니다. 사유를 입력하면 OPS 환불 검토 요청으로 접수됩니다.</span> : null}
         </div>
-      </section>
+      </section> : null}
 
       {confirmOpen && selected ? (
         <div className="modalBackdrop" role="presentation" onMouseDown={() => !canceling && setConfirmOpen(false)}>
@@ -391,6 +418,9 @@ const css = `
   .status-refunded, .status-canceled, .status-cancelled { background:#f3f4f6; color:#4b5563; }
   .status-failed { background:#fef2f2; color:#b91c1c; }
   .tableWrap { overflow:auto; max-height:52vh; min-height:240px; border:1px solid #eef2f7; border-radius:10px; }
+  .listHeader { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .listHeader .h2 { margin:0; }
+  .moreButton { justify-self:center; min-width:220px; }
   .cellNowrap { white-space:nowrap; }
   thead th { position:sticky; top:0; background:#fff; z-index:1; }
   th:nth-child(1), td:nth-child(1) { width:56px; text-align:center; }
