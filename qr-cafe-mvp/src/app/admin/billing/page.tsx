@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -21,6 +21,14 @@ type LoadedBillingSettings = BillingSettings & {
 type PrepayAddonAccess = {
   status: string;
   paidUntil: string | null;
+};
+type PrepayFeatureState = {
+  enabled: boolean;
+  canEnable: boolean;
+  baseActive: boolean;
+  addonActive: boolean;
+  pgReady: boolean;
+  blockedReasons: string[];
 };
 
 const EMPTY_BILLING: BillingSettings = {
@@ -101,6 +109,15 @@ function BillingForm({ storeId }: { storeId: string }) {
   const [saveBadge, setSaveBadge] = useState<"idle" | "saved" | "error">("idle");
   const [saveMode, setSaveMode] = useState<SaveMode>("unsynced");
   const [loading, setLoading] = useState(true);
+  const [featureState, setFeatureState] = useState<PrepayFeatureState | null>(null);
+  const [featureSaving, setFeatureSaving] = useState(false);
+  const [featureMessage, setFeatureMessage] = useState("");
+
+  const loadFeatureState = useCallback(async () => {
+    const response = await fetch(`/api/billing/prepay-enabled?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result?.ok) setFeatureState(result.state as PrepayFeatureState);
+  }, [storeId]);
 
   useEffect(() => {
     let mounted = true;
@@ -122,11 +139,12 @@ function BillingForm({ storeId }: { storeId: string }) {
         setSaveMode("unsynced");
       }
       setLoading(false);
+      await loadFeatureState();
     })();
     return () => {
       mounted = false;
     };
-  }, [storeId]);
+  }, [loadFeatureState, storeId]);
 
   const activationReady = useMemo(
     () => !!form.pgMid && !!form.pgClientKey && (!!form.pgSecretKey || !!savedPg?.hasSecret),
@@ -149,12 +167,29 @@ function BillingForm({ storeId }: { storeId: string }) {
       setSaveMode("db");
       setSaveBadge("saved");
       setTimeout(() => setSaveBadge("idle"), 1400);
+      await loadFeatureState();
       return;
     }
 
     setSaveMode("unsynced");
     setSaveBadge("error");
     setTimeout(() => setSaveBadge("idle"), 2000);
+  };
+
+  const onToggleFeature = async () => {
+    if (!featureState) return;
+    const nextEnabled = !featureState.enabled;
+    if (!nextEnabled && !window.confirm("고객 온라인 선결제를 끌까요? 옵션 구독 기간은 그대로 유지됩니다.")) return;
+    setFeatureSaving(true);
+    setFeatureMessage("");
+    const response = await fetch("/api/billing/prepay-enabled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId, enabled: nextEnabled }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.ok) setFeatureMessage(String(result?.message || "기능 상태를 변경하지 못했습니다."));
+    else {
+      setFeatureState(result.state as PrepayFeatureState);
+      setFeatureMessage(nextEnabled ? "고객 온라인 선결제를 켰습니다." : "고객 온라인 선결제를 껐습니다. 구독 기간은 유지됩니다.");
+    }
+    setFeatureSaving(false);
   };
 
   if (loading) {
@@ -184,6 +219,18 @@ function BillingForm({ storeId }: { storeId: string }) {
           </p>
         </section>
       ) : null}
+
+      <section className="card featureCard">
+        <div className="featureHeader">
+          <div>
+            <div className="featureTitleRow"><h2 className="h2">고객 온라인 선결제</h2><span className={featureState?.enabled ? "stateBadge on" : "stateBadge"}>{featureState?.enabled ? "기능 켜짐" : "기능 꺼짐"}</span></div>
+            <p className="muted">기능을 꺼도 이미 결제한 선결제 옵션의 구독 기간은 유지됩니다.</p>
+          </div>
+          <button className={featureState?.enabled ? "switchButton on" : "switchButton"} type="button" role="switch" aria-checked={featureState?.enabled === true} disabled={featureSaving || (!featureState?.enabled && !featureState?.canEnable)} onClick={() => void onToggleFeature()}><span />{featureSaving ? "저장 중" : featureState?.enabled ? "ON" : "OFF"}</button>
+        </div>
+        {!featureState?.canEnable && !featureState?.enabled ? <div className="requirementBox"><strong>기능을 켜기 위한 확인 사항</strong>{featureState?.blockedReasons.map((reason) => <span key={reason}>• {reason}</span>)}</div> : null}
+        {featureMessage ? <p className={featureState?.enabled ? "ok" : "warn"} role="status">{featureMessage}</p> : null}
+      </section>
 
       <section className="card">
         <h2 className="h2">등록된 PG 정보</h2>
@@ -514,10 +561,22 @@ const css = `
     font-weight: 800;
     margin: 0;
   }
+  .featureCard { border-color:#c7d7fe; background:linear-gradient(135deg,#fff,#f5f8ff); }
+  .featureHeader { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+  .featureTitleRow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .featureTitleRow .h2 { margin:0; }
+  .stateBadge { border-radius:999px; padding:4px 8px; background:#f2f4f7; color:#667085; font-size:11px; font-weight:900; }
+  .stateBadge.on { background:#ecfdf3; color:#047857; }
+  .switchButton { width:82px; min-height:42px; border:0; border-radius:999px; background:#98a2b3; color:#fff; display:flex; align-items:center; gap:7px; padding:5px 10px 5px 5px; font-weight:900; cursor:pointer; flex:none; }
+  .switchButton span { width:32px; height:32px; border-radius:50%; background:#fff; box-shadow:0 2px 5px rgba(0,0,0,.18); }
+  .switchButton.on { background:#2563eb; flex-direction:row-reverse; padding:5px 5px 5px 10px; }
+  .switchButton:disabled { opacity:.5; cursor:not-allowed; }
+  .requirementBox { display:grid; gap:5px; border-radius:12px; background:#fff7ed; color:#9a3412; padding:12px; font-size:12px; }
   @media (max-width: 700px) {
     .grid2 {
       grid-template-columns: 1fr;
     }
+    .featureHeader { align-items:flex-start; }
   }
 `;
 export default function AdminBillingPage() {
