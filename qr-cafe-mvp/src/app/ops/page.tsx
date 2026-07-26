@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { maskToken } from "@/app/lib/billingSettings";
+import RionBrand from "@/app/components/RionBrand";
 
 type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "tickets" | "settings";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
@@ -1250,6 +1251,8 @@ export default function OpsPage() {
   return (
     <main className="wrap">
       <style jsx global>{`
+        :root { --ops-navy:#0f1f3d; --ops-charcoal:#2b2f36; --ops-muted:#667085; --ops-line:#e1e5eb; --ops-canvas:#f3f5f8; }
+        body { background:var(--ops-canvas); color:var(--ops-charcoal); }
         .wrap {
           width: 100%;
           max-width: 1440px;
@@ -1257,14 +1260,25 @@ export default function OpsPage() {
           padding: 24px;
           display: grid;
           gap: 16px;
-          color: #111827;
+          color: var(--ops-charcoal);
         }
         .hero {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
-          gap: 16px;
+          align-items: center;
+          gap: 20px;
+          padding:18px 20px;
+          border-radius:18px;
+          color:#fff;
+          background:linear-gradient(120deg,#0b172f,#0f1f3d 62%,#182f59);
+          box-shadow:0 18px 45px rgba(15,31,61,.14);
         }
+        .heroBrand { display:flex; align-items:center; gap:18px; min-width:0; }
+        .heroMeta { padding-left:18px; border-left:1px solid rgba(255,255,255,.18); }
+        .heroMeta strong { display:block; font-size:14px; }
+        .heroMeta .sub { color:#c6d0df; }
+        .liveBadge { display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.1);font-size:10px;font-weight:950;letter-spacing:.08em; }
+        .liveBadge::before { content:"";width:6px;height:6px;border-radius:50%;background:#6ee7b7;box-shadow:0 0 0 3px rgba(110,231,183,.15); }
         .benefitBox { display:grid; gap:9px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
         .benefitSummary { display:grid; grid-template-columns:1fr auto; gap:7px 12px; font-size:12px; }
         .benefitSummary strong { color:#1d4ed8; }
@@ -1297,7 +1311,9 @@ export default function OpsPage() {
         .subscriptionLinks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding-top:12px; border-top:1px solid #eef2f7; }
         .emptyState { margin:0; padding:24px; text-align:center; color:#64748b; }
         .opsAccount > div { display:grid; gap:2px; text-align:right; }
-        .opsAccount small { color:#6b7280; font-size:10px; font-weight:900; }
+        .opsAccount small { color:#c6d0df; font-size:10px; font-weight:900; }
+        .hero .btn { border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff; }
+        .hero .btn:hover { background:rgba(255,255,255,.18); }
         .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
         .opsModal { width:min(460px,100%); display:grid; gap:14px; border-radius:18px; background:#fff; padding:22px; box-shadow:0 28px 80px rgba(15,23,42,.28); }
         .h1 {
@@ -1318,11 +1334,11 @@ export default function OpsPage() {
           flex-wrap: wrap;
         }
         .card {
-          border: 1px solid #e5e7eb;
-          border-radius: 18px;
+          border: 1px solid var(--ops-line);
+          border-radius: 16px;
           background: #fff;
           padding: 18px;
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.045);
+          box-shadow: 0 8px 24px rgba(15,31,61,.04);
         }
         .kpis {
           display: grid;
@@ -1354,9 +1370,10 @@ export default function OpsPage() {
           gap: 8px;
           overflow: auto;
           padding: 4px;
-          border: 1px solid #e5e7eb;
-          border-radius: 16px;
-          background: #f8fafc;
+          border: 1px solid var(--ops-line);
+          border-radius: 14px;
+          background: #fff;
+          box-shadow:0 5px 18px rgba(15,31,61,.035);
         }
         .tab {
           border: 0;
@@ -1369,7 +1386,7 @@ export default function OpsPage() {
           white-space: nowrap;
         }
         .tab.active {
-          background: #111827;
+          background: var(--ops-navy);
           color: #fff;
         }
         .btn {
@@ -1377,20 +1394,22 @@ export default function OpsPage() {
           padding: 10px 12px;
           border-radius: 12px;
           background: #fff;
-          color: #111827;
+          color: var(--ops-charcoal);
           font-weight: 900;
           cursor: pointer;
-          min-height: 38px;
+          min-height: 42px;
+          transition:transform .18s,box-shadow .18s,background .18s;
         }
         .btn.primary {
-          background: #2563eb;
-          border-color: #2563eb;
+          background: var(--ops-navy);
+          border-color: var(--ops-navy);
           color: #fff;
         }
         .btn:hover {
           transform: translateY(-1px);
           box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
         }
+        .btn:focus-visible,.tab:focus-visible,.input:focus-visible,.select:focus-visible,.textarea:focus-visible { outline:3px solid rgba(67,102,156,.32); outline-offset:2px; }
         .btn.danger {
           border-color: #fecaca;
           color: #b91c1c;
@@ -1518,7 +1537,7 @@ export default function OpsPage() {
         }
         tr.sel {
           background: #eef6ff;
-          box-shadow: inset 4px 0 0 #2563eb;
+          box-shadow: inset 4px 0 0 var(--ops-navy);
         }
         tr:hover {
           background: #f8fafc;
@@ -1846,7 +1865,10 @@ export default function OpsPage() {
           }
           .hero {
             display: grid;
+            padding:16px;
           }
+          .heroBrand { align-items:flex-start; }
+          .heroMeta { display:none; }
           .kpis {
             grid-template-columns: 1fr;
           }
@@ -1886,25 +1908,24 @@ export default function OpsPage() {
           .modalActions .btn { width:100%; }
           .opsAccount { width:100%; }
           .opsAccount > div { text-align:left; width:100%; }
+          .opsAccount .btn { flex:1; min-height:44px; }
           .modalBackdrop { align-items:end; padding:10px; }
           .opsModal { border-radius:18px 18px 12px 12px; padding:18px; }
         }
       `}</style>
 
       <header className="hero">
-        <div>
-          <h1 className="h1">OPS 관리자 콘솔</h1>
-          <p className="sub">
-            전체 매장, 구독, 주문, 문의 상태를 한눈에 확인하고 관리합니다.
-          </p>
-          <p className="sub">
-            마지막 업데이트: {lastLoadedAt ? fmtDateTime(lastLoadedAt) : "-"}
-          </p>
+        <div className="heroBrand">
+          <RionBrand product inverse />
+          <div className="heroMeta">
+            <span className="liveBadge">LIVE</span>
+            <p className="sub">마지막 업데이트 {lastLoadedAt ? fmtDateTime(lastLoadedAt) : "-"}</p>
+          </div>
         </div>
         <div className="row opsAccount">
           <div><strong>{opsIdentity.email || "OPS 사용자"}</strong><small>{opsIdentity.role.toUpperCase()}</small></div>
-          <button className="btn" onClick={loadOps}>
-            새로고침
+          <button className="btn" onClick={loadOps} disabled={loading}>
+            {loading ? "업데이트 중..." : "새로고침"}
           </button>
           <button className="btn" onClick={() => void supabase.auth.signOut().then(() => router.replace("/ops/login"))}>로그아웃</button>
         </div>
