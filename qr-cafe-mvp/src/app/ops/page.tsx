@@ -81,6 +81,7 @@ type RefundHistoryRow = {
   reason: string;
   status: string;
   public_error_code: string | null;
+  internal_error: string | null;
   pg_status: string | null;
   requested_at: string;
   completed_at: string | null;
@@ -2214,7 +2215,7 @@ export default function OpsPage() {
                     <td className="num">{fmtMoney(row.amount_krw)}</td>
                     <td><span className={`pill ${row.status === "completed" ? "ok" : row.status === "failed" || row.status === "reconcile_required" ? "danger" : "warn"}`}>{refundStatusLabel(row.status)}</span></td>
                     <td>{row.pg_status || "-"}</td>
-                    <td><div className="cellMain"><strong>{row.reason}</strong><small>{row.public_error_code || "오류 없음"}</small></div></td>
+                    <td><div className="cellMain"><strong>{row.reason}</strong><small>{row.public_error_code || "오류 없음"}</small>{row.internal_error ? <small title={row.internal_error}>{row.internal_error}</small> : null}</div></td>
                     <td>{fmtDateTime(row.completed_at)}</td>
                   </tr>
                 ))}

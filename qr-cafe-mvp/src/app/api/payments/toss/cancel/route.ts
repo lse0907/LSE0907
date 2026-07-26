@@ -18,6 +18,26 @@ function publicCancelError(code: string, message: string, status: number) {
   return NextResponse.json({ ok: false, code, message }, { status });
 }
 
+function classifyRefundClaimError(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("check constraint") && normalized.includes("billing_payments")) {
+    return {
+      code: "REFUND_DB_STATUS_CONSTRAINT",
+      message: "결제 취소 상태 설정을 확인하고 있습니다. 중복 결제하지 말고 OPS에 문의해 주세요. (RF-DB-01)",
+    };
+  }
+  if (normalized.includes("subscription_changed_after_payment")) {
+    return {
+      code: "SUBSCRIPTION_CHANGED_AFTER_PAYMENT",
+      message: "결제 후 구독 기간이 변경되어 즉시 취소할 수 없습니다. OPS에 확인을 요청해 주세요.",
+    };
+  }
+  return {
+    code: "REFUND_CLAIM_FAILED",
+    message: "다른 취소 요청이 처리 중이거나 이후 구독 결제가 있어 즉시 취소할 수 없습니다.",
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as CancelBody;
@@ -97,10 +117,12 @@ export async function POST(req: NextRequest) {
       p_store_id: storeId,
     });
     if (claimRes.error || !claimRes.data) {
-      await markAttempt({ status: "failed", public_error_code: "REFUND_CLAIM_FAILED", internal_error: claimRes.error?.message || "refund claim returned no row" });
+      const internalError = claimRes.error?.message || "refund claim returned no row";
+      const classified = classifyRefundClaimError(internalError);
+      await markAttempt({ status: "failed", public_error_code: classified.code, internal_error: internalError.slice(0, 500) });
       return publicCancelError(
-        "REFUND_CLAIM_FAILED",
-        "다른 취소 요청이 처리 중이거나 이후 구독 결제가 있어 즉시 취소할 수 없습니다.",
+        classified.code,
+        classified.message,
         409,
       );
     }
