@@ -33,7 +33,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/admin") ||
     pathname.startsWith("/staff") ||
     pathname.startsWith("/onboarding") ||
-    pathname.startsWith("/me");
+    pathname.startsWith("/me") ||
+    (pathname.startsWith("/ops") && pathname !== "/ops/login");
 
   const isAuthPage =
     pathname.startsWith("/login") ||
@@ -50,7 +51,7 @@ export async function middleware(req: NextRequest) {
   // 보호 구간: 로그인 없으면 /login
   if (isProtected && !isLoggedIn) {
     const url = req.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = pathname.startsWith("/ops") ? "/ops/login" : "/login";
     // 원래 가려던 곳 리턴용
     url.searchParams.set("next", pathname + (req.nextUrl.search || ""));
     return NextResponse.redirect(url);
@@ -89,5 +90,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/staff/:path*", "/onboarding/:path*", "/me/:path*", "/login", "/signup", "/signup-owner", "/signup-customer"],
+  matcher: ["/admin/:path*", "/staff/:path*", "/onboarding/:path*", "/me/:path*", "/ops/:path*", "/login", "/signup", "/signup-owner", "/signup-customer"],
 };

@@ -102,6 +102,19 @@ type SavedPlatformPg = {
   hasSecret: boolean;
   updatedAt: string | null;
 };
+type StoreBenefit = {
+  billingAccountId: number | null;
+  ownerUserId: string | null;
+  founderMember: boolean;
+  founderBase: boolean;
+  founderAddon: boolean;
+  founderReason: string;
+  founderDesignatedAt: string | null;
+  storeSequence: number;
+  baseStatus: string;
+  trialEndAt: string | null;
+  paidUntil: string | null;
+};
 
 type KpiSummary = {
   totalStores: number;
@@ -277,6 +290,10 @@ export default function OpsPage() {
     secretKey: "",
   });
   const [savedPg, setSavedPg] = useState<SavedPlatformPg | null>(null);
+  const [pgReason, setPgReason] = useState("");
+  const [benefit, setBenefit] = useState<StoreBenefit | null>(null);
+  const [benefitForm, setBenefitForm] = useState({ founderMember: false, founderBase: false, founderAddon: false, founderReason: "", trialEndAt: "", trialReason: "" });
+  const [benefitSaving, setBenefitSaving] = useState(false);
 
   const loadOps = useCallback(async () => {
     setLoading(true);
@@ -458,8 +475,7 @@ export default function OpsPage() {
     (async () => {
       const { data } = await supabase.auth.getUser();
       const roleFromApp = String(data?.user?.app_metadata?.role || "");
-      const roleFromUser = String(data?.user?.user_metadata?.role || "");
-      const allowed = roleFromApp === "ops" || roleFromUser === "ops";
+      const allowed = roleFromApp === "ops";
       setIsOps(allowed);
       if (!allowed) {
         setLoading(false);
@@ -479,18 +495,16 @@ export default function OpsPage() {
   useEffect(() => {
     if (isOps !== true) return;
     (async () => {
-      const { data, error } = await supabase
-        .from("platform_pg_config")
-        .select("mid, client_key, secret_key, updated_at")
-        .eq("id", 1)
-        .maybeSingle();
-      if (error) return;
-      setPgForm({ mid: String(data?.mid || ""), clientKey: String(data?.client_key || ""), secretKey: "" });
+      const response = await fetch("/api/ops/platform-pg", { cache: "no-store" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.ok) return;
+      const data = result.config;
+      setPgForm({ mid: String(data?.mid || ""), clientKey: String(data?.clientKey || ""), secretKey: "" });
       setSavedPg({
         mid: String(data?.mid || ""),
-        clientKey: String(data?.client_key || ""),
-        hasSecret: !!String(data?.secret_key || "").trim(),
-        updatedAt: String(data?.updated_at || "").trim() || null,
+        clientKey: String(data?.clientKey || ""),
+        hasSecret: data?.hasSecret === true,
+        updatedAt: String(data?.updatedAt || "").trim() || null,
       });
     })();
   }, [isOps]);
@@ -667,27 +681,60 @@ export default function OpsPage() {
       "플랫폼 PG 정보를 변경하시겠습니까? 이 설정은 전체 점주 구독 결제에 영향을 줄 수 있습니다.",
     );
     if (!ok) return;
-    const payload: {
-      id: number;
-      mid: string;
-      client_key: string;
-      secret_key?: string;
-      updated_at: string;
-    } = {
-      id: 1,
-      mid: pgForm.mid.trim(),
-      client_key: pgForm.clientKey.trim(),
-      updated_at: new Date().toISOString(),
-    };
-    if (pgForm.secretKey.trim()) payload.secret_key = pgForm.secretKey.trim();
-    const { error } = await supabase
-      .from("platform_pg_config")
-      .upsert(payload, { onConflict: "id" });
-    setMsg(error ? `PG 저장 실패: ${error.message}` : "PG 저장 완료");
-    if (!error) {
-      setSavedPg({ mid: payload.mid, clientKey: payload.client_key, hasSecret: payload.secret_key ? true : savedPg?.hasSecret || false, updatedAt: payload.updated_at });
+    if (!pgReason.trim()) { setMsg("PG 변경 사유를 입력해 주세요."); return; }
+    const response = await fetch("/api/ops/platform-pg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mid: pgForm.mid, clientKey: pgForm.clientKey, secretKey: pgForm.secretKey, reason: pgReason }) });
+    const result = await response.json().catch(() => ({}));
+    setMsg(response.ok && result?.ok ? "PG 저장 완료" : String(result?.message || "PG 저장 실패"));
+    if (response.ok && result?.ok) {
+      setSavedPg(result.config);
       setPgForm((prev) => ({ ...prev, secretKey: "" }));
+      setPgReason("");
     }
+  };
+
+  const loadBenefit = useCallback(async (storeId: string) => {
+    if (!storeId || isOps !== true) return;
+    const response = await fetch(`/api/ops/store-benefits?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.ok) { setMsg(String(result?.message || "구독 혜택을 불러오지 못했습니다.")); return; }
+    const next = result.benefit as StoreBenefit;
+    setBenefit(next);
+    setBenefitForm({
+      founderMember: next.founderMember,
+      founderBase: next.founderBase,
+      founderAddon: next.founderAddon,
+      founderReason: next.founderReason || "",
+      trialEndAt: next.trialEndAt ? new Date(next.trialEndAt).toISOString().slice(0, 10) : "",
+      trialReason: "",
+    });
+  }, [isOps]);
+
+  useEffect(() => {
+    if (!selectedStoreId) return;
+    const timer = window.setTimeout(() => void loadBenefit(selectedStoreId), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadBenefit, selectedStoreId]);
+
+  const saveFounderBenefit = async () => {
+    if (!selectedStoreId || !benefitForm.founderReason.trim()) { setMsg("창립 멤버 설정 사유를 입력해 주세요."); return; }
+    if (benefitForm.founderAddon && !window.confirm("선결제 베타 테스트 참여를 확인했습니까? 옵션 구독 40% 할인이 적용됩니다.")) return;
+    setBenefitSaving(true);
+    const response = await fetch("/api/ops/store-benefits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, founderMember: benefitForm.founderMember, founderBase: benefitForm.founderBase, founderAddon: benefitForm.founderAddon, founderReason: benefitForm.founderReason }) });
+    const result = await response.json().catch(() => ({}));
+    setMsg(response.ok && result?.ok ? "창립 멤버 혜택을 저장했습니다." : String(result?.message || "혜택 저장에 실패했습니다."));
+    if (response.ok && result?.ok) setBenefit(result.benefit);
+    setBenefitSaving(false);
+  };
+
+  const saveTrial = async () => {
+    if (!selectedStoreId || !benefitForm.trialReason.trim()) { setMsg("무료 체험 조정 사유를 입력해 주세요."); return; }
+    setBenefitSaving(true);
+    const trialEndAt = benefitForm.trialEndAt ? new Date(`${benefitForm.trialEndAt}T23:59:59+09:00`).toISOString() : null;
+    const response = await fetch("/api/ops/store-benefits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, trialEndAt, trialReason: benefitForm.trialReason }) });
+    const result = await response.json().catch(() => ({}));
+    setMsg(response.ok && result?.ok ? "무료 체험 기간을 조정했습니다." : String(result?.message || "무료 체험 조정에 실패했습니다."));
+    if (response.ok && result?.ok) { setBenefit(result.benefit); setBenefitForm((prev) => ({ ...prev, trialReason: "" })); }
+    setBenefitSaving(false);
   };
 
   const updateTicket = async (
@@ -987,6 +1034,22 @@ export default function OpsPage() {
             </div>
           </div>
 
+          <div className="benefitBox">
+            <div className="sectionTitle">창립 멤버·무료 체험</div>
+            <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "창립 멤버" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
+            <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>창립 멤버로 지정</span></label>
+            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 40% 할인</span></label>
+            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>선결제 옵션 40% 할인</span></label>
+            <textarea className="input" rows={2} maxLength={240} placeholder="창립 멤버 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
+            <button className="btn primary" disabled={benefitSaving} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "창립 멤버 혜택 저장"}</button>
+            <div className="trialControls">
+              <label><span>무료 체험 종료일</span><input className="input" type="date" value={benefitForm.trialEndAt} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialEndAt: e.target.value }))}/></label>
+              <textarea className="input" rows={2} maxLength={240} placeholder="무료 체험 조정 사유(필수)" value={benefitForm.trialReason} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialReason: e.target.value }))}/>
+              <button className="btn" disabled={benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onClick={() => void saveTrial()}>무료 체험 기간 저장</button>
+              {benefit?.baseStatus === "active" || benefit?.paidUntil ? <small className="muted">유료 매장은 무료 체험을 변경할 수 없습니다. 별도의 구독 보상 절차를 사용해야 합니다.</small> : null}
+            </div>
+          </div>
+
           <div className="quickLinks">
             <button
               className="btn"
@@ -1047,6 +1110,11 @@ export default function OpsPage() {
           align-items: flex-start;
           gap: 16px;
         }
+        .benefitBox { display:grid; gap:9px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
+        .checkRow { display:flex; align-items:center; gap:9px; font-weight:800; font-size:13px; }
+        .checkRow input { width:18px; height:18px; }
+        .trialControls { display:grid; gap:8px; padding-top:10px; border-top:1px solid #dbeafe; }
+        .trialControls label { display:grid; gap:6px; font-size:12px; font-weight:800; }
         .h1 {
           margin: 0;
           font-size: clamp(24px, 2vw, 30px);
@@ -2317,6 +2385,14 @@ export default function OpsPage() {
                 onChange={(e) =>
                   setPgForm((p) => ({ ...p, secretKey: e.target.value }))
                 }
+              />
+              <textarea
+                className="input"
+                rows={2}
+                maxLength={240}
+                placeholder="PG 변경 사유(필수)"
+                value={pgReason}
+                onChange={(e) => setPgReason(e.target.value)}
               />
               <button className="btn primary" onClick={savePg}>
                 PG 저장
