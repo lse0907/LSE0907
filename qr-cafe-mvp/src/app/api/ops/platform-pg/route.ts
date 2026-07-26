@@ -12,7 +12,7 @@ const view = (row: Record<string, unknown> | null) => ({
 export async function GET(req: NextRequest) {
   try {
     const admin = createSupabaseAdminClient();
-    await requireOpsUser(req, admin);
+    await requireOpsUser(req, admin, ["master"]);
     const { data, error } = await admin.from("platform_pg_config").select("mid,client_key,secret_key,updated_at,pg_verified_at").eq("id", 1).maybeSingle();
     if (error) throw new Error("플랫폼 PG 설정을 불러오지 못했습니다.");
     return NextResponse.json({ ok: true, config: view(data) });
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const reason = String(body.reason || "").trim();
     if (!mid || !clientKey || !reason) return NextResponse.json({ ok: false, message: "MID, Client Key, 변경 사유를 입력해 주세요." }, { status: 400 });
     const admin = createSupabaseAdminClient();
-    const actor = await requireOpsUser(req, admin);
+    const actor = await requireOpsUser(req, admin, ["master"]);
     const before = await admin.from("platform_pg_config").select("mid,client_key,secret_key,updated_at,pg_verified_at").eq("id", 1).maybeSingle();
     const payload: Record<string, unknown> = { id: 1, mid, client_key: clientKey, updated_at: new Date().toISOString(), pg_verified_at: null };
     if (secretKey) payload.secret_key = secretKey;

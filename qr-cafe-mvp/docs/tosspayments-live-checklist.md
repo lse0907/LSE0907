@@ -164,4 +164,6 @@ PG사를 토스페이먼츠로 고정했기 때문에, 사장님이 따라할 �
 
 - 실무 실행 순서는 `prepay-next-step-plan.md` 문서를 기준으로 진행합니다.
 - 라이브 가격·할인·무료체험·결제복구·OPS 보안은 `docs/sql/supabase-billing-live-v2.sql` 파일을 SQL Editor에 전체 복붙해서 실행합니다.
+- 이어서 `docs/sql/supabase-billing-live-v2-1.sql` 전체를 실행해야 창립 멤버 원자적 저장과 선결제 기능 ON/OFF가 적용됩니다.
+- OPS 마스터는 자동으로 점주 전체에 부여되지 않습니다. `docs/sql/supabase-ops-master-account.sql`에서 지정한 이메일 사용자 한 명에게만 수동 부여합니다.
 - 운영 확정 문서는 `docs/b-plan-final-onepage.md`를 우선 기준으로 사용합니다.

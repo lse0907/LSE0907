@@ -40,7 +40,9 @@
 ## 적용 순서
 1. 기존 기본 스키마가 없는 환경은 `docs/sql/supabase-billing-setup.sql`를 먼저 실행.
 2. `docs/sql/supabase-billing-live-v2.sql` 전체를 Supabase SQL Editor에서 실행.
-3. owner 계정으로 서버 견적 → 토스 승인 → 구독 반영 흐름을 테스트.
+3. `docs/sql/supabase-billing-live-v2-1.sql` 전체를 실행해 OPS 저장과 선결제 ON/OFF를 보완.
+4. 현재 운영 계정을 마스터로 쓸 때만 `docs/sql/supabase-ops-master-account.sql`의 이메일을 바꿔 전체 실행.
+5. OPS 권한 변경 후 로그아웃·재로그인하고 owner 계정으로 서버 견적 → 토스 승인 → 구독 반영 흐름을 테스트.
 3. UI에서 남은 기간/만료 상태를 읽어 노출.
 4. owner 전용 결제 페이지(1/3/6/12개월 선택) 연결.
 

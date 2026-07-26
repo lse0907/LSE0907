@@ -2,7 +2,9 @@ import type { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ApiError } from "./storeAuth";
 
-export async function requireOpsUser(req: NextRequest, supabaseAdmin: SupabaseClient) {
+export type OpsRole = "master" | "billing" | "support" | "viewer";
+
+export async function requireOpsUser(req: NextRequest, supabaseAdmin: SupabaseClient, allowedRoles?: OpsRole[]) {
   const authorization = req.headers.get("authorization") || "";
   const bearer = authorization.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
   let userResult;
@@ -18,5 +20,10 @@ export async function requireOpsUser(req: NextRequest, supabaseAdmin: SupabaseCl
   const user = userResult.data?.user;
   if (userResult.error || !user) throw new ApiError(401, "OPS 로그인이 필요합니다.", "OPS_LOGIN_REQUIRED");
   if (String(user.app_metadata?.role || "") !== "ops") throw new ApiError(403, "OPS 권한이 없습니다.", "OPS_FORBIDDEN");
-  return { userId: user.id };
+  const rawRole = String(user.app_metadata?.ops_role || "viewer");
+  const opsRole: OpsRole = rawRole === "master" || rawRole === "billing" || rawRole === "support" ? rawRole : "viewer";
+  if (allowedRoles?.length && !allowedRoles.includes(opsRole)) {
+    throw new ApiError(403, "이 OPS 작업을 수행할 권한이 없습니다.", "OPS_ROLE_FORBIDDEN");
+  }
+  return { userId: user.id, email: user.email || "", opsRole };
 }

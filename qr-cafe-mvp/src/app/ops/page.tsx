@@ -294,6 +294,10 @@ export default function OpsPage() {
   const [benefit, setBenefit] = useState<StoreBenefit | null>(null);
   const [benefitForm, setBenefitForm] = useState({ founderMember: false, founderBase: false, founderAddon: false, founderReason: "", trialEndAt: "", trialReason: "" });
   const [benefitSaving, setBenefitSaving] = useState(false);
+  const [opsIdentity, setOpsIdentity] = useState({ email: "", role: "viewer" });
+  const [benefitEditorOpen, setBenefitEditorOpen] = useState(false);
+  const isOpsMaster = opsIdentity.role === "master";
+  const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
 
   const loadOps = useCallback(async () => {
     setLoading(true);
@@ -476,6 +480,7 @@ export default function OpsPage() {
       const { data } = await supabase.auth.getUser();
       const roleFromApp = String(data?.user?.app_metadata?.role || "");
       const allowed = roleFromApp === "ops";
+      setOpsIdentity({ email: String(data?.user?.email || ""), role: String(data?.user?.app_metadata?.ops_role || "viewer") });
       setIsOps(allowed);
       if (!allowed) {
         setLoading(false);
@@ -722,7 +727,7 @@ export default function OpsPage() {
     const response = await fetch("/api/ops/store-benefits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, founderMember: benefitForm.founderMember, founderBase: benefitForm.founderBase, founderAddon: benefitForm.founderAddon, founderReason: benefitForm.founderReason }) });
     const result = await response.json().catch(() => ({}));
     setMsg(response.ok && result?.ok ? "창립 멤버 혜택을 저장했습니다." : String(result?.message || "혜택 저장에 실패했습니다."));
-    if (response.ok && result?.ok) setBenefit(result.benefit);
+    if (response.ok && result?.ok) { setBenefit(result.benefit); setBenefitEditorOpen(false); }
     setBenefitSaving(false);
   };
 
@@ -1037,15 +1042,12 @@ export default function OpsPage() {
           <div className="benefitBox">
             <div className="sectionTitle">창립 멤버·무료 체험</div>
             <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "창립 멤버" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
-            <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>창립 멤버로 지정</span></label>
-            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 40% 할인</span></label>
-            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>선결제 옵션 40% 할인</span></label>
-            <textarea className="input" rows={2} maxLength={240} placeholder="창립 멤버 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
-            <button className="btn primary" disabled={benefitSaving} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "창립 멤버 혜택 저장"}</button>
+            <div className="benefitSummary"><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
+            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "창립 멤버 혜택 변경" : "조회 전용"}</button>
             <div className="trialControls">
               <label><span>무료 체험 종료일</span><input className="input" type="date" value={benefitForm.trialEndAt} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialEndAt: e.target.value }))}/></label>
               <textarea className="input" rows={2} maxLength={240} placeholder="무료 체험 조정 사유(필수)" value={benefitForm.trialReason} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialReason: e.target.value }))}/>
-              <button className="btn" disabled={benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onClick={() => void saveTrial()}>무료 체험 기간 저장</button>
+              <button className="btn" disabled={!canManageBilling || benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onClick={() => void saveTrial()}>무료 체험 기간 저장</button>
               {benefit?.baseStatus === "active" || benefit?.paidUntil ? <small className="muted">유료 매장은 무료 체험을 변경할 수 없습니다. 별도의 구독 보상 절차를 사용해야 합니다.</small> : null}
             </div>
           </div>
@@ -1111,10 +1113,16 @@ export default function OpsPage() {
           gap: 16px;
         }
         .benefitBox { display:grid; gap:9px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
+        .benefitSummary { display:grid; grid-template-columns:1fr auto; gap:7px 12px; font-size:12px; }
+        .benefitSummary strong { color:#1d4ed8; }
         .checkRow { display:flex; align-items:center; gap:9px; font-weight:800; font-size:13px; }
         .checkRow input { width:18px; height:18px; }
         .trialControls { display:grid; gap:8px; padding-top:10px; border-top:1px solid #dbeafe; }
         .trialControls label { display:grid; gap:6px; font-size:12px; font-weight:800; }
+        .opsAccount > div { display:grid; gap:2px; text-align:right; }
+        .opsAccount small { color:#6b7280; font-size:10px; font-weight:900; }
+        .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
+        .opsModal { width:min(460px,100%); display:grid; gap:14px; border-radius:18px; background:#fff; padding:22px; box-shadow:0 28px 80px rgba(15,23,42,.28); }
         .h1 {
           margin: 0;
           font-size: clamp(24px, 2vw, 30px);
@@ -1658,6 +1666,10 @@ export default function OpsPage() {
           .quickLinks {
             grid-template-columns: 1fr;
           }
+          .opsAccount { width:100%; }
+          .opsAccount > div { text-align:left; width:100%; }
+          .modalBackdrop { align-items:end; padding:10px; }
+          .opsModal { border-radius:18px 18px 12px 12px; padding:18px; }
         }
       `}</style>
 
@@ -1671,10 +1683,12 @@ export default function OpsPage() {
             마지막 업데이트: {lastLoadedAt ? fmtDateTime(lastLoadedAt) : "-"}
           </p>
         </div>
-        <div className="row">
+        <div className="row opsAccount">
+          <div><strong>{opsIdentity.email || "OPS 사용자"}</strong><small>{opsIdentity.role.toUpperCase()}</small></div>
           <button className="btn" onClick={loadOps}>
             새로고침
           </button>
+          <button className="btn" onClick={() => void supabase.auth.signOut().then(() => router.replace("/ops/login"))}>로그아웃</button>
         </div>
       </header>
 
@@ -1722,7 +1736,7 @@ export default function OpsPage() {
       </section>
 
       <nav className="tabs" aria-label="OPS 탭">
-        {TABS.map((tab) => (
+        {TABS.filter((tab) => tab.id !== "settings" || isOpsMaster).map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -2334,7 +2348,7 @@ export default function OpsPage() {
         </section>
       ) : null}
 
-      {!loading && activeTab === "settings" ? (
+      {!loading && activeTab === "settings" && isOpsMaster ? (
         <section className="settingsGrid">
           <article className="card">
             <div className="sectionTitle">등록된 플랫폼 PG</div>
@@ -2400,6 +2414,19 @@ export default function OpsPage() {
             </div>
           </article>
         </section>
+      ) : null}
+
+      {benefitEditorOpen && selectedStore ? (
+        <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setBenefitEditorOpen(false)}>
+          <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="founder-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div><div className="sectionTitle" id="founder-editor-title">창립 멤버 혜택 변경</div><p className="muted">{selectedStore.store_name || selectedStore.store_id}</p></div>
+            <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>창립 멤버로 지정</span></label>
+            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 40% 할인</span></label>
+            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>선결제 옵션 40% 할인</span></label>
+            <textarea className="input" rows={3} maxLength={240} placeholder="창립 멤버 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
+            <div className="row"><button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>취소</button><button className="btn primary" disabled={benefitSaving} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "변경 저장"}</button></div>
+          </section>
+        </div>
       ) : null}
     </main>
   );

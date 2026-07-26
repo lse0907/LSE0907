@@ -25,7 +25,7 @@ async function load(admin: ReturnType<typeof createSupabaseAdminClient>, storeId
 
 export async function GET(req: NextRequest) {
   try {
-    const admin = createSupabaseAdminClient(); await requireOpsUser(req, admin);
+    const admin = createSupabaseAdminClient(); await requireOpsUser(req, admin, ["master", "billing"]);
     const storeId = String(new URL(req.url).searchParams.get("storeId") || "").trim();
     if (!storeId) return NextResponse.json({ ok: false, message: "매장을 선택해 주세요." }, { status: 400 });
     return NextResponse.json({ ok: true, benefit: await load(admin, storeId) });
@@ -39,21 +39,29 @@ export async function POST(req: NextRequest) {
     const founderReason = String(body.founderReason || "").trim();
     const trialReason = String(body.trialReason || "").trim();
     if (!storeId) return NextResponse.json({ ok: false, message: "매장을 선택해 주세요." }, { status: 400 });
-    const admin = createSupabaseAdminClient(); const actor = await requireOpsUser(req, admin);
+    const admin = createSupabaseAdminClient(); const actor = await requireOpsUser(req, admin, ["master", "billing"]);
     const before = await load(admin, storeId);
     if (typeof body.founderMember === "boolean") {
       if (!founderReason) return NextResponse.json({ ok: false, message: "창립 멤버 설정 사유를 입력해 주세요." }, { status: 400 });
-      await admin.from("billing_accounts").update({ founder_member: body.founderMember, founder_designated_at: body.founderMember ? new Date().toISOString() : null, founder_designated_by: actor.userId, founder_reason: founderReason }).eq("id", before.billingAccountId);
-      await admin.from("billing_account_stores").update({ founder_base_discount: body.founderMember && body.founderBase === true, founder_addon_discount: body.founderMember && body.founderAddon === true, founder_discount_started_at: body.founderMember ? new Date().toISOString() : null, founder_discount_reason: founderReason }).eq("store_id", storeId);
+      if (!before.billingAccountId) return NextResponse.json({ ok: false, code: "BILLING_ACCOUNT_STORE_MISSING", message: "선택한 매장이 결제 계정에 연결되어 있지 않습니다. 후속 SQL의 연결 복구를 먼저 실행해 주세요." }, { status: 409 });
+      const saved = await admin.rpc("set_store_founder_benefit", {
+        p_store_id: storeId, p_actor_user_id: actor.userId, p_founder_member: body.founderMember,
+        p_founder_base: body.founderBase === true, p_founder_addon: body.founderAddon === true, p_reason: founderReason,
+      });
+      if (saved.error) return NextResponse.json({ ok: false, code: "FOUNDER_BENEFIT_SAVE_FAILED", message: `창립 멤버 혜택 저장 실패: ${saved.error.message}` }, { status: 500 });
     }
     if (body.trialEndAt !== undefined) {
       if (!trialReason) return NextResponse.json({ ok: false, message: "무료 체험 조정 사유를 입력해 주세요." }, { status: 400 });
       const trialEndAt = String(body.trialEndAt || "").trim() || null;
       if (before.baseStatus === "active" || before.paidUntil) return NextResponse.json({ ok: false, message: "유료 매장은 무료 체험이 아니라 구독 보상 기능으로 조정해야 합니다." }, { status: 409 });
-      await admin.from("store_billing").upsert({ store_id: storeId, base_plan_status: trialEndAt && new Date(trialEndAt).getTime() > Date.now() ? "trialing" : "inactive", trial_end_at: trialEndAt, base_price_krw: 14900, price_version: "standard", updated_at: new Date().toISOString() }, { onConflict: "store_id" });
+      const adjusted = await admin.from("store_billing").upsert({ store_id: storeId, base_plan_status: trialEndAt && new Date(trialEndAt).getTime() > Date.now() ? "trialing" : "inactive", trial_end_at: trialEndAt, base_price_krw: 14900, price_version: "standard", updated_at: new Date().toISOString() }, { onConflict: "store_id" });
+      if (adjusted.error) return NextResponse.json({ ok: false, code: "TRIAL_SAVE_FAILED", message: `무료 체험 저장 실패: ${adjusted.error.message}` }, { status: 500 });
     }
     const after = await load(admin, storeId);
-    await admin.from("billing_admin_audit_logs").insert({ actor_user_id: actor.userId, action: body.trialEndAt !== undefined ? "trial_adjusted" : "founder_benefit_updated", store_id: storeId, billing_account_id: before.billingAccountId, before_data: before, after_data: after, reason: body.trialEndAt !== undefined ? trialReason : founderReason });
+    if (body.trialEndAt !== undefined) {
+      const audit = await admin.from("billing_admin_audit_logs").insert({ actor_user_id: actor.userId, action: "trial_adjusted", store_id: storeId, billing_account_id: before.billingAccountId, before_data: before, after_data: after, reason: trialReason });
+      if (audit.error) return NextResponse.json({ ok: false, code: "AUDIT_LOG_FAILED", message: "기간은 저장되었지만 감사 기록을 남기지 못했습니다. 운영 확인이 필요합니다." }, { status: 500 });
+    }
     return NextResponse.json({ ok: true, benefit: after });
   } catch (error: unknown) { return apiErrorResponse(error); }
 }
