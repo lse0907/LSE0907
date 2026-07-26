@@ -183,7 +183,6 @@ function BillingPayContent() {
 
   return (
     <main className="billingWrap">
-      <style jsx global>{`${css}${compactResponsiveCss}`}</style>
       <header className="billingHeader">
         <div><span className="eyebrow">LEON ORDER BILLING</span><h1>구독 관리</h1><p>{storeName}의 플랜과 결제 혜택을 확인하세요.</p></div>
         <div className="headerActions"><button className="secondaryButton" onClick={() => router.push(`/admin/billing?store=${encodeURIComponent(storeId)}`)}>온라인 결제 설정</button><button className="secondaryButton" onClick={() => router.push("/admin")}>관리자 홈</button></div>
@@ -240,6 +239,15 @@ const compactResponsiveCss = `
   @media (max-width:479px){.eyebrow{font-size:9px}.billingHeader h1{font-size:24px}.statusPanel>div{grid-template-columns:82px 1fr}.statusPanel>div small{display:none}.productTag{font-size:9px}.period strong{font-size:13px}.period span{font-size:10px}.checkoutGrid{gap:9px}}
 `;
 
+const billingStyles = `${css}${compactResponsiveCss}`;
+
 export default function BillingPayPage() {
-  return <Suspense fallback={<main className="billingWrap"><section className="stepCard">구독 정보를 불러오고 있습니다...</section></main>}><BillingPayContent /></Suspense>;
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: billingStyles }} />
+      <Suspense fallback={<main className="billingWrap"><section className="stepCard">구독 정보를 불러오고 있습니다...</section></main>}>
+        <BillingPayContent />
+      </Suspense>
+    </>
+  );
 }
