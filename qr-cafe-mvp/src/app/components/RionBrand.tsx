@@ -7,7 +7,7 @@ type RionBrandProps = {
 };
 
 export default function RionBrand({ compact = false, inverse = false, product = false }: RionBrandProps) {
-  const logoSrc = inverse ? "/brand/rion-logo-white.png" : "/rion-symbol.svg";
+  const logoSrc = inverse ? "/rion-logo-white.png" : "/rion-symbol.svg";
 
   return (
     <div className={`rionBrand ${compact ? "compact" : ""} ${inverse ? "inverse" : ""}`} aria-label={product ? "RION Order OPS" : "RION Labs"}>
