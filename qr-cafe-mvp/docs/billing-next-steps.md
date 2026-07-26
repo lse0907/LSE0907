@@ -7,6 +7,10 @@
 - 옵션도 기간제로 과금: addon 결제 시 `addon_paid_until`도 동일 기준으로 갱신.
 - 권한: 결제/구독 설정 및 결제 실행은 owner 전용.
 - 미결제 정책: 만료 즉시 기능 제한 + 매장 리스트에 남은 기간 노출.
+- 정상 가격: 기본 14,900원 + 선결제 옵션 5,000원(부가세 포함).
+- 장기 할인: 3개월 5%, 6개월 10%, 12개월 15%.
+- 창립 멤버: 기본/옵션 별도 40%, 장기·다매장 할인과 중복하지 않음.
+- 추가 매장: 기본 15%, 장기 할인 포함 총 25% 상한, 옵션 할인 없음.
 
 ## 데이터 모델(요약)
 - `store_billing`
@@ -25,16 +29,21 @@
   - `anchor = max(now(), paid_until)`
   - `new_paid_until = anchor + plan_months`
 - 결제 금액 계산 규칙(서버 강제):
-  - `expected_amount = plan_months * ((base_selected ? base_price : 0) + (addon_selected ? addon_price : 0))`
-  - 예: 1개월(기본+옵션) = `(8900 + 5000) * 1 = 13900`
+  - `/api/billing/quote`가 가격 정책, 창립 멤버, 추가 매장, 기간 할인을 계산하고 서버 견적을 저장.
+  - 토스 승인 시 브라우저 값이 아닌 저장된 서버 견적의 주문번호·금액·결제자를 검증.
+  - 승인 성공과 구독 반영을 별도 상태로 저장하여 `approved_not_applied` 결제를 재처리 가능하게 유지.
 - 결제 성공 시:
   - 기본 결제 포함이면 `store_billing.base_plan_status = active`, `paid_until` 갱신
   - addon 결제 포함이면 `store_addons.prepay_addon_status = active`, `addon_paid_until` 갱신
   - `billing_payments` 이력 1건 기록
 
 ## 적용 순서
-1. `docs/sql/supabase-billing-setup.sql`를 Supabase SQL Editor에서 실행.
-2. owner 계정으로 샘플 결제 적용 함수(`apply_store_billing_payment`)를 테스트.
+1. 기존 기본 스키마가 없는 환경은 `docs/sql/supabase-billing-setup.sql`를 먼저 실행.
+2. `docs/sql/supabase-billing-live-v2.sql` 전체를 Supabase SQL Editor에서 실행.
+3. `docs/sql/supabase-billing-live-v2-1.sql` 전체를 실행해 OPS 저장과 선결제 ON/OFF를 보완.
+4. `docs/sql/supabase-billing-live-v2-2.sql` 전체를 실행해 환불 이력, 실패 복구 RPC, OPS 환불 추적을 적용.
+5. 현재 운영 계정을 마스터로 쓸 때만 `docs/sql/supabase-ops-master-account.sql`의 이메일을 바꿔 전체 실행.
+6. OPS 권한 변경 후 로그아웃·재로그인하고 owner 계정으로 서버 견적 → 토스 승인 → 즉시 취소 → OPS 이력 확인 흐름을 테스트.
 3. UI에서 남은 기간/만료 상태를 읽어 노출.
 4. owner 전용 결제 페이지(1/3/6/12개월 선택) 연결.
 

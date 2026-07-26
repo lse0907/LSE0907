@@ -205,7 +205,6 @@ function BillingCancelPageInner() {
 
   return (
     <main className="wrap">
-      <style jsx global>{css}</style>
       <header className="topbar">
         <h1 className="h1">최근 구독 결제 취소</h1>
         <div className="row">
@@ -365,11 +364,11 @@ const css = `
   :root { --bg:#f7f8fc; --card:#fff; --line:#e6e8f0; --txt:#111827; --muted:#6b7280; --primary:#2563eb; --ok:#047857; --warn:#b45309; --danger:#dc2626; --radius:14px; }
   * { box-sizing:border-box; }
   body { margin:0; color:var(--txt); background:var(--bg); }
-  .wrap { max-width:1000px; margin:0 auto; padding:16px; display:grid; gap:12px; }
+  .wrap { color-scheme:light; color:var(--txt); max-width:1000px; margin:0 auto; padding:16px; display:grid; gap:12px; }
   .topbar { display:flex; justify-content:space-between; align-items:center; gap:10px; }
   .h1 { margin:0; font-size:22px; font-weight:900; }
   .h2 { margin:0 0 8px; font-size:16px; font-weight:900; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; display:grid; gap:10px; }
+  .card { color:var(--txt); background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; display:grid; gap:10px; }
   .pill { border:1px solid #dbeafe; background:#eff6ff; color:#1e3a8a; border-radius:999px; padding:4px 8px; font-weight:800; font-size:12px; width:fit-content; }
   .muted { color:var(--muted); margin:0; font-size:13px; }
   .notice { margin:0; border-radius:10px; background:#eff6ff; color:#1e40af; padding:10px 12px; font-size:13px; font-weight:700; }
@@ -377,8 +376,11 @@ const css = `
   .btn { border:1px solid var(--line); background:#fff; color:var(--txt); border-radius:10px; padding:10px 12px; font-weight:800; cursor:pointer; }
   .btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
   .btn.danger { background:var(--danger); color:#fff; border-color:var(--danger); }
-  .btn:disabled { opacity:.5; cursor:not-allowed; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
+  .btn:disabled { background:#f3f4f6; border-color:#e5e7eb; color:#6b7280; opacity:1; cursor:not-allowed; }
+  .btn.primary:disabled, .btn.danger:disabled { background:#d1d5db; border-color:#d1d5db; color:#4b5563; }
+  .btn:focus-visible, .chip:focus-visible, .paymentCard:focus-visible, .input:focus-visible { outline:3px solid rgba(37,99,235,.28); outline-offset:2px; }
+  table { color:var(--txt); width:100%; border-collapse:collapse; font-size:13px; }
+  input[type="radio"] { width:18px; height:18px; accent-color:var(--primary); }
   th, td { border-bottom:1px solid #eef2f7; padding:8px; text-align:left; vertical-align:top; }
   tr.sel { background:#eff6ff; }
   .ok { color:var(--ok); font-weight:800; }
@@ -395,14 +397,15 @@ const css = `
   th:nth-child(4), td:nth-child(4) { width:56px; text-align:center; }
   th:nth-child(5), td:nth-child(5) { width:76px; text-align:center; white-space:nowrap; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
-  .chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 12px; cursor:pointer; font-weight:700; }
+  .chip { color:var(--txt); border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 12px; cursor:pointer; font-weight:700; }
   .chip.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; }
   .field { display:grid; gap:6px; }
-  .input { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px; }
+  .input { color:var(--txt); caret-color:var(--primary); background:#fff; width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px; }
+  .input::placeholder { color:#6b7280; opacity:1; }
   .charCount { justify-self:end; color:var(--muted); font-size:12px; }
   .mobilePayments { display:none; }
   .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:20px; background:rgba(15,23,42,.56); }
-  .modal { width:min(100%, 460px); border:1px solid var(--line); border-radius:16px; background:#fff; box-shadow:0 24px 64px rgba(15,23,42,.24); padding:20px; display:grid; gap:16px; }
+  .modal { color:var(--txt); color-scheme:light; width:min(100%, 460px); border:1px solid var(--line); border-radius:16px; background:#fff; box-shadow:0 24px 64px rgba(15,23,42,.24); padding:20px; display:grid; gap:16px; }
   .summaryList { margin:0; display:grid; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; }
   .summaryList > div { display:grid; grid-template-columns:90px 1fr; gap:12px; padding:10px 12px; border-bottom:1px solid #eef2f7; }
   .summaryList > div:last-child { border-bottom:0; }
@@ -416,7 +419,7 @@ const css = `
     .topbar .btn { flex:1; }
     .tableWrap { display:none; }
     .mobilePayments { display:grid; gap:10px; }
-    .paymentCard { width:100%; display:grid; gap:7px; text-align:left; border:1px solid var(--line); border-radius:12px; background:#fff; color:var(--txt); padding:12px; cursor:pointer; }
+    .paymentCard { color-scheme:light; width:100%; display:grid; gap:7px; text-align:left; border:1px solid var(--line); border-radius:12px; background:#fff; color:var(--txt); padding:12px; cursor:pointer; }
     .paymentCard.selected { border:2px solid var(--primary); padding:11px; background:#eff6ff; }
     .paymentCardTop { display:flex; align-items:center; justify-content:space-between; gap:8px; }
     .modalBackdrop { padding:12px; align-items:end; }
@@ -428,8 +431,11 @@ const css = `
 
 export default function BillingCancelPage() {
   return (
-    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
-      <BillingCancelPageInner />
-    </Suspense>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: css }} />
+      <Suspense fallback={<main className="wrap"><div className="card"><p className="muted">로딩 중...</p></div></main>}>
+        <BillingCancelPageInner />
+      </Suspense>
+    </>
   );
 }
