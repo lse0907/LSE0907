@@ -184,7 +184,7 @@ function BillingPayContent() {
   return (
     <main className="billingWrap">
       <header className="billingHeader">
-        <div><span className="eyebrow">LEON ORDER BILLING</span><h1>구독 관리</h1><p>{storeName}의 플랜과 결제 혜택을 확인하세요.</p></div>
+        <div><span className="eyebrow">RION ORDER</span><h1>구독 관리</h1><p>{storeName}의 플랜과 결제 혜택을 확인하세요.</p></div>
         <div className="headerActions"><button className="secondaryButton" onClick={() => router.push(`/admin/billing?store=${encodeURIComponent(storeId)}`)}>온라인 결제 설정</button><button className="secondaryButton" onClick={() => router.push("/admin")}>관리자 홈</button></div>
       </header>
 

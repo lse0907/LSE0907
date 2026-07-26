@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { maskToken } from "@/app/lib/billingSettings";
+import RionBrand from "@/app/components/RionBrand";
 
 type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "tickets" | "settings";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
@@ -214,6 +215,13 @@ function isActiveTicket(status: string) {
   return ACTIVE_TICKET_STATUSES.has(status);
 }
 
+function addDaysToDateInput(raw: string, days: number) {
+  const base = raw ? new Date(`${raw}T12:00:00`) : new Date();
+  if (!Number.isFinite(base.getTime())) return ymd(new Date());
+  base.setDate(base.getDate() + days);
+  return ymd(base);
+}
+
 function ticketStatusLabel(status: string) {
   if (status === "open") return "접수";
   if (status === "in_progress") return "처리 중";
@@ -359,6 +367,7 @@ export default function OpsPage() {
   const [benefitSaving, setBenefitSaving] = useState(false);
   const [opsIdentity, setOpsIdentity] = useState({ email: "", role: "viewer" });
   const [benefitEditorOpen, setBenefitEditorOpen] = useState(false);
+  const [trialEditorOpen, setTrialEditorOpen] = useState(false);
   const [refundRows, setRefundRows] = useState<RefundHistoryRow[]>([]);
   const [refundCases, setRefundCases] = useState<RefundCaseRow[]>([]);
   const [refundLoading, setRefundLoading] = useState(false);
@@ -840,13 +849,20 @@ export default function OpsPage() {
   };
 
   const saveTrial = async () => {
+    if (!isOpsMaster) { setMsg("마스터 권한만 무료 체험 기간을 연장할 수 있습니다."); return; }
     if (!selectedStoreId || !benefitForm.trialReason.trim()) { setMsg("무료 체험 조정 사유를 입력해 주세요."); return; }
+    if (!benefitForm.trialEndAt) { setMsg("변경할 무료 체험 종료일을 선택해 주세요."); return; }
+    if (benefit?.trialEndAt && new Date(`${benefitForm.trialEndAt}T23:59:59+09:00`).getTime() <= new Date(benefit.trialEndAt).getTime()) { setMsg("현재 종료일보다 이후 날짜를 선택해 주세요."); return; }
     setBenefitSaving(true);
     const trialEndAt = benefitForm.trialEndAt ? new Date(`${benefitForm.trialEndAt}T23:59:59+09:00`).toISOString() : null;
     const response = await fetch("/api/ops/store-benefits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, trialEndAt, trialReason: benefitForm.trialReason }) });
     const result = await response.json().catch(() => ({}));
     setMsg(response.ok && result?.ok ? "무료 체험 기간을 조정했습니다." : String(result?.message || "무료 체험 조정에 실패했습니다."));
-    if (response.ok && result?.ok) { setBenefit(result.benefit); setBenefitForm((prev) => ({ ...prev, trialReason: "" })); }
+    if (response.ok && result?.ok) {
+      setBenefit(result.benefit);
+      setBenefitForm((prev) => ({ ...prev, trialReason: "" }));
+      setTrialEditorOpen(false);
+    }
     setBenefitSaving(false);
   };
 
@@ -1234,10 +1250,15 @@ export default function OpsPage() {
             <div><dt>남은 기간</dt><dd>{remainingDays(selectedStore.paid_until) != null ? `D-${Math.max(0, Number(remainingDays(selectedStore.paid_until)))}` : "-"}</dd></div>
             <div><dt>이번 달 결제</dt><dd>{fmtMoney(selectedStore.monthly_revenue)} · {selectedStore.paid_count.toLocaleString()}건</dd></div>
           </dl>
+          <section className="trialManagementCard">
+            <div className="trialCardHeader"><div><div className="sectionTitle">무료 체험</div><p>무료 매장의 체험 기간을 확인하고 마스터 권한으로 연장합니다.</p></div><span className={`pill ${benefit?.baseStatus === "trialing" ? "ok" : "warn"}`}>{benefit?.baseStatus === "trialing" ? "체험 중" : "미적용"}</span></div>
+            <div className="trialFacts"><div><span>현재 종료일</span><strong>{fmtDate(benefit?.trialEndAt || null)}</strong></div><div><span>남은 기간</span><strong>{remainingDays(benefit?.trialEndAt || null) != null ? `${Math.max(0, Number(remainingDays(benefit?.trialEndAt || null)))}일` : "-"}</strong></div></div>
+            {benefit?.baseStatus === "active" || benefit?.paidUntil ? <p className="trialHelp">유료 구독 매장은 무료 체험 대신 별도의 구독 보상 절차로 조정해야 합니다.</p> : <button className="btn primary" disabled={!isOpsMaster} title={isOpsMaster ? "무료 체험 종료일을 연장합니다." : "마스터 권한만 무료 체험 기간을 연장할 수 있습니다."} onClick={() => setTrialEditorOpen(true)}>{isOpsMaster ? "무료 체험 기간 연장" : "마스터 권한으로 연장 가능"}</button>}
+          </section>
           <section className="benefitSummaryCard">
-            <div className="panelHeader"><div><div className="sectionTitle">혜택 및 무료 체험</div><p>현재 적용 상태를 확인하고 필요한 경우에만 변경합니다.</p></div></div>
-            <div className="benefitSummary"><span>창립 멤버</span><strong>{benefit?.founderMember ? "적용" : "미적용"}</strong><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong><span>무료 체험 종료</span><strong>{fmtDate(benefit?.trialEndAt || null)}</strong></div>
-            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "혜택·무료 체험 관리" : "조회 전용"}</button>
+            <div className="panelHeader"><div><div className="sectionTitle">창립 멤버 혜택</div><p>할인 적용 상태를 별도로 관리합니다.</p></div></div>
+            <div className="benefitSummary"><span>창립 멤버</span><strong>{benefit?.founderMember ? "적용" : "미적용"}</strong><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
+            <button className="btn" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "창립 멤버 혜택 관리" : "조회 전용"}</button>
           </section>
           <button className="activityToggle" type="button" aria-expanded={subscriptionActivityOpen} onClick={() => setSubscriptionActivityOpen((open) => !open)}><span>매장 활동 참고 정보</span><strong>{subscriptionActivityOpen ? "접기" : "펼치기"}</strong></button>
           {subscriptionActivityOpen ? <div className="activityGrid"><div><span>오늘 주문</span><strong>{selectedStore.today_order_count.toLocaleString()}건</strong></div><div><span>이번 달 주문</span><strong>{selectedStore.monthly_order_count.toLocaleString()}건</strong></div><div><span>미처리 문의</span><strong>{selectedStore.open_ticket_count.toLocaleString()}건</strong></div><div><span>최근 주문</span><strong>{fmtDateTime(selectedStore.last_order_at)}</strong></div></div> : null}
@@ -1250,21 +1271,34 @@ export default function OpsPage() {
   return (
     <main className="wrap">
       <style jsx global>{`
+        :root { --ops-navy:#0f1f3d; --ops-charcoal:#2b2f36; --ops-muted:#667085; --ops-line:#e1e5eb; --ops-canvas:#f3f5f8; }
+        body { background:var(--ops-canvas); color:var(--ops-charcoal); }
         .wrap {
           width: 100%;
-          max-width: 1440px;
+          max-width: 1600px;
           margin: 0 auto;
-          padding: 24px;
+          padding: 28px clamp(24px, 2.4vw, 40px) 48px;
           display: grid;
-          gap: 16px;
-          color: #111827;
+          gap: 18px;
+          color: var(--ops-charcoal);
         }
         .hero {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
-          gap: 16px;
+          align-items: center;
+          gap: 20px;
+          padding:18px 20px;
+          border-radius:18px;
+          color:#fff;
+          background:linear-gradient(120deg,#0b172f,#0f1f3d 62%,#182f59);
+          box-shadow:0 18px 45px rgba(15,31,61,.14);
         }
+        .heroBrand { display:flex; align-items:center; gap:22px; min-width:0; }
+        .heroMeta { padding-left:18px; border-left:1px solid rgba(255,255,255,.18); }
+        .heroMeta strong { display:block; font-size:14px; }
+        .heroMeta .sub { color:#c6d0df; }
+        .liveBadge { display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.1);font-size:10px;font-weight:950;letter-spacing:.08em; }
+        .liveBadge::before { content:"";width:6px;height:6px;border-radius:50%;background:#6ee7b7;box-shadow:0 0 0 3px rgba(110,231,183,.15); }
         .benefitBox { display:grid; gap:9px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
         .benefitSummary { display:grid; grid-template-columns:1fr auto; gap:7px 12px; font-size:12px; }
         .benefitSummary strong { color:#1d4ed8; }
@@ -1272,7 +1306,7 @@ export default function OpsPage() {
         .checkRow input { width:18px; height:18px; }
         .trialControls { display:grid; gap:8px; padding-top:10px; border-top:1px solid #dbeafe; }
         .trialControls label { display:grid; gap:6px; font-size:12px; font-weight:800; }
-        .subscriptionShell { display:grid; grid-template-columns:minmax(0,1.75fr) minmax(330px,.75fr); gap:16px; align-items:start; }
+        .subscriptionShell { display:grid; grid-template-columns:minmax(0,2.15fr) minmax(400px,.85fr); gap:18px; align-items:start; }
         .subscriptionMain { display:grid; gap:14px; min-width:0; }
         .subscriptionKpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
         .subscriptionKpi { border:1px solid #e2e8f0; border-radius:14px; padding:13px 14px; background:linear-gradient(145deg,#fff,#f8fafc); display:grid; gap:5px; }
@@ -1289,6 +1323,20 @@ export default function OpsPage() {
         .subscriptionFacts dt { color:#64748b; font-size:12px; font-weight:800; }
         .subscriptionFacts dd { margin:0; text-align:right; font-size:13px; font-weight:900; }
         .benefitSummaryCard { display:grid; gap:11px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
+        .trialManagementCard { display:grid; gap:13px; padding:16px; border:1px solid #b8d5ff; background:linear-gradient(145deg,#f7fbff,#eef6ff); border-radius:14px; }
+        .trialCardHeader { display:flex;justify-content:space-between;align-items:flex-start;gap:12px; }
+        .trialCardHeader .sectionTitle { margin-bottom:4px; }
+        .trialCardHeader p,.trialHelp { margin:0;color:#64748b;font-size:12px;line-height:1.5; }
+        .trialFacts { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
+        .trialFacts div { display:grid;gap:5px;padding:11px 12px;border:1px solid #dbe7f5;border-radius:11px;background:#fff; }
+        .trialFacts span { color:#64748b;font-size:11px;font-weight:800; }
+        .trialFacts strong { font-size:14px; }
+        .trialPresetGrid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
+        .trialPresetGrid .btn { width:100%; }
+        .trialPreview { display:grid;gap:8px;padding:13px;border:1px solid #b8d5ff;border-radius:12px;background:#f3f8ff; }
+        .trialPreview div { display:flex;justify-content:space-between;gap:16px;font-size:13px; }
+        .trialPreview span { color:#64748b; }
+        .trialPreview strong { text-align:right; }
         .activityToggle { width:100%; display:flex; justify-content:space-between; padding:12px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; cursor:pointer; }
         .activityGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
         .activityGrid div { display:grid; gap:4px; padding:10px; border-radius:11px; background:#f8fafc; }
@@ -1297,9 +1345,12 @@ export default function OpsPage() {
         .subscriptionLinks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding-top:12px; border-top:1px solid #eef2f7; }
         .emptyState { margin:0; padding:24px; text-align:center; color:#64748b; }
         .opsAccount > div { display:grid; gap:2px; text-align:right; }
-        .opsAccount small { color:#6b7280; font-size:10px; font-weight:900; }
+        .opsAccount small { color:#c6d0df; font-size:10px; font-weight:900; }
+        .hero .btn { border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff; }
+        .hero .btn:hover { background:rgba(255,255,255,.18); }
         .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
         .opsModal { width:min(460px,100%); display:grid; gap:14px; border-radius:18px; background:#fff; padding:22px; box-shadow:0 28px 80px rgba(15,23,42,.28); }
+        .opsModal .opsField { display:grid;gap:7px;font-size:13px;font-weight:800; }
         .h1 {
           margin: 0;
           font-size: clamp(24px, 2vw, 30px);
@@ -1318,11 +1369,11 @@ export default function OpsPage() {
           flex-wrap: wrap;
         }
         .card {
-          border: 1px solid #e5e7eb;
-          border-radius: 18px;
+          border: 1px solid var(--ops-line);
+          border-radius: 16px;
           background: #fff;
           padding: 18px;
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.045);
+          box-shadow: 0 8px 24px rgba(15,31,61,.04);
         }
         .kpis {
           display: grid;
@@ -1354,9 +1405,10 @@ export default function OpsPage() {
           gap: 8px;
           overflow: auto;
           padding: 4px;
-          border: 1px solid #e5e7eb;
-          border-radius: 16px;
-          background: #f8fafc;
+          border: 1px solid var(--ops-line);
+          border-radius: 14px;
+          background: #fff;
+          box-shadow:0 5px 18px rgba(15,31,61,.035);
         }
         .tab {
           border: 0;
@@ -1369,7 +1421,7 @@ export default function OpsPage() {
           white-space: nowrap;
         }
         .tab.active {
-          background: #111827;
+          background: var(--ops-navy);
           color: #fff;
         }
         .btn {
@@ -1377,28 +1429,30 @@ export default function OpsPage() {
           padding: 10px 12px;
           border-radius: 12px;
           background: #fff;
-          color: #111827;
+          color: var(--ops-charcoal);
           font-weight: 900;
           cursor: pointer;
-          min-height: 38px;
+          min-height: 42px;
+          transition:transform .18s,box-shadow .18s,background .18s;
         }
         .btn.primary {
-          background: #2563eb;
-          border-color: #2563eb;
+          background: var(--ops-navy);
+          border-color: var(--ops-navy);
           color: #fff;
         }
         .btn:hover {
           transform: translateY(-1px);
           box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
         }
+        .btn:focus-visible,.tab:focus-visible,.input:focus-visible,.select:focus-visible,.textarea:focus-visible { outline:3px solid rgba(67,102,156,.32); outline-offset:2px; }
         .btn.danger {
           border-color: #fecaca;
           color: #b91c1c;
         }
         .grid2 {
           display: grid;
-          grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.85fr);
-          gap: 16px;
+          grid-template-columns: minmax(0, 2.2fr) minmax(390px, 0.9fr);
+          gap: 18px;
           align-items: start;
         }
         .grid3 {
@@ -1467,7 +1521,7 @@ export default function OpsPage() {
         th,
         td {
           border-bottom: 1px solid #eef2f7;
-          padding: 13px 12px;
+          padding: 15px 14px;
           text-align: left;
           vertical-align: middle;
         }
@@ -1518,7 +1572,7 @@ export default function OpsPage() {
         }
         tr.sel {
           background: #eef6ff;
-          box-shadow: inset 4px 0 0 #2563eb;
+          box-shadow: inset 4px 0 0 var(--ops-navy);
         }
         tr:hover {
           background: #f8fafc;
@@ -1702,8 +1756,8 @@ export default function OpsPage() {
         }
         .settingsGrid {
           display: grid;
-          grid-template-columns: 0.8fr 1.2fr;
-          gap: 16px;
+          grid-template-columns: minmax(380px, 0.8fr) minmax(560px, 1.2fr);
+          gap: 18px;
           align-items: start;
         }
         .dashboardGrid {
@@ -1846,7 +1900,10 @@ export default function OpsPage() {
           }
           .hero {
             display: grid;
+            padding:16px;
           }
+          .heroBrand { align-items:flex-start; }
+          .heroMeta { display:none; }
           .kpis {
             grid-template-columns: 1fr;
           }
@@ -1871,6 +1928,8 @@ export default function OpsPage() {
           .subscriptionKpis,
           .subscriptionToolbar,
           .subscriptionLinks { grid-template-columns:1fr; }
+          .trialFacts,
+          .trialPresetGrid { grid-template-columns:1fr; }
           .subscriptionTable { min-width:0; }
           .subscriptionTable thead { display:none; }
           .subscriptionTable tbody { display:grid; gap:10px; padding:10px; }
@@ -1886,25 +1945,24 @@ export default function OpsPage() {
           .modalActions .btn { width:100%; }
           .opsAccount { width:100%; }
           .opsAccount > div { text-align:left; width:100%; }
+          .opsAccount .btn { flex:1; min-height:44px; }
           .modalBackdrop { align-items:end; padding:10px; }
           .opsModal { border-radius:18px 18px 12px 12px; padding:18px; }
         }
       `}</style>
 
       <header className="hero">
-        <div>
-          <h1 className="h1">OPS 관리자 콘솔</h1>
-          <p className="sub">
-            전체 매장, 구독, 주문, 문의 상태를 한눈에 확인하고 관리합니다.
-          </p>
-          <p className="sub">
-            마지막 업데이트: {lastLoadedAt ? fmtDateTime(lastLoadedAt) : "-"}
-          </p>
+        <div className="heroBrand">
+          <RionBrand product inverse />
+          <div className="heroMeta">
+            <span className="liveBadge">LIVE</span>
+            <p className="sub">마지막 업데이트 {lastLoadedAt ? fmtDateTime(lastLoadedAt) : "-"}</p>
+          </div>
         </div>
         <div className="row opsAccount">
           <div><strong>{opsIdentity.email || "OPS 사용자"}</strong><small>{opsIdentity.role.toUpperCase()}</small></div>
-          <button className="btn" onClick={loadOps}>
-            새로고침
+          <button className="btn" onClick={loadOps} disabled={loading}>
+            {loading ? "업데이트 중..." : "새로고침"}
           </button>
           <button className="btn" onClick={() => void supabase.auth.signOut().then(() => router.replace("/ops/login"))}>로그아웃</button>
         </div>
@@ -2772,21 +2830,32 @@ export default function OpsPage() {
       {benefitEditorOpen && selectedStore ? (
         <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setBenefitEditorOpen(false)}>
           <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="founder-editor-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div><div className="sectionTitle" id="founder-editor-title">혜택·무료 체험 관리</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 현재 상태 {benefit?.baseStatus || "-"}</p></div>
-            <div className="sectionTitle">창립 멤버 혜택</div>
+            <div><div className="sectionTitle" id="founder-editor-title">창립 멤버 혜택 관리</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 현재 상태 {benefit?.baseStatus || "-"}</p></div>
             <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>창립 멤버로 지정</span></label>
             <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 40% 할인</span></label>
             <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>선결제 옵션 40% 할인</span></label>
             <textarea className="input" rows={3} maxLength={240} placeholder="창립 멤버 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
             <button className="btn primary" disabled={benefitSaving || !benefitForm.founderReason.trim()} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "창립 멤버 혜택 저장"}</button>
-            <div className="trialControls">
-              <div className="sectionTitle">무료 체험 기간</div>
-              <label><span>무료 체험 종료일</span><input className="input" type="date" value={benefitForm.trialEndAt} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialEndAt: event.target.value }))}/></label>
-              <textarea className="textarea" rows={2} maxLength={240} placeholder="무료 체험 조정 사유(필수)" value={benefitForm.trialReason} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialReason: event.target.value }))}/>
-              <button className="btn" disabled={!canManageBilling || benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil) || !benefitForm.trialReason.trim()} onClick={() => void saveTrial()}>{benefitSaving ? "저장 중..." : "무료 체험 기간 저장"}</button>
-              {benefit?.baseStatus === "active" || benefit?.paidUntil ? <small className="muted">유료 매장은 무료 체험을 변경할 수 없습니다. 별도의 구독 보상 절차를 사용해야 합니다.</small> : null}
-            </div>
             <button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>닫기</button>
+          </section>
+        </div>
+      ) : null}
+
+      {trialEditorOpen && selectedStore && isOpsMaster ? (
+        <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setTrialEditorOpen(false)}>
+          <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="trial-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div><div className="sectionTitle" id="trial-editor-title">무료 체험 기간 연장</div><p className="muted">{selectedStore.store_name || selectedStore.store_id}의 무료 체험 종료일을 연장합니다.</p></div>
+            <div className="trialPreview">
+              <div><span>현재 종료일</span><strong>{fmtDate(benefit?.trialEndAt || null)}</strong></div>
+              <div><span>변경 후 종료일</span><strong>{benefitForm.trialEndAt ? fmtDate(`${benefitForm.trialEndAt}T23:59:59+09:00`) : "날짜를 선택해 주세요"}</strong></div>
+            </div>
+            <div><div className="sectionTitle">빠른 연장</div><div className="trialPresetGrid">
+              {[7, 14, 30].map((days) => <button key={days} className="btn" type="button" onClick={() => setBenefitForm((prev) => ({ ...prev, trialEndAt: addDaysToDateInput(prev.trialEndAt || ymd(new Date()), days) }))}>+{days}일</button>)}
+            </div></div>
+            <label className="opsField"><span>무료 체험 종료일</span><input className="input" type="date" min={addDaysToDateInput(benefit?.trialEndAt ? new Date(benefit.trialEndAt).toISOString().slice(0, 10) : ymd(new Date()), 1)} value={benefitForm.trialEndAt} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialEndAt: event.target.value }))}/></label>
+            <label className="opsField"><span>연장 사유 (필수)</span><textarea className="textarea" rows={3} maxLength={240} placeholder="초기 운영 지원 등 연장 근거를 입력해 주세요." value={benefitForm.trialReason} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialReason: event.target.value }))}/></label>
+            <p className="muted">이 변경은 마스터 계정과 사유, 변경 전·후 기간이 감사 기록에 저장됩니다.</p>
+            <div className="modalActions"><button className="btn" disabled={benefitSaving} onClick={() => setTrialEditorOpen(false)}>취소</button><button className="btn primary" disabled={benefitSaving || !benefitForm.trialEndAt || !benefitForm.trialReason.trim()} onClick={() => void saveTrial()}>{benefitSaving ? "연장 중..." : "무료 체험 기간 연장"}</button></div>
           </section>
         </div>
       ) : null}
