@@ -72,6 +72,19 @@ type PaymentBaseRow = {
   paid_at?: string | null;
   status?: string | null;
 };
+type RefundHistoryRow = {
+  id: number;
+  billing_payment_id: number;
+  store_id: string;
+  store_name: string | null;
+  amount_krw: number;
+  reason: string;
+  status: string;
+  public_error_code: string | null;
+  pg_status: string | null;
+  requested_at: string;
+  completed_at: string | null;
+};
 type OrderBaseRow = {
   store_id: string | null;
   order_date: string | null;
@@ -217,6 +230,15 @@ function ticketCategoryLabel(category: string) {
   return category || "-";
 }
 
+function refundStatusLabel(status: string) {
+  if (status === "requested") return "요청됨";
+  if (status === "processing") return "처리 중";
+  if (status === "completed") return "취소 완료";
+  if (status === "failed") return "취소 실패";
+  if (status === "reconcile_required") return "확인 필요";
+  return status || "-";
+}
+
 function storeStatusLabel(row: StoreOpsRow) {
   if (row.status === "deleted") return "삭제";
   if (row.status === "inactive") return "비활성";
@@ -296,6 +318,9 @@ export default function OpsPage() {
   const [benefitSaving, setBenefitSaving] = useState(false);
   const [opsIdentity, setOpsIdentity] = useState({ email: "", role: "viewer" });
   const [benefitEditorOpen, setBenefitEditorOpen] = useState(false);
+  const [refundRows, setRefundRows] = useState<RefundHistoryRow[]>([]);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundStatusFilter, setRefundStatusFilter] = useState("all");
   const isOpsMaster = opsIdentity.role === "master";
   const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
 
@@ -513,6 +538,22 @@ export default function OpsPage() {
       });
     })();
   }, [isOps]);
+
+  const loadRefundHistory = useCallback(async () => {
+    if (isOps !== true || !canManageBilling) return;
+    setRefundLoading(true);
+    const response = await fetch("/api/ops/refund-history?limit=100", { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result?.ok) setRefundRows((result.rows || []) as RefundHistoryRow[]);
+    else setMsg(String(result?.message || "환불 이력을 불러오지 못했습니다."));
+    setRefundLoading(false);
+  }, [canManageBilling, isOps]);
+
+  useEffect(() => {
+    if (activeTab !== "customers") return;
+    const timer = window.setTimeout(() => void loadRefundHistory(), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, loadRefundHistory]);
 
   const selectedStore = useMemo(
     () => rows.find((r) => r.store_id === selectedStoreId) || rows[0] || null,
@@ -2141,6 +2182,46 @@ export default function OpsPage() {
             {renderStoreTable("stores")}
           </article>
           {renderSelectedStore()}
+        </section>
+      ) : null}
+
+      {!loading && activeTab === "customers" && canManageBilling ? (
+        <section className="card">
+          <div className="panelHeader">
+            <div>
+              <div className="sectionTitle">구독 결제 취소·환불 이력</div>
+              <p>PG 취소 결과와 내부 구독 복구 상태를 함께 확인합니다.</p>
+            </div>
+            <div className="row">
+              <select className="select" value={refundStatusFilter} onChange={(event) => setRefundStatusFilter(event.target.value)}>
+                <option value="all">상태 전체</option>
+                <option value="processing">처리 중</option>
+                <option value="completed">취소 완료</option>
+                <option value="failed">취소 실패</option>
+                <option value="reconcile_required">확인 필요</option>
+              </select>
+              <button className="btn" disabled={refundLoading} onClick={() => void loadRefundHistory()}>{refundLoading ? "불러오는 중" : "새로고침"}</button>
+            </div>
+          </div>
+          <div className="tableWrap">
+            <table className="opsTable">
+              <thead><tr><th>요청일시</th><th>매장</th><th>환불금액</th><th>상태</th><th>PG 상태</th><th>취소 사유·오류</th><th>완료일시</th></tr></thead>
+              <tbody>
+                {refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).map((row) => (
+                  <tr key={row.id}>
+                    <td>{fmtDateTime(row.requested_at)}</td>
+                    <td><div className="cellMain"><strong>{row.store_name || row.store_id}</strong><small>{row.store_id}</small></div></td>
+                    <td className="num">{fmtMoney(row.amount_krw)}</td>
+                    <td><span className={`pill ${row.status === "completed" ? "ok" : row.status === "failed" || row.status === "reconcile_required" ? "danger" : "warn"}`}>{refundStatusLabel(row.status)}</span></td>
+                    <td>{row.pg_status || "-"}</td>
+                    <td><div className="cellMain"><strong>{row.reason}</strong><small>{row.public_error_code || "오류 없음"}</small></div></td>
+                    <td>{fmtDateTime(row.completed_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!refundLoading && refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).length === 0 ? <p className="muted">조건에 맞는 환불 이력이 없습니다.</p> : null}
         </section>
       ) : null}
 
