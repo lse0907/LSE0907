@@ -367,6 +367,7 @@ export default function OpsPage() {
   const [refundSyncTarget, setRefundSyncTarget] = useState<RefundCaseRow | null>(null);
   const [refundSyncReason, setRefundSyncReason] = useState("");
   const [refundActionId, setRefundActionId] = useState<number | null>(null);
+  const [subscriptionActivityOpen, setSubscriptionActivityOpen] = useState(false);
   const isOpsMaster = opsIdentity.role === "master";
   const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
 
@@ -1151,12 +1152,6 @@ export default function OpsPage() {
             <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "창립 멤버" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
             <div className="benefitSummary"><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
             <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "창립 멤버 혜택 변경" : "조회 전용"}</button>
-            <div className="trialControls">
-              <label><span>무료 체험 종료일</span><input className="input" type="date" value={benefitForm.trialEndAt} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialEndAt: e.target.value }))}/></label>
-              <textarea className="input" rows={2} maxLength={240} placeholder="무료 체험 조정 사유(필수)" value={benefitForm.trialReason} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(e) => setBenefitForm((prev) => ({ ...prev, trialReason: e.target.value }))}/>
-              <button className="btn" disabled={!canManageBilling || benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onClick={() => void saveTrial()}>무료 체험 기간 저장</button>
-              {benefit?.baseStatus === "active" || benefit?.paidUntil ? <small className="muted">유료 매장은 무료 체험을 변경할 수 없습니다. 별도의 구독 보상 절차를 사용해야 합니다.</small> : null}
-            </div>
           </div>
 
           <div className="quickLinks">
@@ -1201,6 +1196,57 @@ export default function OpsPage() {
     </aside>
   );
 
+  const renderSubscriptionTable = () => (
+    <div className="tableWrap subscriptionTableWrap">
+      <table className="opsTable subscriptionTable">
+        <thead><tr><th>매장·점주</th><th>구독 상태</th><th>구독 기간</th><th>이번 달 결제</th><th>운영 확인</th></tr></thead>
+        <tbody>
+          {filteredRows.map((r) => {
+            const days = remainingDays(r.paid_until);
+            return (
+              <tr key={r.store_id} className={r.store_id === selectedStore?.store_id ? "sel" : ""} tabIndex={0} onClick={() => { setSelectedStoreId(r.store_id); setSubscriptionActivityOpen(false); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedStoreId(r.store_id); setSubscriptionActivityOpen(false); } }}>
+                <td data-label="매장"><div className="cellMain"><strong>{r.store_name || r.store_id}</strong><small>매장 ID {r.store_id} · 점주 {shortId(r.owner_user_id)}</small></div></td>
+                <td data-label="구독 상태"><span className={`pill ${r.base_plan_status === "active" ? "ok" : "warn"}`}>{r.base_plan_status === "active" ? "유료 구독 중" : "무료·비활성"}</span></td>
+                <td data-label="구독 기간"><div className="cellMain"><strong>{fmtDate(r.paid_until)}</strong><small>{days != null ? days < 0 ? `만료 ${Math.abs(days)}일 경과` : `D-${days}` : "기간 없음"}</small></div></td>
+                <td data-label="이번 달 결제"><div className="cellMain"><strong>{fmtMoney(r.monthly_revenue)}</strong><small>{r.paid_count.toLocaleString()}건</small></div></td>
+                <td data-label="운영 확인"><span className={`pill ${storeRiskLabel(r) === "정상" ? "ok" : "warn"}`}>{storeRiskLabel(r)}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {filteredRows.length === 0 ? <p className="emptyState">조건에 맞는 구독 매장이 없습니다. 필터를 초기화해 다시 확인해 주세요.</p> : null}
+    </div>
+  );
+
+  const renderSubscriptionDetail = () => (
+    <aside className="card detailCard subscriptionDetail">
+      {selectedStore ? (
+        <>
+          <div className="storeDetailHeader">
+            <div><div className="eyebrow">구독 상세</div><h3>{selectedStore.store_name || selectedStore.store_id}</h3><p className="muted">매장 ID {selectedStore.store_id} · 점주 {shortId(selectedStore.owner_user_id)}</p></div>
+            <div className="pillStack right"><span className={`pill ${selectedStore.base_plan_status === "active" ? "ok" : "warn"}`}>{selectedStore.base_plan_status === "active" ? "유료 구독 중" : "무료·비활성"}</span></div>
+          </div>
+          <div className={`insight ${storeRiskLabel(selectedStore) === "정상" ? "ok" : "warn"}`}><strong>구독 운영 판단</strong><span>{selectedStore.base_plan_status === "active" ? `구독 중이며 만료일까지 ${Math.max(0, remainingDays(selectedStore.paid_until) || 0)}일 남았습니다.` : "유료 구독이 아닙니다. 무료 체험 또는 구독 상태를 확인해 주세요."}</span></div>
+          <dl className="subscriptionFacts">
+            <div><dt>현재 상태</dt><dd>{selectedStore.base_plan_status === "active" ? "유료 구독 중" : "무료·비활성"}</dd></div>
+            <div><dt>구독 만료일</dt><dd>{fmtDate(selectedStore.paid_until)}</dd></div>
+            <div><dt>남은 기간</dt><dd>{remainingDays(selectedStore.paid_until) != null ? `D-${Math.max(0, Number(remainingDays(selectedStore.paid_until)))}` : "-"}</dd></div>
+            <div><dt>이번 달 결제</dt><dd>{fmtMoney(selectedStore.monthly_revenue)} · {selectedStore.paid_count.toLocaleString()}건</dd></div>
+          </dl>
+          <section className="benefitSummaryCard">
+            <div className="panelHeader"><div><div className="sectionTitle">혜택 및 무료 체험</div><p>현재 적용 상태를 확인하고 필요한 경우에만 변경합니다.</p></div></div>
+            <div className="benefitSummary"><span>창립 멤버</span><strong>{benefit?.founderMember ? "적용" : "미적용"}</strong><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong><span>무료 체험 종료</span><strong>{fmtDate(benefit?.trialEndAt || null)}</strong></div>
+            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "혜택·무료 체험 관리" : "조회 전용"}</button>
+          </section>
+          <button className="activityToggle" type="button" aria-expanded={subscriptionActivityOpen} onClick={() => setSubscriptionActivityOpen((open) => !open)}><span>매장 활동 참고 정보</span><strong>{subscriptionActivityOpen ? "접기" : "펼치기"}</strong></button>
+          {subscriptionActivityOpen ? <div className="activityGrid"><div><span>오늘 주문</span><strong>{selectedStore.today_order_count.toLocaleString()}건</strong></div><div><span>이번 달 주문</span><strong>{selectedStore.monthly_order_count.toLocaleString()}건</strong></div><div><span>미처리 문의</span><strong>{selectedStore.open_ticket_count.toLocaleString()}건</strong></div><div><span>최근 주문</span><strong>{fmtDateTime(selectedStore.last_order_at)}</strong></div></div> : null}
+          <div className="subscriptionLinks"><button className="btn" onClick={() => setActiveTab("payments")}>결제·환불 보기</button><button className="btn" onClick={() => setActiveTab("tickets")}>문의 보기</button></div>
+        </>
+      ) : <p className="muted">선택된 매장이 없습니다.</p>}
+    </aside>
+  );
+
   return (
     <main className="wrap">
       <style jsx global>{`
@@ -1226,6 +1272,30 @@ export default function OpsPage() {
         .checkRow input { width:18px; height:18px; }
         .trialControls { display:grid; gap:8px; padding-top:10px; border-top:1px solid #dbeafe; }
         .trialControls label { display:grid; gap:6px; font-size:12px; font-weight:800; }
+        .subscriptionShell { display:grid; grid-template-columns:minmax(0,1.75fr) minmax(330px,.75fr); gap:16px; align-items:start; }
+        .subscriptionMain { display:grid; gap:14px; min-width:0; }
+        .subscriptionKpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+        .subscriptionKpi { border:1px solid #e2e8f0; border-radius:14px; padding:13px 14px; background:linear-gradient(145deg,#fff,#f8fafc); display:grid; gap:5px; }
+        .subscriptionKpi span { color:#64748b; font-size:12px; font-weight:800; }
+        .subscriptionKpi strong { font-size:20px; }
+        .subscriptionKpi small { color:#64748b; }
+        .subscriptionToolbar { display:grid; grid-template-columns:minmax(220px,1fr) 170px 170px auto; gap:9px; }
+        .subscriptionResult { display:flex; justify-content:space-between; gap:10px; align-items:center; color:#64748b; font-size:12px; font-weight:800; }
+        .subscriptionDetail { display:grid; gap:14px; }
+        .eyebrow { color:#2563eb; font-size:11px; font-weight:950; letter-spacing:.08em; text-transform:uppercase; }
+        .subscriptionFacts { margin:0; display:grid; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; }
+        .subscriptionFacts div { display:flex; justify-content:space-between; gap:16px; padding:11px 12px; border-bottom:1px solid #eef2f7; }
+        .subscriptionFacts div:last-child { border-bottom:0; }
+        .subscriptionFacts dt { color:#64748b; font-size:12px; font-weight:800; }
+        .subscriptionFacts dd { margin:0; text-align:right; font-size:13px; font-weight:900; }
+        .benefitSummaryCard { display:grid; gap:11px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
+        .activityToggle { width:100%; display:flex; justify-content:space-between; padding:12px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; cursor:pointer; }
+        .activityGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+        .activityGrid div { display:grid; gap:4px; padding:10px; border-radius:11px; background:#f8fafc; }
+        .activityGrid span { color:#64748b; font-size:11px; font-weight:800; }
+        .activityGrid strong { font-size:12px; word-break:break-word; }
+        .subscriptionLinks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding-top:12px; border-top:1px solid #eef2f7; }
+        .emptyState { margin:0; padding:24px; text-align:center; color:#64748b; }
         .opsAccount > div { display:grid; gap:2px; text-align:right; }
         .opsAccount small { color:#6b7280; font-size:10px; font-weight:900; }
         .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
@@ -1753,6 +1823,7 @@ export default function OpsPage() {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
           .grid2,
+          .subscriptionShell,
           .settingsGrid,
           .dashboardGrid,
           .ticketShell {
@@ -1760,9 +1831,11 @@ export default function OpsPage() {
           }
           .businessGrid,
           .ticketStats,
-          .refundSummary {
+          .refundSummary,
+          .subscriptionKpis {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+          .subscriptionToolbar { grid-template-columns:1fr 1fr; }
           .detailCard {
             position: static;
           }
@@ -1795,6 +1868,18 @@ export default function OpsPage() {
             grid-template-columns: 1fr;
           }
           .refundSummary { grid-template-columns:1fr; }
+          .subscriptionKpis,
+          .subscriptionToolbar,
+          .subscriptionLinks { grid-template-columns:1fr; }
+          .subscriptionTable { min-width:0; }
+          .subscriptionTable thead { display:none; }
+          .subscriptionTable tbody { display:grid; gap:10px; padding:10px; }
+          .subscriptionTable tr { display:grid; gap:9px; border:1px solid #e2e8f0; border-radius:14px; padding:13px; }
+          .subscriptionTable tr.sel { box-shadow:inset 4px 0 0 #2563eb; }
+          .subscriptionTable td { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:0; border:0; text-align:right; }
+          .subscriptionTable td::before { content:attr(data-label); color:#64748b; font-size:11px; font-weight:900; text-align:left; }
+          .subscriptionTable td:first-child { display:block; text-align:left; padding-bottom:9px; border-bottom:1px solid #eef2f7; }
+          .subscriptionTable td:first-child::before { display:none; }
           .refundActionNotice { position:static; align-items:flex-start; }
           .refundActions { min-width:150px; }
           .modalActions { display:grid; grid-template-columns:1fr; }
@@ -2278,20 +2363,27 @@ export default function OpsPage() {
       ) : null}
 
       {!loading && activeTab === "subscriptions" ? (
-        <section className="grid2">
-          <article className="card">
-            <div className="panelHeader">
-              <div><div className="sectionTitle">구독 현황</div><p>플랜 상태, 만료일과 구독 매출을 중심으로 확인합니다.</p></div>
-              <span className="pill ok">구독 운영</span>
+        <section className="subscriptionShell">
+          <div className="subscriptionMain">
+            <div className="subscriptionKpis" aria-label="구독 운영 요약">
+              <div className="subscriptionKpi"><span>유료 구독</span><strong>{kpi.paidStores.toLocaleString()}개</strong><small>전체 {kpi.totalStores.toLocaleString()}개 중 {kpi.totalStores ? Math.round(kpi.paidStores / kpi.totalStores * 100) : 0}%</small></div>
+              <div className="subscriptionKpi"><span>무료·비활성</span><strong>{freeOrInactiveStores.toLocaleString()}개</strong><small>혜택 또는 체험 상태 확인</small></div>
+              <div className="subscriptionKpi"><span>7일 내 만료</span><strong>{kpi.expiringSoonStores.toLocaleString()}개</strong><small>구독 기간 사전 확인</small></div>
+              <div className="subscriptionKpi"><span>점검 필요</span><strong>{noPaymentPaidStores.length.toLocaleString()}개</strong><small>유료 상태·결제 이력 불일치</small></div>
             </div>
-            <div className="filters" style={{ marginTop: 12 }}>
-              <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="매장명 / store_id 검색" />
+            <article className="card">
+              <div className="panelHeader"><div><div className="sectionTitle">구독 현황</div><p>매장별 구독 상태, 기간과 결제 현황을 확인합니다.</p></div><span className="pill">총 {filteredRows.length.toLocaleString()}개</span></div>
+              <div className="subscriptionToolbar">
+                <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="매장명·매장 ID·점주 계정 검색" aria-label="구독 매장 검색" />
               <select className="select" value={subFilter} onChange={(event) => setSubFilter(event.target.value)}><option value="all">구독 전체</option><option value="active">활성 구독</option><option value="inactive">비활성/미구독</option><option value="expiring">만료 임박</option></select>
               <select className="select" value={sortBy} onChange={(event) => setSortBy(event.target.value as StoreSort)}><option value="expiring">만료 임박순</option><option value="monthlyRevenue">구독매출 높은순</option><option value="risk">점검 우선순</option></select>
-            </div>
-            {renderStoreTable("billing")}
-          </article>
-          {renderSelectedStore()}
+                <button className="btn" disabled={!query && subFilter === "all" && sortBy === "expiring"} onClick={() => { setQuery(""); setSubFilter("all"); setSortBy("expiring"); }}>필터 초기화</button>
+              </div>
+              <div className="subscriptionResult"><span>검색 결과 {filteredRows.length.toLocaleString()}개</span><span>매장을 선택하면 구독 상세를 확인할 수 있습니다.</span></div>
+              <div style={{ marginTop: 12 }}>{renderSubscriptionTable()}</div>
+            </article>
+          </div>
+          {renderSubscriptionDetail()}
         </section>
       ) : null}
 
@@ -2680,12 +2772,21 @@ export default function OpsPage() {
       {benefitEditorOpen && selectedStore ? (
         <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setBenefitEditorOpen(false)}>
           <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="founder-editor-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div><div className="sectionTitle" id="founder-editor-title">창립 멤버 혜택 변경</div><p className="muted">{selectedStore.store_name || selectedStore.store_id}</p></div>
+            <div><div className="sectionTitle" id="founder-editor-title">혜택·무료 체험 관리</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 현재 상태 {benefit?.baseStatus || "-"}</p></div>
+            <div className="sectionTitle">창립 멤버 혜택</div>
             <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>창립 멤버로 지정</span></label>
             <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 40% 할인</span></label>
             <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>선결제 옵션 40% 할인</span></label>
             <textarea className="input" rows={3} maxLength={240} placeholder="창립 멤버 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
-            <div className="row"><button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>취소</button><button className="btn primary" disabled={benefitSaving} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "변경 저장"}</button></div>
+            <button className="btn primary" disabled={benefitSaving || !benefitForm.founderReason.trim()} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "창립 멤버 혜택 저장"}</button>
+            <div className="trialControls">
+              <div className="sectionTitle">무료 체험 기간</div>
+              <label><span>무료 체험 종료일</span><input className="input" type="date" value={benefitForm.trialEndAt} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialEndAt: event.target.value }))}/></label>
+              <textarea className="textarea" rows={2} maxLength={240} placeholder="무료 체험 조정 사유(필수)" value={benefitForm.trialReason} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialReason: event.target.value }))}/>
+              <button className="btn" disabled={!canManageBilling || benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil) || !benefitForm.trialReason.trim()} onClick={() => void saveTrial()}>{benefitSaving ? "저장 중..." : "무료 체험 기간 저장"}</button>
+              {benefit?.baseStatus === "active" || benefit?.paidUntil ? <small className="muted">유료 매장은 무료 체험을 변경할 수 없습니다. 별도의 구독 보상 절차를 사용해야 합니다.</small> : null}
+            </div>
+            <button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>닫기</button>
           </section>
         </div>
       ) : null}
