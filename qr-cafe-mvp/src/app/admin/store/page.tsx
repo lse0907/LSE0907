@@ -11,6 +11,7 @@ import {
   useStoreProfile,
 } from "@/app/lib/storeProfile";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
+import { prepareStoreImage } from "@/app/lib/storeImageUpload";
 
 const STORE_IMAGE_BUCKET = "store-assets";
 type StoreStatus = "active" | "inactive" | "deleted";
@@ -417,11 +418,12 @@ function AdminstorePageInner() {
       setUploadMsg("매장 정보를 먼저 불러온 뒤에 이미지를 업로드해 주세요.");
       return "";
     }
-    const ext = getFileExt(file.name) || "png";
+    const uploadFile = await prepareStoreImage(file);
+    const ext = getFileExt(uploadFile.name) || "png";
     const path = `${storeId}/${kind}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage
       .from(STORE_IMAGE_BUCKET)
-      .upload(path, file, { upsert: true });
+      .upload(path, uploadFile, { upsert: true, contentType: uploadFile.type || undefined });
     if (error) throw error;
 
     const { data } = supabase.storage
@@ -1375,7 +1377,11 @@ function AdminstorePageInner() {
                   className="input"
                   type="file"
                   accept="image/*"
-                  onChange={(e) => onUploadMain(e.target.files?.[0] || null)}
+                  onChange={async (e) => {
+                    const input = e.currentTarget;
+                    await onUploadMain(input.files?.[0] || null);
+                    input.value = "";
+                  }}
                   disabled={uploadingMain}
                 />
                 {uploadingMain ? (
@@ -1398,7 +1404,11 @@ function AdminstorePageInner() {
                   className="input"
                   type="file"
                   accept="image/*"
-                  onChange={(e) => onUploadLogo(e.target.files?.[0] || null)}
+                  onChange={async (e) => {
+                    const input = e.currentTarget;
+                    await onUploadLogo(input.files?.[0] || null);
+                    input.value = "";
+                  }}
                   disabled={uploadingLogo}
                 />
                 {uploadingLogo ? (
