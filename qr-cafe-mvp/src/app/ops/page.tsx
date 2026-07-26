@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { maskToken } from "@/app/lib/billingSettings";
+import RionBrand from "@/app/components/RionBrand";
 
 type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "tickets" | "settings";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
@@ -37,6 +38,8 @@ type StoreOpsRow = {
   created_at: string | null;
   base_plan_status: string;
   paid_until: string | null;
+  trial_end_at: string | null;
+  founder_member: boolean;
   addon_status: string;
   addon_paid_until: string | null;
   monthly_revenue: number;
@@ -60,7 +63,9 @@ type BillingBaseRow = {
   store_id: string;
   base_plan_status: string | null;
   paid_until: string | null;
+  trial_end_at: string | null;
 };
+type FounderStoreRow = { store_id: string | null; billing_accounts: { founder_member?: boolean | null } | Array<{ founder_member?: boolean | null }> | null };
 type AddonBaseRow = {
   store_id: string;
   prepay_addon_status: string | null;
@@ -205,6 +210,27 @@ function remainingDays(raw: string | null) {
   return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
+function subscriptionStatusLabel(status: string) {
+  if (status === "active") return "유료 구독 중";
+  if (status === "trialing") return "무료 체험 중";
+  if (status === "past_due") return "결제 확인 필요";
+  if (status === "canceled" || status === "cancelled") return "구독 해지";
+  if (status === "inactive" || !status) return "미구독";
+  return "상태 확인 필요";
+}
+
+function subscriptionTone(status: string) {
+  if (status === "active") return "ok";
+  if (status === "trialing") return "trial";
+  if (status === "past_due") return "warn";
+  if (status === "canceled" || status === "cancelled") return "danger";
+  return "neutral";
+}
+
+function usageEndAt(row: StoreOpsRow) {
+  return row.base_plan_status === "active" ? row.paid_until : row.base_plan_status === "trialing" ? row.trial_end_at : null;
+}
+
 function isExpiringSoon(raw: string | null) {
   const d = remainingDays(raw);
   return d != null && d >= 0 && d <= 7;
@@ -212,6 +238,13 @@ function isExpiringSoon(raw: string | null) {
 
 function isActiveTicket(status: string) {
   return ACTIVE_TICKET_STATUSES.has(status);
+}
+
+function addDaysToDateInput(raw: string, days: number) {
+  const base = raw ? new Date(`${raw}T12:00:00`) : new Date();
+  if (!Number.isFinite(base.getTime())) return ymd(new Date());
+  base.setDate(base.getDate() + days);
+  return ymd(base);
 }
 
 function ticketStatusLabel(status: string) {
@@ -289,8 +322,8 @@ function storeStatusLabel(row: StoreOpsRow) {
 
 function storeRiskLabel(row: StoreOpsRow) {
   if (row.urgent_ticket_count > 0) return "긴급문의";
-  if (isExpiringSoon(row.paid_until)) return "만료임박";
-  if (row.base_plan_status !== "active") return "구독확인";
+  if (isExpiringSoon(usageEndAt(row))) return "만료임박";
+  if (row.base_plan_status !== "active" && row.base_plan_status !== "trialing") return "구독확인";
   if (!row.setup_completed) return "설정필요";
   if (row.monthly_order_count === 0) return "주문없음";
   return "정상";
@@ -298,7 +331,7 @@ function storeRiskLabel(row: StoreOpsRow) {
 
 function storeRiskRank(row: StoreOpsRow) {
   if (row.urgent_ticket_count > 0) return 10;
-  if (isExpiringSoon(row.paid_until)) return 9;
+  if (isExpiringSoon(usageEndAt(row))) return 9;
   if (row.base_plan_status === "active" && row.monthly_order_count === 0)
     return 8;
   if (!row.setup_completed) return 7;
@@ -311,8 +344,8 @@ function storeRiskRank(row: StoreOpsRow) {
 function storeInsight(row: StoreOpsRow) {
   if (row.urgent_ticket_count > 0)
     return "긴급 문의가 있어 가장 먼저 확인해야 합니다.";
-  if (isExpiringSoon(row.paid_until))
-    return "구독 만료가 가까워 갱신 안내가 필요합니다.";
+  if (isExpiringSoon(usageEndAt(row)))
+    return "이용 종료일이 가까워 갱신 또는 체험 기간 확인이 필요합니다.";
   if (row.base_plan_status === "active" && row.monthly_order_count === 0)
     return "유료 구독 중이지만 이번 달 주문이 없어 이탈 위험이 있습니다.";
   if (!row.setup_completed)
@@ -359,6 +392,8 @@ export default function OpsPage() {
   const [benefitSaving, setBenefitSaving] = useState(false);
   const [opsIdentity, setOpsIdentity] = useState({ email: "", role: "viewer" });
   const [benefitEditorOpen, setBenefitEditorOpen] = useState(false);
+  const [trialEditorOpen, setTrialEditorOpen] = useState(false);
+  const [trialMessage, setTrialMessage] = useState("");
   const [refundRows, setRefundRows] = useState<RefundHistoryRow[]>([]);
   const [refundCases, setRefundCases] = useState<RefundCaseRow[]>([]);
   const [refundLoading, setRefundLoading] = useState(false);
@@ -392,11 +427,12 @@ export default function OpsPage() {
       orderRes,
       ticketRes,
       memberRes,
+      founderRes,
     ] = await Promise.all([
       storesQuery,
       supabase
         .from("store_billing")
-        .select("store_id, base_plan_status, paid_until"),
+        .select("store_id, base_plan_status, paid_until, trial_end_at"),
       supabase
         .from("store_addons")
         .select("store_id, prepay_addon_status, addon_paid_until"),
@@ -418,6 +454,7 @@ export default function OpsPage() {
         .order("created_at", { ascending: false })
         .limit(200),
       supabase.from("store_members").select("store_id, user_id, role"),
+      supabase.from("billing_account_stores").select("store_id,billing_accounts(founder_member)"),
     ]);
 
     if (
@@ -452,8 +489,11 @@ export default function OpsPage() {
     const orderRows = (orderRes.data || []) as OrderBaseRow[];
     const ticketRows = (ticketRes.data || []) as SupportTicketRow[];
     const memberRows = (memberRes.data || []) as StoreMemberRow[];
+    const founderRows = (founderRes.data || []) as FounderStoreRow[];
     if (memberRes.error)
       setMsg(`점주 계정 연결 로딩 실패: ${memberRes.error.message}`);
+    if (founderRes.error)
+      setMsg(`창립 멤버 정보 로딩 실패: ${founderRes.error.message}`);
 
     const billMap = new Map(billRows.map((x) => [x.store_id, x]));
     const addonMap = new Map(addonRows.map((x) => [x.store_id, x]));
@@ -465,6 +505,13 @@ export default function OpsPage() {
     const openTicketMap = new Map<string, number>();
     const urgentTicketMap = new Map<string, number>();
     const ownerMap = new Map<string, string>();
+    const founderMap = new Map<string, boolean>();
+
+    for (const item of founderRows) {
+      const sid = String(item.store_id || "");
+      const account = Array.isArray(item.billing_accounts) ? item.billing_accounts[0] : item.billing_accounts;
+      if (sid) founderMap.set(sid, account?.founder_member === true);
+    }
 
     for (const m of memberRows) {
       const sid = String(m.store_id || "");
@@ -523,6 +570,8 @@ export default function OpsPage() {
         base_plan_status:
           billMap.get(s.store_id)?.base_plan_status || "inactive",
         paid_until: billMap.get(s.store_id)?.paid_until || null,
+        trial_end_at: billMap.get(s.store_id)?.trial_end_at || null,
+        founder_member: founderMap.get(String(s.store_id)) === true,
         addon_status:
           addonMap.get(s.store_id)?.prepay_addon_status || "inactive",
         addon_paid_until: addonMap.get(s.store_id)?.addon_paid_until || null,
@@ -642,8 +691,9 @@ export default function OpsPage() {
       const matchesSub =
         subFilter === "all" ||
         (subFilter === "active" && r.base_plan_status === "active") ||
-        (subFilter === "inactive" && r.base_plan_status !== "active") ||
-        (subFilter === "expiring" && isExpiringSoon(r.paid_until));
+        (subFilter === "trialing" && r.base_plan_status === "trialing") ||
+        (subFilter === "inactive" && r.base_plan_status !== "active" && r.base_plan_status !== "trialing") ||
+        (subFilter === "expiring" && isExpiringSoon(usageEndAt(r)));
       const matchesTicket =
         ticketFilter === "all" ||
         (ticketFilter === "open" && r.open_ticket_count > 0) ||
@@ -664,14 +714,24 @@ export default function OpsPage() {
         return b.open_ticket_count - a.open_ticket_count;
       if (sortBy === "expiring")
         return (
-          (remainingDays(a.paid_until) ?? 99999) -
-          (remainingDays(b.paid_until) ?? 99999)
+          (remainingDays(usageEndAt(a)) ?? 99999) -
+          (remainingDays(usageEndAt(b)) ?? 99999)
         );
       return storeRiskRank(b) - storeRiskRank(a);
     });
 
     return next;
   }, [query, rows, sortBy, subFilter, ticketFilter]);
+
+  const subscriptionRows = useMemo(
+    () => filteredRows.filter((row) => row.status !== "deleted"),
+    [filteredRows],
+  );
+
+  const subscriptionBaseRows = useMemo(
+    () => rows.filter((row) => row.status !== "deleted"),
+    [rows],
+  );
 
   const kpi = useMemo<KpiSummary>(() => {
     const activeTicketRows = tickets.filter((t) =>
@@ -732,6 +792,9 @@ export default function OpsPage() {
   const arpu =
     kpi.paidStores > 0 ? Math.round(kpi.monthlyRevenue / kpi.paidStores) : 0;
   const freeOrInactiveStores = Math.max(0, kpi.totalStores - kpi.paidStores);
+  const subscriptionPaidStores = subscriptionBaseRows.filter((r) => r.base_plan_status === "active").length;
+  const subscriptionTrialStores = subscriptionBaseRows.filter((r) => r.base_plan_status === "trialing").length;
+  const subscriptionExpiringStores = subscriptionBaseRows.filter((r) => isExpiringSoon(usageEndAt(r))).length;
   const todayOrders = rows.reduce((a, c) => a + c.today_order_count, 0);
   const noPaymentPaidStores = rows.filter(
     (r) => r.base_plan_status === "active" && r.paid_count === 0,
@@ -840,13 +903,24 @@ export default function OpsPage() {
   };
 
   const saveTrial = async () => {
-    if (!selectedStoreId || !benefitForm.trialReason.trim()) { setMsg("무료 체험 조정 사유를 입력해 주세요."); return; }
+    setTrialMessage("");
+    if (!isOpsMaster) { setTrialMessage("마스터 권한만 무료 체험 기간을 변경할 수 있습니다."); return; }
+    if (!selectedStoreId) { setTrialMessage("매장을 다시 선택해 주세요."); return; }
+    if (!benefitForm.trialEndAt) { setTrialMessage("무료 체험 종료일을 선택해 주세요."); return; }
+    if (!benefitForm.trialReason.trim()) { setTrialMessage("무료 체험 시작 또는 연장 사유를 입력해 주세요."); return; }
+    if (benefit?.trialEndAt && new Date(`${benefitForm.trialEndAt}T23:59:59+09:00`).getTime() <= new Date(benefit.trialEndAt).getTime()) { setTrialMessage("현재 종료일보다 이후 날짜를 선택해 주세요."); return; }
     setBenefitSaving(true);
     const trialEndAt = benefitForm.trialEndAt ? new Date(`${benefitForm.trialEndAt}T23:59:59+09:00`).toISOString() : null;
     const response = await fetch("/api/ops/store-benefits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, trialEndAt, trialReason: benefitForm.trialReason }) });
     const result = await response.json().catch(() => ({}));
-    setMsg(response.ok && result?.ok ? "무료 체험 기간을 조정했습니다." : String(result?.message || "무료 체험 조정에 실패했습니다."));
-    if (response.ok && result?.ok) { setBenefit(result.benefit); setBenefitForm((prev) => ({ ...prev, trialReason: "" })); }
+    const resultMessage = response.ok && result?.ok ? `무료 체험을 ${fmtDate(result.benefit?.trialEndAt || trialEndAt)}까지 적용했습니다.` : String(result?.message || "무료 체험 조정에 실패했습니다.");
+    setTrialMessage(resultMessage);
+    setMsg(resultMessage);
+    if (response.ok && result?.ok) {
+      setBenefit(result.benefit);
+      setBenefitForm((prev) => ({ ...prev, trialReason: "" }));
+      await loadOps();
+    }
     setBenefitSaving(false);
   };
 
@@ -941,12 +1015,13 @@ export default function OpsPage() {
         </thead>
         <tbody>
           {filteredRows.map((r) => {
-            const days = remainingDays(r.paid_until);
+            const periodEnd = usageEndAt(r);
+            const days = remainingDays(periodEnd);
             const dday = days != null ? `D-${Math.max(0, days)}` : "-";
             return (
               <tr
                 key={r.store_id}
-                className={r.store_id === selectedStore?.store_id ? "sel" : ""}
+                className={`${r.store_id === selectedStore?.store_id ? "sel" : ""} ${r.status === "deleted" ? "deletedRow" : ""}`}
                 onClick={() => setSelectedStoreId(r.store_id)}
               >
                 {mode === "billing" ? (
@@ -959,23 +1034,17 @@ export default function OpsPage() {
                     </td>
                     <td>
                       <div className="cellMain">
-                        <strong>{r.store_name || r.store_id}</strong>
+                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong>{r.founder_member ? <span className="pill founder" title="창립 멤버 혜택 적용 매장">창립</span> : null}</div>
                         <small>{r.store_id}</small>
                       </div>
                     </td>
                     <td>
-                      <span
-                        className={`pill ${r.base_plan_status === "active" ? "ok" : "warn"}`}
-                      >
-                        {r.base_plan_status === "active"
-                          ? "유료"
-                          : "무료/비활성"}
-                      </span>
+                      <span className={`pill ${subscriptionTone(r.base_plan_status)}`}>{subscriptionStatusLabel(r.base_plan_status)}</span>
                     </td>
                     <td>
                       <div className="cellMain">
-                        <strong>{fmtDate(r.paid_until)}</strong>
-                        <small>{dday}</small>
+                        <strong>{fmtDate(periodEnd)}</strong>
+                        <small>{periodEnd ? dday : "기간 없음"}</small>
                       </div>
                     </td>
                     <td className="num">{fmtMoney(r.monthly_revenue)}</td>
@@ -998,14 +1067,14 @@ export default function OpsPage() {
                     </td>
                     <td>
                       <div className="cellMain">
-                        <strong>{r.store_name || r.store_id}</strong>
+                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong>{r.founder_member ? <span className="pill founder" title="창립 멤버 혜택 적용 매장">창립</span> : null}</div>
                         <small>{r.store_id}</small>
                       </div>
                     </td>
                     <td>
                       <div className="pillStack">
                         <span
-                          className={`pill ${storeStatusLabel(r) === "운영중" ? "ok" : "warn"}`}
+                          className={`pill ${r.status === "deleted" ? "danger" : storeStatusLabel(r) === "운영중" ? "ok" : "warn"}`}
                         >
                           {storeStatusLabel(r)}
                         </span>
@@ -1018,14 +1087,8 @@ export default function OpsPage() {
                     </td>
                     <td>
                       <div className="cellMain">
-                        <strong>
-                          {r.base_plan_status === "active"
-                            ? "유료"
-                            : "무료/비활성"}
-                        </strong>
-                        <small>
-                          {fmtMoney(r.monthly_revenue)} · {dday}
-                        </small>
+                        <span className={`pill ${subscriptionTone(r.base_plan_status)}`}>{subscriptionStatusLabel(r.base_plan_status)}</span>
+                        <small>{periodEnd ? `${fmtDate(periodEnd)} · ${days != null && days < 0 ? `만료 ${Math.abs(days)}일` : dday}` : "기간 없음"}</small>
                       </div>
                     </td>
                     <td>
@@ -1105,17 +1168,17 @@ export default function OpsPage() {
             </div>
             <div className="metric">
               <span>구독 상태</span>
-              <strong>{selectedStore.base_plan_status}</strong>
+              <strong>{subscriptionStatusLabel(selectedStore.base_plan_status)}</strong>
             </div>
             <div className="metric">
-              <span>구독 만료</span>
-              <strong>{fmtDate(selectedStore.paid_until)}</strong>
+              <span>이용 종료일</span>
+              <strong>{fmtDate(usageEndAt(selectedStore))}</strong>
             </div>
             <div className="metric">
               <span>남은 기간</span>
               <strong>
-                {remainingDays(selectedStore.paid_until) != null
-                  ? `D-${Math.max(0, Number(remainingDays(selectedStore.paid_until)))}`
+                {remainingDays(usageEndAt(selectedStore)) != null
+                  ? `D-${Math.max(0, Number(remainingDays(usageEndAt(selectedStore))))}`
                   : "-"}
               </strong>
             </div>
@@ -1148,7 +1211,7 @@ export default function OpsPage() {
           </div>
 
           <div className="benefitBox">
-            <div className="sectionTitle">창립 멤버·무료 체험</div>
+            <div className="sectionTitle">창립 멤버 혜택</div>
             <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "창립 멤버" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
             <div className="benefitSummary"><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
             <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "창립 멤버 혜택 변경" : "조회 전용"}</button>
@@ -1199,15 +1262,16 @@ export default function OpsPage() {
   const renderSubscriptionTable = () => (
     <div className="tableWrap subscriptionTableWrap">
       <table className="opsTable subscriptionTable">
-        <thead><tr><th>매장·점주</th><th>구독 상태</th><th>구독 기간</th><th>이번 달 결제</th><th>운영 확인</th></tr></thead>
+        <thead><tr><th>매장·점주</th><th>구독 상태</th><th>이용 기간</th><th>이번 달 결제</th><th>운영 확인</th></tr></thead>
         <tbody>
-          {filteredRows.map((r) => {
-            const days = remainingDays(r.paid_until);
+          {subscriptionRows.map((r) => {
+            const periodEnd = usageEndAt(r);
+            const days = remainingDays(periodEnd);
             return (
               <tr key={r.store_id} className={r.store_id === selectedStore?.store_id ? "sel" : ""} tabIndex={0} onClick={() => { setSelectedStoreId(r.store_id); setSubscriptionActivityOpen(false); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedStoreId(r.store_id); setSubscriptionActivityOpen(false); } }}>
                 <td data-label="매장"><div className="cellMain"><strong>{r.store_name || r.store_id}</strong><small>매장 ID {r.store_id} · 점주 {shortId(r.owner_user_id)}</small></div></td>
-                <td data-label="구독 상태"><span className={`pill ${r.base_plan_status === "active" ? "ok" : "warn"}`}>{r.base_plan_status === "active" ? "유료 구독 중" : "무료·비활성"}</span></td>
-                <td data-label="구독 기간"><div className="cellMain"><strong>{fmtDate(r.paid_until)}</strong><small>{days != null ? days < 0 ? `만료 ${Math.abs(days)}일 경과` : `D-${days}` : "기간 없음"}</small></div></td>
+                <td data-label="구독 상태"><span className={`pill ${subscriptionTone(r.base_plan_status)}`}>{subscriptionStatusLabel(r.base_plan_status)}</span></td>
+                <td data-label="이용 기간"><div className="cellMain"><strong>{fmtDate(periodEnd)}</strong><small>{days != null ? days < 0 ? `만료 ${Math.abs(days)}일 경과` : `D-${days}` : "기간 없음"}</small></div></td>
                 <td data-label="이번 달 결제"><div className="cellMain"><strong>{fmtMoney(r.monthly_revenue)}</strong><small>{r.paid_count.toLocaleString()}건</small></div></td>
                 <td data-label="운영 확인"><span className={`pill ${storeRiskLabel(r) === "정상" ? "ok" : "warn"}`}>{storeRiskLabel(r)}</span></td>
               </tr>
@@ -1215,7 +1279,7 @@ export default function OpsPage() {
           })}
         </tbody>
       </table>
-      {filteredRows.length === 0 ? <p className="emptyState">조건에 맞는 구독 매장이 없습니다. 필터를 초기화해 다시 확인해 주세요.</p> : null}
+      {subscriptionRows.length === 0 ? <p className="emptyState">조건에 맞는 구독 매장이 없습니다. 필터를 초기화해 다시 확인해 주세요.</p> : null}
     </div>
   );
 
@@ -1225,19 +1289,18 @@ export default function OpsPage() {
         <>
           <div className="storeDetailHeader">
             <div><div className="eyebrow">구독 상세</div><h3>{selectedStore.store_name || selectedStore.store_id}</h3><p className="muted">매장 ID {selectedStore.store_id} · 점주 {shortId(selectedStore.owner_user_id)}</p></div>
-            <div className="pillStack right"><span className={`pill ${selectedStore.base_plan_status === "active" ? "ok" : "warn"}`}>{selectedStore.base_plan_status === "active" ? "유료 구독 중" : "무료·비활성"}</span></div>
+            <div className="pillStack right"><span className={`pill ${subscriptionTone(selectedStore.base_plan_status)}`}>{subscriptionStatusLabel(selectedStore.base_plan_status)}</span></div>
           </div>
-          <div className={`insight ${storeRiskLabel(selectedStore) === "정상" ? "ok" : "warn"}`}><strong>구독 운영 판단</strong><span>{selectedStore.base_plan_status === "active" ? `구독 중이며 만료일까지 ${Math.max(0, remainingDays(selectedStore.paid_until) || 0)}일 남았습니다.` : "유료 구독이 아닙니다. 무료 체험 또는 구독 상태를 확인해 주세요."}</span></div>
+          <div className={`insight ${selectedStore.base_plan_status === "active" || selectedStore.base_plan_status === "trialing" ? "ok" : "warn"}`}><strong>구독 운영 판단</strong><span>{selectedStore.base_plan_status === "active" ? `유료 구독 중이며 종료일까지 ${Math.max(0, remainingDays(selectedStore.paid_until) || 0)}일 남았습니다.` : selectedStore.base_plan_status === "trialing" ? `무료 체험 중이며 종료일까지 ${Math.max(0, remainingDays(selectedStore.trial_end_at) || 0)}일 남았습니다.` : "현재 이용 중인 구독이나 무료 체험이 없습니다."}</span></div>
           <dl className="subscriptionFacts">
-            <div><dt>현재 상태</dt><dd>{selectedStore.base_plan_status === "active" ? "유료 구독 중" : "무료·비활성"}</dd></div>
-            <div><dt>구독 만료일</dt><dd>{fmtDate(selectedStore.paid_until)}</dd></div>
-            <div><dt>남은 기간</dt><dd>{remainingDays(selectedStore.paid_until) != null ? `D-${Math.max(0, Number(remainingDays(selectedStore.paid_until)))}` : "-"}</dd></div>
+            <div><dt>현재 상태</dt><dd>{subscriptionStatusLabel(selectedStore.base_plan_status)}</dd></div>
+            <div><dt>이용 종료일</dt><dd>{fmtDate(usageEndAt(selectedStore))}</dd></div>
+            <div><dt>남은 기간</dt><dd>{remainingDays(usageEndAt(selectedStore)) != null ? `D-${Math.max(0, Number(remainingDays(usageEndAt(selectedStore))))}` : "-"}</dd></div>
             <div><dt>이번 달 결제</dt><dd>{fmtMoney(selectedStore.monthly_revenue)} · {selectedStore.paid_count.toLocaleString()}건</dd></div>
           </dl>
-          <section className="benefitSummaryCard">
-            <div className="panelHeader"><div><div className="sectionTitle">혜택 및 무료 체험</div><p>현재 적용 상태를 확인하고 필요한 경우에만 변경합니다.</p></div></div>
-            <div className="benefitSummary"><span>창립 멤버</span><strong>{benefit?.founderMember ? "적용" : "미적용"}</strong><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong><span>무료 체험 종료</span><strong>{fmtDate(benefit?.trialEndAt || null)}</strong></div>
-            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "혜택·무료 체험 관리" : "조회 전용"}</button>
+          <section className="trialManagementRow">
+            <div><div className="sectionTitle">무료 체험</div><p>{benefit?.baseStatus === "trialing" ? `${fmtDate(benefit.trialEndAt)}까지 · ${Math.max(0, Number(remainingDays(benefit.trialEndAt)))}일 남음` : benefit?.baseStatus === "active" || benefit?.paidUntil ? "유료 구독 중인 매장은 무료 체험을 변경할 수 없습니다." : "현재 적용된 무료 체험 기간이 없습니다."}</p></div>
+            {benefit?.baseStatus === "active" || benefit?.paidUntil ? <span className="pill ok">유료 구독 중</span> : isOpsMaster ? <button className="btn primary" onClick={() => { setTrialMessage(""); setTrialEditorOpen(true); }}>{benefit?.trialEndAt ? "기간 연장" : "무료 체험 시작"}</button> : <span className="lockedHint">마스터 권한에서 관리</span>}
           </section>
           <button className="activityToggle" type="button" aria-expanded={subscriptionActivityOpen} onClick={() => setSubscriptionActivityOpen((open) => !open)}><span>매장 활동 참고 정보</span><strong>{subscriptionActivityOpen ? "접기" : "펼치기"}</strong></button>
           {subscriptionActivityOpen ? <div className="activityGrid"><div><span>오늘 주문</span><strong>{selectedStore.today_order_count.toLocaleString()}건</strong></div><div><span>이번 달 주문</span><strong>{selectedStore.monthly_order_count.toLocaleString()}건</strong></div><div><span>미처리 문의</span><strong>{selectedStore.open_ticket_count.toLocaleString()}건</strong></div><div><span>최근 주문</span><strong>{fmtDateTime(selectedStore.last_order_at)}</strong></div></div> : null}
@@ -1250,21 +1313,34 @@ export default function OpsPage() {
   return (
     <main className="wrap">
       <style jsx global>{`
+        :root { --ops-navy:#0f1f3d; --ops-charcoal:#2b2f36; --ops-muted:#667085; --ops-line:#e1e5eb; --ops-canvas:#f3f5f8; }
+        body { background:var(--ops-canvas); color:var(--ops-charcoal); }
         .wrap {
           width: 100%;
-          max-width: 1440px;
+          max-width: 1600px;
           margin: 0 auto;
-          padding: 24px;
+          padding: 28px clamp(24px, 2.4vw, 40px) 48px;
           display: grid;
-          gap: 16px;
-          color: #111827;
+          gap: 18px;
+          color: var(--ops-charcoal);
         }
         .hero {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
-          gap: 16px;
+          align-items: center;
+          gap: 20px;
+          padding:18px 20px;
+          border-radius:18px;
+          color:#fff;
+          background:linear-gradient(120deg,#0b172f,#0f1f3d 62%,#182f59);
+          box-shadow:0 18px 45px rgba(15,31,61,.14);
         }
+        .heroBrand { display:flex; align-items:center; gap:22px; min-width:0; }
+        .heroMeta { padding-left:18px; border-left:1px solid rgba(255,255,255,.18); }
+        .heroMeta strong { display:block; font-size:14px; }
+        .heroMeta .sub { color:#c6d0df; }
+        .liveBadge { display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.1);font-size:10px;font-weight:950;letter-spacing:.08em; }
+        .liveBadge::before { content:"";width:6px;height:6px;border-radius:50%;background:#6ee7b7;box-shadow:0 0 0 3px rgba(110,231,183,.15); }
         .benefitBox { display:grid; gap:9px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
         .benefitSummary { display:grid; grid-template-columns:1fr auto; gap:7px 12px; font-size:12px; }
         .benefitSummary strong { color:#1d4ed8; }
@@ -1272,7 +1348,7 @@ export default function OpsPage() {
         .checkRow input { width:18px; height:18px; }
         .trialControls { display:grid; gap:8px; padding-top:10px; border-top:1px solid #dbeafe; }
         .trialControls label { display:grid; gap:6px; font-size:12px; font-weight:800; }
-        .subscriptionShell { display:grid; grid-template-columns:minmax(0,1.75fr) minmax(330px,.75fr); gap:16px; align-items:start; }
+        .subscriptionShell { display:grid; grid-template-columns:minmax(0,2.15fr) minmax(400px,.85fr); gap:18px; align-items:start; }
         .subscriptionMain { display:grid; gap:14px; min-width:0; }
         .subscriptionKpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
         .subscriptionKpi { border:1px solid #e2e8f0; border-radius:14px; padding:13px 14px; background:linear-gradient(145deg,#fff,#f8fafc); display:grid; gap:5px; }
@@ -1289,6 +1365,18 @@ export default function OpsPage() {
         .subscriptionFacts dt { color:#64748b; font-size:12px; font-weight:800; }
         .subscriptionFacts dd { margin:0; text-align:right; font-size:13px; font-weight:900; }
         .benefitSummaryCard { display:grid; gap:11px; padding:14px; border:1px solid #dbeafe; background:#f8fbff; border-radius:14px; }
+        .trialManagementRow { display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 16px;border:1px solid #b8d5ff;background:linear-gradient(145deg,#f7fbff,#eef6ff);border-radius:14px; }
+        .trialManagementRow .sectionTitle { margin-bottom:4px; }
+        .trialManagementRow p { margin:0;color:#64748b;font-size:12px;line-height:1.5; }
+        .trialManagementRow .btn { flex:0 0 auto; }
+        .lockedHint { color:#64748b;font-size:11px;font-weight:800;white-space:nowrap; }
+        .trialPresetGrid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
+        .trialPresetGrid .btn { width:100%; }
+        .trialPreview { display:grid;gap:8px;padding:13px;border:1px solid #b8d5ff;border-radius:12px;background:#f3f8ff; }
+        .trialPreview div { display:flex;justify-content:space-between;gap:16px;font-size:13px; }
+        .trialPreview span { color:#64748b; }
+        .trialPreview strong { text-align:right; }
+        .trialMessage { margin:0;padding:11px 12px;border:1px solid #bfdbfe;border-radius:11px;background:#eff6ff;color:#1e3a8a;font-size:12px;font-weight:800;line-height:1.5; }
         .activityToggle { width:100%; display:flex; justify-content:space-between; padding:12px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; cursor:pointer; }
         .activityGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
         .activityGrid div { display:grid; gap:4px; padding:10px; border-radius:11px; background:#f8fafc; }
@@ -1297,9 +1385,12 @@ export default function OpsPage() {
         .subscriptionLinks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding-top:12px; border-top:1px solid #eef2f7; }
         .emptyState { margin:0; padding:24px; text-align:center; color:#64748b; }
         .opsAccount > div { display:grid; gap:2px; text-align:right; }
-        .opsAccount small { color:#6b7280; font-size:10px; font-weight:900; }
+        .opsAccount small { color:#c6d0df; font-size:10px; font-weight:900; }
+        .hero .btn { border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff; }
+        .hero .btn:hover { background:rgba(255,255,255,.18); }
         .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
         .opsModal { width:min(460px,100%); display:grid; gap:14px; border-radius:18px; background:#fff; padding:22px; box-shadow:0 28px 80px rgba(15,23,42,.28); }
+        .opsModal .opsField { display:grid;gap:7px;font-size:13px;font-weight:800; }
         .h1 {
           margin: 0;
           font-size: clamp(24px, 2vw, 30px);
@@ -1318,11 +1409,11 @@ export default function OpsPage() {
           flex-wrap: wrap;
         }
         .card {
-          border: 1px solid #e5e7eb;
-          border-radius: 18px;
+          border: 1px solid var(--ops-line);
+          border-radius: 16px;
           background: #fff;
           padding: 18px;
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.045);
+          box-shadow: 0 8px 24px rgba(15,31,61,.04);
         }
         .kpis {
           display: grid;
@@ -1354,9 +1445,10 @@ export default function OpsPage() {
           gap: 8px;
           overflow: auto;
           padding: 4px;
-          border: 1px solid #e5e7eb;
-          border-radius: 16px;
-          background: #f8fafc;
+          border: 1px solid var(--ops-line);
+          border-radius: 14px;
+          background: #fff;
+          box-shadow:0 5px 18px rgba(15,31,61,.035);
         }
         .tab {
           border: 0;
@@ -1369,7 +1461,7 @@ export default function OpsPage() {
           white-space: nowrap;
         }
         .tab.active {
-          background: #111827;
+          background: var(--ops-navy);
           color: #fff;
         }
         .btn {
@@ -1377,28 +1469,30 @@ export default function OpsPage() {
           padding: 10px 12px;
           border-radius: 12px;
           background: #fff;
-          color: #111827;
+          color: var(--ops-charcoal);
           font-weight: 900;
           cursor: pointer;
-          min-height: 38px;
+          min-height: 42px;
+          transition:transform .18s,box-shadow .18s,background .18s;
         }
         .btn.primary {
-          background: #2563eb;
-          border-color: #2563eb;
+          background: var(--ops-navy);
+          border-color: var(--ops-navy);
           color: #fff;
         }
         .btn:hover {
           transform: translateY(-1px);
           box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
         }
+        .btn:focus-visible,.tab:focus-visible,.input:focus-visible,.select:focus-visible,.textarea:focus-visible { outline:3px solid rgba(67,102,156,.32); outline-offset:2px; }
         .btn.danger {
           border-color: #fecaca;
           color: #b91c1c;
         }
         .grid2 {
           display: grid;
-          grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.85fr);
-          gap: 16px;
+          grid-template-columns: minmax(0, 2.2fr) minmax(390px, 0.9fr);
+          gap: 18px;
           align-items: start;
         }
         .grid3 {
@@ -1467,7 +1561,7 @@ export default function OpsPage() {
         th,
         td {
           border-bottom: 1px solid #eef2f7;
-          padding: 13px 12px;
+          padding: 15px 14px;
           text-align: left;
           vertical-align: middle;
         }
@@ -1499,6 +1593,7 @@ export default function OpsPage() {
           line-height: 1.25;
           word-break: keep-all;
         }
+        .nameWithBadge { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
         .cellMain small {
           color: #6b7280;
           font-size: 12px;
@@ -1518,11 +1613,13 @@ export default function OpsPage() {
         }
         tr.sel {
           background: #eef6ff;
-          box-shadow: inset 4px 0 0 #2563eb;
+          box-shadow: inset 4px 0 0 var(--ops-navy);
         }
         tr:hover {
           background: #f8fafc;
         }
+        tr.deletedRow { color:#7f1d1d;background:#fffafa; }
+        tr.deletedRow:hover { background:#fff5f5; }
         .pill {
           display: inline-flex;
           align-items: center;
@@ -1548,6 +1645,9 @@ export default function OpsPage() {
           background: #fef2f2;
           border-color: #fecaca;
         }
+        .pill.trial { color:#1e3a8a;background:#eff6ff;border-color:#bfdbfe; }
+        .pill.neutral { color:#475569;background:#f8fafc;border-color:#cbd5e1; }
+        .pill.founder { color:#0f1f3d;background:#eef4ff;border-color:#a9bddf;font-size:10px;padding:3px 7px; }
         .detailCard {
           position: sticky;
           top: 16px;
@@ -1702,8 +1802,8 @@ export default function OpsPage() {
         }
         .settingsGrid {
           display: grid;
-          grid-template-columns: 0.8fr 1.2fr;
-          gap: 16px;
+          grid-template-columns: minmax(380px, 0.8fr) minmax(560px, 1.2fr);
+          gap: 18px;
           align-items: start;
         }
         .dashboardGrid {
@@ -1846,7 +1946,10 @@ export default function OpsPage() {
           }
           .hero {
             display: grid;
+            padding:16px;
           }
+          .heroBrand { align-items:flex-start; }
+          .heroMeta { display:none; }
           .kpis {
             grid-template-columns: 1fr;
           }
@@ -1871,6 +1974,7 @@ export default function OpsPage() {
           .subscriptionKpis,
           .subscriptionToolbar,
           .subscriptionLinks { grid-template-columns:1fr; }
+          .trialPresetGrid { grid-template-columns:1fr; }
           .subscriptionTable { min-width:0; }
           .subscriptionTable thead { display:none; }
           .subscriptionTable tbody { display:grid; gap:10px; padding:10px; }
@@ -1886,25 +1990,24 @@ export default function OpsPage() {
           .modalActions .btn { width:100%; }
           .opsAccount { width:100%; }
           .opsAccount > div { text-align:left; width:100%; }
+          .opsAccount .btn { flex:1; min-height:44px; }
           .modalBackdrop { align-items:end; padding:10px; }
           .opsModal { border-radius:18px 18px 12px 12px; padding:18px; }
         }
       `}</style>
 
       <header className="hero">
-        <div>
-          <h1 className="h1">OPS 관리자 콘솔</h1>
-          <p className="sub">
-            전체 매장, 구독, 주문, 문의 상태를 한눈에 확인하고 관리합니다.
-          </p>
-          <p className="sub">
-            마지막 업데이트: {lastLoadedAt ? fmtDateTime(lastLoadedAt) : "-"}
-          </p>
+        <div className="heroBrand">
+          <RionBrand product inverse />
+          <div className="heroMeta">
+            <span className="liveBadge">LIVE</span>
+            <p className="sub">마지막 업데이트 {lastLoadedAt ? fmtDateTime(lastLoadedAt) : "-"}</p>
+          </div>
         </div>
         <div className="row opsAccount">
           <div><strong>{opsIdentity.email || "OPS 사용자"}</strong><small>{opsIdentity.role.toUpperCase()}</small></div>
-          <button className="btn" onClick={loadOps}>
-            새로고침
+          <button className="btn" onClick={loadOps} disabled={loading}>
+            {loading ? "업데이트 중..." : "새로고침"}
           </button>
           <button className="btn" onClick={() => void supabase.auth.signOut().then(() => router.replace("/ops/login"))}>로그아웃</button>
         </div>
@@ -1959,7 +2062,10 @@ export default function OpsPage() {
             key={tab.id}
             type="button"
             className={`tab ${activeTab === tab.id ? "active" : ""}`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              if (tab.id === "subscriptions" && selectedStore?.status === "deleted") setSelectedStoreId(subscriptionBaseRows[0]?.store_id || "");
+              setActiveTab(tab.id);
+            }}
           >
             {tab.label}
           </button>
@@ -2278,11 +2384,8 @@ export default function OpsPage() {
           <article className="card">
             <div className="panelHeader">
               <div>
-                <div className="sectionTitle">고객·구독 관리</div>
-                <p>
-                  점주 계정, 매장, 구독/결제, 주문 사용량, 문의 상태를 한
-                  화면에서 함께 확인합니다.
-                </p>
+                <div className="sectionTitle">점주·매장 관리</div>
+                <p>점주 계정과 매장 상태, 운영 현황 및 적용 혜택을 한곳에서 확인합니다.</p>
               </div>
               <span className="pill ok">계정 → 매장</span>
             </div>
@@ -2331,6 +2434,7 @@ export default function OpsPage() {
               >
                 <option value="all">구독 전체</option>
                 <option value="active">활성 구독</option>
+                <option value="trialing">무료 체험 중</option>
                 <option value="inactive">비활성/미구독</option>
                 <option value="expiring">만료 임박</option>
               </select>
@@ -2366,20 +2470,20 @@ export default function OpsPage() {
         <section className="subscriptionShell">
           <div className="subscriptionMain">
             <div className="subscriptionKpis" aria-label="구독 운영 요약">
-              <div className="subscriptionKpi"><span>유료 구독</span><strong>{kpi.paidStores.toLocaleString()}개</strong><small>전체 {kpi.totalStores.toLocaleString()}개 중 {kpi.totalStores ? Math.round(kpi.paidStores / kpi.totalStores * 100) : 0}%</small></div>
-              <div className="subscriptionKpi"><span>무료·비활성</span><strong>{freeOrInactiveStores.toLocaleString()}개</strong><small>혜택 또는 체험 상태 확인</small></div>
-              <div className="subscriptionKpi"><span>7일 내 만료</span><strong>{kpi.expiringSoonStores.toLocaleString()}개</strong><small>구독 기간 사전 확인</small></div>
-              <div className="subscriptionKpi"><span>점검 필요</span><strong>{noPaymentPaidStores.length.toLocaleString()}개</strong><small>유료 상태·결제 이력 불일치</small></div>
+              <div className="subscriptionKpi"><span>유료 구독</span><strong>{subscriptionPaidStores.toLocaleString()}개</strong><small>삭제 매장을 제외한 {subscriptionBaseRows.length.toLocaleString()}개 중</small></div>
+              <div className="subscriptionKpi"><span>무료 체험 중</span><strong>{subscriptionTrialStores.toLocaleString()}개</strong><small>체험 종료일과 남은 기간 확인</small></div>
+              <div className="subscriptionKpi"><span>7일 내 종료</span><strong>{subscriptionExpiringStores.toLocaleString()}개</strong><small>구독·체험 기간 사전 확인</small></div>
+              <div className="subscriptionKpi"><span>점검 필요</span><strong>{noPaymentPaidStores.filter((r) => r.status !== "deleted").length.toLocaleString()}개</strong><small>유료 상태·결제 이력 불일치</small></div>
             </div>
             <article className="card">
-              <div className="panelHeader"><div><div className="sectionTitle">구독 현황</div><p>매장별 구독 상태, 기간과 결제 현황을 확인합니다.</p></div><span className="pill">총 {filteredRows.length.toLocaleString()}개</span></div>
+              <div className="panelHeader"><div><div className="sectionTitle">구독 현황</div><p>매장별 구독 상태, 이용 기간과 결제 현황을 확인합니다.</p></div><span className="pill">총 {subscriptionRows.length.toLocaleString()}개</span></div>
               <div className="subscriptionToolbar">
                 <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="매장명·매장 ID·점주 계정 검색" aria-label="구독 매장 검색" />
-              <select className="select" value={subFilter} onChange={(event) => setSubFilter(event.target.value)}><option value="all">구독 전체</option><option value="active">활성 구독</option><option value="inactive">비활성/미구독</option><option value="expiring">만료 임박</option></select>
+              <select className="select" value={subFilter} onChange={(event) => setSubFilter(event.target.value)}><option value="all">구독 전체</option><option value="active">유료 구독</option><option value="trialing">무료 체험 중</option><option value="inactive">미구독·기타</option><option value="expiring">종료 임박</option></select>
               <select className="select" value={sortBy} onChange={(event) => setSortBy(event.target.value as StoreSort)}><option value="expiring">만료 임박순</option><option value="monthlyRevenue">구독매출 높은순</option><option value="risk">점검 우선순</option></select>
                 <button className="btn" disabled={!query && subFilter === "all" && sortBy === "expiring"} onClick={() => { setQuery(""); setSubFilter("all"); setSortBy("expiring"); }}>필터 초기화</button>
               </div>
-              <div className="subscriptionResult"><span>검색 결과 {filteredRows.length.toLocaleString()}개</span><span>매장을 선택하면 구독 상세를 확인할 수 있습니다.</span></div>
+              <div className="subscriptionResult"><span>검색 결과 {subscriptionRows.length.toLocaleString()}개</span><span>삭제된 매장은 구독 관리 대상에서 제외됩니다.</span></div>
               <div style={{ marginTop: 12 }}>{renderSubscriptionTable()}</div>
             </article>
           </div>
@@ -2772,21 +2876,34 @@ export default function OpsPage() {
       {benefitEditorOpen && selectedStore ? (
         <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setBenefitEditorOpen(false)}>
           <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="founder-editor-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div><div className="sectionTitle" id="founder-editor-title">혜택·무료 체험 관리</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 현재 상태 {benefit?.baseStatus || "-"}</p></div>
-            <div className="sectionTitle">창립 멤버 혜택</div>
+            <div><div className="sectionTitle" id="founder-editor-title">창립 멤버 혜택 관리</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 현재 상태 {benefit?.baseStatus || "-"}</p></div>
             <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>창립 멤버로 지정</span></label>
             <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 40% 할인</span></label>
             <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>선결제 옵션 40% 할인</span></label>
             <textarea className="input" rows={3} maxLength={240} placeholder="창립 멤버 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
             <button className="btn primary" disabled={benefitSaving || !benefitForm.founderReason.trim()} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "창립 멤버 혜택 저장"}</button>
-            <div className="trialControls">
-              <div className="sectionTitle">무료 체험 기간</div>
-              <label><span>무료 체험 종료일</span><input className="input" type="date" value={benefitForm.trialEndAt} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialEndAt: event.target.value }))}/></label>
-              <textarea className="textarea" rows={2} maxLength={240} placeholder="무료 체험 조정 사유(필수)" value={benefitForm.trialReason} disabled={benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil)} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialReason: event.target.value }))}/>
-              <button className="btn" disabled={!canManageBilling || benefitSaving || benefit?.baseStatus === "active" || Boolean(benefit?.paidUntil) || !benefitForm.trialReason.trim()} onClick={() => void saveTrial()}>{benefitSaving ? "저장 중..." : "무료 체험 기간 저장"}</button>
-              {benefit?.baseStatus === "active" || benefit?.paidUntil ? <small className="muted">유료 매장은 무료 체험을 변경할 수 없습니다. 별도의 구독 보상 절차를 사용해야 합니다.</small> : null}
-            </div>
             <button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>닫기</button>
+          </section>
+        </div>
+      ) : null}
+
+      {trialEditorOpen && selectedStore && isOpsMaster ? (
+        <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setTrialEditorOpen(false)}>
+          <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="trial-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div><div className="sectionTitle" id="trial-editor-title">{benefit?.trialEndAt ? "무료 체험 기간 연장" : "무료 체험 시작"}</div><p className="muted">{selectedStore.store_name || selectedStore.store_id}의 무료 체험 이용 기간을 설정합니다.</p></div>
+            <div className="trialPreview">
+              <div><span>현재 종료일</span><strong>{fmtDate(benefit?.trialEndAt || null)}</strong></div>
+              <div><span>변경 후 종료일</span><strong>{benefitForm.trialEndAt ? fmtDate(`${benefitForm.trialEndAt}T23:59:59+09:00`) : "날짜를 선택해 주세요"}</strong></div>
+            </div>
+            <div><div className="sectionTitle">빠른 연장</div><div className="trialPresetGrid">
+              {[7, 14, 30].map((days) => <button key={days} className="btn" type="button" onClick={() => setBenefitForm((prev) => ({ ...prev, trialEndAt: addDaysToDateInput(prev.trialEndAt || ymd(new Date()), days) }))}>+{days}일</button>)}
+            </div></div>
+            <label className="opsField"><span>무료 체험 종료일</span><input className="input" type="date" min={addDaysToDateInput(benefit?.trialEndAt ? new Date(benefit.trialEndAt).toISOString().slice(0, 10) : ymd(new Date()), 1)} value={benefitForm.trialEndAt} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialEndAt: event.target.value }))}/></label>
+            <label className="opsField"><span>연장 사유 (필수)</span><textarea className="textarea" rows={3} maxLength={240} placeholder="초기 운영 지원 등 연장 근거를 입력해 주세요." value={benefitForm.trialReason} onChange={(event) => setBenefitForm((prev) => ({ ...prev, trialReason: event.target.value }))}/></label>
+            {!benefitForm.trialReason.trim() ? <p className="muted">무료 체험 시작 또는 기간 연장을 위해 사유를 입력해 주세요.</p> : null}
+            {trialMessage ? <p className="trialMessage" role="status" aria-live="polite">{trialMessage}</p> : null}
+            <p className="muted">이 변경은 마스터 계정과 사유, 변경 전·후 기간이 감사 기록에 저장됩니다.</p>
+            <div className="modalActions"><button className="btn" disabled={benefitSaving} onClick={() => setTrialEditorOpen(false)}>닫기</button><button className="btn primary" disabled={benefitSaving} onClick={() => void saveTrial()}>{benefitSaving ? "처리 중..." : benefit?.trialEndAt ? "무료 체험 기간 연장" : "무료 체험 시작"}</button></div>
           </section>
         </div>
       ) : null}
