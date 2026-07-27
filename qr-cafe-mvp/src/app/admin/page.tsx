@@ -1333,6 +1333,8 @@ body {
   justify-content:flex-end;
 }
 .btn{
+  appearance:none;
+  -webkit-appearance:none;
   border:1px solid var(--line);
   background:#fff;
   color:var(--text);
@@ -1341,6 +1343,7 @@ body {
   padding:10px 14px;
   border-radius:12px;
   cursor:pointer;
+  font-family:inherit;
   font-weight:850;
   font-size:clamp(13px, 0.95vw, 14px);
   line-height:1.2;
@@ -1687,7 +1690,7 @@ body {
   .topActions{
     width:100%;
     display:grid;
-    grid-template-columns:1fr 1fr auto;
+    grid-template-columns:repeat(3,minmax(0,1fr));
     gap:7px;
   }
   .topActions .btn{
@@ -1782,8 +1785,7 @@ body {
   }
 }
 @media (max-width: 360px){
-  .topActions{ grid-template-columns:1fr 1fr; }
-  .topActions .btn[href="/logout"]{ grid-column:1/-1; }
+  .topActions .btn{ padding-inline:4px; font-size:11px; }
   .welcomeHero{ grid-template-columns:1fr; }
   .mobileWelcome{ display:none; }
   .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
