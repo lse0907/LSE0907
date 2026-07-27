@@ -20,8 +20,9 @@ export default function RionBrand({ compact = false, inverse = false, product = 
       <Image
         className="rionBrandLogo"
         src={logoSrc}
-        width={admin ? 512 : 52}
-        height={admin ? 512 : 52}
+        width={admin ? 42 : 52}
+        height={admin ? 42 : 52}
+        style={admin ? { width: "var(--rion-logo-size)", height: "var(--rion-logo-size)", objectFit: "contain", flexShrink: 0 } : undefined}
         alt=""
         aria-hidden="true"
         priority
@@ -32,7 +33,8 @@ export default function RionBrand({ compact = false, inverse = false, product = 
         {!compact ? <span>{product ? (admin ? "매장 운영 워크스페이스" : "통합 운영 콘솔") : "Realize Innovation ON"}</span> : null}
       </div>
       <style jsx>{`
-        .rionBrand { display:flex; align-items:center; gap:11px; color:#0f1f3d; min-width:0; }
+        .rionBrand { --rion-logo-size:48px; display:flex; align-items:center; gap:11px; color:#0f1f3d; min-width:0; }
+        .rionBrand.admin { --rion-logo-size:42px; }
         .rionBrand.inverse { color:#fff; }
         .rionBrandLogo { width:48px; height:48px; flex:0 0 auto; object-fit:contain; }
         .rionBrand.admin .rionBrandLogo { width:42px; height:42px; object-position:center; }
@@ -42,13 +44,13 @@ export default function RionBrand({ compact = false, inverse = false, product = 
         .rionBrandCopy strong { font-family:Inter,"Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size:23px; line-height:1; letter-spacing:-.045em; white-space:nowrap; }
         .rionBrandCopy strong b { font-weight:500; }
         .rionBrandCopy span { font-size:11px; font-weight:700; letter-spacing:-.01em; opacity:.76; }
-        .rionBrand.compact { gap:9px; }
+        .rionBrand.compact { --rion-logo-size:38px; gap:9px; }
         .rionBrand.compact .rionBrandLogo { width:38px; height:38px; }
         .rionBrand.admin.compact .rionBrandLogo { width:38px; height:38px; }
         .rionBrand.compact.inverse .rionBrandLogo { width:38px; height:38px; }
         .rionBrand.compact .rionBrandCopy strong { font-size:18px; }
         @media (max-width:640px) {
-          .rionBrand.admin { gap:8px; }
+          .rionBrand.admin { --rion-logo-size:38px; gap:8px; }
           .rionBrand.admin .rionBrandLogo { width:38px; height:38px; }
           .rionBrand.admin .rionBrandCopy strong { font-size:18px; }
           .rionBrand.admin .rionBrandCopy span { font-size:9px; }
