@@ -2,8 +2,9 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 type TabKey = "accounts" | "pins" | "devices" | "logs";
 type ApiSection = { rows: any[]; error?: string };
@@ -57,7 +58,6 @@ function eventLabel(type: string) {
 }
 
 function MembersPageInner() {
-  const router = useRouter();
   const sp = useSearchParams();
   const storeId = useMemo(() => String(sp.get("store") || getCurrentStoreId() || "").trim(), [sp]);
   const [tab, setTab] = useState<TabKey>("accounts");
@@ -152,14 +152,7 @@ function MembersPageInner() {
   return (
     <main className="wrap">
       <style jsx global>{css}</style>
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">매장설정</p>
-          <h1>직원/권한 관리</h1>
-          <p className="muted">공용 계정, 직원 PIN 승인, 승인 기기, 보안 로그를 관리합니다.</p>
-        </div>
-        <button className="btn homeBtn" onClick={() => router.push(`/admin?store=${encodeURIComponent(storeId)}`)}>관리자 홈</button>
-      </header>
+      <AdminPageHeader title="직원/권한 관리" description="공용 계정, 직원 PIN, 승인 기기와 보안 기록을 관리합니다." storeId={storeId} eyebrow="TEAM & SECURITY" />
 
       {!storeId ? <div className="alert">먼저 관리자 홈에서 매장을 선택해주세요.</div> : null}
       {msg ? <div className="alert">{msg}</div> : null}
@@ -293,7 +286,7 @@ h1 { margin: 0; font-size: 30px; letter-spacing: -0.03em; } h2 { margin: 0; font
 .modalBody { display: grid; gap: 10px; } label { display: grid; gap: 6px; color: #374151; font-weight: 900; } input, select { border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; font-weight: 800; } input:disabled { background: #f3f4f6; color: #6b7280; }
 .modalActions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 1024px) { .listScroll { max-height: 500px; } .logScroll { max-height: 560px; } }
-@media (max-width: 720px) { .wrap { padding: 14px; } .topbar { position: relative; display: block; margin-bottom: 12px; padding-right: 92px; } .panelHead, .rowCard, .pinRow { display: grid; grid-template-columns: 1fr; } .homeBtn { position: absolute; top: 0; right: 0; width: auto; min-width: 78px; min-height: 32px; padding: 6px 9px; border-radius: 10px; font-size: 12px; } .pinAddBtn { width: auto; min-width: 96px; min-height: 32px; padding: 6px 10px; border-radius: 10px; font-size: 12px; justify-self: end; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .stat { padding: 10px 12px; border-radius: 14px; } .stat span { font-size: 12px; } .stat strong { margin-top: 2px; font-size: 20px; } .listScroll { max-height: 360px; } .logScroll { max-height: 420px; } .actions, .rowActions { width: 100%; justify-content: flex-start; } .btn, .tab { min-height: 40px; padding: 8px 10px; } .doneBadge { min-height: 26px; padding: 4px 8px; } .logRow { flex-wrap: wrap; row-gap: 2px; } .logRow strong, .logRow span, .logRow time { font-size: 12px; } .pinText strong { white-space: normal; } }
+@media (max-width: 720px) { .wrap { padding: 12px; } .tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; margin-bottom:10px; } .panelHead, .rowCard, .pinRow { display: grid; grid-template-columns: 1fr; } .pinAddBtn { width: auto; min-width: 96px; min-height: 32px; padding: 6px 10px; border-radius: 10px; font-size: 12px; justify-self: end; } .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .stat { padding: 10px 12px; border-radius: 14px; } .stat span { font-size: 12px; } .stat strong { margin-top: 2px; font-size: 20px; } .listScroll { max-height: 360px; } .logScroll { max-height: 420px; } .actions, .rowActions { width: 100%; justify-content: flex-start; } .btn, .tab { min-height: 40px; padding: 8px 5px; font-size:11px; } .doneBadge { min-height: 26px; padding: 4px 8px; } .logRow { flex-wrap: wrap; row-gap: 2px; } .logRow strong, .logRow span, .logRow time { font-size: 12px; } .pinText strong { white-space: normal; } }
 @media (max-width: 720px) and (max-height: 740px) { .listScroll { max-height: 300px; } .logScroll { max-height: 340px; } }
 `;
 

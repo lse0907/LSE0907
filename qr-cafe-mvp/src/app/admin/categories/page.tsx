@@ -1,11 +1,13 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { getSetupProgress, setSetupStepConfirmed } from "@/app/lib/setupProgress";
 import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
+import MenuAdminNav from "@/app/admin/_components/MenuAdminNav";
 
 type MenuCategory = {
   id: string;
@@ -30,7 +32,6 @@ function uid(prefix = "cat") {
 }
 
 function CategoriesPageInner() {
-  const router = useRouter();
   const sp = useSearchParams();
   const setupMode = (sp.get("mode") || "manual").trim();
   const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
@@ -601,18 +602,8 @@ function CategoriesPageInner() {
         }
       `}</style>
 
-      <header className="row headerRow">
-        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 950 }}>카테고리 관리</h1>
-        <div className="topActionRow">
-          <button className="btn" onClick={() => router.push(storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")}>관리자 홈 </button>
-          <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>옵션관리</a>
-          <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>메뉴관리</a>
-        </div>
-      </header>
-      <p className="subText">메뉴 분류(카테고리)를 등록/수정/정렬합니다.</p>
-      <p className="subText">
-        현재 매장: <b>{storeName || storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
-      </p>
+      <AdminPageHeader title="카테고리 관리" description="고객에게 보여 줄 메뉴 분류를 만들고 순서를 관리합니다." storeId={storeId} storeName={storeName} eyebrow="MENU MANAGEMENT" />
+      <MenuAdminNav active="categories" storeId={storeId} />
       {!setupCompleted ? (
         <SetupProgressBanner
           stepLabel="카테고리 확인"

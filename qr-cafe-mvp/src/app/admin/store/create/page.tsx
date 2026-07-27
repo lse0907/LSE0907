@@ -8,6 +8,7 @@ import { setCurrentStoreId } from "@/app/lib/currentStore";
 import { DEFAULT_STORE_PROFILE, saveStoreProfile } from "@/app/lib/storeProfile";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 import { prepareStoreImage } from "@/app/lib/storeImageUpload";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 const STORE_IMAGE_BUCKET = "store-assets";
 
@@ -626,6 +627,8 @@ export default function AdminStoreCreatePage() {
           .extraInfoGrid {
             grid-template-columns: 1fr;
           }
+          .formStack { order: 1; }
+          .sideStack { order: 2; }
           .addressRow {
             flex-direction: column;
             align-items: stretch;
@@ -638,25 +641,16 @@ export default function AdminStoreCreatePage() {
             align-items: stretch;
           }
           .hero {
-            height: 200px;
+            height: 150px;
           }
+          .previewCard { display: none; }
           .storeName {
             font-size: 18px;
           }
         }
       `}</style>
 
-      <header className="topbar">
-        <div>
-          <h1 className="h1">매장 만들기</h1>
-          <p className="sub">필수 정보만 입력하세요.</p>
-        </div>
-        <div className="topActions">
-          <button className="btn topHomeBtn" type="button" onClick={() => router.back()}>
-            관리자 홈
-          </button>
-        </div>
-      </header>
+      <AdminPageHeader title="매장 만들기" description="필수 정보를 입력하면 바로 초기 설정을 이어갈 수 있습니다." eyebrow="NEW STORE" />
 
       {msg ? <div className="alert">{msg}</div> : null}
 
