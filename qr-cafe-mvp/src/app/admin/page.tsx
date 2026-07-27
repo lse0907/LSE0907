@@ -104,6 +104,7 @@ function AdminPageInner() {
   >(null);
   const [storeStatusFilter, setStoreStatusFilter] =
     useState<StoreStatusFilter>("all");
+  const [mobileStorePickerOpen, setMobileStorePickerOpen] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({
@@ -468,6 +469,7 @@ function AdminPageInner() {
   const handleSelectStore = (storeId: string) => {
     setSelectedStoreId(storeId);
     setActiveSection("store");
+    setMobileStorePickerOpen(false);
   };
 
   const goCreate = () => {
@@ -617,6 +619,7 @@ function AdminPageInner() {
           <h1 className="h1" id="admin-home-title">
             매장 운영의 모든 순간을<br className="desktopBreak" /> 한곳에서 관리하세요.
           </h1>
+          <strong className="mobileWelcome">오늘도 매장 운영을 시작해 볼까요?</strong>
           <p className="desc">
             오늘의 매출부터 메뉴와 QR 설정까지, 필요한 업무를 빠르게 시작할 수 있습니다.
           </p>
@@ -660,7 +663,7 @@ function AdminPageInner() {
       ) : null}
 
       <div className="adminLayout">
-        <section className="card listCard">
+        <section className={`card listCard ${mobileStorePickerOpen ? "storePickerOpen" : "storePickerClosed"}`}>
           <div className="cardHead">
             <div>
               <span className="sectionLabel">MY STORES</span>
@@ -675,6 +678,22 @@ function AdminPageInner() {
           </div>
 
           <p className="muted sectionDesc">관리할 매장을 선택하면 오른쪽의 운영 도구가 활성화됩니다.</p>
+          {stores.length > 0 ? (
+            <button
+              className="mobileStoreToggle"
+              type="button"
+              aria-expanded={mobileStorePickerOpen}
+              aria-controls="admin-store-picker"
+              onClick={() => setMobileStorePickerOpen((open) => !open)}
+            >
+              <span>
+                <small>현재 관리 매장</small>
+                <strong>{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장을 선택해 주세요"}</strong>
+              </span>
+              <span className="mobileStoreToggleAction">{mobileStorePickerOpen ? "닫기" : "매장 변경"}</span>
+            </button>
+          ) : null}
+          <div id="admin-store-picker" className="storePickerDetails">
           {stores.length > 0 ? (
             <div
               className="storeFilterRow"
@@ -802,6 +821,7 @@ function AdminPageInner() {
               </p>
             </>
           )}
+          </div>
         </section>
 
         {/* ===== 관리자 메뉴 ===== */}
@@ -1122,6 +1142,7 @@ body {
   background:rgba(80,145,255,.16);
 }
 .welcomeCopy{ max-width:650px; }
+.mobileWelcome,.mobileStoreToggle{ display:none; }
 .eyebrow,.sectionLabel{
   display:block;
   color:#7baaff;
@@ -1592,29 +1613,58 @@ body {
 }
 @media (max-width: 960px){
   .wrap{
-    max-width: 820px;
-    padding:20px;
+    max-width: 900px;
+    padding:18px;
   }
   .adminLayout{
-    grid-template-columns: 1fr;
+    grid-template-columns:minmax(245px,280px) minmax(0,1fr);
+    gap:14px;
   }
   .storeList{
-    max-height: min(46vh, 420px);
-  }
-  .menuCard{
-    order:2;
-  }
-  .listCard{
-    order:1;
+    max-height:min(57vh,560px);
   }
   .topbar{
     align-items:center;
   }
-  .welcomeHero{ min-height:220px; padding:30px; }
-  .heroStore{ width:260px; }
+  .welcomeHero{ min-height:174px; padding:24px 28px; }
+  .heroStore{ width:235px; min-width:210px; padding:17px; }
+  .h1{ margin-top:8px; font-size:clamp(25px,3.5vw,34px); }
+  .desc{ margin-top:9px; font-size:13px; }
+  .card{ padding:17px; }
+  .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .statsRow{ min-height:86px; padding:10px; gap:4px; }
+  .cardBtn{ min-height:78px; padding:11px; grid-template-columns:34px minmax(0,1fr) auto; gap:7px; }
+  .cardBtnIcon{ width:34px; height:34px; }
   .setupBanner{
     align-items:flex-start;
   }
+}
+@media (max-width: 740px){
+  .adminLayout{ grid-template-columns:1fr; }
+  .menuCard{ order:2; }
+  .listCard{ order:1; }
+  .mobileStoreToggle{
+    width:100%;
+    margin-top:12px;
+    padding:12px 13px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    border:1px solid #cbd9ee;
+    border-radius:14px;
+    background:#f7faff;
+    color:var(--text);
+    text-align:left;
+    cursor:pointer;
+  }
+  .mobileStoreToggle > span:first-child{ min-width:0; display:grid; gap:3px; }
+  .mobileStoreToggle small{ color:var(--muted); font-size:10px; font-weight:750; }
+  .mobileStoreToggle strong{ overflow:hidden; font-size:14px; text-overflow:ellipsis; white-space:nowrap; }
+  .mobileStoreToggleAction{ flex:0 0 auto; color:#245da9; font-size:12px; font-weight:900; }
+  .storePickerClosed .storePickerDetails{ display:none; }
+  .storePickerOpen .storePickerDetails{ display:block; }
+  .storePickerOpen .storeList{ max-height:min(44vh,360px); }
 }
 @media (max-width: 640px){
   .adminLayout{
@@ -1648,11 +1698,14 @@ body {
     white-space:nowrap;
   }
   .adminBadge{ display:none; }
-  .welcomeHero{ min-height:0; padding:25px 22px; display:grid; gap:22px; border-radius:22px; }
+  .welcomeHero{ min-height:0; padding:16px; display:grid; grid-template-columns:minmax(0,.9fr) minmax(158px,1.1fr); gap:12px; border-radius:19px; }
   .welcomeHero::before{ width:240px; height:240px; right:-100px; top:-150px; border-width:50px; }
-  .h1{ font-size:clamp(27px,8vw,34px); }
-  .desktopBreak{ display:none; }
-  .heroStore{ width:100%; min-width:0; padding:17px; }
+  .welcomeCopy{ display:flex; align-items:center; }
+  .welcomeCopy .eyebrow,.welcomeCopy .h1,.welcomeCopy .desc{ display:none; }
+  .mobileWelcome{ display:block; color:#fff; font-size:clamp(16px,4.6vw,20px); line-height:1.4; letter-spacing:-.035em; word-break:keep-all; }
+  .heroStore{ width:100%; min-width:0; padding:13px; border-radius:15px; }
+  .heroStoreLabel{ font-size:10px; }
+  .heroStore strong{ font-size:15px; }
   .card{
     padding:17px;
     border-radius:19px;
@@ -1696,20 +1749,30 @@ body {
     font-size:11px;
   }
   .btnGroup{
-    grid-template-columns:1fr;
-    gap:8px;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:6px;
   }
   .cardBtn{
-    min-height:72px;
-    padding:11px 13px;
+    min-height:82px;
+    padding:9px 5px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    text-align:center;
+    gap:6px;
   }
-  .cardBtnArrow{ transform:rotate(90deg); }
-  .cardBtnOn .cardBtnArrow{ transform:rotate(-90deg); }
+  .cardBtnCopy{ display:block; }
+  .cardBtnTitle{ font-size:12px; }
+  .cardBtnDesc,.cardBtnArrow{ display:none; }
+  .cardBtnIcon{ width:32px; height:32px; border-radius:10px; font-size:17px; }
   .toolsHead{ align-items:start; }
   .toolsHead p{ display:none; }
   .subPanel{ grid-template-columns:1fr; }
   .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .statsRow{ min-height:102px; }
+  .statsRow{ min-height:74px; padding:9px; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:3px 6px; }
+  .statsIcon{ width:22px; height:22px; border-radius:7px; font-size:10px; grid-row:1/3; }
+  .statsLabel{ font-size:10px; }
+  .statsValue{ font-size:13px; }
   .storeList{
     max-height: min(42vh, 360px);
   }
@@ -1721,8 +1784,9 @@ body {
 @media (max-width: 360px){
   .topActions{ grid-template-columns:1fr 1fr; }
   .topActions .btn[href="/logout"]{ grid-column:1/-1; }
-  .statsSummaryCompact{ grid-template-columns:1fr; }
-  .statsRow{ min-height:94px; }
+  .welcomeHero{ grid-template-columns:1fr; }
+  .mobileWelcome{ display:none; }
+  .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media (prefers-reduced-motion:reduce){
   .btn,.cardBtn,.subBtn,.storeRow{ transition:none; }
