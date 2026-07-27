@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { clearCurrentStoreId, getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { clearSetupProgress, getSetupProgress, type SetupProgressState } from "@/app/lib/setupProgress";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 type SetupStep = 0 | 1 | 2 | 3 | 4;
 type ActiveSetupStep = 1 | 2 | 3 | 4;
@@ -423,13 +424,7 @@ function AdminSetupPageInner() {
 
   return (
     <main className="wrap">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">매장 오픈 준비</p>
-          <h1>초기 설정</h1>
-          <p className="heroText">{storeName ? `${storeName} 매장` : "선택한 매장"}의 주문 접수에 필요한 기본 정보를 완성해 주세요.</p>
-        </div>
-      </header>
+      <AdminPageHeader title="초기 설정" description="주문 접수에 필요한 기본 정보를 순서대로 완성해 주세요." storeId={storeId} storeName={storeName} eyebrow="매장 오픈 준비" />
 
       {loading ? (
         <section className="card loadingCard" aria-live="polite">
