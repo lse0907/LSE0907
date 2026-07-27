@@ -715,15 +715,21 @@ function AdminLoyaltyInner() {
 
   return (
     <main className="loyaltyPage">
-      <AdminPageHeader title="포인트/쿠폰 설정" description="재방문 고객을 위한 적립 정책과 쿠폰을 관리합니다." storeId={storeId} eyebrow="LOYALTY" actions={<button className="btn btnDark" type="button" onClick={loadData}>새로고침</button>} />
+      <AdminPageHeader title="포인트/쿠폰 설정" description="재방문 고객을 위한 적립 정책과 쿠폰을 관리합니다." storeId={storeId} eyebrow="LOYALTY" />
 
       {msg ? <div className={`notice notice-${msgTone}`} role="status">{msg}</div> : null}
 
-      <section className="summaryStrip" aria-label="포인트 쿠폰 요약">
-        <span><b>적립률</b> 일반 {settings.tier_general_rate_pct}% · 단골 {settings.tier_regular_rate_pct}% · VIP {settings.tier_vip_rate_pct}%</span>
-        <span><b>사용 제한</b> 최소 {money(settings.min_redeem_points)}P · 최대 {settings.max_redeem_pct}%</span>
-        <span><b>쿠폰</b> 활성 {activeTemplates}개 · 비활성 {inactiveTemplates}개</span>
-        <span><b>최근 발급</b> 사용 가능 {issuedCoupons.filter((row) => row.status === "issued").length}장</span>
+      <section className="summarySection" aria-labelledby="loyalty-summary-title">
+        <div className="summaryHeader">
+          <div><span className="summaryEyebrow">OVERVIEW</span><h2 id="loyalty-summary-title">운영 현황</h2></div>
+          <button className="summaryRefresh" type="button" onClick={loadData} aria-label="포인트 쿠폰 현황 새로고침">↻ 새로고침</button>
+        </div>
+        <div className="summaryStrip">
+          <article className="summaryMetric rateMetric"><span className="metricIcon" aria-hidden="true">%</span><div><b>적립률</b><strong>일반 {settings.tier_general_rate_pct}% · 단골 {settings.tier_regular_rate_pct}%</strong><small>VIP {settings.tier_vip_rate_pct}%</small></div></article>
+          <article className="summaryMetric limitMetric"><span className="metricIcon" aria-hidden="true">P</span><div><b>사용 제한</b><strong>최소 {money(settings.min_redeem_points)}P</strong><small>최대 {settings.max_redeem_pct}% 사용</small></div></article>
+          <article className="summaryMetric couponMetric"><span className="metricIcon" aria-hidden="true">C</span><div><b>쿠폰 현황</b><strong>활성 {activeTemplates}개</strong><small>비활성 {inactiveTemplates}개</small></div></article>
+          <article className="summaryMetric issueMetric"><span className="metricIcon" aria-hidden="true">✓</span><div><b>최근 발급</b><strong>사용 가능 {issuedCoupons.filter((row) => row.status === "issued").length}장</strong><small>고객 발급 기준</small></div></article>
+        </div>
       </section>
 
       <nav className="tabBar" aria-label="포인트 쿠폰 관리 탭">
@@ -1199,10 +1205,21 @@ function AdminLoyaltyInner() {
         html { color-scheme: light; overflow-y: scroll; scrollbar-gutter: stable both-edges; }
         body { background: #eef4fb; color: #0f172a; }
         .loyaltyPage { background: transparent; }
-        .loyaltyPage .summaryStrip { align-self: start; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border: 1px solid #e2e8f0; border-radius: 16px; padding: 10px 12px; background: #f8fafc; color: #475569; font-size: 13px; font-weight: 750; box-shadow: inset 0 1px 0 rgba(255,255,255,.85); }
-        .loyaltyPage .summaryStrip span { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; border-right: 1px solid #e2e8f0; padding-right: 10px; }
-        .loyaltyPage .summaryStrip span:last-child { border-right: 0; padding-right: 0; }
-        .loyaltyPage .summaryStrip b { color: #111827; font-weight: 950; }
+        .loyaltyPage .summarySection { display:grid; gap:10px; padding:14px; border:1px solid #dbe3ef; border-radius:18px; background:linear-gradient(145deg,#fff,#f7faff); box-shadow:0 10px 26px rgba(30,55,90,.055); }
+        .loyaltyPage .summaryHeader { display:flex; align-items:end; justify-content:space-between; gap:12px; }
+        .loyaltyPage .summaryHeader h2 { margin:3px 0 0; color:#14213d; font-size:17px; letter-spacing:-.03em; }
+        .loyaltyPage .summaryEyebrow { color:#4775b8; font-size:9px; font-weight:950; letter-spacing:.12em; }
+        .loyaltyPage .summaryRefresh { min-height:34px; padding:7px 10px; border:1px solid #d6e0ee; border-radius:10px; background:#fff; color:#334155; font-family:inherit; font-size:11px; font-weight:850; cursor:pointer; }
+        .loyaltyPage .summaryStrip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+        .loyaltyPage .summaryMetric { min-width:0; padding:11px; display:grid; grid-template-columns:30px minmax(0,1fr); gap:9px; border:1px solid #e2e8f0; border-radius:14px; background:#fff; }
+        .loyaltyPage .summaryMetric>div { min-width:0; display:grid; gap:3px; }
+        .loyaltyPage .summaryMetric b { color:#64748b; font-size:10px; font-weight:850; }
+        .loyaltyPage .summaryMetric strong { overflow:hidden; color:#17233d; font-size:12px; font-weight:950; text-overflow:ellipsis; white-space:nowrap; }
+        .loyaltyPage .summaryMetric small { color:#64748b; font-size:10px; font-weight:750; }
+        .loyaltyPage .metricIcon { width:30px; height:30px; display:grid; place-items:center; border-radius:10px; background:#eff6ff; color:#2563eb; font-size:11px; font-weight:950; }
+        .loyaltyPage .limitMetric .metricIcon { background:#f0fdf4; color:#15803d; }
+        .loyaltyPage .couponMetric .metricIcon { background:#f5f3ff; color:#7c3aed; }
+        .loyaltyPage .issueMetric .metricIcon { background:#fff7ed; color:#c2410c; }
         .loyaltyPage .templateStats { display: flex; flex-wrap: wrap; gap: 8px; color: #475569; font-size: 13px; font-weight: 850; }
         .loyaltyPage .templateStats span { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 10px; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; }
         .loyaltyPage .templateStats b { color: #111827; }
@@ -1405,8 +1422,14 @@ function AdminLoyaltyInner() {
           .loyaltyPage .createTemplateGrid .field:first-child, .loyaltyPage .historySearchPanel .searchField { grid-column: 1 / -1; }
           .loyaltyPage .historySearchPanel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .loyaltyPage .issueSteps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-          .loyaltyPage .summaryStrip { display: grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap: 6px; padding: 9px; }
-          .loyaltyPage .summaryStrip span { border-right: 0; padding-right: 0; }
+          .loyaltyPage .summarySection { gap:8px; padding:11px; border-radius:16px; }
+          .loyaltyPage .summaryHeader h2 { font-size:15px; }
+          .loyaltyPage .summaryRefresh { min-height:32px; padding:6px 8px; }
+          .loyaltyPage .summaryStrip { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+          .loyaltyPage .summaryMetric { min-height:78px; padding:9px; grid-template-columns:24px minmax(0,1fr); gap:7px; border-radius:12px; }
+          .loyaltyPage .metricIcon { width:24px; height:24px; border-radius:8px; font-size:9px; }
+          .loyaltyPage .summaryMetric strong { font-size:11px; white-space:normal; line-height:1.25; }
+          .loyaltyPage .summaryMetric small { font-size:9px; }
           .loyaltyPage .panelHead { display: grid; }
           .loyaltyPage .rowActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
           .loyaltyPage .rowActions .btn { width: 100%; }
