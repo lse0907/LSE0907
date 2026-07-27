@@ -83,8 +83,13 @@ function calcRemainingDays(createdAt?: string | null) {
 
 function hasActivePrepayAddon(addon?: StoreAddonSummary | null) {
   if (!addon) return false;
-  const paidUntilMs = addon.addonPaidUntil ? new Date(addon.addonPaidUntil).getTime() : NaN;
-  return addon.prepayAddonStatus === "active" || (Number.isFinite(paidUntilMs) && paidUntilMs > Date.now());
+  const paidUntilMs = addon.addonPaidUntil
+    ? new Date(addon.addonPaidUntil).getTime()
+    : NaN;
+  return (
+    addon.prepayAddonStatus === "active" ||
+    (Number.isFinite(paidUntilMs) && paidUntilMs > Date.now())
+  );
 }
 
 function AdminPageInner() {
@@ -261,12 +266,13 @@ function AdminPageInner() {
       if (!storeId) continue;
       nextAddons[storeId] = {
         prepayAddonStatus: String(
-          (row as { prepay_addon_status?: string | null }).prepay_addon_status ||
-            "inactive",
+          (row as { prepay_addon_status?: string | null })
+            .prepay_addon_status || "inactive",
         ),
         addonPaidUntil:
           String(
-            (row as { addon_paid_until?: string | null }).addon_paid_until || "",
+            (row as { addon_paid_until?: string | null }).addon_paid_until ||
+              "",
           ).trim() || null,
       };
     }
@@ -510,9 +516,7 @@ function AdminPageInner() {
   const selectedBilling = selectedStoreId
     ? billingByStore[selectedStoreId]
     : null;
-  const selectedAddon = selectedStoreId
-    ? addonByStore[selectedStoreId]
-    : null;
+  const selectedAddon = selectedStoreId ? addonByStore[selectedStoreId] : null;
   const canOpenOnlinePaymentSettings = hasActivePrepayAddon(selectedAddon);
   const selectedFreeRemaining = selectedStore
     ? calcRemainingDays(selectedStore.created_at)
@@ -573,7 +577,9 @@ function AdminPageInner() {
           <span className="loadingSpinner" aria-hidden="true" />
           <div>
             <h1 className="loadingTitle">매장 관리 공간을 준비하고 있어요</h1>
-            <p className="muted">매장과 운영 정보를 안전하게 불러오는 중입니다.</p>
+            <p className="muted">
+              매장과 운영 정보를 안전하게 불러오는 중입니다.
+            </p>
           </div>
         </div>
       </main>
@@ -617,22 +623,34 @@ function AdminPageInner() {
         <div className="welcomeCopy">
           <span className="eyebrow">RION ORDER WORKSPACE</span>
           <h1 className="h1" id="admin-home-title">
-            매장 운영의 모든 순간을<br className="desktopBreak" /> 한곳에서 관리하세요.
+            매장 운영의 모든 순간을
+            <br className="desktopBreak" /> 한곳에서 관리하세요.
           </h1>
-          <strong className="mobileWelcome">오늘도 매장 운영을 시작해 볼까요?</strong>
+          <strong className="mobileWelcome">
+            오늘도 매장 운영을 시작해 볼까요?
+          </strong>
           <p className="desc">
-            오늘의 매출부터 메뉴와 QR 설정까지, 필요한 업무를 빠르게 시작할 수 있습니다.
+            오늘의 매출부터 메뉴와 QR 설정까지, 필요한 업무를 빠르게 시작할 수
+            있습니다.
           </p>
         </div>
         <div className="heroStore" aria-label="현재 선택 매장">
           <span className="heroStoreLabel">현재 관리 매장</span>
-          <strong>{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장을 선택해 주세요"}</strong>
+          <strong>
+            {selectedStore
+              ? selectedStore.store_name || selectedStore.store_id
+              : "매장을 선택해 주세요"}
+          </strong>
           {selectedStore ? (
-            <span className={`heroStatus heroStatus${getStoreDisplayStatus(selectedStore)[0].toUpperCase()}${getStoreDisplayStatus(selectedStore).slice(1)}`}>
+            <span
+              className={`heroStatus heroStatus${getStoreDisplayStatus(selectedStore)[0].toUpperCase()}${getStoreDisplayStatus(selectedStore).slice(1)}`}
+            >
               <i aria-hidden="true" /> {getStoreStatusLabel(selectedStore)}
             </span>
           ) : (
-            <span className="heroStatus heroStatusNeutral"><i aria-hidden="true" /> 선택 대기</span>
+            <span className="heroStatus heroStatusNeutral">
+              <i aria-hidden="true" /> 선택 대기
+            </span>
           )}
         </div>
       </section>
@@ -663,7 +681,9 @@ function AdminPageInner() {
       ) : null}
 
       <div className="adminLayout">
-        <section className={`card listCard ${mobileStorePickerOpen ? "storePickerOpen" : "storePickerClosed"}`}>
+        <section
+          className={`card listCard ${mobileStorePickerOpen ? "storePickerOpen" : "storePickerClosed"}`}
+        >
           <div className="cardHead">
             <div>
               <span className="sectionLabel">MY STORES</span>
@@ -677,7 +697,9 @@ function AdminPageInner() {
             </div>
           </div>
 
-          <p className="muted sectionDesc">관리할 매장을 선택하면 오른쪽의 운영 도구가 활성화됩니다.</p>
+          <p className="muted sectionDesc">
+            관리할 매장을 선택하면 오른쪽의 운영 도구가 활성화됩니다.
+          </p>
           {stores.length > 0 ? (
             <button
               className="mobileStoreToggle"
@@ -688,9 +710,15 @@ function AdminPageInner() {
             >
               <span>
                 <small>현재 관리 매장</small>
-                <strong>{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장을 선택해 주세요"}</strong>
+                <strong>
+                  {selectedStore
+                    ? selectedStore.store_name || selectedStore.store_id
+                    : "매장을 선택해 주세요"}
+                </strong>
               </span>
-              <span className="mobileStoreToggleAction">{mobileStorePickerOpen ? "닫기" : "매장 변경"}</span>
+              <span className="mobileStoreToggleAction">
+                {mobileStorePickerOpen ? "닫기" : "매장 변경"}
+              </span>
             </button>
           ) : null}
           <div id="admin-store-picker" className="storePickerDetails">
@@ -853,9 +881,14 @@ function AdminPageInner() {
                     </span>
                   ) : null}
                 </div>
-                <div className="statsSummary statsSummaryCompact" aria-label="매장 핵심 지표">
+                <div
+                  className="statsSummary statsSummaryCompact"
+                  aria-label="매장 핵심 지표"
+                >
                   <div className="statsRow statsDaily">
-                    <span className="statsIcon" aria-hidden="true">↗</span>
+                    <span className="statsIcon" aria-hidden="true">
+                      ↗
+                    </span>
                     <span className="statsLabel">일간 매출</span>
                     <span className="statsValue">
                       {statsLoading
@@ -864,7 +897,9 @@ function AdminPageInner() {
                     </span>
                   </div>
                   <div className="statsRow statsWeekly">
-                    <span className="statsIcon" aria-hidden="true">W</span>
+                    <span className="statsIcon" aria-hidden="true">
+                      W
+                    </span>
                     <span className="statsLabel">주간 매출</span>
                     <span className="statsValue">
                       {statsLoading
@@ -873,7 +908,9 @@ function AdminPageInner() {
                     </span>
                   </div>
                   <div className="statsRow statsMonthly">
-                    <span className="statsIcon" aria-hidden="true">M</span>
+                    <span className="statsIcon" aria-hidden="true">
+                      M
+                    </span>
                     <span className="statsLabel">월간 매출</span>
                     <span className="statsValue">
                       {statsLoading
@@ -882,7 +919,9 @@ function AdminPageInner() {
                     </span>
                   </div>
                   <div className="statsRow statsBilling">
-                    <span className="statsIcon" aria-hidden="true">✓</span>
+                    <span className="statsIcon" aria-hidden="true">
+                      ✓
+                    </span>
                     <span className="statsLabel">구독 상태</span>
                     <span className="statsValue">
                       {selectedSubscriptionStatus} · {selectedRemainingText}
@@ -912,12 +951,16 @@ function AdminPageInner() {
               }
               disabled={!selectedStoreId}
             >
-              <span className="cardBtnIcon" aria-hidden="true">⌂</span>
+              <span className="cardBtnIcon" aria-hidden="true">
+                ⌂
+              </span>
               <span className="cardBtnCopy">
                 <span className="cardBtnTitle">매장 관리</span>
                 <span className="cardBtnDesc">정보 · 직원 · QR</span>
               </span>
-              <span className="cardBtnArrow" aria-hidden="true">›</span>
+              <span className="cardBtnArrow" aria-hidden="true">
+                ›
+              </span>
             </button>
 
             <button
@@ -927,12 +970,16 @@ function AdminPageInner() {
               }
               disabled={!selectedStoreId}
             >
-              <span className="cardBtnIcon" aria-hidden="true">☷</span>
+              <span className="cardBtnIcon" aria-hidden="true">
+                ☷
+              </span>
               <span className="cardBtnCopy">
                 <span className="cardBtnTitle">메뉴 관리</span>
                 <span className="cardBtnDesc">메뉴 · 옵션 · 업로드</span>
               </span>
-              <span className="cardBtnArrow" aria-hidden="true">›</span>
+              <span className="cardBtnArrow" aria-hidden="true">
+                ›
+              </span>
             </button>
 
             <button
@@ -944,12 +991,16 @@ function AdminPageInner() {
               }
               disabled={!selectedStoreId}
             >
-              <span className="cardBtnIcon" aria-hidden="true">?</span>
+              <span className="cardBtnIcon" aria-hidden="true">
+                ?
+              </span>
               <span className="cardBtnCopy">
                 <span className="cardBtnTitle">지원 센터</span>
                 <span className="cardBtnDesc">문의 및 문제 해결</span>
               </span>
-              <span className="cardBtnArrow" aria-hidden="true">›</span>
+              <span className="cardBtnArrow" aria-hidden="true">
+                ›
+              </span>
             </button>
           </div>
 
@@ -987,28 +1038,49 @@ function AdminPageInner() {
           ) : null}
 
           {activeSection === "ops" ? (
-            <div className="subPanel" ref={subPanelRef}>
-              <button
-                className="subBtn"
-                onClick={() => go("/admin/categories")}
-              >
-                카테고리 관리
-              </button>
-              <button className="subBtn" onClick={() => go("/admin/options")}>
-                옵션관리
-              </button>
-              <button className="subBtn" onClick={() => go("/admin/menu")}>
-                메뉴관리
-              </button>
-              <button
-                className="subBtn"
-                onClick={() => go("/admin/menu/option-connect")}
-              >
-                옵션 연결 확인
-              </button>
-              <button className="subBtn" onClick={() => go("/admin/import")}>
-                일괄 데이터 업로드
-              </button>
+            <div className="subPanel menuSubPanel" ref={subPanelRef}>
+              <div className="subSection">
+                <div className="subSectionHead">
+                  <span>CORE MANAGEMENT</span>
+                  <strong>기본 관리</strong>
+                </div>
+                <div className="menuCoreGrid">
+                  <button className="menuShortcut" onClick={() => go("/admin/categories")} aria-label="카테고리 관리 페이지로 이동">
+                    <span className="menuShortcutIcon" aria-hidden="true">C</span>
+                    <span className="menuShortcutText"><strong><span className="desktopLabel">카테고리 관리</span><span className="mobileLabel">카테고리</span></strong><small>분류와 노출 순서</small></span>
+                    <span className="menuShortcutArrow" aria-hidden="true">›</span>
+                  </button>
+                  <button className="menuShortcut" onClick={() => go("/admin/options")} aria-label="옵션 관리 페이지로 이동">
+                    <span className="menuShortcutIcon optionIcon" aria-hidden="true">O</span>
+                    <span className="menuShortcutText"><strong><span className="desktopLabel">옵션 관리</span><span className="mobileLabel">옵션</span></strong><small>사이즈와 추가 선택</small></span>
+                    <span className="menuShortcutArrow" aria-hidden="true">›</span>
+                  </button>
+                  <button className="menuShortcut" onClick={() => go("/admin/menu")} aria-label="메뉴 관리 페이지로 이동">
+                    <span className="menuShortcutIcon menuIcon" aria-hidden="true">M</span>
+                    <span className="menuShortcutText"><strong><span className="desktopLabel">메뉴 관리</span><span className="mobileLabel">메뉴</span></strong><small>상품과 판매 정보</small></span>
+                    <span className="menuShortcutArrow" aria-hidden="true">›</span>
+                  </button>
+                </div>
+              </div>
+              <div className="subDivider" aria-hidden="true" />
+              <div className="subSection">
+                <div className="subSectionHead toolSectionHead">
+                  <span>MANAGEMENT UTILITY</span>
+                  <strong>관리 도구</strong>
+                </div>
+                <div className="menuUtilityGrid">
+                  <button className="utilityShortcut" onClick={() => go("/admin/menu/option-connect")} aria-label="옵션 연결 점검 페이지로 이동">
+                    <span className="utilityIcon" aria-hidden="true">↔</span>
+                    <span><strong><span className="desktopLabel">옵션 연결 점검</span><span className="mobileLabel">옵션 점검</span></strong><small>연결 누락 확인 및 일괄 정리</small></span>
+                    <span className="utilityArrow" aria-hidden="true">›</span>
+                  </button>
+                  <button className="utilityShortcut" onClick={() => go("/admin/import")} aria-label="CSV 일괄 등록 페이지로 이동">
+                    <span className="utilityIcon uploadIcon" aria-hidden="true">↑</span>
+                    <span><strong><span className="desktopLabel">CSV 일괄 등록</span><span className="mobileLabel">CSV 등록</span></strong><small>파일로 여러 항목을 빠르게 등록</small></span>
+                    <span className="utilityArrow" aria-hidden="true">›</span>
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -1566,6 +1638,28 @@ body {
   font-weight:800;
   line-height:1.35;
 }
+.menuSubPanel{ display:block; padding:14px; background:linear-gradient(180deg,#f8fafe 0%,#f3f6fb 100%); }
+.subSection{ display:grid; gap:10px; }
+.subSectionHead{ display:flex; align-items:end; justify-content:space-between; gap:10px; padding:0 2px; }
+.subSectionHead span{ color:#5275a4; font-size:8px; font-weight:900; letter-spacing:.13em; }
+.subSectionHead strong{ color:#243b5a; font-size:11px; font-weight:900; }
+.subDivider{ height:1px; margin:13px 0; background:linear-gradient(90deg,transparent,#d8e2ef 12%,#d8e2ef 88%,transparent); }
+.menuCoreGrid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.menuShortcut,.utilityShortcut{ appearance:none; border:1px solid var(--line); cursor:pointer; transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease; }
+.menuShortcut{ min-width:0; min-height:72px; padding:11px; display:grid; grid-template-columns:32px minmax(0,1fr) auto; align-items:center; gap:9px; border-radius:14px; background:#fff; color:var(--text); text-align:left; }
+.menuShortcut:hover,.utilityShortcut:hover{ border-color:#aec4e1; box-shadow:0 8px 20px rgba(27,61,103,.09); transform:translateY(-1px); }
+.menuShortcutIcon,.utilityIcon{ width:32px; height:32px; display:grid; place-items:center; border-radius:10px; background:#eaf2ff; color:#235da8; font-size:11px; font-weight:950; }
+.optionIcon{ background:#ecf9f2; color:#168657; }
+.menuIcon{ background:#f2edff; color:#7650c7; }
+.menuShortcutText,.utilityShortcut>span:nth-child(2){ min-width:0; display:grid; gap:3px; }
+.menuShortcut strong,.utilityShortcut strong{ color:var(--text); font-size:12px; font-weight:900; white-space:nowrap; }
+.menuShortcut small,.utilityShortcut small{ overflow:hidden; color:#78869a; font-size:9px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.menuShortcutArrow,.utilityArrow{ color:#93a5bb; font-size:20px; }
+.mobileLabel{ display:none; }
+.menuUtilityGrid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.utilityShortcut{ min-width:0; min-height:60px; padding:10px 12px; display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; gap:9px; border-radius:13px; background:rgba(255,255,255,.72); color:var(--text); text-align:left; }
+.utilityIcon{ width:30px; height:30px; background:#edf1f7; color:#405a7c; font-size:15px; }
+.uploadIcon{ background:#fff2e8; color:#b95d1d; }
 .statsSummary{
   border:1px solid var(--line);
   border-radius:12px;
@@ -1771,6 +1865,21 @@ body {
   .toolsHead{ align-items:start; }
   .toolsHead p{ display:none; }
   .subPanel{ grid-template-columns:1fr; }
+  .menuSubPanel{ padding:11px; }
+  .subSectionHead{ align-items:center; }
+  .subSectionHead span{ font-size:7px; }
+  .menuCoreGrid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  .menuShortcut{ min-height:58px; padding:8px 4px; display:flex; flex-direction:column; justify-content:center; gap:5px; text-align:center; }
+  .menuShortcutIcon{ width:27px; height:27px; border-radius:8px; font-size:9px; }
+  .menuShortcutText{ display:block; }
+  .menuShortcut strong,.utilityShortcut strong{ font-size:11px; }
+  .menuShortcut small,.menuShortcutArrow,.utilityShortcut small,.utilityArrow{ display:none; }
+  .mobileLabel{ display:inline; }
+  .desktopLabel{ display:none; }
+  .subDivider{ margin:10px 0; }
+  .menuUtilityGrid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+  .utilityShortcut{ min-height:46px; padding:7px 8px; grid-template-columns:25px minmax(0,1fr); gap:6px; }
+  .utilityIcon{ width:25px; height:25px; border-radius:8px; font-size:12px; }
   .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
   .statsRow{ min-height:74px; padding:9px; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:3px 6px; }
   .statsIcon{ width:22px; height:22px; border-radius:7px; font-size:10px; grid-row:1/3; }
