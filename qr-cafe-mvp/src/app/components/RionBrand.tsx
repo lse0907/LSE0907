@@ -4,13 +4,15 @@ type RionBrandProps = {
   compact?: boolean;
   inverse?: boolean;
   product?: boolean;
+  admin?: boolean;
 };
 
-export default function RionBrand({ compact = false, inverse = false, product = false }: RionBrandProps) {
+export default function RionBrand({ compact = false, inverse = false, product = false, admin = false }: RionBrandProps) {
   const logoSrc = inverse ? "/rion-logo-white.png" : "/rion-symbol.svg";
+  const productLabel = admin ? "ADMIN" : "OPS";
 
   return (
-    <div className={`rionBrand ${compact ? "compact" : ""} ${inverse ? "inverse" : ""}`} aria-label={product ? "RION Order OPS" : "RION Labs"}>
+    <div className={`rionBrand ${compact ? "compact" : ""} ${inverse ? "inverse" : ""}`} aria-label={product ? `RION Order ${productLabel}` : "RION Labs"}>
       <Image
         className="rionBrandLogo"
         src={logoSrc}
@@ -21,8 +23,8 @@ export default function RionBrand({ compact = false, inverse = false, product = 
         priority
       />
       <div className="rionBrandCopy">
-        <strong>{product ? <>RION Order <b>OPS</b></> : <>RION <b>Labs</b></>}</strong>
-        {!compact ? <span>{product ? "통합 운영 콘솔" : "Realize Innovation ON"}</span> : null}
+        <strong>{product ? <>RION Order <b>{productLabel}</b></> : <>RION <b>Labs</b></>}</strong>
+        {!compact ? <span>{product ? (admin ? "매장 운영 워크스페이스" : "통합 운영 콘솔") : "Realize Innovation ON"}</span> : null}
       </div>
       <style jsx>{`
         .rionBrand { display:flex; align-items:center; gap:11px; color:#0f1f3d; min-width:0; }
