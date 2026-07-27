@@ -4,6 +4,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
+import RionBrand from "@/app/components/RionBrand";
 import {
   getCurrentStoreId,
   setCurrentStoreId,
@@ -103,6 +104,7 @@ function AdminPageInner() {
   >(null);
   const [storeStatusFilter, setStoreStatusFilter] =
     useState<StoreStatusFilter>("all");
+  const [mobileStorePickerOpen, setMobileStorePickerOpen] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [statsSummary, setStatsSummary] = useState({
@@ -467,6 +469,7 @@ function AdminPageInner() {
   const handleSelectStore = (storeId: string) => {
     setSelectedStoreId(storeId);
     setActiveSection("store");
+    setMobileStorePickerOpen(false);
   };
 
   const goCreate = () => {
@@ -565,9 +568,13 @@ function AdminPageInner() {
         <style jsx global>
           {baseCss}
         </style>
-        <div className="card">
-          <h1 className="h1">관리자</h1>
-          <p className="muted">로딩 중...</p>
+        <div className="loadingCard" role="status" aria-live="polite">
+          <RionBrand product admin />
+          <span className="loadingSpinner" aria-hidden="true" />
+          <div>
+            <h1 className="loadingTitle">매장 관리 공간을 준비하고 있어요</h1>
+            <p className="muted">매장과 운영 정보를 안전하게 불러오는 중입니다.</p>
+          </div>
         </div>
       </main>
     );
@@ -580,8 +587,9 @@ function AdminPageInner() {
       </style>
 
       <header className="topbar">
-        <div>
-          <h1 className="h1">관리자</h1>
+        <div className="brandArea">
+          <RionBrand product admin />
+          <span className="adminBadge">STORE ADMIN</span>
         </div>
 
         <div className="topActions">
@@ -604,6 +612,30 @@ function AdminPageInner() {
           </a>
         </div>
       </header>
+
+      <section className="welcomeHero" aria-labelledby="admin-home-title">
+        <div className="welcomeCopy">
+          <span className="eyebrow">RION ORDER WORKSPACE</span>
+          <h1 className="h1" id="admin-home-title">
+            매장 운영의 모든 순간을<br className="desktopBreak" /> 한곳에서 관리하세요.
+          </h1>
+          <strong className="mobileWelcome">오늘도 매장 운영을 시작해 볼까요?</strong>
+          <p className="desc">
+            오늘의 매출부터 메뉴와 QR 설정까지, 필요한 업무를 빠르게 시작할 수 있습니다.
+          </p>
+        </div>
+        <div className="heroStore" aria-label="현재 선택 매장">
+          <span className="heroStoreLabel">현재 관리 매장</span>
+          <strong>{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장을 선택해 주세요"}</strong>
+          {selectedStore ? (
+            <span className={`heroStatus heroStatus${getStoreDisplayStatus(selectedStore)[0].toUpperCase()}${getStoreDisplayStatus(selectedStore).slice(1)}`}>
+              <i aria-hidden="true" /> {getStoreStatusLabel(selectedStore)}
+            </span>
+          ) : (
+            <span className="heroStatus heroStatusNeutral"><i aria-hidden="true" /> 선택 대기</span>
+          )}
+        </div>
+      </section>
 
       {msg ? <div className="alert">{msg}</div> : null}
       {showSetupBanner ? (
@@ -631,9 +663,12 @@ function AdminPageInner() {
       ) : null}
 
       <div className="adminLayout">
-        <section className="card listCard">
+        <section className={`card listCard ${mobileStorePickerOpen ? "storePickerOpen" : "storePickerClosed"}`}>
           <div className="cardHead">
-            <h2 className="cardTitle">매장 리스트</h2>
+            <div>
+              <span className="sectionLabel">MY STORES</span>
+              <h2 className="cardTitle">내 매장</h2>
+            </div>
             <div className="row" style={{ gap: 8 }}>
               <span className="pill">{visibleStores.length}개</span>
               <button className="btn" onClick={goCreate}>
@@ -642,7 +677,23 @@ function AdminPageInner() {
             </div>
           </div>
 
-          <p className="muted">매장을 선택해 주세요.</p>
+          <p className="muted sectionDesc">관리할 매장을 선택하면 오른쪽의 운영 도구가 활성화됩니다.</p>
+          {stores.length > 0 ? (
+            <button
+              className="mobileStoreToggle"
+              type="button"
+              aria-expanded={mobileStorePickerOpen}
+              aria-controls="admin-store-picker"
+              onClick={() => setMobileStorePickerOpen((open) => !open)}
+            >
+              <span>
+                <small>현재 관리 매장</small>
+                <strong>{selectedStore ? selectedStore.store_name || selectedStore.store_id : "매장을 선택해 주세요"}</strong>
+              </span>
+              <span className="mobileStoreToggleAction">{mobileStorePickerOpen ? "닫기" : "매장 변경"}</span>
+            </button>
+          ) : null}
+          <div id="admin-store-picker" className="storePickerDetails">
           {stores.length > 0 ? (
             <div
               className="storeFilterRow"
@@ -770,6 +821,7 @@ function AdminPageInner() {
               </p>
             </>
           )}
+          </div>
         </section>
 
         {/* ===== 관리자 메뉴 ===== */}
@@ -801,8 +853,9 @@ function AdminPageInner() {
                     </span>
                   ) : null}
                 </div>
-                <div className="statsSummary statsSummaryCompact">
-                  <div className="statsRow">
+                <div className="statsSummary statsSummaryCompact" aria-label="매장 핵심 지표">
+                  <div className="statsRow statsDaily">
+                    <span className="statsIcon" aria-hidden="true">↗</span>
                     <span className="statsLabel">일간 매출</span>
                     <span className="statsValue">
                       {statsLoading
@@ -810,7 +863,8 @@ function AdminPageInner() {
                         : `${statsSummary.daily.toLocaleString()}원`}
                     </span>
                   </div>
-                  <div className="statsRow">
+                  <div className="statsRow statsWeekly">
+                    <span className="statsIcon" aria-hidden="true">W</span>
                     <span className="statsLabel">주간 매출</span>
                     <span className="statsValue">
                       {statsLoading
@@ -818,7 +872,8 @@ function AdminPageInner() {
                         : `${statsSummary.weekly.toLocaleString()}원`}
                     </span>
                   </div>
-                  <div className="statsRow">
+                  <div className="statsRow statsMonthly">
+                    <span className="statsIcon" aria-hidden="true">M</span>
                     <span className="statsLabel">월간 매출</span>
                     <span className="statsValue">
                       {statsLoading
@@ -826,7 +881,8 @@ function AdminPageInner() {
                         : `${statsSummary.monthly.toLocaleString()}원`}
                     </span>
                   </div>
-                  <div className="statsRow">
+                  <div className="statsRow statsBilling">
+                    <span className="statsIcon" aria-hidden="true">✓</span>
                     <span className="statsLabel">구독 상태</span>
                     <span className="statsValue">
                       {selectedSubscriptionStatus} · {selectedRemainingText}
@@ -840,6 +896,14 @@ function AdminPageInner() {
             </div>
           ) : null}
 
+          <div className="toolsHead">
+            <div>
+              <span className="sectionLabel">QUICK TOOLS</span>
+              <h2 className="cardTitle">빠른 관리</h2>
+            </div>
+            <p>업무 영역을 선택해 필요한 기능으로 이동하세요.</p>
+          </div>
+
           <div className="btnGroup">
             <button
               className={`cardBtn ${activeSection === "store" ? "cardBtnOn" : ""}`}
@@ -848,7 +912,12 @@ function AdminPageInner() {
               }
               disabled={!selectedStoreId}
             >
-              <div className="cardBtnTitle">매장설정</div>
+              <span className="cardBtnIcon" aria-hidden="true">⌂</span>
+              <span className="cardBtnCopy">
+                <span className="cardBtnTitle">매장 관리</span>
+                <span className="cardBtnDesc">정보 · 직원 · QR</span>
+              </span>
+              <span className="cardBtnArrow" aria-hidden="true">›</span>
             </button>
 
             <button
@@ -858,7 +927,12 @@ function AdminPageInner() {
               }
               disabled={!selectedStoreId}
             >
-              <div className="cardBtnTitle">메뉴설정</div>
+              <span className="cardBtnIcon" aria-hidden="true">☷</span>
+              <span className="cardBtnCopy">
+                <span className="cardBtnTitle">메뉴 관리</span>
+                <span className="cardBtnDesc">메뉴 · 옵션 · 업로드</span>
+              </span>
+              <span className="cardBtnArrow" aria-hidden="true">›</span>
             </button>
 
             <button
@@ -870,7 +944,12 @@ function AdminPageInner() {
               }
               disabled={!selectedStoreId}
             >
-              <div className="cardBtnTitle">지원센터</div>
+              <span className="cardBtnIcon" aria-hidden="true">?</span>
+              <span className="cardBtnCopy">
+                <span className="cardBtnTitle">지원 센터</span>
+                <span className="cardBtnDesc">문의 및 문제 해결</span>
+              </span>
+              <span className="cardBtnArrow" aria-hidden="true">›</span>
             </button>
           </div>
 
@@ -955,37 +1034,63 @@ function AdminPageInner() {
 const baseCss = `
 :root {
   color-scheme: light;
-  --bg: #f6f7f9;
+  --bg: #f3f6fb;
   --card: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
-  --line: #e5e7eb;
-  --brand: #111827;
-  --radius: 16px;
+  --text: #14213d;
+  --muted: #667085;
+  --line: #e4e9f2;
+  --brand: #0f1f3d;
+  --brand-blue: #2563eb;
+  --brand-soft: #eef4ff;
+  --radius: 22px;
 }
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37,99,235,.08), transparent 26rem),
+    var(--bg);
   color: var(--text);
 }
+.button, button, a { -webkit-tap-highlight-color: transparent; }
 .wrap{
   width:100%;
-  max-width: 1180px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 22px;
+  padding: 24px 28px 48px;
   display: grid;
-  gap: 16px;
+  gap: 20px;
 }
 .adminLayout{
   display:grid;
-  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-  gap:16px;
+  grid-template-columns: minmax(310px, 370px) minmax(0, 1fr);
+  gap:20px;
   align-items:start;
 }
 .topbar{
   display:flex;
-  align-items:flex-start;
+  align-items:center;
   justify-content:space-between;
+  gap:20px;
+  min-height:52px;
+}
+.brandArea{
+  display:flex;
+  align-items:center;
   gap:12px;
+  min-width:0;
+}
+.adminBadge{
+  display:inline-flex;
+  align-items:center;
+  min-height:25px;
+  padding:0 9px;
+  border:1px solid #cbd8ef;
+  border-radius:999px;
+  background:rgba(255,255,255,.72);
+  color:#49617f;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.08em;
+  white-space:nowrap;
 }
 .topActions{
   display:flex;
@@ -994,36 +1099,112 @@ body {
   justify-content:flex-end;
 }
 .topActions .btn{
-  padding:10px 12px;
-  border-radius:10px;
+  min-height:40px;
+  padding:10px 13px;
+  border-radius:12px;
   font-size:clamp(12px, 0.75vw, 13px);
 }
-.h1{
-  margin:0;
-  font-size:clamp(24px, 2vw, 30px);
-  font-weight:950;
-  letter-spacing:-0.02em;
+.welcomeHero{
+  position:relative;
+  overflow:hidden;
+  isolation:isolate;
+  min-height:230px;
+  padding:34px 38px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:32px;
+  border-radius:28px;
+  color:#fff;
+  background:linear-gradient(125deg,#0c1b35 0%,#132d59 57%,#1f55a8 100%);
+  box-shadow:0 24px 60px rgba(15,31,61,.2);
 }
-.desc{
-  margin:6px 0 0 0;
-  color:var(--muted);
-  font-size:clamp(12px, 0.85vw, 13px);
-  font-weight:800;
-  line-height:1.4;
+.welcomeHero::before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  width:330px;
+  height:330px;
+  right:-80px;
+  top:-190px;
+  border-radius:50%;
+  border:70px solid rgba(255,255,255,.055);
+}
+.welcomeHero::after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  width:220px;
+  height:220px;
+  left:47%;
+  bottom:-185px;
+  border-radius:50%;
+  background:rgba(80,145,255,.16);
+}
+.welcomeCopy{ max-width:650px; }
+.mobileWelcome,.mobileStoreToggle{ display:none; }
+.eyebrow,.sectionLabel{
+  display:block;
+  color:#7baaff;
+  font-size:10px;
+  line-height:1.2;
+  font-weight:900;
+  letter-spacing:.13em;
+}
+.h1{
+  margin:12px 0 0;
+  font-size:clamp(28px, 3.1vw, 43px);
+  line-height:1.2;
+  font-weight:900;
+  letter-spacing:-.045em;
   word-break:keep-all;
 }
+.desc{
+  margin:15px 0 0;
+  max-width:560px;
+  color:#c8d7ed;
+  font-size:clamp(13px, 1.2vw, 15px);
+  font-weight:650;
+  line-height:1.65;
+  word-break:keep-all;
+}
+.heroStore{
+  width:min(275px,32%);
+  min-width:230px;
+  padding:22px;
+  display:grid;
+  gap:8px;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:20px;
+  background:rgba(255,255,255,.1);
+  box-shadow:inset 0 1px rgba(255,255,255,.08);
+  backdrop-filter:blur(12px);
+}
+.heroStoreLabel{ color:#aebed6; font-size:11px; font-weight:800; }
+.heroStore strong{ overflow:hidden; color:#fff; font-size:18px; text-overflow:ellipsis; white-space:nowrap; }
+.heroStatus{ display:flex; align-items:center; gap:6px; color:#a7f3d0; font-size:12px; font-weight:850; }
+.heroStatus i{ width:7px; height:7px; border-radius:50%; background:#34d399; box-shadow:0 0 0 4px rgba(52,211,153,.13); }
+.heroStatusSetup{ color:#fed7aa; }
+.heroStatusSetup i{ background:#fb923c; box-shadow:0 0 0 4px rgba(251,146,60,.14); }
+.heroStatusInactive,.heroStatusNeutral{ color:#d4dbe7; }
+.heroStatusInactive i,.heroStatusNeutral i{ background:#94a3b8; box-shadow:0 0 0 4px rgba(148,163,184,.13); }
 .muted{
   color:var(--muted);
-  font-weight:800;
+  font-weight:650;
   font-size:clamp(12px, 0.85vw, 13px);
+  line-height:1.55;
 }
 .card{
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--radius);
-  padding:16px;
-  box-shadow:0 1px 0 rgba(0,0,0,0.03);
+  padding:22px;
+  box-shadow:0 10px 28px rgba(30,55,90,.055);
 }
+.loadingCard{ min-height:320px; padding:40px; display:grid; place-items:center; align-content:center; gap:20px; text-align:center; border:1px solid var(--line); border-radius:28px; background:#fff; box-shadow:0 20px 50px rgba(30,55,90,.08); }
+.loadingTitle{ margin:0 0 5px; font-size:20px; letter-spacing:-.03em; }
+.loadingSpinner{ width:28px; height:28px; border:3px solid #dce6f5; border-top-color:var(--brand-blue); border-radius:50%; animation:adminSpin .8s linear infinite; }
+@keyframes adminSpin{ to{ transform:rotate(360deg); } }
 .row{
   display:flex;
   align-items:center;
@@ -1035,10 +1216,13 @@ body {
   gap:10px;
 }
 .cardTitle{
-  margin:0;
-  font-size:clamp(15px, 1.1vw, 17px);
-  font-weight:950;
+  margin:5px 0 0;
+  font-size:clamp(18px, 1.5vw, 21px);
+  font-weight:900;
+  letter-spacing:-.025em;
 }
+.sectionLabel{ color:#4675bd; }
+.sectionDesc{ margin-top:12px; }
 .pill{
   font-size:12px;
   font-weight:900;
@@ -1053,17 +1237,16 @@ body {
   border:1px solid #fecaca;
   background:#fef2f2;
   color:#991b1b;
-  border-radius:14px;
-  padding:10px 12px;
-  font-weight:900;
+  border-radius:16px;
+  padding:13px 15px;
+  font-weight:800;
 }
 .setupBanner{
-  margin-top:10px;
   border:1px solid #fde68a;
-  background:#fffbeb;
+  background:linear-gradient(90deg,#fffbeb,#fffdf5);
   color:#92400e;
-  border-radius:14px;
-  padding:12px;
+  border-radius:18px;
+  padding:16px 18px;
   display:flex;
   justify-content:space-between;
   gap:12px;
@@ -1094,9 +1277,9 @@ body {
   text-overflow:ellipsis;
   white-space:nowrap;
   border-radius:999px;
-  border:1px solid #bfdbfe;
-  background:#dbeafe;
-  color:#1d4ed8;
+  border:1px solid #c8d9f6;
+  background:#fff;
+  color:#214f96;
   padding:7px 12px;
   font-size:13px;
   font-weight:950;
@@ -1104,17 +1287,16 @@ body {
 .dashboardGrid{
   display:grid;
   gap:10px;
-  margin-top:12px;
 }
 .overviewCard{
   border:1px solid var(--line);
   background:#fff;
-  border-radius:14px;
-  padding:12px;
+  border-radius:18px;
+  padding:18px;
 }
 .overviewCardSelected{
-  border-color:#bfdbfe;
-  background:#eef4ff;
+  border-color:#d5e1f3;
+  background:linear-gradient(145deg,#f8fbff,#f2f6fc);
 }
 .overviewHead{
   display:flex;
@@ -1132,8 +1314,8 @@ body {
 }
 .overviewTitle{
   margin:0;
-  font-size:clamp(15px, 1.1vw, 17px);
-  font-weight:950;
+  font-size:clamp(17px, 1.2vw, 19px);
+  font-weight:900;
 }
 .hint{
   color:var(--muted);
@@ -1155,22 +1337,25 @@ body {
   background:#fff;
   color:var(--text);
   -webkit-text-fill-color: currentColor;
+  min-height:42px;
   padding:10px 14px;
   border-radius:12px;
   cursor:pointer;
-  font-weight:950;
+  font-weight:850;
   font-size:clamp(13px, 0.95vw, 14px);
   line-height:1.2;
   display:inline-flex;
   align-items:center;
   justify-content:center;
   text-decoration:none;
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease;
 }
+.btn:hover:not(:disabled){ border-color:#b8c8df; box-shadow:0 5px 14px rgba(30,55,90,.08); transform:translateY(-1px); }
 .btnGroup{
   display:grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap:6px;
-  margin-top:12px;
+  gap:10px;
+  margin-top:14px;
 }
 .btnPrimary{
   background:var(--brand);
@@ -1183,7 +1368,7 @@ body {
   border-color:#93c5fd;
 }
 .btnBilling{
-  background:#1f2937;
+  background:var(--brand);
   color:#fff;
   border-color:#1f2937;
 }
@@ -1209,12 +1394,12 @@ body {
   border-radius:999px;
   padding:7px 10px;
   font-size:12px;
-  font-weight:950;
+  font-weight:850;
   cursor:pointer;
 }
 .filterChipOn{
-  border-color:#111827;
-  background:#111827;
+  border-color:var(--brand);
+  background:var(--brand);
   color:#fff;
 }
 .storeList{
@@ -1229,17 +1414,20 @@ body {
   text-align:left;
   border:1px solid var(--line);
   background:#fff;
-  border-radius:14px;
-  padding:12px;
+  border-radius:16px;
+  padding:14px;
   cursor:pointer;
   display:flex;
   justify-content:space-between;
   align-items:flex-start;
   gap:10px;
+  transition:border-color .18s ease,background .18s ease,box-shadow .18s ease,transform .18s ease;
 }
+.storeRow:hover{ border-color:#c3d1e5; box-shadow:0 7px 18px rgba(30,55,90,.07); transform:translateY(-1px); }
 .storeRowOn{
-  border:2px solid var(--brand);
-  background:#eef4ff;
+  border:2px solid #477cc7;
+  background:var(--brand-soft);
+  box-shadow:0 8px 20px rgba(37,99,235,.09);
 }
 .storeRowInactive{
   background:#f8fafc;
@@ -1268,7 +1456,7 @@ body {
   flex-wrap:wrap;
 }
 .storeName{
-  font-weight:950;
+  font-weight:900;
   font-size:clamp(13px, 0.95vw, 14px);
 }
 .storeStatusBadge{
@@ -1294,56 +1482,76 @@ body {
   color:#475569;
 }
 .cardBtn{
-  text-align:center;
+  min-width:0;
+  min-height:92px;
+  text-align:left;
   border:1px solid var(--line);
   background:#fff;
   color:var(--text);
   -webkit-text-fill-color: currentColor;
-  border-radius:12px;
-  padding:9px 6px;
+  border-radius:17px;
+  padding:14px;
   cursor:pointer;
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease;
 }
+.cardBtn:hover:not(:disabled){ border-color:#b8c8df; box-shadow:0 8px 20px rgba(30,55,90,.08); transform:translateY(-2px); }
 .cardBtn:disabled{
   opacity:.5;
   cursor:not-allowed;
 }
 .cardBtnOn{
-  background:var(--brand);
+  background:linear-gradient(135deg,var(--brand),#173967);
   color:#fff;
   border-color:var(--brand);
 }
 .cardBtnOn .cardBtnDesc{
-  color:#f3f4f6;
+  color:#b9cae3;
 }
+.cardBtnIcon{ width:38px; height:38px; display:grid; place-items:center; border-radius:12px; background:#edf3fb; color:#234c83; font-size:20px; font-weight:900; }
+.cardBtnOn .cardBtnIcon{ background:rgba(255,255,255,.12); color:#fff; }
+.cardBtnCopy{ min-width:0; display:grid; gap:4px; }
 .cardBtnTitle{
   margin:0;
-  font-size:clamp(12px, 0.95vw, 14px);
-  font-weight:950;
-  line-height:1.1;
+  font-size:clamp(13px, 1vw, 15px);
+  font-weight:900;
+  line-height:1.2;
   white-space:nowrap;
 }
+.cardBtnDesc{ overflow:hidden; color:#7b879b; font-size:11px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.cardBtnArrow{ color:#9aa8ba; font-size:24px; line-height:1; transform:rotate(90deg); transition:transform .18s ease; }
+.cardBtnOn .cardBtnArrow{ color:#fff; transform:rotate(-90deg); }
+.toolsHead{ margin-top:22px; display:flex; align-items:end; justify-content:space-between; gap:16px; }
+.toolsHead p{ margin:0; color:var(--muted); font-size:12px; font-weight:650; }
 .subPanel{
-  margin-top:12px;
+  margin-top:14px;
   display:grid;
-  gap:8px;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;
   border:1px solid var(--line);
-  background:#f9fafb;
-  border-radius:14px;
-  padding:10px;
+  background:#f6f8fc;
+  border-radius:18px;
+  padding:12px;
 }
 .subBtn{
   border:1px solid var(--line);
   background:#fff;
   color:var(--text);
   -webkit-text-fill-color: currentColor;
+  min-height:48px;
   padding:12px 14px;
-  border-radius:12px;
+  border-radius:13px;
   cursor:pointer;
-  font-weight:900;
+  font-weight:800;
   text-align:left;
   display:grid;
   gap:4px;
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;
 }
+.subBtn:hover:not(.subBtnDisabled){ border-color:#b8c8df; box-shadow:0 5px 14px rgba(30,55,90,.07); transform:translateY(-1px); }
 .subBtnDisabled{
   opacity:.72;
   cursor:not-allowed;
@@ -1368,20 +1576,35 @@ body {
   border:0;
   padding:0;
   background:transparent;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:9px;
 }
 .statsRow{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  font-weight:900;
+  min-width:0;
+  min-height:105px;
+  padding:13px;
+  display:grid;
+  align-content:start;
+  gap:7px;
+  border:1px solid #e3e9f2;
+  border-radius:15px;
+  background:#fff;
+  font-weight:850;
 }
+.statsIcon{ width:27px; height:27px; display:grid; place-items:center; border-radius:9px; background:#edf4ff; color:#2563eb; font-size:12px; font-weight:900; }
+.statsWeekly .statsIcon{ background:#f0fdf4; color:#15803d; }
+.statsMonthly .statsIcon{ background:#f5f3ff; color:#7c3aed; }
+.statsBilling .statsIcon{ background:#fff7ed; color:#c2410c; }
 .statsLabel{
   color:var(--muted);
   font-size:12px;
 }
 .statsValue{
-  font-size:14px;
+  overflow:hidden;
+  font-size:clamp(13px,1.25vw,17px);
+  letter-spacing:-.03em;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 .stickyCard{
   position:sticky;
@@ -1390,27 +1613,58 @@ body {
 }
 @media (max-width: 960px){
   .wrap{
-    max-width: 760px;
+    max-width: 900px;
     padding:18px;
   }
   .adminLayout{
-    grid-template-columns: 1fr;
+    grid-template-columns:minmax(245px,280px) minmax(0,1fr);
+    gap:14px;
   }
   .storeList{
-    max-height: min(46vh, 420px);
-  }
-  .menuCard{
-    order:2;
-  }
-  .listCard{
-    order:1;
+    max-height:min(57vh,560px);
   }
   .topbar{
     align-items:center;
   }
+  .welcomeHero{ min-height:174px; padding:24px 28px; }
+  .heroStore{ width:235px; min-width:210px; padding:17px; }
+  .h1{ margin-top:8px; font-size:clamp(25px,3.5vw,34px); }
+  .desc{ margin-top:9px; font-size:13px; }
+  .card{ padding:17px; }
+  .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .statsRow{ min-height:86px; padding:10px; gap:4px; }
+  .cardBtn{ min-height:78px; padding:11px; grid-template-columns:34px minmax(0,1fr) auto; gap:7px; }
+  .cardBtnIcon{ width:34px; height:34px; }
   .setupBanner{
     align-items:flex-start;
   }
+}
+@media (max-width: 740px){
+  .adminLayout{ grid-template-columns:1fr; }
+  .menuCard{ order:2; }
+  .listCard{ order:1; }
+  .mobileStoreToggle{
+    width:100%;
+    margin-top:12px;
+    padding:12px 13px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    border:1px solid #cbd9ee;
+    border-radius:14px;
+    background:#f7faff;
+    color:var(--text);
+    text-align:left;
+    cursor:pointer;
+  }
+  .mobileStoreToggle > span:first-child{ min-width:0; display:grid; gap:3px; }
+  .mobileStoreToggle small{ color:var(--muted); font-size:10px; font-weight:750; }
+  .mobileStoreToggle strong{ overflow:hidden; font-size:14px; text-overflow:ellipsis; white-space:nowrap; }
+  .mobileStoreToggleAction{ flex:0 0 auto; color:#245da9; font-size:12px; font-weight:900; }
+  .storePickerClosed .storePickerDetails{ display:none; }
+  .storePickerOpen .storePickerDetails{ display:block; }
+  .storePickerOpen .storeList{ max-height:min(44vh,360px); }
 }
 @media (max-width: 640px){
   .adminLayout{
@@ -1418,48 +1672,43 @@ body {
   }
   .wrap{
     max-width: 100%;
-    padding:12px;
-    gap:12px;
+    padding:14px 14px calc(32px + env(safe-area-inset-bottom));
+    gap:14px;
   }
   .topbar{
-    display:grid;
-    grid-template-columns:auto auto minmax(0, 1fr) auto;
-    align-items:start;
-    column-gap:6px;
-    row-gap:8px;
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:10px;
   }
-  .topbar > div:first-child{
-    grid-column:1 / 4;
-    grid-row:1;
+  .brandArea{
+    flex:1 1 auto;
   }
   .topActions{
-    display:contents;
+    width:100%;
+    display:grid;
+    grid-template-columns:1fr 1fr auto;
+    gap:7px;
   }
   .topActions .btn{
-    width:auto;
-    padding:8px 9px;
+    width:100%;
+    min-height:42px;
+    padding:8px 7px;
     font-size:12px;
     white-space:nowrap;
   }
-  .topActions button:nth-of-type(1){
-    grid-column:1;
-    grid-row:2;
-    justify-self:start;
-  }
-  .topActions button:nth-of-type(2){
-    grid-column:2;
-    grid-row:2;
-    justify-self:start;
-  }
-  .topActions .btn[href="/logout"]{
-    grid-column:4;
-    grid-row:1;
-    justify-self:end;
-    align-self:start;
-  }
+  .adminBadge{ display:none; }
+  .welcomeHero{ min-height:0; padding:16px; display:grid; grid-template-columns:minmax(0,.9fr) minmax(158px,1.1fr); gap:12px; border-radius:19px; }
+  .welcomeHero::before{ width:240px; height:240px; right:-100px; top:-150px; border-width:50px; }
+  .welcomeCopy{ display:flex; align-items:center; }
+  .welcomeCopy .eyebrow,.welcomeCopy .h1,.welcomeCopy .desc{ display:none; }
+  .mobileWelcome{ display:block; color:#fff; font-size:clamp(16px,4.6vw,20px); line-height:1.4; letter-spacing:-.035em; word-break:keep-all; }
+  .heroStore{ width:100%; min-width:0; padding:13px; border-radius:15px; }
+  .heroStoreLabel{ font-size:10px; }
+  .heroStore strong{ font-size:15px; }
   .card{
-    padding:14px;
-    border-radius:14px;
+    padding:17px;
+    border-radius:19px;
   }
   .setupBannerActions{
     width:100%;
@@ -1499,36 +1748,32 @@ body {
     padding:7px 9px;
     font-size:11px;
   }
-  .cardBtnTitle{ font-size:12px; }
   .btnGroup{
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap:4px;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:6px;
   }
   .cardBtn{
-    padding:8px 4px;
+    min-height:82px;
+    padding:9px 5px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    text-align:center;
+    gap:6px;
   }
-  .storeFilterRow{
-  display:flex;
-  gap:6px;
-  flex-wrap:wrap;
-  margin-top:10px;
-}
-.filterChip{
-  border:1px solid var(--line);
-  background:#fff;
-  color:var(--text);
-  border-radius:999px;
-  padding:7px 10px;
-  font-size:12px;
-  font-weight:950;
-  cursor:pointer;
-}
-.filterChipOn{
-  border-color:#111827;
-  background:#111827;
-  color:#fff;
-}
-.storeList{
+  .cardBtnCopy{ display:block; }
+  .cardBtnTitle{ font-size:12px; }
+  .cardBtnDesc,.cardBtnArrow{ display:none; }
+  .cardBtnIcon{ width:32px; height:32px; border-radius:10px; font-size:17px; }
+  .toolsHead{ align-items:start; }
+  .toolsHead p{ display:none; }
+  .subPanel{ grid-template-columns:1fr; }
+  .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .statsRow{ min-height:74px; padding:9px; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:3px 6px; }
+  .statsIcon{ width:22px; height:22px; border-radius:7px; font-size:10px; grid-row:1/3; }
+  .statsLabel{ font-size:10px; }
+  .statsValue{ font-size:13px; }
+  .storeList{
     max-height: min(42vh, 360px);
   }
   .setupBanner{
@@ -1537,9 +1782,15 @@ body {
   }
 }
 @media (max-width: 360px){
-  .btnGroup{
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  .topActions{ grid-template-columns:1fr 1fr; }
+  .topActions .btn[href="/logout"]{ grid-column:1/-1; }
+  .welcomeHero{ grid-template-columns:1fr; }
+  .mobileWelcome{ display:none; }
+  .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (prefers-reduced-motion:reduce){
+  .btn,.cardBtn,.subBtn,.storeRow{ transition:none; }
+  .loadingSpinner{ animation-duration:1.8s; }
 }
 `;
 export default function AdminPage() {
