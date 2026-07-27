@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 type LoyaltySettingsRow = {
   store_id: string;
@@ -714,16 +715,7 @@ function AdminLoyaltyInner() {
 
   return (
     <main className="loyaltyPage">
-      <section className="heroCard">
-        <div>
-          <h1>포인트/쿠폰 설정</h1>
-          <p className="storeLine">현재 매장: <b>{storeId || "-"}</b></p>
-        </div>
-        <div className="heroActions">
-          <button className="btn" type="button" onClick={() => router.push(storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")}>관리자 홈</button>
-          <button className="btn btnDark" type="button" onClick={loadData}>새로고침</button>
-        </div>
-      </section>
+      <AdminPageHeader title="포인트/쿠폰 설정" description="재방문 고객을 위한 적립 정책과 쿠폰을 관리합니다." storeId={storeId} eyebrow="LOYALTY" actions={<button className="btn btnDark" type="button" onClick={loadData}>새로고침</button>} />
 
       {msg ? <div className={`notice notice-${msgTone}`} role="status">{msg}</div> : null}
 
@@ -1405,14 +1397,15 @@ function AdminLoyaltyInner() {
           .loyaltyPage .summaryCard { min-height: 88px; padding: 14px 14px 14px 18px; }
           .loyaltyPage .summaryCard strong { font-size: 15px; }
           .loyaltyPage .summaryCard p { font-size: 12px; }
-          .loyaltyPage .tabBar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+          .loyaltyPage .tabBar { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 42px; gap: 0; }
+          .loyaltyPage .tab { padding: 7px 3px; font-size: 11px; }
           .loyaltyPage .tabButton { height: 42px; padding: 0 10px; }
           .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .itemGrid, .loyaltyPage .searchPanel, .loyaltyPage .customerRow, .loyaltyPage .targetBasicGrid, .loyaltyPage .targetFilterGrid, .loyaltyPage .targetRow, .loyaltyPage .historySearchPanel, .loyaltyPage .issueSteps, .loyaltyPage .resultStats, .loyaltyPage .templateToolbar, .loyaltyPage .templateRow { grid-template-columns: 1fr; }
           .loyaltyPage .policyGrid, .loyaltyPage .tierGrid, .loyaltyPage .createTemplateGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .loyaltyPage .createTemplateGrid .field:first-child, .loyaltyPage .historySearchPanel .searchField { grid-column: 1 / -1; }
           .loyaltyPage .historySearchPanel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .loyaltyPage .issueSteps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-          .loyaltyPage .summaryStrip { display: grid; gap: 6px; padding: 10px; }
+          .loyaltyPage .summaryStrip { display: grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap: 6px; padding: 9px; }
           .loyaltyPage .summaryStrip span { border-right: 0; padding-right: 0; }
           .loyaltyPage .panelHead { display: grid; }
           .loyaltyPage .rowActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
