@@ -1,0 +1,6 @@
+.nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:4px;border:1px solid #dbe3ef;border-radius:15px;background:#fff;box-shadow:0 8px 22px rgba(30,55,90,.045)}
+.link{min-width:0;min-height:42px;padding:8px 10px;display:flex;align-items:center;justify-content:center;border-radius:11px;color:#64748b;font-size:12px;font-weight:850;text-decoration:none;white-space:nowrap;transition:background .16s ease,color .16s ease,box-shadow .16s ease}
+.link:hover{background:#f4f7fb;color:#19385f}
+.active{background:linear-gradient(135deg,#102342,#1d467b);color:#fff;box-shadow:0 6px 14px rgba(15,35,66,.18)}
+.active:hover{background:linear-gradient(135deg,#102342,#1d467b);color:#fff}
+@media(max-width:640px){.nav{display:flex;overflow-x:auto;padding:3px;scrollbar-width:none}.nav::-webkit-scrollbar{display:none}.link{flex:1 0 auto;min-width:68px;min-height:40px;padding:7px 9px;font-size:11px}.link:nth-last-child(-n+2){min-width:78px}}
