@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 type BillingPaymentRow = {
   id: number;
@@ -232,17 +233,7 @@ function BillingCancelPageInner() {
 
   return (
     <main className="wrap">
-      <header className="topbar">
-        <div><h1 className="h1">구독 결제 내역</h1><p className="muted">결제 내역을 확인하고 취소 또는 환불을 요청할 수 있어요.</p></div>
-        <div className="row">
-          <button className="btn" type="button" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>
-            구독 결제
-          </button>
-          <button className="btn" type="button" onClick={() => router.push("/admin")}>
-            관리자 홈
-          </button>
-        </div>
-      </header>
+      <AdminPageHeader title="결제 내역 및 취소" description="결제 내역을 확인하고 취소 가능한 항목을 안전하게 처리하세요." storeId={storeId} storeName={storeName} eyebrow="BILLING HISTORY" actions={<button className="btn" type="button" onClick={() => router.push(`/admin/billing/pay?store=${encodeURIComponent(storeId)}`)}>구독 결제로</button>} />
 
       <section className="card">
         <div className="pill">{storeName} ({storeId})</div>

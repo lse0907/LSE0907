@@ -3,6 +3,8 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
+import Link from "next/link";
+import AuthShell from "@/app/_components/AuthShell";
 
 function SignupCustomerPageInner() {
   const router = useRouter();
@@ -86,52 +88,23 @@ function SignupCustomerPageInner() {
   };
 
   return (
-    <main style={{ maxWidth: 460, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>고객 회원가입</h1>
-      <p style={{ color: "#6b7280", marginTop: 8, fontWeight: 700, lineHeight: 1.4 }}>
-        간편하게 가입하고, 매장별 포인트와 쿠폰 혜택을 받아보세요.
-      </p>
-
-      {msg ? (
-        <p style={{ color: "#b91c1c", fontWeight: 900, marginTop: 12, whiteSpace: "pre-wrap" }}>{msg}</p>
-      ) : null}
-
-      <form onSubmit={onSubmit} style={{ marginTop: 16, display: "grid", gap: 12 }}>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="이메일" style={inputStyle} />
-        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required placeholder="비밀번호" style={inputStyle} />
-        <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="이름 (필수)" style={inputStyle} />
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="전화번호 (필수)" style={inputStyle} />
-
-        <button type="submit" disabled={loading} style={btnStyle}>
+    <AuthShell eyebrow="CUSTOMER ACCOUNT" title="고객 회원가입" description="간편하게 가입하고 매장별 포인트와 쿠폰 혜택을 받아보세요." footer={<><Link href="/signup">가입 유형 다시 선택</Link><span> · </span><Link href="/login">로그인</Link></>}>
+      {msg ? <p className="authMessage" role="alert">{msg}</p> : null}
+      <form onSubmit={onSubmit}>
+        <p className="authSectionTitle">계정 정보</p>
+        <label className="authField">이메일<input className="authInput" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" required placeholder="example@email.com" /></label>
+        <label className="authField">비밀번호<input className="authInput" value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="new-password" required placeholder="안전한 비밀번호를 입력해 주세요" /></label>
+        <div className="authDivider" />
+        <p className="authSectionTitle">기본 정보</p>
+        <label className="authField">이름<input className="authInput" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required placeholder="이름을 입력해 주세요" /></label>
+        <label className="authField">전화번호<input className="authInput" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" autoComplete="tel" required placeholder="010-0000-0000" /></label>
+        <button type="submit" disabled={loading} className="authButton">
           {loading ? "가입 처리 중..." : "가입하고 혜택 받기"}
         </button>
       </form>
-
-      <div style={{ marginTop: 14 }}>
-        <a href="/login" style={{ fontWeight: 900 }}>
-          로그인
-        </a>
-      </div>
-    </main>
+    </AuthShell>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #e5e7eb",
-  fontWeight: 800,
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #111827",
-  background: "#111827",
-  color: "white",
-  fontWeight: 900,
-  cursor: "pointer",
-};
 
 export default function SignupCustomerPage() {
   return (

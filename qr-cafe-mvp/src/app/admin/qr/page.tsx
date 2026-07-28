@@ -9,6 +9,7 @@ import { useStoreProfile } from "@/app/lib/storeProfile";
 import { ACCENT_COLORS, COUNTER_PRINT_PRESETS, TABLE_PRINT_PRESETS, TEMPLATE_OPTIONS, defaultDesignSettings, designWithDefaults } from "./qrDesign";
 import { createCounterPosterCanvas as renderCounterPosterCanvas, createTableSheetCanvases as renderTableSheetCanvases } from "./qrCanvas";
 import type { AdminQrCode, AdminQrDesignSettings, CounterPrintPreset, ImageSource, PaperPreset, PrintTarget, TablePrintPreset } from "./qrTypes";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 const START_PATH = "/";
 
@@ -1696,20 +1697,7 @@ function AdminQrPageInner() {
         }
       `}</style>
 
-      <header className="topbar">
-        <div className="titleRow">
-          <div>
-            <h1 className="h1">매장 QR 만들기</h1>
-            <p className="desc">인쇄용 QR을 만들어요.</p>
-          </div>
-          <div className="topActions">
-            <span className="pill" title={storeId ? `선택 매장: ${storeId}` : "선택 매장 없음"}>매장: {storeId || "—"}</span>
-            <a className="btn" href={storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin"}>
-              관리자 홈
-            </a>
-          </div>
-        </div>
-      </header>
+      <AdminPageHeader title="매장 QR 만들기" description="카운터와 테이블에서 사용할 인쇄용 QR을 만듭니다." storeId={storeId} storeName={storeName} eyebrow="QR STUDIO" />
 
       <section className="statusGrid" aria-label="QR 등록 현황">
         <div className="statCard">

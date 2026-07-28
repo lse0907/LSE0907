@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 import { getCurrentStoreId } from "../lib/currentStore";
+import AuthShell from "@/app/_components/AuthShell";
 
 function LoginPageInner() {
   const router = useRouter();
@@ -26,6 +27,7 @@ function LoginPageInner() {
   const [rememberLoginId, setRememberLoginId] = useState(() => !!readSavedLoginId());
   const [msg, setMsg] = useState<string>(initialError || "");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const resolveSafeNext = (raw: string) => {
     if (!raw) return "";
@@ -102,33 +104,14 @@ function LoginPageInner() {
   };
 
   return (
-    <main style={{ maxWidth: 420, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>로그인</h1>
-
-      {msg ? (
-        <p style={{ color: "#b91c1c", fontWeight: 800, marginTop: 12 }}>{msg}</p>
-      ) : null}
-
-      <form onSubmit={onSubmit} style={{ marginTop: 16, display: "grid", gap: 12 }}>
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          type="text"
-          required
-          placeholder="이메일 또는 매장 로그인 ID"
-          style={inputStyle}
-        />
-        <input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          type="password"
-          required
-          placeholder="비밀번호"
-          style={inputStyle}
-        />
+    <AuthShell eyebrow="WELCOME BACK" title="로그인" description="RION Order 계정으로 안전하게 로그인해 주세요." footer={<><Link href="/signup">계정이 없으신가요? 회원가입</Link><span> · </span><Link href="/">서비스 홈</Link></>}>
+      {msg ? <p className="authMessage" role="alert">{msg}</p> : null}
+      <form onSubmit={onSubmit}>
+        <label className="authField">이메일 또는 매장 로그인 ID<input className="authInput" value={email} onChange={(e) => setEmail(e.target.value)} type="text" autoComplete="username" required placeholder="계정 ID를 입력해 주세요" /></label>
+        <label className="authField">비밀번호<span className="authRow"><input className="authInput" value={password} onChange={(e) => setPassword(e.target.value)} type={showPassword ? "text" : "password"} autoComplete="current-password" required placeholder="비밀번호를 입력해 주세요" /><button type="button" className="passwordToggle" onClick={() => setShowPassword((visible) => !visible)} aria-pressed={showPassword}>{showPassword ? "숨기기" : "보기"}</button></span></label>
         <label
           htmlFor="rememberLoginId"
-          style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "#374151" }}
+          className="rememberRow"
         >
           <input
             id="rememberLoginId"
@@ -136,27 +119,15 @@ function LoginPageInner() {
             checked={rememberLoginId}
             onChange={(e) => setRememberLoginId(e.target.checked)}
             type="checkbox"
-            style={{ width: 18, height: 18 }}
           />
           이 기기에 로그인 ID 저장
         </label>
-        <button type="submit" disabled={loading} style={btnStyle}>
+        <button type="submit" disabled={loading} className="authButton">
           {loading ? "로그인 중..." : "로그인"}
         </button>
       </form>
-
-      <div style={{ marginTop: 14 }}>
-        <Link href="/signup" style={{ fontWeight: 900 }}>
-          회원가입
-        </Link>
-      </div>
-
-      <div style={{ marginTop: 18 }}>
-        <Link href="/" style={{ color: "#6b7280", fontWeight: 800 }}>
-          홈으로
-        </Link>
-      </div>
-    </main>
+      <style jsx>{`.rememberRow{display:flex;align-items:center;gap:8px;color:#43536a;font-size:12px;font-weight:800}.rememberRow input{width:18px;height:18px;accent-color:#173e73}.passwordToggle{flex:0 0 auto;min-height:48px;padding:0 13px;border:1px solid #d9e0eb;border-radius:12px;background:#f7f9fc;color:#294c78;font-weight:900;cursor:pointer}`}</style>
+    </AuthShell>
   );
 }
 
@@ -174,22 +145,6 @@ function resolveStoreId(rawStore: string | null, next: string) {
   }
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #e5e7eb",
-  fontWeight: 700,
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #111827",
-  background: "#111827",
-  color: "white",
-  fontWeight: 900,
-  cursor: "pointer",
-};
 export default function LoginPage() {
   return (
     <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>

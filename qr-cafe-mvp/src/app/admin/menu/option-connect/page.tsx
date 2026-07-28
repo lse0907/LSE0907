@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
+import MenuAdminNav from "@/app/admin/_components/MenuAdminNav";
 
 type OptionGroup = {
   id: string;
@@ -342,7 +344,6 @@ function AdminMenuOptionConnectInner() {
   };
 
   const setupBackHref = `/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
-  const adminHomeHref = `/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`;
   const menuHref = `/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
   const optionsHref = `/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`;
 
@@ -839,21 +840,8 @@ function AdminMenuOptionConnectInner() {
         }
       `}</style>
 
-      <header className="topbar">
-        <div className="titleRow">
-          <div>
-            <h1 className="h1">옵션 연결 확인</h1>
-            <p className="sub">
-              {storeName ? `${storeName} 매장 · ` : ""}메뉴별 옵션 필요 여부를 확인하고, 필요한 경우 한 번에 연결합니다.
-            </p>
-          </div>
-          <div className="headerActionRow">
-            <a className="btn" href={adminHomeHref}>관리자 홈</a>
-            <a className="btn" href={optionsHref}>옵션관리</a>
-            <a className="btn" href={menuHref}>메뉴관리</a>
-          </div>
-        </div>
-      </header>
+      <AdminPageHeader title="옵션 연결 확인" description="메뉴별 옵션 필요 여부를 확인하고 여러 메뉴를 한 번에 처리합니다." storeId={storeId} storeName={storeName} eyebrow="MENU MANAGEMENT" />
+      <MenuAdminNav active="connect" storeId={storeId} />
 
       {!setupCompleted && storeId ? (
         <SetupProgressBanner

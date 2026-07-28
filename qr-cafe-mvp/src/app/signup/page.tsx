@@ -1,54 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import AuthShell from "@/app/_components/AuthShell";
 
 export default function SignupChooserPage() {
   return (
-    <main style={{ maxWidth: 460, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>회원가입</h1>
-      <p style={{ color: "#6b7280", marginTop: 8, fontWeight: 700, lineHeight: 1.5 }}>
-        가입 유형을 선택해주세요. 일반 고객은 포인트/쿠폰 혜택을 받을 수 있고,
-        점주(사장님)는 매장 관리 기능을 사용할 수 있습니다.
-      </p>
-
-      <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
-        <Link href="/signup-customer" style={primaryBtnStyle}>
-          고객 회원가입
+    <AuthShell compact eyebrow="CREATE ACCOUNT" title="회원가입" description="이용 목적에 맞는 계정을 선택해 주세요." footer={<><Link href="/login">이미 계정이 있으신가요? 로그인</Link><span> · </span><Link href="/">서비스 홈</Link></>}>
+      <div className="accountGrid">
+        <Link href="/signup-customer" className="accountCard customerCard">
+          <span className="accountIcon" aria-hidden="true">♡</span>
+          <span><strong>고객으로 가입</strong><small>주문 내역을 확인하고 매장별 포인트와 쿠폰 혜택을 받아보세요.</small></span>
+          <span className="arrow" aria-hidden="true">›</span>
         </Link>
-        <Link href="/signup-owner" style={secondaryBtnStyle}>
-          점주 회원가입
+        <Link href="/signup-owner" className="accountCard ownerCard">
+          <span className="accountIcon" aria-hidden="true">▣</span>
+          <span><strong>점주로 가입</strong><small>매장을 만들고 메뉴, 주문, 직원과 운영 현황을 관리하세요.</small></span>
+          <span className="arrow" aria-hidden="true">›</span>
         </Link>
       </div>
-
-      <div style={{ marginTop: 14 }}>
-        <Link href="/login" style={{ fontWeight: 900 }}>
-          로그인
-        </Link>
-      </div>
-    </main>
+      <style jsx>{`.accountGrid{display:grid;gap:11px}.accountCard{min-height:105px;padding:16px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:12px;border:1px solid #dce4ef;border-radius:16px;color:#172640;text-decoration:none;transition:.17s}.accountCard:hover{border-color:#9db7da;box-shadow:0 9px 22px rgba(26,58,99,.09);transform:translateY(-1px)}.accountIcon{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:#edf4ff;color:#215eaa;font-size:20px;font-weight:900}.ownerCard .accountIcon{background:#102342;color:#fff}.accountCard>span:nth-child(2){display:grid;gap:5px}.accountCard strong{font-size:15px}.accountCard small{color:#69788d;font-size:11px;font-weight:700;line-height:1.5}.arrow{color:#8ea0b7;font-size:24px}@media(max-width:420px){.accountCard{min-height:96px;padding:13px}.accountIcon{width:36px;height:36px}}`}</style>
+    </AuthShell>
   );
 }
-
-const primaryBtnStyle: React.CSSProperties = {
-  display: "block",
-  textAlign: "center",
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #111827",
-  background: "#111827",
-  color: "white",
-  fontWeight: 900,
-  textDecoration: "none",
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  display: "block",
-  textAlign: "center",
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #d1d5db",
-  background: "#fff",
-  color: "#111827",
-  fontWeight: 900,
-  textDecoration: "none",
-};

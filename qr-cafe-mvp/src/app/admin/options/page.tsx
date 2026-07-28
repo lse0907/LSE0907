@@ -7,6 +7,8 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { getSetupProgress, setSetupStepConfirmed } from "@/app/lib/setupProgress";
 import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
+import MenuAdminNav from "@/app/admin/_components/MenuAdminNav";
 
 type OptionGroup = {
   id: string;
@@ -1929,28 +1931,10 @@ function AdminOptionsPageInner() {
         }
       `}</style>
 
-      <header className="topbar">
+      <AdminPageHeader title="옵션 관리" description="여러 메뉴에서 함께 사용할 옵션 그룹과 항목을 관리합니다." storeId={storeId} storeName={storeName} eyebrow="MENU MANAGEMENT" />
+      <MenuAdminNav active="options" storeId={storeId} />
+      <section className="topbar">
         <div className="topbarMain">
-          <div className="titleRow">
-            <h1 className="h1">옵션 관리</h1>
-            <div className="headerActionRow">
-              <a className="btn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-                관리자 홈
-              </a>
-              <a className="btn" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-                카테고리관리
-              </a>
-              <a className="btn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-                메뉴관리
-              </a>
-            </div>
-          </div>
-          <p className="sub">
-            메뉴에 연결되는 옵션을 등록 및 관리 합니다.
-          </p>
-          <p className="sub" style={{ marginTop: 6 }}>
-            현재 매장: <b>{storeName || storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
-          </p>
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
               <SetupProgressBanner
@@ -2021,7 +2005,7 @@ function AdminOptionsPageInner() {
           </div>
         </div>
 
-      </header>
+      </section>
 
       {!loading && !hasCategoryPrerequisite ? (
         <section className="card" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
