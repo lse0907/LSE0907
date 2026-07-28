@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
 import { supabase } from "@/app/lib/supabaseClient";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
@@ -1221,27 +1222,13 @@ function AdminStatsPageInner() {
         }
       `}</style>
 
-      <header className="heroCard">
-        <div className="titleRow">
-          <div>
-            <p className="eyebrow">SALES DASHBOARD</p>
-            <h1 className="h1">매출 통계</h1>
-            <p className="heroDesc">주문 흐름, 인기 메뉴, 기간별 매출을 한 화면에서 확인하세요.</p>
-            <div className="metaRow">
-              <span className="pill">{displayStoreName}</span>
-              <span className="pill">취소 주문 제외</span>
-              <span className="pill">{isPaidSubscriber ? "유료 구독 중" : "일부 제한"}</span>
-              <span className="pill">{modeLabel}</span>
-            </div>
-          </div>
-          <div className="heroActions">
-            <a className="btn homeBtn" href={storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin"}>관리자 홈</a>
-            <button className="btn refreshBtn" type="button" onClick={fetchFromDb} disabled={loading}>{loading ? "새로고침 중" : "새로고침"}</button>
-            <button className="btn advancedStatsBtn" type="button" onClick={() => setAdvancedOpen(true)}>{isPaidSubscriber ? "고급 통계" : "고급 통계 미리보기"}</button>
-          </div>
-        </div>
-        {errMsg ? <div className="err">오류: {errMsg}</div> : null}
-      </header>
+      <AdminPageHeader title="매출 통계" description="주문 흐름, 인기 메뉴와 기간별 매출을 한 화면에서 확인하세요." storeId={storeId} storeName={displayStoreName} eyebrow="SALES DASHBOARD" actions={<><button className="btn refreshBtn" type="button" onClick={fetchFromDb} disabled={loading}>{loading ? "새로고침 중" : "새로고침"}</button><button className="btn advancedStatsBtn" type="button" onClick={() => setAdvancedOpen(true)}>{isPaidSubscriber ? "고급 통계" : "고급 통계 미리보기"}</button></>} />
+      <div className="metaRow" aria-label="통계 조회 조건">
+        <span className="pill">취소 주문 제외</span>
+        <span className="pill">{isPaidSubscriber ? "유료 구독 중" : "일부 제한"}</span>
+        <span className="pill">{modeLabel}</span>
+      </div>
+      {errMsg ? <div className="err">오류: {errMsg}</div> : null}
 
       {!isPaidSubscriber ? (
         <section className="card notice">

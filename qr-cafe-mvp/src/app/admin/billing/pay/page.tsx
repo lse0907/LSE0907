@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 type PlanMonths = 1 | 3 | 6 | 12;
 type Quote = {
@@ -183,10 +184,7 @@ function BillingPayContent() {
 
   return (
     <main className="billingWrap">
-      <header className="billingHeader">
-        <div><span className="eyebrow">RION ORDER</span><h1>구독 관리</h1><p>{storeName}의 플랜과 결제 혜택을 확인하세요.</p></div>
-        <div className="headerActions"><button className="secondaryButton" onClick={() => router.push(`/admin/billing?store=${encodeURIComponent(storeId)}`)}>온라인 결제 설정</button><button className="secondaryButton" onClick={() => router.push("/admin")}>관리자 홈</button></div>
-      </header>
+      <AdminPageHeader title="구독 결제" description="이용할 기능과 기간을 선택하고 최종 결제 금액을 확인하세요." storeId={storeId} storeName={storeName} eyebrow="RION ORDER · BILLING" actions={<button className="secondaryButton" onClick={() => router.push(`/admin/billing?store=${encodeURIComponent(storeId)}`)}>결제 설정으로</button>} />
 
       {message ? <section className={`resultBanner ${messageKind}`} role="status"><strong>{messageKind === "success" ? "결제 완료" : messageKind === "warning" ? "처리 상태 확인 중" : messageKind === "error" ? "확인이 필요합니다" : "안내"}</strong><span>{message}</span></section> : null}
 
