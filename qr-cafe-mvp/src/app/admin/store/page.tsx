@@ -12,6 +12,7 @@ import {
 } from "@/app/lib/storeProfile";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 import { prepareStoreImage } from "@/app/lib/storeImageUpload";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 const STORE_IMAGE_BUCKET = "store-assets";
 type StoreStatus = "active" | "inactive" | "deleted";
@@ -1116,6 +1117,8 @@ function AdminstorePageInner() {
           .operationGrid {
             grid-template-columns: 1fr;
           }
+          .formStack { order: 1; }
+          .sideStack { order: 2; }
 
           .operationStrip {
             align-items: stretch;
@@ -1150,6 +1153,8 @@ function AdminstorePageInner() {
           .previewWrap {
             gap: 8px;
           }
+          .previewWrap .hero { height: 150px; }
+          .previewWrap .previewCard { display: none; }
 
           .cardTitle {
             font-size: 15px;
@@ -1246,26 +1251,7 @@ function AdminstorePageInner() {
         }
       `}</style>
 
-      <header className="topbar">
-        <div>
-          <h1 className="h1">매장 정보</h1>
-        </div>
-
-        <div className="topActions">
-          <button
-            className="btn"
-            type="button"
-            onClick={() => {
-              const next = storeId
-                ? `/admin?store=${encodeURIComponent(storeId)}`
-                : "/admin";
-              router.push(next);
-            }}
-          >
-            관리자 홈
-          </button>
-        </div>
-      </header>
+      <AdminPageHeader title="매장 정보" description="고객에게 표시되는 매장 정보와 운영 설정을 관리합니다." storeId={storeId} storeName={String((draft as any)?.storeName || profile?.storeName || "")} />
 
       <div className="pageMeta">
         <div className="badgeRow">

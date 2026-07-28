@@ -4,6 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
+import MenuAdminNav from "@/app/admin/_components/MenuAdminNav";
 
 type ImportTarget = "categories" | "menus";
 
@@ -691,23 +693,9 @@ function AdminImportPageInner() {
         }
       `}</style>
 
-      <header className="card hero">
-        <div>
-          <h1 className="title">일괄 등록</h1>
-          <p className="muted" style={{ marginTop: 8 }}>
-            카테고리와 메뉴를 CSV로 빠르게 등록합니다. 이미지/옵션 연결/전용옵션은 등록 후 각 관리 화면에서 확인해 주세요.
-          </p>
-          <p className="muted" style={{ marginTop: 6 }}>
-            현재 매장: <b>{storeName || storeId || "(미선택)"}</b>
-          </p>
-          {!storeId ? <div className="statusCard statusWarn" style={{ marginTop: 10 }}>관리자 홈에서 매장을 먼저 선택해 주세요.</div> : null}
-        </div>
-        <div className="heroActions" aria-label="관리자 이동 버튼">
-          <a className="btn heroBtn" href={`/admin${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>관리자 홈</a>
-          <a className="btn heroBtn" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>카테고리관리</a>
-          <a className="btn heroBtn" href={`/admin/menu${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>메뉴관리</a>
-        </div>
-      </header>
+      <AdminPageHeader title="일괄 등록" description="CSV 파일로 카테고리와 메뉴를 빠르게 등록합니다." storeId={storeId} storeName={storeName} eyebrow="MENU MANAGEMENT" />
+      <MenuAdminNav active="import" storeId={storeId} />
+      {!storeId ? <div className="statusCard statusWarn">관리자 홈에서 매장을 먼저 선택해 주세요.</div> : null}
 
       <section className="card">
         <div>
