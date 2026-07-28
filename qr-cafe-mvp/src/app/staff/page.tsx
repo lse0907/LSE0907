@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import RionBrand from "@/app/components/RionBrand";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
@@ -563,7 +564,7 @@ function StaffPageInner() {
       : currentWorker
         ? "workerBadge workerBadgeStaff"
         : "workerBadge workerBadgePending";
-  const workerChangeLabel = currentWorker ? "변경" : "PIN 입력";
+  const workerChangeLabel = currentWorker ? "담당 변경" : "PIN 입력";
   const storeDisplayName = storeName || storeId || "미선택";
   const deviceNoticeText = deviceStatus === "checking"
     ? "기기 확인 중..."
@@ -968,11 +969,11 @@ function StaffPageInner() {
   }, [staffViewMode, stationTab]);
 
   const tabGuideText = useMemo(() => {
-    if (staffViewMode === "simple") return "주문확인 후 제조완료, 전달완료 순서로 처리해 주세요.";
-    if (stationTab === "order") return "신규 주문을 먼저 확인해 주세요.";
-    if (stationTab === "make") return "주문확인 후 제조시작 버튼으로 일괄 시작하세요.";
-    if (stationTab === "ready") return "확인 처리 후 전달완료를 진행하세요.";
-    return "완료된 주문 기록을 확인할 수 있습니다.";
+    if (staffViewMode === "simple") return "주문 확인 → 제조 완료 → 전달 완료";
+    if (stationTab === "order") return "새 주문을 확인해 주세요.";
+    if (stationTab === "make") return "제조할 메뉴를 확인해 주세요.";
+    if (stationTab === "ready") return "준비 완료 여부를 확인해 주세요.";
+    return "";
   }, [staffViewMode, stationTab]);
 
   const statusButtonLabelForView = (s: OrderStatus) => {
@@ -2551,16 +2552,419 @@ function StaffPageInner() {
           }
         }
 
+        /* RION Order Staff visual system */
+        :root {
+          --bg: #f3f6fb;
+          --card: #ffffff;
+          --text: #14213d;
+          --muted: #667085;
+          --line: #e4e9f2;
+          --brand: #0f1f3d;
+          --brand-blue: #2563eb;
+          --brand-soft: #eef4ff;
+          --danger: #dc2626;
+          --radius: 22px;
+        }
+
+        body {
+          background:
+            radial-gradient(circle at 6% 0%, rgba(37, 99, 235, 0.07), transparent 28rem),
+            var(--bg);
+        }
+
+        .wrap {
+          max-width: 1240px;
+          padding: 24px 24px 40px;
+        }
+
+        .topbar {
+          padding: 18px 20px 20px;
+          border: 1px solid rgba(228, 233, 242, 0.92);
+          border-radius: 26px;
+          background: rgba(255, 255, 255, 0.94);
+          box-shadow: 0 18px 50px rgba(30, 55, 90, 0.08);
+          backdrop-filter: blur(12px);
+        }
+
+        .titleBlock { gap: 16px; }
+
+        .titleTop {
+          padding-bottom: 15px;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .brandArea {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+
+        .workspaceBadge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 25px;
+          padding: 5px 9px;
+          border: 1px solid #cbd8ea;
+          border-radius: 999px;
+          background: #f6f8fc;
+          color: #36506f;
+          font-size: 10px;
+          font-weight: 950;
+          letter-spacing: 0.08em;
+          white-space: nowrap;
+        }
+
+        .pageIntro { display: grid; gap: 5px; }
+
+        .pageEyebrow {
+          color: var(--brand-blue);
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 0.1em;
+        }
+
+        .h1 {
+          color: var(--brand);
+          font-size: 32px;
+          letter-spacing: -0.045em;
+        }
+
+        .pageDesc {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          font-weight: 650;
+          line-height: 1.55;
+          word-break: keep-all;
+        }
+
+        .topActions { gap: 7px; }
+
+        .btn {
+          min-height: 42px;
+          border-color: #d9e1ed;
+          color: var(--text);
+          font-family: inherit;
+          box-shadow: 0 1px 2px rgba(15, 31, 61, 0.03);
+          transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, transform 0.08s ease;
+        }
+
+        .btn:hover { border-color: #aebdd2; background: #f8faff; }
+        .btn:active { transform: translateY(1px); }
+        .btn:focus-visible, .actionBtn:focus-visible, .chip:focus-visible, .backBtn:focus-visible {
+          outline: 3px solid rgba(37, 99, 235, 0.28);
+          outline-offset: 2px;
+        }
+
+        .btnPrimary { background: var(--brand); border-color: var(--brand); color: #fff; }
+        .btnPrimary:hover { background: #17345e; border-color: #17345e; }
+
+        .staffToolbar {
+          margin-top: 0;
+          grid-template-columns: minmax(0, 1fr) minmax(320px, auto);
+          align-items: stretch;
+          padding: 0;
+          overflow: hidden;
+          border-color: #dfe6f0;
+          border-radius: 18px;
+          background: #f8faff;
+          box-shadow: none;
+        }
+
+        .contextLine {
+          padding: 13px 14px;
+          gap: 11px;
+        }
+
+        .contextItem { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+        .contextItem strong { overflow: hidden; color: var(--brand); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+        .contextKey { color: #75849a; font-size: 11px; font-weight: 900; white-space: nowrap; }
+        .contextDivider { width: 1px; height: 26px; background: #dfe6f0; }
+
+        .workerBadge { min-height: 27px; padding: 5px 9px; }
+        .workerActionBtn { min-height: 34px; margin-left: auto; border-radius: 10px; }
+
+        .modeRow {
+          display: grid;
+          grid-template-columns: auto auto;
+          justify-content: end;
+          align-content: center;
+          padding: 10px 12px;
+          border-left: 1px solid #dfe6f0;
+          background: #fff;
+        }
+
+        .modeLabel { color: #75849a; font-size: 11px; font-weight: 900; }
+
+        .modeSwitch { border-color: #dbe3ef; background: #f3f6fb; }
+
+        .modeSwitchBtn {
+          min-height: 34px;
+          color: #52637a;
+          font-size: 12px;
+        }
+
+        .modeSwitchBtnOn {
+          background: var(--brand);
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(15, 31, 61, 0.22);
+        }
+
+        .modeDescription {
+          grid-column: 1 / -1;
+          margin: 5px 0 0;
+          color: var(--muted);
+          font-size: 10px;
+          font-weight: 700;
+          text-align: right;
+          white-space: nowrap;
+        }
+
+        .deviceNotice {
+          width: 100%;
+          margin-top: 12px;
+          border-radius: 14px;
+          padding: 10px 12px;
+        }
+
+        .tabsRow {
+          margin-top: 18px;
+          padding: 5px;
+          border: 1px solid #dfe6f0;
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.82);
+          box-shadow: 0 8px 24px rgba(30, 55, 90, 0.05);
+        }
+
+        .tabs { width: 100%; margin-top: 0; gap: 5px; }
+
+        .chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          min-height: 44px;
+          border-color: transparent;
+          background: transparent;
+          color: #52637a;
+          font-family: inherit;
+          font-size: 14px;
+          transition: color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+        }
+
+        .chip:hover { background: #f3f6fb; }
+        .chipOn { border-color: #dbe6f8; background: var(--brand-soft); color: #1d4ed8; box-shadow: none; }
+
+        .tabCount {
+          display: inline-grid;
+          min-width: 23px;
+          height: 23px;
+          place-items: center;
+          border-radius: 999px;
+          background: #e7edf6;
+          color: #52637a;
+          padding: 0 6px;
+          font-size: 11px;
+          font-weight: 950;
+        }
+
+        .chipOn .tabCount { background: #2563eb; color: #fff; }
+        .tabHint { margin: 8px 5px 0; color: #75849a; font-size: 12px; font-weight: 650; }
+
+        .newOrderPopup {
+          margin-top: 12px;
+          border-color: #b9d3ff;
+          border-radius: 18px;
+          padding: 13px 14px;
+          background: linear-gradient(135deg, #edf5ff, #f8fbff);
+          box-shadow: 0 10px 28px rgba(37, 99, 235, 0.1);
+        }
+
+        .newOrderPopupContent { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; }
+        .newOrderDot { width: 10px; height: 10px; border-radius: 999px; background: #2563eb; box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.12); }
+        .newOrderPopupTitle { color: #1d4ed8; font-size: 12px; }
+        .newOrderPopupText { margin-top: 2px; color: var(--brand); font-size: 17px; font-weight: 950; }
+
+        .panel { gap: 18px; }
+
+        .card {
+          border-color: #dfe6f0;
+          border-radius: 22px;
+          padding: 18px;
+          box-shadow: 0 12px 34px rgba(30, 55, 90, 0.07);
+        }
+
+        .cardEmpty { min-height: 280px; }
+
+        .cardTitle { color: var(--brand); font-size: 21px; letter-spacing: -0.025em; }
+
+        .itemBtn {
+          padding: 14px;
+          border-color: #e1e7f0;
+          border-radius: 16px;
+          box-shadow: 0 3px 10px rgba(30, 55, 90, 0.035);
+        }
+
+        .itemBtn:hover { border-color: #aebed4; box-shadow: 0 8px 22px rgba(30, 55, 90, 0.08); }
+        .itemBtnOn { border: 2px solid #4c82d8; background: #f8fbff; box-shadow: 0 10px 26px rgba(37, 99, 235, 0.12); }
+        .bigNo { color: var(--brand); font-size: 21px; letter-spacing: -0.025em; }
+
+        .elapsedBadge { border-color: #f5d98e; background: #fff8e6; }
+        .badge { border-color: #dfe6f0; }
+        .badgeHot { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+
+        .quickActionBtn {
+          min-height: 38px;
+          border-color: #d9e1ed;
+          padding: 8px 13px;
+          color: var(--text);
+          font-family: inherit;
+        }
+
+        .quickActionBtnPrimary { border-color: var(--brand-blue); background: var(--brand-blue); color: #fff; }
+
+        .detailBox, .orderItemsBox {
+          border-color: #dfe6f0;
+          border-radius: 16px;
+        }
+
+        .actionBtn {
+          min-height: 48px;
+          border-color: #d9e1ed;
+          color: var(--text);
+          font-family: inherit;
+        }
+
+        .actionPrimary { background: var(--brand-blue); border-color: var(--brand-blue); }
+        .actionCancel { background: #fff8f8; border-color: #fecaca; color: var(--danger); }
+        .actionBtn:disabled, .btn:disabled, .quickActionBtn:disabled { cursor: not-allowed; box-shadow: none; }
+
+        .pinModal, .modalCard {
+          border-color: #dfe6f0;
+          border-radius: 22px;
+          box-shadow: 0 28px 80px rgba(15, 31, 61, 0.24);
+        }
+
+        .pinModal { padding: 22px; }
+        .modalCard { padding: 20px; }
+
+        .pinModalTextInput, .modalInput, .modalSelect, .pinModalInput, .buzzerInput {
+          border-color: #ced8e6;
+          outline: none;
+        }
+
+        .pinModalTextInput:focus, .modalInput:focus, .modalSelect:focus, .pinModalInput:focus, .buzzerInput:focus {
+          border-color: #4c82d8;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
+        }
+
+        @media (min-width: 901px) {
+          .tabs .chip { flex: 1 1 0; }
+          .panel { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+        }
+
+        @media (max-width: 900px) {
+          .wrap { padding: 12px 12px 28px; }
+          .topbar { padding: 11px 12px 12px; border-radius: 18px; }
+          .titleBlock { gap: 9px; }
+          .titleTop { min-height: 38px; padding-bottom: 8px; gap: 8px; }
+          .brandArea { gap: 7px; }
+          .workspaceBadge, .pageIntro { display: none; }
+          .topActions { gap: 6px; }
+          .btn.topActionBtn { min-height: 36px; padding: 7px 10px; font-size: 11px; }
+          .staffToolbar { grid-template-columns: 1fr; border-radius: 13px; }
+          .contextLine { flex-wrap: nowrap; padding: 8px 9px; gap: 7px; }
+          .contextKey, .contextDivider { display: none; }
+          .contextItem { min-width: 0; }
+          .contextItem:first-child { flex: 1 1 auto; overflow: hidden; }
+          .contextItem:first-child::after { content: "·"; margin-left: 7px; color: #a0aec0; }
+          .contextItem strong { font-size: 13px; }
+          .workerBadge { min-height: 25px; padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+          .workerActionBtn { min-height: 34px; margin-left: auto; padding: 6px 9px; font-size: 11px; white-space: nowrap; }
+          .modeRow { display: block; padding: 7px; border-top: 1px solid #dfe6f0; border-left: 0; }
+          .modeLabel, .modeDescription { display: none; }
+          .modeSwitch { display: flex; width: 100%; padding: 3px; }
+          .modeSwitchBtn { flex: 1; min-height: 34px; }
+          .tabsRow { margin-top: 8px; }
+          .tabHint { min-height: 0; margin-top: 5px; }
+          .tabHint:empty { display: none; }
+          .panel { margin-top: 9px; }
+          .card { min-height: auto; }
+          .cardEmpty { min-height: 190px; }
+          .mobileHide { display: none !important; }
+          .actionRow { display: none; }
+          .actionDock {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: max(12px, env(safe-area-inset-bottom));
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            z-index: 30;
+            backdrop-filter: blur(4px);
+          }
+          .actionDockTriple { grid-template-columns: 1fr; }
+          .dockSpacer { height: 96px; }
+        }
+
+        @media (max-width: 640px) {
+          .wrap { padding: 10px 10px 28px; }
+          .topbar { padding: 10px; border-radius: 17px; }
+          .titleBlock { gap: 8px; }
+          .titleTop { gap: 6px; padding-bottom: 7px; }
+          .brandArea { gap: 6px; }
+          .h1 { font-size: 27px; }
+          .pageDesc { font-size: 13px; }
+          .btn.topActionBtn { min-height: 36px; padding: 7px 8px; font-size: 11px; }
+          .contextLine { padding: 7px 8px; gap: 5px; }
+          .contextItem:first-child::after { margin-left: 5px; }
+          .workerActionBtn { min-height: 34px; }
+          .modeRow { padding: 6px; }
+          .tabsRow { margin-top: 7px; padding: 4px; }
+          .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
+          .tabs .chip { min-width: 0; min-height: 44px; gap: 4px; padding: 7px 4px; font-size: 12px; }
+          .tabs .chip:first-child:nth-last-child(2), .tabs .chip:first-child:nth-last-child(2) ~ .chip { grid-column: span 2; }
+          .tabCount { min-width: 20px; height: 20px; padding: 0 5px; font-size: 10px; }
+          .newOrderPopupContent { grid-template-columns: auto minmax(0, 1fr); }
+          .newOrderPopupContent .itemQuickActions { grid-column: 1 / -1; width: 100%; gap: 8px; }
+          .newOrderPopupContent .quickActionBtn { flex: 1; min-height: 44px; }
+          .panel { margin-top: 12px; }
+          .card { padding: 14px; border-radius: 18px; }
+          .itemBtn { padding: 13px; }
+          .bigNo { font-size: 20px; }
+          .quickActionBtn { min-height: 42px; padding: 9px 12px; font-size: 13px; }
+          .actionDock { border-radius: 18px; padding: 10px; }
+          .actionBtn { min-height: 50px; }
+          .pinModal, .modalCard { border-radius: 20px; }
+        }
+
+        @media (max-width: 390px) {
+          .workspaceBadge { display: none; }
+          .btn.topActionBtn { padding: 7px 6px; font-size: 10px; }
+          .tabs .chip { font-size: 11px; }
+        }
+
       `}</style>
 
       <header className="topbar">
         <div className="titleBlock">
           <div className="titleTop">
-            <h1 className="h1">직원 화면</h1>
+            <div className="brandArea">
+              <RionBrand product staff />
+              <span className="workspaceBadge">STORE STAFF</span>
+            </div>
 
             <div className="topActions">
               <button
-                className="btn btnPrimary topActionBtn"
+                type="button"
+                className="btn topActionBtn"
                 onClick={() =>
                   (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
                 }
@@ -2571,23 +2975,36 @@ function StaffPageInner() {
             </div>
           </div>
 
-          <div className="staffToolbar" aria-label="직원 화면 작업 상태">
+          <div className="pageIntro">
+            <span className="pageEyebrow">ORDER OPERATIONS</span>
+            <h1 className="h1">주문 운영</h1>
+            <p className="pageDesc">새 주문을 확인하고 제조부터 전달까지 빠르게 처리하세요.</p>
+          </div>
+
+          <div className="staffToolbar" aria-label="직원 화면 운영 정보">
             <div className="contextLine" aria-label="매장과 담당 직원">
-              <span className="storeBadge">매장 · {storeDisplayName}</span>
-              <span className={workerBadgeClass}>담당 · {workerRoleText}</span>
-              <button className="btn btnSmall workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
+              <span className="contextItem">
+                <span className="contextKey">현재 매장</span>
+                <strong>{storeDisplayName}</strong>
+              </span>
+              <span className="contextDivider" aria-hidden="true" />
+              <span className="contextItem">
+                <span className="contextKey">현재 담당</span>
+                <span className={workerBadgeClass}>{workerRoleText}</span>
+              </span>
+              <button type="button" className="btn workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
             </div>
 
             <div className="modeRow">
               <p className="modeLabel">운영 방식</p>
-              <div className="modeSwitch" role="group" aria-label="모드전환">
+              <div className="modeSwitch" role="group" aria-label="운영 방식 전환">
                 <button
                   type="button"
                   className={`modeSwitchBtn ${staffViewMode === "simple" ? "modeSwitchBtnOn" : ""}`}
                   aria-pressed={staffViewMode === "simple"}
                   onClick={() => updateStaffViewMode("simple")}
                 >
-                  기본 모드
+                  기본 운영
                 </button>
                 <button
                   type="button"
@@ -2595,9 +3012,12 @@ function StaffPageInner() {
                   aria-pressed={staffViewMode === "station"}
                   onClick={() => updateStaffViewMode("station")}
                 >
-                  분업 모드
+                  분업 운영
                 </button>
               </div>
+              <p className="modeDescription">
+                {staffViewMode === "simple" ? "주문 단위로 전체 과정을 처리합니다." : "접수·제조·준비를 단계별로 처리합니다."}
+              </p>
             </div>
           </div>
 
@@ -2669,7 +3089,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              주문확인 ({counts.active})
+              <span>진행 중</span><span className="tabCount">{counts.active}</span>
             </button>
             <button
               className={`chip ${listTab === "completed" ? "chipOn" : ""}`}
@@ -2678,7 +3098,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              완료 ({counts.completed})
+              <span>완료</span><span className="tabCount">{counts.completed}</span>
             </button>
           </div>
         </div>
@@ -2692,7 +3112,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              주문확인 ({stationCounts.order})
+              <span>접수</span><span className="tabCount">{stationCounts.order}</span>
             </button>
             <button
               className={`chip ${stationTab === "make" ? "chipOn" : ""}`}
@@ -2701,7 +3121,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              제조 ({stationCounts.make})
+              <span>제조</span><span className="tabCount">{stationCounts.make}</span>
             </button>
             <button
               className={`chip ${stationTab === "ready" ? "chipOn" : ""}`}
@@ -2710,7 +3130,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              준비 ({stationCounts.ready})
+              <span>준비</span><span className="tabCount">{stationCounts.ready}</span>
             </button>
             <button
               className={`chip ${stationTab === "history" ? "chipOn" : ""}`}
@@ -2719,7 +3139,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              완료 ({stationCounts.history})
+              <span>완료</span><span className="tabCount">{stationCounts.history}</span>
             </button>
           </div>
         </div>
@@ -2727,10 +3147,14 @@ function StaffPageInner() {
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
       {newOrderPopup ? (
         <div className="newOrderPopup" role="alert" aria-live="assertive">
-          <div className="rowBetween" style={{ gap: 8, alignItems: "center" }}>
-            <div className="newOrderPopupTitle">신규 주문 접수 · 주문번호 {newOrderPopup.displayNo}</div>
+          <div className="newOrderPopupContent">
+            <span className="newOrderDot" aria-hidden="true" />
+            <div>
+              <div className="newOrderPopupTitle">새 주문이 도착했어요</div>
+              <div className="newOrderPopupText">주문번호 {newOrderPopup.displayNo}</div>
+            </div>
             <div className="itemQuickActions" style={{ marginTop: 0 }}>
-              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>확인</button>
+              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>주문 확인</button>
               <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>닫기</button>
             </div>
           </div>
@@ -2739,7 +3163,7 @@ function StaffPageInner() {
       <p className="tabHint">{tabGuideText}</p>
 
       <div className="panel">
-        <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
+        <section className={`card ${filteredOrders.length === 0 ? "cardEmpty" : ""} ${mobileView === "detail" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
             <h2 className="cardTitle">{listTitle}</h2>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -2955,7 +3379,7 @@ function StaffPageInner() {
                       <div className="bigNo">
                         {o.displayNo}
                         {o.buzzerNo ? ` · 벨 ${o.buzzerNo}` : ""}
-                        {showNew ? <span className="badge badgeHot">NEW</span> : null}
+                        {showNew ? <span className="badge badgeHot">신규</span> : null}
                       </div>
                       <div className="orderMetaRight">
                         <span className="elapsedBadge">{formatElapsedMin(o.createdAt)}</span>
@@ -3003,7 +3427,7 @@ function StaffPageInner() {
           )}
         </section>
 
-        <section className={`card ${mobileView === "list" ? "mobileHide" : ""}`}>
+        <section className={`card ${!selected ? "cardEmpty" : ""} ${mobileView === "list" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
             <h2 className="cardTitle">주문 상세</h2>
             <button
@@ -3079,16 +3503,20 @@ function StaffPageInner() {
                 <span className="badge">완료 {counts.completed}건</span>
                 <span className="badge">전체 {counts.all}건</span>
               </div>
-              <div className="itemQuickActions">
-                <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
-                  주문확인 탭 보기
-                </button>
-                {staffViewMode === "station" ? (
+              {((staffViewMode === "simple" ? listTab !== "active" : stationTab !== "order") || (staffViewMode === "station" && stationTab !== "make")) ? (
+                <div className="itemQuickActions">
+                  {(staffViewMode === "simple" ? listTab !== "active" : stationTab !== "order") ? (
+                    <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
+                      접수 탭으로 이동
+                    </button>
+                  ) : null}
+                  {staffViewMode === "station" && stationTab !== "make" ? (
                   <button type="button" className="quickActionBtn" onClick={() => setStationTab("make")}>
                     제조 탭 보기
                   </button>
-                ) : null}
-              </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : (
             <>
