@@ -729,6 +729,10 @@ function AdminStatsPageInner() {
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 12px;
         }
+        .premiumInsight{position:relative;min-height:112px;padding:19px 20px;display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:15px;overflow:hidden;border:1px solid #304e7b;border-radius:18px;background:linear-gradient(135deg,#0f2344,#1d477d);color:#fff;box-shadow:0 14px 30px rgba(15,35,66,.15)}
+        .premiumInsight:after{content:"";position:absolute;right:-60px;top:-90px;width:210px;height:210px;border:35px solid rgba(255,255,255,.05);border-radius:50%}
+        .premiumIcon{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:rgba(224,181,84,.16);color:#f0ca70;z-index:1}.premiumIcon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+        .premiumCopy{min-width:0;display:grid;gap:5px;z-index:1}.premiumTop{display:flex;align-items:center;gap:8px}.premiumTop strong{font-size:16px;font-weight:950}.premiumBadge{padding:3px 7px;border:1px solid rgba(240,202,112,.44);border-radius:999px;background:rgba(240,202,112,.12);color:#f4d58b;font-size:8px;font-weight:950;letter-spacing:.1em}.premiumCopy p{margin:0;color:#c8d6e8;font-size:11px;font-weight:700;line-height:1.5}.premiumButton{z-index:1;min-height:42px;padding:0 14px;border:1px solid rgba(255,255,255,.3);border-radius:12px;background:#fff;color:#173e73;font-weight:950;cursor:pointer;white-space:nowrap}
         .metricCard {
           position: relative;
           min-height: 154px;
@@ -1126,9 +1130,7 @@ function AdminStatsPageInner() {
             grid-template-columns: 1fr 1fr;
             width: 100%;
           }
-          .advancedStatsBtn {
-            grid-column: 1 / -1;
-          }
+          .premiumInsight{min-height:0;padding:15px;grid-template-columns:36px minmax(0,1fr);gap:11px}.premiumIcon{width:36px;height:36px}.premiumButton{grid-column:1/-1;width:100%}.premiumCopy p{font-size:10px}
           .btnRow {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -1222,7 +1224,7 @@ function AdminStatsPageInner() {
         }
       `}</style>
 
-      <AdminPageHeader title="매출 통계" description="주문 흐름, 인기 메뉴와 기간별 매출을 한 화면에서 확인하세요." storeId={storeId} storeName={displayStoreName} eyebrow="SALES DASHBOARD" actions={<><button className="btn refreshBtn" type="button" onClick={fetchFromDb} disabled={loading}>{loading ? "새로고침 중" : "새로고침"}</button><button className="btn advancedStatsBtn" type="button" onClick={() => setAdvancedOpen(true)}>{isPaidSubscriber ? "고급 통계" : "고급 통계 미리보기"}</button></>} />
+      <AdminPageHeader title="매출 통계" description="주문 흐름, 인기 메뉴와 기간별 매출을 한 화면에서 확인하세요." storeId={storeId} storeName={displayStoreName} eyebrow="SALES DASHBOARD" actions={<button className="btn refreshBtn" type="button" onClick={fetchFromDb} disabled={loading}>{loading ? "새로고침 중" : "새로고침"}</button>} />
       <div className="metaRow" aria-label="통계 조회 조건">
         <span className="pill">취소 주문 제외</span>
         <span className="pill">{isPaidSubscriber ? "유료 구독 중" : "일부 제한"}</span>
@@ -1258,6 +1260,12 @@ function AdminStatsPageInner() {
             <div className="metricSub desktopMetricOnly">상세 지표는 구독 후 확인</div>
           )}
         </div>
+      </section>
+
+      <section className="premiumInsight" aria-label="프리미엄 통계">
+        <span className="premiumIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9Z"/><path d="m19 14 .7 2.3L22 17l-2.3.7L19 20l-.7-2.3L16 17l2.3-.7Z"/><path d="M4 14v6h10"/><path d="m5 17 3-3 2 2 4-5"/></svg></span>
+        <span className="premiumCopy"><span className="premiumTop"><strong>{isPaidSubscriber ? "고급 통계" : "프리미엄 분석"}</strong><span className="premiumBadge">{isPaidSubscriber ? "이용 중" : "PREMIUM"}</span></span><p>시간대별 매출과 메뉴 흐름을 더 깊게 분석해 매장 운영에 활용하세요.</p></span>
+        <button className="premiumButton" type="button" onClick={() => setAdvancedOpen(true)}>{isPaidSubscriber ? "고급 통계 열기" : "프리미엄 통계 미리보기"}</button>
       </section>
 
       <section className="twoCol">

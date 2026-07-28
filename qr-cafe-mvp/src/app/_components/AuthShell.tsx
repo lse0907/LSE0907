@@ -16,7 +16,7 @@ export default function AuthShell({ eyebrow, title, description, children, foote
     <main className={styles.page}>
       <section className={`${styles.shell} ${compact ? styles.compact : ""}`}>
         <aside className={styles.brandPanel} aria-label="RION Order 소개">
-          <RionBrand product />
+          <RionBrand product auth inverse />
           <div className={styles.brandCopy}>
             <span>ORDER &amp; STORE PLATFORM</span>
             <strong>주문과 매장 운영을<br />하나의 흐름으로 연결합니다.</strong>
@@ -26,7 +26,7 @@ export default function AuthShell({ eyebrow, title, description, children, foote
         </aside>
         <div className={styles.formPanel}>
           <header className={styles.header}>
-            <span className={styles.mobileBrand}><RionBrand product /></span>
+            <span className={styles.mobileBrand}><RionBrand product auth /></span>
             <span className={styles.eyebrow}>{eyebrow}</span>
             <h1>{title}</h1>
             <p>{description}</p>
@@ -38,4 +38,3 @@ export default function AuthShell({ eyebrow, title, description, children, foote
     </main>
   );
 }
-
