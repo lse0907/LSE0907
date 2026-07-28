@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 type TicketRow = {
   id: number;
@@ -139,17 +140,11 @@ function AdminSupportInner() {
         .pill { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
       `}</style>
 
-      <header className="top">
-        <h1 className="h1">지원센터</h1>
-        <div className="row">
-          <button className="btn" onClick={() => router.back()}>관리자 홈 </button>
-        </div>
-      </header>
+      <AdminPageHeader title="지원센터" description="운영 중 궁금한 점이나 문제를 접수하고 처리 상태를 확인하세요." storeId={storeId} storeName={storeName} eyebrow="SUPPORT CENTER" />
 
       <section className="card">
         <div className="row">
-          <span className="pill">store: {storeName}</span>
-          <span className="pill">id: {storeId}</span>
+          <span className="pill">현재 매장 · {storeName}</span>
         </div>
         <p className="muted">불편사항/문의/오류를 등록하면 OPS에서 처리 상태를 갱신합니다.</p>
 

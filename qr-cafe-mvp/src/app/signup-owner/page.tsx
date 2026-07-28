@@ -4,6 +4,8 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
+import Link from "next/link";
+import AuthShell from "@/app/_components/AuthShell";
 
 function SignupOwnerPageInner() {
   const router = useRouter();
@@ -107,58 +109,37 @@ function SignupOwnerPageInner() {
   };
 
   return (
-    <main style={{ maxWidth: 460, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>점주 회원가입</h1>
-      <p style={{ color: "#6b7280", marginTop: 8, fontWeight: 700, lineHeight: 1.4 }}>
-        사장님 계정을 생성합니다. 주소(거주지)는 “주소 검색”으로 선택할 수 있어요.
-      </p>
-
-      {msg ? (
-        <p style={{ color: "#b91c1c", fontWeight: 900, marginTop: 12, whiteSpace: "pre-wrap" }}>{msg}</p>
-      ) : null}
-
-      <form onSubmit={onSubmit} style={{ marginTop: 16, display: "grid", gap: 12 }}>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="이메일" style={inputStyle} />
-        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required placeholder="비밀번호" style={inputStyle} />
-
-        <div style={dividerStyle} />
-
-        <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="이름 (필수)" style={inputStyle} />
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="전화번호 (필수)" style={inputStyle} />
-
-        <div style={{ display: "grid", gap: 8 }}>
-          <label style={{ fontWeight: 900 }}>주소(거주지) (필수)</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input value={address} readOnly placeholder="주소 검색으로 입력" style={{ ...inputStyle, flex: 1 }} />
+    <AuthShell eyebrow="OWNER ACCOUNT" title="점주 회원가입" description="점주 계정을 만든 다음 매장 정보와 메뉴 설정을 이어갈 수 있습니다." footer={<><Link href="/signup">가입 유형 다시 선택</Link><span> · </span><Link href="/login">로그인</Link></>}>
+      {msg ? <p className="authMessage" role="alert">{msg}</p> : null}
+      <form onSubmit={onSubmit}>
+        <p className="authSectionTitle">계정 정보</p>
+        <label className="authField">이메일<input className="authInput" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" required placeholder="example@email.com" /></label>
+        <label className="authField">비밀번호<input className="authInput" value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="new-password" required placeholder="안전한 비밀번호를 입력해 주세요" /></label>
+        <div className="authDivider" />
+        <p className="authSectionTitle">대표자 정보</p>
+        <label className="authField">이름<input className="authInput" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required placeholder="이름을 입력해 주세요" /></label>
+        <label className="authField">전화번호<input className="authInput" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" autoComplete="tel" required placeholder="010-0000-0000" /></label>
+        <label className="authField">주소<span className="authRow"><input className="authInput" value={address} readOnly placeholder="주소 검색으로 입력" />
             <button
               type="button"
               onClick={openAddressSearch}
-              style={{ ...btnStyle, background: "#fff", color: "#111827" }}
+              className="addressButton"
               disabled={loading}
             >
               주소 검색
             </button>
-          </div>
-
-          <input
+          </span></label>
+          <label className="authField">상세 주소<input
+            className="authInput"
             id="addressDetailInput"
             value={addressDetail}
             onChange={(e) => setAddressDetail(e.target.value)}
-            placeholder="상세주소 (선택) 예: 101동 1203호"
-            style={inputStyle}
-          />
-        </div>
-
-        <button type="submit" disabled={loading} style={btnStyle}>
-          {loading ? "가입 처리 중..." : "가입하기"}
+            placeholder="선택 사항 · 예: 101동 1203호"
+          /></label>
+        <button type="submit" disabled={loading} className="authButton">
+          {loading ? "가입 처리 중..." : "점주 계정 만들기"}
         </button>
       </form>
-
-      <div style={{ marginTop: 14 }}>
-        <a href="/login" style={{ fontWeight: 900 }}>
-          로그인
-        </a>
-      </div>
 
       {showAddr ? (
         <div style={modalOverlayStyle} onClick={closeAddressSearch}>
@@ -178,32 +159,10 @@ function SignupOwnerPageInner() {
           </div>
         </div>
       ) : null}
-    </main>
+      <style jsx>{`.addressButton{flex:0 0 auto;min-height:48px;padding:0 13px;border:1px solid #b8c8df;border-radius:12px;background:#f7f9fc;color:#294c78;font-weight:900;cursor:pointer}`}</style>
+    </AuthShell>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #e5e7eb",
-  fontWeight: 800,
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid #111827",
-  background: "#111827",
-  color: "white",
-  fontWeight: 900,
-  cursor: "pointer",
-};
-
-const dividerStyle: React.CSSProperties = {
-  height: 1,
-  background: "#e5e7eb",
-  margin: "4px 0",
-};
 
 const modalOverlayStyle: React.CSSProperties = {
   position: "fixed",

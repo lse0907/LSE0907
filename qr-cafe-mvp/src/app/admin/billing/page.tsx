@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { BillingSettings, maskToken } from "@/app/lib/billingSettings";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 type SaveMode = "db" | "unsynced";
 type SavedPgView = {
@@ -362,12 +363,7 @@ function AdminBillingPageInner() {
     <main className="wrap">
       <style jsx global>{css}</style>
 
-      <header className="topbar">
-        <h1 className="h1">온라인 결제 설정</h1>
-        <button className="btn" type="button" onClick={() => router.back()}>
-          관리자 홈
-        </button>
-      </header>
+      <AdminPageHeader title="온라인 결제 설정" description="고객 선결제를 위한 토스페이먼츠 PG 연결과 사용 상태를 관리합니다." storeId={storeId} eyebrow="ONLINE PAYMENT" />
 
       {storeId ? (
         accessLoading ? (
@@ -573,6 +569,8 @@ const css = `
   .switchButton:disabled { opacity:.5; cursor:not-allowed; }
   .requirementBox { display:grid; gap:5px; border-radius:12px; background:#fff7ed; color:#9a3412; padding:12px; font-size:12px; }
   @media (max-width: 700px) {
+    .wrap { padding:12px; gap:10px; }
+    .card { padding:14px; border-radius:15px; }
     .grid2 {
       grid-template-columns: 1fr;
     }

@@ -6,6 +6,8 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { getSetupProgress, setSetupStepConfirmed } from "@/app/lib/setupProgress";
 import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
+import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
+import MenuAdminNav from "@/app/admin/_components/MenuAdminNav";
 
 const MENU_IMAGE_BUCKET = "menu-assets";
 
@@ -2526,26 +2528,10 @@ function AdminMenuPageInner() {
         }
       `}</style>
 
-      <header className="topbar">
+      <AdminPageHeader title="메뉴 관리" description="메뉴 기본정보, 이미지, 가격과 옵션 연결을 관리합니다." storeId={storeId} storeName={storeName} eyebrow="MENU MANAGEMENT" />
+      <MenuAdminNav active="menu" storeId={storeId} />
+      <section className="topbar">
         <div className="topbarMain">
-          <div className="titleRow">
-            <h1 className="h1">메뉴 관리</h1>
-            <div className="headerActionRow">
-              <button className="btn" onClick={onBack}>
-                관리자 홈
-              </button>
-              <a className="btn" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-                카테고리관리
-              </a>
-              <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}` : ""}`}>
-                옵션관리
-              </a>
-            </div>
-          </div>
-          <p className="sub">메뉴 기본정보와 옵션 가격을 관리합니다.</p>
-          <p className="sub" style={{ marginTop: 6 }}>
-            현재 매장: <b>{storeName || storeId || "(미선택)"}</b> {loading ? "· 불러오는 중..." : ""}
-          </p>
           {!setupCompleted ? (
             <section style={{ marginTop: 8 }}>
               <SetupProgressBanner
@@ -2596,7 +2582,7 @@ function AdminMenuPageInner() {
         ) : badge === "error" ? (
           <span className="badge badgeError">{badgeText}</span>
         ) : null}
-      </header>
+      </section>
 
 
       {showMenuPrerequisiteNotice ? (
