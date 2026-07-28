@@ -59,13 +59,19 @@ export default function RionBrand({ compact = false, inverse = false, product = 
         .rionBrand.staff.compact .rionBrandLogo { width:38px; height:38px; }
         .rionBrand.compact.inverse .rionBrandLogo { width:38px; height:38px; }
         .rionBrand.compact .rionBrandCopy strong { font-size:18px; }
+        @media (max-width:900px) {
+          .rionBrand.staff { --rion-logo-size:36px; gap:8px; }
+          .rionBrand.staff .rionBrandLogo { width:36px; height:36px; }
+          .rionBrand.staff .rionBrandCopy strong { font-size:18px; }
+          .rionBrand.staff .rionBrandCopy span { display:none; }
+        }
         @media (max-width:640px) {
           .rionBrand.admin { --rion-logo-size:38px; gap:8px; }
           .rionBrand.admin .rionBrandLogo { width:38px; height:38px; }
           .rionBrand.admin .rionBrandCopy strong { font-size:18px; }
           .rionBrand.admin .rionBrandCopy span { font-size:9px; }
-          .rionBrand.staff { --rion-logo-size:38px; gap:8px; }
-          .rionBrand.staff .rionBrandLogo { width:38px; height:38px; }
+          .rionBrand.staff { --rion-logo-size:36px; gap:8px; }
+          .rionBrand.staff .rionBrandLogo { width:36px; height:36px; }
           .rionBrand.staff .rionBrandCopy strong { font-size:18px; }
           .rionBrand.staff .rionBrandCopy span { font-size:9px; }
         }

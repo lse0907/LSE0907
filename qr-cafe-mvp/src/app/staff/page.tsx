@@ -564,7 +564,7 @@ function StaffPageInner() {
       : currentWorker
         ? "workerBadge workerBadgeStaff"
         : "workerBadge workerBadgePending";
-  const workerChangeLabel = currentWorker ? "변경" : "PIN 입력";
+  const workerChangeLabel = currentWorker ? "담당 변경" : "PIN 입력";
   const storeDisplayName = storeName || storeId || "미선택";
   const deviceNoticeText = deviceStatus === "checking"
     ? "기기 확인 중..."
@@ -969,11 +969,11 @@ function StaffPageInner() {
   }, [staffViewMode, stationTab]);
 
   const tabGuideText = useMemo(() => {
-    if (staffViewMode === "simple") return "주문확인 후 제조완료, 전달완료 순서로 처리해 주세요.";
-    if (stationTab === "order") return "신규 주문을 먼저 확인해 주세요.";
-    if (stationTab === "make") return "주문확인 후 제조시작 버튼으로 일괄 시작하세요.";
-    if (stationTab === "ready") return "확인 처리 후 전달완료를 진행하세요.";
-    return "완료된 주문 기록을 확인할 수 있습니다.";
+    if (staffViewMode === "simple") return "주문 확인 → 제조 완료 → 전달 완료";
+    if (stationTab === "order") return "새 주문을 확인해 주세요.";
+    if (stationTab === "make") return "제조할 메뉴를 확인해 주세요.";
+    if (stationTab === "ready") return "준비 완료 여부를 확인해 주세요.";
+    return "";
   }, [staffViewMode, stationTab]);
 
   const statusButtonLabelForView = (s: OrderStatus) => {
@@ -2795,6 +2795,8 @@ function StaffPageInner() {
           box-shadow: 0 12px 34px rgba(30, 55, 90, 0.07);
         }
 
+        .cardEmpty { min-height: 280px; }
+
         .cardTitle { color: var(--brand); font-size: 21px; letter-spacing: -0.025em; }
 
         .itemBtn {
@@ -2863,30 +2865,69 @@ function StaffPageInner() {
         }
 
         @media (max-width: 900px) {
-          .wrap { padding: 18px 18px 32px; }
-          .staffToolbar { grid-template-columns: 1fr; }
-          .modeRow { border-top: 1px solid #dfe6f0; border-left: 0; justify-content: start; }
-          .modeDescription { text-align: left; }
+          .wrap { padding: 12px 12px 28px; }
+          .topbar { padding: 11px 12px 12px; border-radius: 18px; }
+          .titleBlock { gap: 9px; }
+          .titleTop { min-height: 38px; padding-bottom: 8px; gap: 8px; }
+          .brandArea { gap: 7px; }
+          .workspaceBadge, .pageIntro { display: none; }
+          .topActions { gap: 6px; }
+          .btn.topActionBtn { min-height: 36px; padding: 7px 10px; font-size: 11px; }
+          .staffToolbar { grid-template-columns: 1fr; border-radius: 13px; }
+          .contextLine { flex-wrap: nowrap; padding: 8px 9px; gap: 7px; }
+          .contextKey, .contextDivider { display: none; }
+          .contextItem { min-width: 0; }
+          .contextItem:first-child { flex: 1 1 auto; overflow: hidden; }
+          .contextItem:first-child::after { content: "·"; margin-left: 7px; color: #a0aec0; }
+          .contextItem strong { font-size: 13px; }
+          .workerBadge { min-height: 25px; padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+          .workerActionBtn { min-height: 34px; margin-left: auto; padding: 6px 9px; font-size: 11px; white-space: nowrap; }
+          .modeRow { display: block; padding: 7px; border-top: 1px solid #dfe6f0; border-left: 0; }
+          .modeLabel, .modeDescription { display: none; }
+          .modeSwitch { display: flex; width: 100%; padding: 3px; }
+          .modeSwitchBtn { flex: 1; min-height: 34px; }
+          .tabsRow { margin-top: 8px; }
+          .tabHint { min-height: 0; margin-top: 5px; }
+          .tabHint:empty { display: none; }
+          .panel { margin-top: 9px; }
+          .card { min-height: auto; }
+          .cardEmpty { min-height: 190px; }
+          .mobileHide { display: none !important; }
+          .actionRow { display: none; }
+          .actionDock {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: max(12px, env(safe-area-inset-bottom));
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            z-index: 30;
+            backdrop-filter: blur(4px);
+          }
+          .actionDockTriple { grid-template-columns: 1fr; }
+          .dockSpacer { height: 96px; }
         }
 
         @media (max-width: 640px) {
           .wrap { padding: 10px 10px 28px; }
-          .topbar { padding: 14px; border-radius: 20px; }
-          .titleBlock { gap: 13px; }
-          .titleTop { gap: 6px; padding-bottom: 12px; }
+          .topbar { padding: 10px; border-radius: 17px; }
+          .titleBlock { gap: 8px; }
+          .titleTop { gap: 6px; padding-bottom: 7px; }
           .brandArea { gap: 6px; }
-          .workspaceBadge { min-height: 22px; padding: 4px 6px; font-size: 8px; }
           .h1 { font-size: 27px; }
           .pageDesc { font-size: 13px; }
           .btn.topActionBtn { min-height: 36px; padding: 7px 8px; font-size: 11px; }
-          .contextLine { padding: 12px; gap: 8px; }
-          .contextDivider { display: none; }
-          .contextItem { flex: 1 1 100%; justify-content: space-between; }
-          .workerActionBtn { min-height: 40px; margin-left: 0; }
-          .modeRow { grid-template-columns: auto 1fr; padding: 10px; }
-          .modeSwitch { justify-self: end; }
-          .modeDescription { white-space: normal; }
-          .tabsRow { margin-top: 12px; padding: 4px; }
+          .contextLine { padding: 7px 8px; gap: 5px; }
+          .contextItem:first-child::after { margin-left: 5px; }
+          .workerActionBtn { min-height: 34px; }
+          .modeRow { padding: 6px; }
+          .tabsRow { margin-top: 7px; padding: 4px; }
           .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
           .tabs .chip { min-width: 0; min-height: 44px; gap: 4px; padding: 7px 4px; font-size: 12px; }
           .tabs .chip:first-child:nth-last-child(2), .tabs .chip:first-child:nth-last-child(2) ~ .chip { grid-column: span 2; }
@@ -3122,7 +3163,7 @@ function StaffPageInner() {
       <p className="tabHint">{tabGuideText}</p>
 
       <div className="panel">
-        <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
+        <section className={`card ${filteredOrders.length === 0 ? "cardEmpty" : ""} ${mobileView === "detail" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
             <h2 className="cardTitle">{listTitle}</h2>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -3386,7 +3427,7 @@ function StaffPageInner() {
           )}
         </section>
 
-        <section className={`card ${mobileView === "list" ? "mobileHide" : ""}`}>
+        <section className={`card ${!selected ? "cardEmpty" : ""} ${mobileView === "list" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
             <h2 className="cardTitle">주문 상세</h2>
             <button
@@ -3462,16 +3503,20 @@ function StaffPageInner() {
                 <span className="badge">완료 {counts.completed}건</span>
                 <span className="badge">전체 {counts.all}건</span>
               </div>
-              <div className="itemQuickActions">
-                <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
-                  주문확인 탭 보기
-                </button>
-                {staffViewMode === "station" ? (
+              {((staffViewMode === "simple" ? listTab !== "active" : stationTab !== "order") || (staffViewMode === "station" && stationTab !== "make")) ? (
+                <div className="itemQuickActions">
+                  {(staffViewMode === "simple" ? listTab !== "active" : stationTab !== "order") ? (
+                    <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
+                      접수 탭으로 이동
+                    </button>
+                  ) : null}
+                  {staffViewMode === "station" && stationTab !== "make" ? (
                   <button type="button" className="quickActionBtn" onClick={() => setStationTab("make")}>
                     제조 탭 보기
                   </button>
-                ) : null}
-              </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : (
             <>
