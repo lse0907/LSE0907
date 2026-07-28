@@ -1,7 +1,7 @@
 // src/app/admin/page.tsx
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import RionBrand from "@/app/components/RionBrand";
@@ -45,6 +45,51 @@ type OrderSummaryRow = {
   order_date?: string | null;
   total_price?: number | string | null;
 };
+
+type AdminIconName =
+  | "plus"
+  | "sales"
+  | "store"
+  | "menu"
+  | "support"
+  | "category"
+  | "options"
+  | "link"
+  | "members"
+  | "qr"
+  | "loyalty"
+  | "payment"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "subscription";
+
+function AdminIcon({ name, size = 18 }: { name: AdminIconName; size?: number }) {
+  const paths: Record<AdminIconName, ReactNode> = {
+    plus: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
+    sales: <><path d="M3 3v18h18" /><path d="m7 15 4-4 3 3 5-6" /><path d="M15 8h4v4" /></>,
+    store: <><path d="M4 10v10h16V10" /><path d="M3 10 5 4h14l2 6" /><path d="M8 20v-6h8v6" /><path d="M3 10a3 3 0 0 0 5 2 3 3 0 0 0 4 0 3 3 0 0 0 4 0 3 3 0 0 0 5-2" /></>,
+    menu: <><path d="M5 4h14v16H5z" /><path d="M8 8h8" /><path d="M8 12h8" /><path d="M8 16h5" /></>,
+    support: <><circle cx="12" cy="12" r="9" /><path d="M9.8 9a2.4 2.4 0 1 1 3.2 2.3c-.7.3-1 .8-1 1.7" /><path d="M12 17h.01" /></>,
+    category: <><path d="M4 6h6l2 2h8v10H4z" /><path d="M4 10h16" /></>,
+    options: <><path d="M4 7h10" /><path d="M18 7h2" /><circle cx="16" cy="7" r="2" /><path d="M4 17h2" /><path d="M10 17h10" /><circle cx="8" cy="17" r="2" /></>,
+    link: <><circle cx="6" cy="12" r="3" /><circle cx="18" cy="7" r="3" /><circle cx="18" cy="17" r="3" /><path d="m8.7 10.7 6.5-2.4" /><path d="m8.7 13.3 6.5 2.4" /></>,
+    members: <><circle cx="9" cy="8" r="3" /><path d="M3 20a6 6 0 0 1 12 0" /><circle cx="18" cy="9" r="2" /><path d="M16 15.5a4 4 0 0 1 5 3.9" /></>,
+    qr: <><path d="M4 4h6v6H4z" /><path d="M14 4h6v6h-6z" /><path d="M4 14h6v6H4z" /><path d="M14 14h2v2h-2z" /><path d="M18 14h2v6h-6v-2" /></>,
+    loyalty: <><path d="M20 12v8H4v-8" /><path d="M2 8h20v4H2z" /><path d="M12 8v12" /><path d="M12 8H7.5A2.5 2.5 0 1 1 10 5.5Z" /><path d="M12 8h4.5A2.5 2.5 0 1 0 14 5.5Z" /></>,
+    payment: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /><path d="M7 15h4" /></>,
+    daily: <><path d="M4 19V9" /><path d="M10 19V5" /><path d="M16 19v-7" /><path d="m4 6 6-3 6 4 4-3" /></>,
+    weekly: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M3 10h18" /><path d="m8 15 2 2 5-5" /></>,
+    monthly: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M3 10h18" /><path d="M7 14h2" /><path d="M11 14h2" /><path d="M15 14h2" /><path d="M7 18h2" /><path d="M11 18h2" /></>,
+    subscription: <><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7Z" /><path d="m9 12 2 2 4-4" /></>,
+  };
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {paths[name]}
+    </svg>
+  );
+}
 
 function toErrorMessage(e: unknown) {
   return e instanceof Error ? e.message : String(e);
@@ -692,6 +737,7 @@ function AdminPageInner() {
             <div className="row" style={{ gap: 8 }}>
               <span className="pill">{visibleStores.length}개</span>
               <button className="btn" onClick={goCreate}>
+                <AdminIcon name="plus" size={15} />
                 {stores.length > 0 ? "매장 추가" : "매장 만들기"}
               </button>
             </div>
@@ -864,6 +910,7 @@ function AdminPageInner() {
                     className="btn btnSmall"
                     onClick={() => go("/admin/stats")}
                   >
+                    <AdminIcon name="sales" size={15} />
                     매출보기
                   </button>
                 </div>
@@ -887,7 +934,7 @@ function AdminPageInner() {
                 >
                   <div className="statsRow statsDaily">
                     <span className="statsIcon" aria-hidden="true">
-                      ↗
+                      <AdminIcon name="daily" size={14} />
                     </span>
                     <span className="statsLabel">일간 매출</span>
                     <span className="statsValue">
@@ -898,7 +945,7 @@ function AdminPageInner() {
                   </div>
                   <div className="statsRow statsWeekly">
                     <span className="statsIcon" aria-hidden="true">
-                      W
+                      <AdminIcon name="weekly" size={14} />
                     </span>
                     <span className="statsLabel">주간 매출</span>
                     <span className="statsValue">
@@ -909,7 +956,7 @@ function AdminPageInner() {
                   </div>
                   <div className="statsRow statsMonthly">
                     <span className="statsIcon" aria-hidden="true">
-                      M
+                      <AdminIcon name="monthly" size={14} />
                     </span>
                     <span className="statsLabel">월간 매출</span>
                     <span className="statsValue">
@@ -920,7 +967,7 @@ function AdminPageInner() {
                   </div>
                   <div className="statsRow statsBilling">
                     <span className="statsIcon" aria-hidden="true">
-                      ✓
+                      <AdminIcon name="subscription" size={14} />
                     </span>
                     <span className="statsLabel">구독 상태</span>
                     <span className="statsValue">
@@ -952,7 +999,7 @@ function AdminPageInner() {
               disabled={!selectedStoreId}
             >
               <span className="cardBtnIcon" aria-hidden="true">
-                ⌂
+                <AdminIcon name="store" size={20} />
               </span>
               <span className="cardBtnCopy">
                 <span className="cardBtnTitle">매장 관리</span>
@@ -971,11 +1018,11 @@ function AdminPageInner() {
               disabled={!selectedStoreId}
             >
               <span className="cardBtnIcon" aria-hidden="true">
-                ☷
+                <AdminIcon name="menu" size={20} />
               </span>
               <span className="cardBtnCopy">
                 <span className="cardBtnTitle">메뉴 관리</span>
-                <span className="cardBtnDesc">메뉴 · 옵션 · 업로드</span>
+                <span className="cardBtnDesc">카테고리 · 옵션 · 메뉴</span>
               </span>
               <span className="cardBtnArrow" aria-hidden="true">
                 ›
@@ -992,7 +1039,7 @@ function AdminPageInner() {
               disabled={!selectedStoreId}
             >
               <span className="cardBtnIcon" aria-hidden="true">
-                ?
+                <AdminIcon name="support" size={20} />
               </span>
               <span className="cardBtnCopy">
                 <span className="cardBtnTitle">지원 센터</span>
@@ -1005,21 +1052,29 @@ function AdminPageInner() {
           </div>
 
           {activeSection === "store" ? (
-            <div className="subPanel" ref={subPanelRef}>
-              <button className="subBtn" onClick={() => go("/admin/store")}>
-                매장정보
+            <div className="subPanel shortcutPanel" ref={subPanelRef}>
+              <button className="shortcutCard" onClick={() => go("/admin/store")}>
+                <span className="shortcutIcon"><AdminIcon name="store" /></span>
+                <span className="shortcutCopy"><strong>매장 정보</strong><small>기본 정보와 운영 설정</small></span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
               </button>
-              <button className="subBtn" onClick={() => go("/admin/members")}>
-                직원/권한 관리
+              <button className="shortcutCard" onClick={() => go("/admin/members")}>
+                <span className="shortcutIcon shortcutIconGreen"><AdminIcon name="members" /></span>
+                <span className="shortcutCopy"><strong>직원·권한</strong><small>직원 등록과 접근 권한</small></span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
               </button>
-              <button className="subBtn" onClick={() => go("/admin/qr")}>
-                매장 QR 생성
+              <button className="shortcutCard" onClick={() => go("/admin/qr")}>
+                <span className="shortcutIcon shortcutIconPurple"><AdminIcon name="qr" /></span>
+                <span className="shortcutCopy"><strong>매장 QR</strong><small>테이블 주문 QR 생성</small></span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
               </button>
-              <button className="subBtn" onClick={() => go("/admin/loyalty")}>
-                포인트/쿠폰 설정
+              <button className="shortcutCard" onClick={() => go("/admin/loyalty")}>
+                <span className="shortcutIcon shortcutIconOrange"><AdminIcon name="loyalty" /></span>
+                <span className="shortcutCopy"><strong>포인트·쿠폰</strong><small>적립과 고객 혜택 설정</small></span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
               </button>
               <button
-                className={`subBtn ${canOpenOnlinePaymentSettings ? "" : "subBtnDisabled"}`}
+                className={`shortcutCard ${canOpenOnlinePaymentSettings ? "" : "shortcutCardDisabled"}`}
                 onClick={() => {
                   if (canOpenOnlinePaymentSettings) {
                     go("/admin/billing");
@@ -1029,65 +1084,49 @@ function AdminPageInner() {
                 }}
                 type="button"
               >
-                <span>온라인 결제 설정{canOpenOnlinePaymentSettings ? "" : " 🔒"}</span>
-                {!canOpenOnlinePaymentSettings ? (
-                  <small className="subBtnHint">선결제 옵션 구독 후 사용 가능</small>
-                ) : null}
+                <span className="shortcutIcon shortcutIconPayment"><AdminIcon name="payment" /></span>
+                <span className="shortcutCopy">
+                  <strong>온라인 결제{canOpenOnlinePaymentSettings ? "" : " · 잠김"}</strong>
+                  <small>{canOpenOnlinePaymentSettings ? "선결제와 결제 설정" : "선결제 옵션 구독 후 사용 가능"}</small>
+                </span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
               </button>
             </div>
           ) : null}
 
           {activeSection === "ops" ? (
-            <div className="subPanel menuSubPanel" ref={subPanelRef}>
-              <div className="subSection">
-                <div className="subSectionHead">
-                  <span>CORE MANAGEMENT</span>
-                  <strong>기본 관리</strong>
-                </div>
-                <div className="menuCoreGrid">
-                  <button className="menuShortcut" onClick={() => go("/admin/categories")} aria-label="카테고리 관리 페이지로 이동">
-                    <span className="menuShortcutIcon" aria-hidden="true">C</span>
-                    <span className="menuShortcutText"><strong><span className="desktopLabel">카테고리 관리</span><span className="mobileLabel">카테고리</span></strong><small>분류와 노출 순서</small></span>
-                    <span className="menuShortcutArrow" aria-hidden="true">›</span>
-                  </button>
-                  <button className="menuShortcut" onClick={() => go("/admin/options")} aria-label="옵션 관리 페이지로 이동">
-                    <span className="menuShortcutIcon optionIcon" aria-hidden="true">O</span>
-                    <span className="menuShortcutText"><strong><span className="desktopLabel">옵션 관리</span><span className="mobileLabel">옵션</span></strong><small>사이즈와 추가 선택</small></span>
-                    <span className="menuShortcutArrow" aria-hidden="true">›</span>
-                  </button>
-                  <button className="menuShortcut" onClick={() => go("/admin/menu")} aria-label="메뉴 관리 페이지로 이동">
-                    <span className="menuShortcutIcon menuIcon" aria-hidden="true">M</span>
-                    <span className="menuShortcutText"><strong><span className="desktopLabel">메뉴 관리</span><span className="mobileLabel">메뉴</span></strong><small>상품과 판매 정보</small></span>
-                    <span className="menuShortcutArrow" aria-hidden="true">›</span>
-                  </button>
-                </div>
-              </div>
-              <div className="subDivider" aria-hidden="true" />
-              <div className="subSection">
-                <div className="subSectionHead toolSectionHead">
-                  <span>MANAGEMENT UTILITY</span>
-                  <strong>관리 도구</strong>
-                </div>
-                <div className="menuUtilityGrid">
-                  <button className="utilityShortcut" onClick={() => go("/admin/menu/option-connect")} aria-label="옵션 연결 점검 페이지로 이동">
-                    <span className="utilityIcon" aria-hidden="true">↔</span>
-                    <span><strong><span className="desktopLabel">옵션 연결 점검</span><span className="mobileLabel">옵션 점검</span></strong><small>연결 누락 확인 및 일괄 정리</small></span>
-                    <span className="utilityArrow" aria-hidden="true">›</span>
-                  </button>
-                  <button className="utilityShortcut" onClick={() => go("/admin/import")} aria-label="CSV 일괄 등록 페이지로 이동">
-                    <span className="utilityIcon uploadIcon" aria-hidden="true">↑</span>
-                    <span><strong><span className="desktopLabel">CSV 일괄 등록</span><span className="mobileLabel">CSV 등록</span></strong><small>파일로 여러 항목을 빠르게 등록</small></span>
-                    <span className="utilityArrow" aria-hidden="true">›</span>
-                  </button>
-                </div>
-              </div>
+            <div className="subPanel shortcutPanel" ref={subPanelRef}>
+              <button className="shortcutCard" onClick={() => go("/admin/categories")}>
+                <span className="shortcutIcon"><AdminIcon name="category" /></span>
+                <span className="shortcutCopy"><strong>카테고리</strong><small>분류와 노출 순서</small></span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
+              </button>
+              <button className="shortcutCard" onClick={() => go("/admin/options")}>
+                <span className="shortcutIcon shortcutIconGreen"><AdminIcon name="options" /></span>
+                <span className="shortcutCopy"><strong>옵션</strong><small>사이즈와 추가 선택</small></span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
+              </button>
+              <button className="shortcutCard" onClick={() => go("/admin/menu")}>
+                <span className="shortcutIcon shortcutIconPurple"><AdminIcon name="menu" /></span>
+                <span className="shortcutCopy"><strong>메뉴</strong><small>상품과 판매 정보</small></span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
+              </button>
+              {(selectedStoreCounts?.menus || 0) > 0 ? (
+                <button className="shortcutCard" onClick={() => go("/admin/menu/option-connect")}>
+                  <span className="shortcutIcon shortcutIconOrange"><AdminIcon name="link" /></span>
+                  <span className="shortcutCopy"><strong>옵션 연결 확인</strong><small>메뉴별 연결 상태와 일괄 설정</small></span>
+                  <span className="shortcutArrow" aria-hidden="true">›</span>
+                </button>
+              ) : null}
             </div>
           ) : null}
 
           {activeSection === "support" ? (
-            <div className="subPanel" ref={subPanelRef}>
-              <button className="subBtn" onClick={() => go("/admin/support")}>
-                문의하기
+            <div className="subPanel shortcutPanel" ref={subPanelRef}>
+              <button className="shortcutCard" onClick={() => go("/admin/support")}>
+                <span className="shortcutIcon"><AdminIcon name="support" /></span>
+                <span className="shortcutCopy"><strong>문의하기</strong><small>운영 중 궁금한 점과 문제 해결</small></span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
               </button>
             </div>
           ) : null}
@@ -1422,6 +1461,7 @@ body {
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  gap:6px;
   text-decoration:none;
   transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease;
 }
@@ -1611,55 +1651,19 @@ body {
   border-radius:18px;
   padding:12px;
 }
-.subBtn{
-  border:1px solid var(--line);
-  background:#fff;
-  color:var(--text);
-  -webkit-text-fill-color: currentColor;
-  min-height:48px;
-  padding:12px 14px;
-  border-radius:13px;
-  cursor:pointer;
-  font-weight:800;
-  text-align:left;
-  display:grid;
-  gap:4px;
-  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;
-}
-.subBtn:hover:not(.subBtnDisabled){ border-color:#b8c8df; box-shadow:0 5px 14px rgba(30,55,90,.07); transform:translateY(-1px); }
-.subBtnDisabled{
-  opacity:.72;
-  cursor:not-allowed;
-  background:#f8fafc;
-}
-.subBtnHint{
-  color:var(--muted);
-  font-size:11px;
-  font-weight:800;
-  line-height:1.35;
-}
-.menuSubPanel{ display:block; padding:14px; background:linear-gradient(180deg,#f8fafe 0%,#f3f6fb 100%); }
-.subSection{ display:grid; gap:10px; }
-.subSectionHead{ display:flex; align-items:end; justify-content:space-between; gap:10px; padding:0 2px; }
-.subSectionHead span{ color:#5275a4; font-size:8px; font-weight:900; letter-spacing:.13em; }
-.subSectionHead strong{ color:#243b5a; font-size:11px; font-weight:900; }
-.subDivider{ height:1px; margin:13px 0; background:linear-gradient(90deg,transparent,#d8e2ef 12%,#d8e2ef 88%,transparent); }
-.menuCoreGrid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-.menuShortcut,.utilityShortcut{ appearance:none; border:1px solid var(--line); cursor:pointer; transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease; }
-.menuShortcut{ min-width:0; min-height:72px; padding:11px; display:grid; grid-template-columns:32px minmax(0,1fr) auto; align-items:center; gap:9px; border-radius:14px; background:#fff; color:var(--text); text-align:left; }
-.menuShortcut:hover,.utilityShortcut:hover{ border-color:#aec4e1; box-shadow:0 8px 20px rgba(27,61,103,.09); transform:translateY(-1px); }
-.menuShortcutIcon,.utilityIcon{ width:32px; height:32px; display:grid; place-items:center; border-radius:10px; background:#eaf2ff; color:#235da8; font-size:11px; font-weight:950; }
-.optionIcon{ background:#ecf9f2; color:#168657; }
-.menuIcon{ background:#f2edff; color:#7650c7; }
-.menuShortcutText,.utilityShortcut>span:nth-child(2){ min-width:0; display:grid; gap:3px; }
-.menuShortcut strong,.utilityShortcut strong{ color:var(--text); font-size:12px; font-weight:900; white-space:nowrap; }
-.menuShortcut small,.utilityShortcut small{ overflow:hidden; color:#78869a; font-size:9px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
-.menuShortcutArrow,.utilityArrow{ color:#93a5bb; font-size:20px; }
-.mobileLabel{ display:none; }
-.menuUtilityGrid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-.utilityShortcut{ min-width:0; min-height:60px; padding:10px 12px; display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; gap:9px; border-radius:13px; background:rgba(255,255,255,.72); color:var(--text); text-align:left; }
-.utilityIcon{ width:30px; height:30px; background:#edf1f7; color:#405a7c; font-size:15px; }
-.uploadIcon{ background:#fff2e8; color:#b95d1d; }
+.shortcutPanel{ grid-template-columns:repeat(2,minmax(0,1fr)); background:linear-gradient(180deg,#f8fafe 0%,#f3f6fb 100%); }
+.shortcutCard{ appearance:none; min-width:0; min-height:68px; padding:10px 11px; display:grid; grid-template-columns:34px minmax(0,1fr) auto; align-items:center; gap:9px; border:1px solid var(--line); border-radius:14px; background:#fff; color:var(--text); cursor:pointer; font-family:inherit; text-align:left; transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease; }
+.shortcutCard:hover:not(.shortcutCardDisabled){ border-color:#aec4e1; box-shadow:0 8px 20px rgba(27,61,103,.09); transform:translateY(-1px); }
+.shortcutIcon{ width:34px; height:34px; display:grid; place-items:center; border-radius:11px; background:#eaf2ff; color:#235da8; }
+.shortcutIconGreen{ background:#ecf9f2; color:#168657; }
+.shortcutIconPurple{ background:#f2edff; color:#7650c7; }
+.shortcutIconOrange{ background:#fff2e8; color:#b95d1d; }
+.shortcutIconPayment{ background:#edf1f7; color:#405a7c; }
+.shortcutCopy{ min-width:0; display:grid; gap:3px; }
+.shortcutCopy strong{ overflow:hidden; color:var(--text); font-size:12px; font-weight:900; text-overflow:ellipsis; white-space:nowrap; }
+.shortcutCopy small{ overflow:hidden; color:#78869a; font-size:9px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.shortcutArrow{ color:#93a5bb; font-size:20px; }
+.shortcutCardDisabled{ background:#f7f8fa; opacity:.76; }
 .statsSummary{
   border:1px solid var(--line);
   border-radius:12px;
@@ -1865,21 +1869,13 @@ body {
   .toolsHead{ align-items:start; }
   .toolsHead p{ display:none; }
   .subPanel{ grid-template-columns:1fr; }
-  .menuSubPanel{ padding:11px; }
-  .subSectionHead{ align-items:center; }
-  .subSectionHead span{ font-size:7px; }
-  .menuCoreGrid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
-  .menuShortcut{ min-height:58px; padding:8px 4px; display:flex; flex-direction:column; justify-content:center; gap:5px; text-align:center; }
-  .menuShortcutIcon{ width:27px; height:27px; border-radius:8px; font-size:9px; }
-  .menuShortcutText{ display:block; }
-  .menuShortcut strong,.utilityShortcut strong{ font-size:11px; }
-  .menuShortcut small,.menuShortcutArrow,.utilityShortcut small,.utilityArrow{ display:none; }
-  .mobileLabel{ display:inline; }
-  .desktopLabel{ display:none; }
-  .subDivider{ margin:10px 0; }
-  .menuUtilityGrid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
-  .utilityShortcut{ min-height:46px; padding:7px 8px; grid-template-columns:25px minmax(0,1fr); gap:6px; }
-  .utilityIcon{ width:25px; height:25px; border-radius:8px; font-size:12px; }
+  .shortcutPanel{ grid-template-columns:repeat(2,minmax(0,1fr)); padding:8px; gap:7px; }
+  .shortcutCard{ min-height:58px; padding:8px; grid-template-columns:29px minmax(0,1fr); gap:7px; }
+  .shortcutIcon{ width:29px; height:29px; border-radius:9px; }
+  .shortcutIcon svg{ width:16px; height:16px; }
+  .shortcutCopy strong{ font-size:11px; }
+  .shortcutCopy small{ font-size:8px; }
+  .shortcutArrow{ display:none; }
   .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
   .statsRow{ min-height:74px; padding:9px; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:3px 6px; }
   .statsIcon{ width:22px; height:22px; border-radius:7px; font-size:10px; grid-row:1/3; }
@@ -1900,7 +1896,7 @@ body {
   .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media (prefers-reduced-motion:reduce){
-  .btn,.cardBtn,.subBtn,.storeRow{ transition:none; }
+  .btn,.cardBtn,.shortcutCard,.storeRow{ transition:none; }
   .loadingSpinner{ animation-duration:1.8s; }
 }
 `;

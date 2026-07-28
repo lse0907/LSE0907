@@ -1,11 +1,4 @@
-.workspaceNav {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: start;
-}
-.primaryNav {
+.nav {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 4px;
@@ -14,7 +7,8 @@
   background: #fff;
   box-shadow: 0 8px 22px rgba(30, 55, 90, 0.045);
 }
-.primaryLink {
+
+.link {
   min-width: 0;
   min-height: 42px;
   padding: 8px 10px;
@@ -32,161 +26,37 @@
     color 0.16s ease,
     box-shadow 0.16s ease;
 }
-.primaryLink:hover {
+
+.link:hover {
   background: #f4f7fb;
   color: #19385f;
 }
+
 .active {
   background: linear-gradient(135deg, #102342, #1d467b);
   color: #fff;
   box-shadow: 0 6px 14px rgba(15, 35, 66, 0.18);
 }
+
 .active:hover {
   background: linear-gradient(135deg, #102342, #1d467b);
   color: #fff;
 }
-.tools {
-  position: relative;
-  min-width: 148px;
-}
-.toolsSummary {
-  min-height: 50px;
-  padding: 7px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  border: 1px solid #dbe3ef;
-  border-radius: 15px;
-  background: #fff;
-  color: #19385f;
-  box-shadow: 0 8px 22px rgba(30, 55, 90, 0.045);
-  cursor: pointer;
-  list-style: none;
-}
-.toolsSummary::-webkit-details-marker {
-  display: none;
-}
-.toolsSummary > span:first-child {
-  display: grid;
-  gap: 1px;
-}
-.toolsSummary strong {
-  font-size: 12px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-.toolsEyebrow {
-  color: #5275a4;
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 0.13em;
-}
-.toolsChevron {
-  font-size: 17px;
-  transition: transform 0.18s ease;
-}
-.tools[open] .toolsChevron {
-  transform: rotate(180deg);
-}
-.toolsActive .toolsSummary {
-  border-color: #aac0df;
-  background: #f5f8fd;
-}
-.toolMenu {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 7px);
-  right: 0;
-  width: 270px;
-  padding: 7px;
-  display: grid;
-  gap: 5px;
-  border: 1px solid #dbe3ef;
-  border-radius: 15px;
-  background: #fff;
-  box-shadow: 0 18px 38px rgba(15, 35, 66, 0.16);
-}
-.toolLink {
-  padding: 11px 12px;
-  display: grid;
-  gap: 3px;
-  border-radius: 10px;
-  color: #19385f;
-  text-decoration: none;
-  transition:
-    background 0.16s ease,
-    color 0.16s ease;
-}
-.toolLink:hover {
-  background: #f3f7fc;
-}
-.toolLink > span {
-  font-size: 12px;
-  font-weight: 900;
-}
-.toolLink small {
-  color: #748299;
-  font-size: 10px;
-  font-weight: 700;
-}
-.toolLinkActive {
-  background: linear-gradient(135deg, #102342, #1d467b);
-  color: #fff;
-}
-.toolLinkActive:hover {
-  background: linear-gradient(135deg, #102342, #1d467b);
-}
-.toolLinkActive small {
-  color: #c6d5e9;
-}
+
 @media (max-width: 640px) {
-  .workspaceNav {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 7px;
-  }
-  .primaryNav {
+  .nav {
     padding: 3px;
   }
-  .primaryLink {
+
+  .link {
     min-height: 40px;
     padding: 7px 6px;
     font-size: 11px;
   }
-  .tools {
-    min-width: 0;
-  }
-  .toolsSummary {
-    min-height: 42px;
-    padding: 6px 11px;
-    border-radius: 13px;
-  }
-  .toolsSummary > span:first-child {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-  .toolsEyebrow {
-    font-size: 7px;
-  }
-  .toolMenu {
-    position: static;
-    width: auto;
-    margin-top: 6px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    box-shadow: 0 8px 22px rgba(30, 55, 90, 0.07);
-  }
-  .toolLink {
-    padding: 10px;
-  }
-  .toolLink small {
-    line-height: 1.35;
-  }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .primaryLink,
-  .toolsChevron,
-  .toolLink {
+  .link {
     transition: none;
   }
 }
