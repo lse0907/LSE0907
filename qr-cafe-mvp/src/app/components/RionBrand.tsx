@@ -15,7 +15,7 @@ type RionBrandProps = {
 export default function RionBrand({ compact = false, inverse = false, product = false, admin = false, auth = false, staff = false }: RionBrandProps) {
   const [adminLogoFailed, setAdminLogoFailed] = useState(false);
   const usesWordmark = admin || auth || staff;
-  const logoSrc = usesWordmark && !adminLogoFailed ? "/rion-logo-deepnavy.png" : inverse ? "/rion-logo-white.png" : "/rion-symbol.svg";
+  const logoSrc = inverse ? "/rion-logo-white.png" : usesWordmark && !adminLogoFailed ? "/rion-logo-deepnavy.png" : "/rion-symbol.svg";
   const productLabel = admin ? "ADMIN" : staff ? "STAFF" : "OPS";
 
   return (
@@ -45,7 +45,7 @@ export default function RionBrand({ compact = false, inverse = false, product = 
         .rionBrand.admin .rionBrandLogo { width:42px; height:42px; object-position:center; }
         .rionBrand.auth .rionBrandLogo { width:42px; height:42px; object-position:center; }
         .rionBrand.staff .rionBrandLogo { width:42px; height:42px; object-position:center; }
-        .rionBrand.auth.inverse .rionBrandLogo { box-sizing:border-box; padding:4px; border-radius:12px; background:#fff; }
+        .rionBrand.auth.inverse .rionBrandLogo { box-sizing:border-box; padding:0; border-radius:0; background:transparent; }
         .rionBrand.auth.inverse.adminFallback .rionBrandLogo { padding:0; background:transparent; }
         .rionBrand.adminFallback .rionBrandLogo { width:42px; height:42px; }
         .rionBrand.inverse .rionBrandLogo { width:48px; height:48px; }
