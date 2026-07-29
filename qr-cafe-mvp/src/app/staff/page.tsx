@@ -1,16 +1,33 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import RionBrand from "@/app/components/RionBrand";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 type PaymentStatus = "not_required" | "pending" | "paid";
 type StaffViewMode = "simple" | "station";
 type ItemStatus = "waiting" | "making" | "done";
+type StaffIconName = "home" | "logout" | "arrow-left" | "check" | "play" | "package-check" | "bell" | "order";
+
+function StaffIcon({ name, className = "staffIcon" }: { name: StaffIconName; className?: string }) {
+  const paths: Record<StaffIconName, ReactNode> = {
+    home: <><path d="M3 9.2 10 3l7 6.2v7.3a.5.5 0 0 1-.5.5h-4.2v-5H7.7v5H3.5a.5.5 0 0 1-.5-.5V9.2Z" /></>,
+    logout: <><path d="M8 3H4.5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1H8" /><path d="M12.5 6.5 16 10l-3.5 3.5M7 10h9" /></>,
+    "arrow-left": <><path d="m9 5-5 5 5 5M4 10h12" /></>,
+    check: <><circle cx="10" cy="10" r="7" /><path d="m6.8 10.1 2.1 2.2 4.5-4.7" /></>,
+    play: <><circle cx="10" cy="10" r="7" /><path d="m8.4 7 4.6 3-4.6 3V7Z" /></>,
+    "package-check": <><path d="m4 6 6-3 6 3v8l-6 3-6-3V6Z" /><path d="m4 6 6 3 6-3M10 9v4" /><path d="m12.2 14.1 1.1 1.1 2.2-2.4" /></>,
+    bell: <><path d="M5.5 14h9l-1.2-1.8V8a3.3 3.3 0 0 0-6.6 0v4.2L5.5 14Z" /><path d="M8.5 16.2h3" /></>,
+    order: <><path d="M5 3.5h10v13H5z" /><path d="M7.5 7h5M7.5 10h5M7.5 13h3" /></>,
+  };
+
+  return <svg className={className} viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
 
 type SelectedOptionItem = {
   id: string;
@@ -252,9 +269,9 @@ function nextStatus(s: OrderStatus): OrderStatus {
 
 function statusButtonLabel(s: OrderStatus) {
   if (s === "new") return "주문 확인";
-  if (s === "checked") return "▶ 제조 시작";
+  if (s === "checked") return "제조 시작";
   if (s === "making") return "준비 완료";
-  if (s === "ready_for_packing") return "✓ 전달 완료";
+  if (s === "ready_for_packing") return "전달 완료";
   if (s === "completed") return "완료됨";
   return "취소됨";
 }
@@ -563,7 +580,7 @@ function StaffPageInner() {
       : currentWorker
         ? "workerBadge workerBadgeStaff"
         : "workerBadge workerBadgePending";
-  const workerChangeLabel = currentWorker ? "변경" : "PIN 입력";
+  const workerChangeLabel = currentWorker ? "담당 변경" : "PIN 입력";
   const storeDisplayName = storeName || storeId || "미선택";
   const deviceNoticeText = deviceStatus === "checking"
     ? "기기 확인 중..."
@@ -967,21 +984,31 @@ function StaffPageInner() {
     return "완료/취소";
   }, [staffViewMode, stationTab]);
 
-  const tabGuideText = useMemo(() => {
-    if (staffViewMode === "simple") return "주문확인 후 제조완료, 전달완료 순서로 처리해 주세요.";
-    if (stationTab === "order") return "신규 주문을 먼저 확인해 주세요.";
-    if (stationTab === "make") return "주문확인 후 제조시작 버튼으로 일괄 시작하세요.";
-    if (stationTab === "ready") return "확인 처리 후 전달완료를 진행하세요.";
-    return "완료된 주문 기록을 확인할 수 있습니다.";
-  }, [staffViewMode, stationTab]);
+  const resolvedStaffEmptyState = useMemo(() => {
+    if (staffViewMode === "simple") {
+      return listTab === "completed"
+        ? { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." }
+        : { title: "현재 진행 중인 주문이 없습니다", description: "새 주문이 들어오면 이곳에 바로 표시됩니다." };
+    }
+    if (stationTab === "order") return { title: "현재 접수할 주문이 없습니다", description: "새 주문이 들어오면 이곳에 바로 표시됩니다." };
+    if (stationTab === "make") return { title: "제조 대기 중인 메뉴가 없습니다", description: "접수된 주문의 제조를 시작하면 이곳에 표시됩니다." };
+    if (stationTab === "ready") return { title: "준비 확인할 주문이 없습니다", description: "제조가 완료된 메뉴가 이곳에 표시됩니다." };
+    return { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." };
+  }, [listTab, staffViewMode, stationTab]);
 
   const statusButtonLabelForView = (s: OrderStatus) => {
     if (staffViewMode === "simple") {
-      if (s === "new") return "✓ 주문 확인";
-      if (s === "checked" || s === "making") return "✓ 제조 완료";
-      if (s === "ready_for_packing") return "✓ 전달 완료";
+      if (s === "new") return "주문 확인";
+      if (s === "checked" || s === "making") return "제조 완료";
+      if (s === "ready_for_packing") return "전달 완료";
     }
     return statusButtonLabel(s);
+  };
+
+  const statusActionIcon = (s: OrderStatus): StaffIconName => {
+    if (staffViewMode !== "simple" && s === "checked") return "play";
+    if (s === "ready_for_packing") return "package-check";
+    return "check";
   };
 
   const nextStatusForView = (s: OrderStatus): OrderStatus => {
@@ -2551,43 +2578,647 @@ function StaffPageInner() {
           }
         }
 
+        /* RION Order Staff visual system */
+        :root {
+          --bg: #f3f6fb;
+          --card: #ffffff;
+          --text: #14213d;
+          --muted: #667085;
+          --line: #e4e9f2;
+          --brand: #0f1f3d;
+          --brand-blue: #2563eb;
+          --brand-soft: #eef4ff;
+          --danger: #dc2626;
+          --radius: 22px;
+        }
+
+        body {
+          background:
+            radial-gradient(circle at 6% 0%, rgba(37, 99, 235, 0.07), transparent 28rem),
+            var(--bg);
+        }
+
+        .wrap {
+          max-width: 1240px;
+          padding: 24px 24px 40px;
+        }
+
+        .topbar {
+          padding: 18px 20px 20px;
+          border: 1px solid rgba(228, 233, 242, 0.92);
+          border-radius: 26px;
+          background: rgba(255, 255, 255, 0.94);
+          box-shadow: 0 18px 50px rgba(30, 55, 90, 0.08);
+          backdrop-filter: blur(12px);
+        }
+
+        .titleBlock { gap: 16px; }
+
+        .titleTop {
+          padding-bottom: 15px;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .brandArea {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+
+        .workspaceBadge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 25px;
+          padding: 5px 9px;
+          border: 1px solid #cbd8ea;
+          border-radius: 999px;
+          background: #f6f8fc;
+          color: #36506f;
+          font-size: 10px;
+          font-weight: 950;
+          letter-spacing: 0.08em;
+          white-space: nowrap;
+        }
+
+        .pageIntro { display: grid; gap: 5px; }
+
+        .pageEyebrow {
+          color: var(--brand-blue);
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 0.1em;
+        }
+
+        .h1 {
+          color: var(--brand);
+          font-size: 32px;
+          letter-spacing: -0.045em;
+        }
+
+        .pageDesc {
+          margin: 0;
+          color: var(--muted);
+          font-size: 14px;
+          font-weight: 650;
+          line-height: 1.55;
+          word-break: keep-all;
+        }
+
+        .topActions { gap: 7px; }
+
+        .btn {
+          min-height: 42px;
+          border-color: #d9e1ed;
+          color: var(--text);
+          font-family: inherit;
+          box-shadow: 0 1px 2px rgba(15, 31, 61, 0.03);
+          transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease, transform 0.08s ease;
+        }
+
+        .btn:hover { border-color: #aebdd2; background: #f8faff; }
+        .btn:active { transform: translateY(1px); }
+        .btn:focus-visible, .actionBtn:focus-visible, .chip:focus-visible, .backBtn:focus-visible {
+          outline: 3px solid rgba(37, 99, 235, 0.28);
+          outline-offset: 2px;
+        }
+
+        .btnPrimary { background: var(--brand); border-color: var(--brand); color: #fff; }
+        .btnPrimary:hover { background: #17345e; border-color: #17345e; }
+
+        .staffToolbar {
+          margin-top: 0;
+          grid-template-columns: minmax(0, 1fr) minmax(320px, auto);
+          align-items: stretch;
+          padding: 0;
+          overflow: hidden;
+          border-color: #dfe6f0;
+          border-radius: 18px;
+          background: #f8faff;
+          box-shadow: none;
+        }
+
+        .contextLine {
+          padding: 13px 14px;
+          gap: 11px;
+        }
+
+        .contextItem { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+        .contextItem strong { overflow: hidden; color: var(--brand); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+        .contextKey { color: #75849a; font-size: 11px; font-weight: 900; white-space: nowrap; }
+        .contextDivider { width: 1px; height: 26px; background: #dfe6f0; }
+
+        .workerBadge { min-height: 27px; padding: 5px 9px; }
+        .workerActionBtn { min-height: 34px; margin-left: auto; border-radius: 10px; }
+
+        .modeRow {
+          display: grid;
+          grid-template-columns: auto auto;
+          justify-content: end;
+          align-content: center;
+          padding: 10px 12px;
+          border-left: 1px solid #dfe6f0;
+          background: #fff;
+        }
+
+        .modeLabel { color: #75849a; font-size: 11px; font-weight: 900; }
+
+        .modeSwitch { border-color: #dbe3ef; background: #f3f6fb; }
+
+        .modeSwitchBtn {
+          min-height: 34px;
+          color: #52637a;
+          font-size: 12px;
+        }
+
+        .modeSwitchBtnOn {
+          background: var(--brand);
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(15, 31, 61, 0.22);
+        }
+
+        .modeDescription {
+          grid-column: 1 / -1;
+          margin: 5px 0 0;
+          color: var(--muted);
+          font-size: 10px;
+          font-weight: 700;
+          text-align: right;
+          white-space: nowrap;
+        }
+
+        .deviceNotice {
+          width: 100%;
+          margin-top: 12px;
+          border-radius: 14px;
+          padding: 10px 12px;
+        }
+
+        .tabsRow {
+          margin-top: 18px;
+          padding: 5px;
+          border: 1px solid #dfe6f0;
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.82);
+          box-shadow: 0 8px 24px rgba(30, 55, 90, 0.05);
+        }
+
+        .tabs { width: 100%; margin-top: 0; gap: 5px; }
+
+        .chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          min-height: 44px;
+          border-color: transparent;
+          background: transparent;
+          color: #52637a;
+          font-family: inherit;
+          font-size: 14px;
+          transition: color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+        }
+
+        .chip:hover { background: #f3f6fb; }
+        .chipOn { border-color: #dbe6f8; background: var(--brand-soft); color: #1d4ed8; box-shadow: none; }
+
+        .tabCount {
+          display: inline-grid;
+          min-width: 23px;
+          height: 23px;
+          place-items: center;
+          border-radius: 999px;
+          background: #e7edf6;
+          color: #52637a;
+          padding: 0 6px;
+          font-size: 11px;
+          font-weight: 950;
+        }
+
+        .chipOn .tabCount { background: #2563eb; color: #fff; }
+        .tabHint { margin: 8px 5px 0; color: #75849a; font-size: 12px; font-weight: 650; }
+
+        .newOrderPopup {
+          margin-top: 12px;
+          border-color: #b9d3ff;
+          border-radius: 18px;
+          padding: 13px 14px;
+          background: linear-gradient(135deg, #edf5ff, #f8fbff);
+          box-shadow: 0 10px 28px rgba(37, 99, 235, 0.1);
+        }
+
+        .newOrderPopupContent { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; }
+        .newOrderDot { width: 10px; height: 10px; border-radius: 999px; background: #2563eb; box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.12); }
+        .newOrderPopupTitle { color: #1d4ed8; font-size: 12px; }
+        .newOrderPopupText { margin-top: 2px; color: var(--brand); font-size: 17px; font-weight: 950; }
+
+        .panel { gap: 18px; }
+
+        .card {
+          border-color: #dfe6f0;
+          border-radius: 22px;
+          padding: 18px;
+          box-shadow: 0 12px 34px rgba(30, 55, 90, 0.07);
+        }
+
+        .cardEmpty { min-height: 280px; }
+
+        .cardTitle { color: var(--brand); font-size: 21px; letter-spacing: -0.025em; }
+
+        .itemBtn {
+          padding: 14px;
+          border-color: #e1e7f0;
+          border-radius: 16px;
+          box-shadow: 0 3px 10px rgba(30, 55, 90, 0.035);
+        }
+
+        .itemBtn:hover { border-color: #aebed4; box-shadow: 0 8px 22px rgba(30, 55, 90, 0.08); }
+        .itemBtnOn { border: 2px solid #4c82d8; background: #f8fbff; box-shadow: 0 10px 26px rgba(37, 99, 235, 0.12); }
+        .bigNo { color: var(--brand); font-size: 21px; letter-spacing: -0.025em; }
+
+        .elapsedBadge { border-color: #f5d98e; background: #fff8e6; }
+        .badge { border-color: #dfe6f0; }
+        .badgeHot { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+
+        .quickActionBtn {
+          min-height: 38px;
+          border-color: #d9e1ed;
+          padding: 8px 13px;
+          color: var(--text);
+          font-family: inherit;
+        }
+
+        .quickActionBtnPrimary { border-color: var(--brand-blue); background: var(--brand-blue); color: #fff; }
+
+        .detailBox, .orderItemsBox {
+          border-color: #dfe6f0;
+          border-radius: 16px;
+        }
+
+        .actionBtn {
+          min-height: 48px;
+          border-color: #d9e1ed;
+          color: var(--text);
+          font-family: inherit;
+        }
+
+        .actionPrimary { background: var(--brand-blue); border-color: var(--brand-blue); }
+        .actionCancel { background: #fff8f8; border-color: #fecaca; color: var(--danger); }
+        .actionBtn:disabled, .btn:disabled, .quickActionBtn:disabled { cursor: not-allowed; box-shadow: none; }
+
+        .pinModal, .modalCard {
+          border-color: #dfe6f0;
+          border-radius: 22px;
+          box-shadow: 0 28px 80px rgba(15, 31, 61, 0.24);
+        }
+
+        .pinModal { padding: 22px; }
+        .modalCard { padding: 20px; }
+
+        .pinModalTextInput, .modalInput, .modalSelect, .pinModalInput, .buzzerInput {
+          border-color: #ced8e6;
+          outline: none;
+        }
+
+        .pinModalTextInput:focus, .modalInput:focus, .modalSelect:focus, .pinModalInput:focus, .buzzerInput:focus {
+          border-color: #4c82d8;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
+        }
+
+        @media (min-width: 901px) {
+          .tabs .chip { flex: 1 1 0; }
+          .panel { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+        }
+
+        @media (max-width: 900px) {
+          .wrap { padding: 12px 12px 28px; }
+          .topbar { padding: 11px 12px 12px; border-radius: 18px; }
+          .titleBlock { gap: 9px; }
+          .titleTop { min-height: 38px; padding-bottom: 8px; gap: 8px; }
+          .brandArea { gap: 7px; }
+          .workspaceBadge, .pageIntro { display: none; }
+          .topActions { gap: 6px; }
+          .btn.topActionBtn { min-height: 36px; padding: 7px 10px; font-size: 11px; }
+          .staffToolbar { grid-template-columns: 1fr; border-radius: 13px; }
+          .contextLine { flex-wrap: nowrap; padding: 8px 9px; gap: 7px; }
+          .contextKey, .contextDivider { display: none; }
+          .contextItem { min-width: 0; }
+          .contextItem:first-child { flex: 1 1 auto; overflow: hidden; }
+          .contextItem:first-child::after { content: "·"; margin-left: 7px; color: #a0aec0; }
+          .contextItem strong { font-size: 13px; }
+          .workerBadge { min-height: 25px; padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+          .workerActionBtn { min-height: 34px; margin-left: auto; padding: 6px 9px; font-size: 11px; white-space: nowrap; }
+          .modeRow { display: block; padding: 7px; border-top: 1px solid #dfe6f0; border-left: 0; }
+          .modeLabel, .modeDescription { display: none; }
+          .modeSwitch { display: flex; width: 100%; padding: 3px; }
+          .modeSwitchBtn { flex: 1; min-height: 34px; }
+          .tabsRow { margin-top: 8px; }
+          .tabHint { min-height: 0; margin-top: 5px; }
+          .tabHint:empty { display: none; }
+          .panel { margin-top: 9px; }
+          .card { min-height: auto; }
+          .cardEmpty { min-height: 190px; }
+          .mobileHide { display: none !important; }
+          .actionRow { display: none; }
+          .actionDock {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: max(12px, env(safe-area-inset-bottom));
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            z-index: 30;
+            backdrop-filter: blur(4px);
+          }
+          .actionDockTriple { grid-template-columns: 1fr; }
+          .dockSpacer { height: 96px; }
+        }
+
+        @media (max-width: 640px) {
+          .wrap { padding: 10px 10px 28px; }
+          .topbar { padding: 10px; border-radius: 17px; }
+          .titleBlock { gap: 8px; }
+          .titleTop { gap: 6px; padding-bottom: 7px; }
+          .brandArea { gap: 6px; }
+          .h1 { font-size: 27px; }
+          .pageDesc { font-size: 13px; }
+          .btn.topActionBtn { min-height: 36px; padding: 7px 8px; font-size: 11px; }
+          .contextLine { padding: 7px 8px; gap: 5px; }
+          .contextItem:first-child::after { margin-left: 5px; }
+          .workerActionBtn { min-height: 34px; }
+          .modeRow { padding: 6px; }
+          .tabsRow { margin-top: 7px; padding: 4px; }
+          .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
+          .tabs .chip { min-width: 0; min-height: 44px; gap: 4px; padding: 7px 4px; font-size: 12px; }
+          .tabs .chip:first-child:nth-last-child(2), .tabs .chip:first-child:nth-last-child(2) ~ .chip { grid-column: span 2; }
+          .tabCount { min-width: 20px; height: 20px; padding: 0 5px; font-size: 10px; }
+          .newOrderPopupContent { grid-template-columns: auto minmax(0, 1fr); }
+          .newOrderPopupContent .itemQuickActions { grid-column: 1 / -1; width: 100%; gap: 8px; }
+          .newOrderPopupContent .quickActionBtn { flex: 1; min-height: 44px; }
+          .panel { margin-top: 12px; }
+          .card { padding: 14px; border-radius: 18px; }
+          .itemBtn { padding: 13px; }
+          .bigNo { font-size: 20px; }
+          .quickActionBtn { min-height: 42px; padding: 9px 12px; font-size: 13px; }
+          .actionDock { border-radius: 18px; padding: 10px; }
+          .actionBtn { min-height: 50px; }
+          .pinModal, .modalCard { border-radius: 20px; }
+        }
+
+        @media (max-width: 390px) {
+          .workspaceBadge { display: none; }
+          .btn.topActionBtn { padding: 7px 6px; font-size: 10px; }
+          .tabs .chip { font-size: 11px; }
+        }
+
+        /* Compact operational header and restrained RION signatures */
+        .topbar { padding: 15px 17px 16px; }
+        .titleBlock { gap: 10px; }
+        .titleTop { min-height: 42px; grid-template-columns: auto minmax(0, 1fr) auto; padding-bottom: 10px; }
+        .workspaceBadge { display: inline-flex; }
+        .headerContext {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 0 14px;
+        }
+        .headerStoreName {
+          overflow: hidden;
+          max-width: 190px;
+          color: var(--brand);
+          font-size: 13px;
+          font-weight: 900;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .headerContextDot { color: #a5b0bf; font-weight: 900; }
+        .operationsLine {
+          position: relative;
+          isolation: isolate;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 18px;
+          min-width: 0;
+          overflow: hidden;
+          border: 1px solid #dfe6f0;
+          border-radius: 15px;
+          padding: 11px 13px;
+          background: linear-gradient(135deg, #fff 0%, #fbfdff 55%, #f5f9ff 100%);
+        }
+        .operationsLine > *:not(.headerBrandMotif) { position: relative; z-index: 1; }
+        .headerBrandMotif {
+          position: absolute;
+          z-index: 0;
+          top: 50%;
+          left: 62%;
+          width: 190px;
+          height: 190px;
+          border: 25px solid rgba(15, 31, 61, .035);
+          border-radius: 50%;
+          box-shadow: 0 0 0 17px rgba(37, 99, 235, .022);
+          pointer-events: none;
+          transform: translate(-50%, -50%);
+        }
+        .pageIntro { display: grid; gap: 2px; min-width: 0; }
+        .pageEyebrow { font-size: 9px; letter-spacing: .12em; }
+        .h1 { font-size: 23px; line-height: 1.1; letter-spacing: -.04em; }
+        .pageDesc { display: none; }
+        .workerBadge { min-width: 0; overflow: hidden; max-width: 160px; text-overflow: ellipsis; white-space: nowrap; }
+        .workerActionBtn { min-height: 32px; padding: 6px 9px; font-size: 10px; white-space: nowrap; }
+        .modeRow {
+          display: block;
+          padding: 0;
+          border: 0;
+          background: transparent;
+        }
+        .modeLabel, .modeDescription { display: none; }
+        .modeSwitch { display: flex; width: 210px; padding: 3px; }
+        .modeSwitchBtn { flex: 1; min-height: 34px; padding: 6px 9px; }
+        .staffIcon { width: 16px; height: 16px; flex: 0 0 auto; }
+        .topActions { gap: 7px; }
+        .btn.topActionBtn {
+          min-height: 40px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 9px 12px;
+          font-family: inherit;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.2;
+          appearance: none;
+        }
+        .quickActionBtn, .actionBtn, .backBtn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .newOrderIcon {
+          width: 34px;
+          height: 34px;
+          display: inline-grid;
+          place-items: center;
+          border-radius: 11px;
+          background: #dceaff;
+          color: var(--brand-blue);
+        }
+        .newOrderIcon .staffIcon { width: 19px; height: 19px; }
+        .emptyStateIcon { width: 32px; height: 32px; margin-bottom: 4px; color: #4877ba; opacity: .82; }
+        .tabsRow { margin-top: 10px; border-radius: 14px; }
+        .chip { position: relative; border-radius: 10px; }
+        .chip::after {
+          content: "";
+          position: absolute;
+          right: 12px;
+          bottom: 2px;
+          left: 12px;
+          height: 2px;
+          border-radius: 999px;
+          background: transparent;
+        }
+        .chipOn::after { background: var(--brand-blue); }
+        .cardTitle { display: inline-flex; align-items: center; gap: 8px; }
+        .cardTitle::before {
+          content: "";
+          width: 3px;
+          height: 18px;
+          flex: 0 0 auto;
+          border-radius: 999px;
+          background: linear-gradient(180deg, var(--brand), var(--brand-blue));
+        }
+        .emptyState {
+          min-height: 150px;
+          display: grid;
+          place-content: center;
+          justify-items: center;
+          gap: 6px;
+          padding: 24px 12px;
+          color: var(--muted);
+          text-align: center;
+        }
+        .emptyStateMark {
+          width: 28px;
+          height: 3px;
+          margin-bottom: 4px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, var(--brand), var(--brand-blue));
+          opacity: .85;
+        }
+        .emptyState strong { color: var(--text); font-size: 15px; }
+        .emptyState span { font-size: 12px; line-height: 1.5; word-break: keep-all; }
+        .panel { margin-top: 10px; }
+
+        @media (max-width: 1023px) {
+          .topbar { padding: 13px 14px 14px; }
+          .headerContext { padding-inline: 8px; }
+          .headerStoreName { max-width: 130px; }
+          .workerBadge { max-width: 120px; }
+          .workerActionBtn { min-height: 34px; padding: 6px 8px; font-size: 10px; }
+          .modeSwitchBtn { font-size: 11px; }
+        }
+
+        @media (max-width: 900px) {
+          .topbar { padding: 10px 11px 11px; }
+          .titleBlock { gap: 8px; }
+          .titleTop { min-height: 38px; grid-template-columns: minmax(0, 1fr) auto; padding-bottom: 7px; }
+          .workspaceBadge { display: none; }
+          .headerContext {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            justify-content: flex-start;
+            padding: 8px 0 0;
+            border-top: 1px solid var(--line);
+          }
+          .headerStoreName { max-width: 220px; }
+          .operationsLine { grid-template-columns: minmax(0, 1fr) auto; }
+          .pageEyebrow { display: block; font-size: 8px; }
+          .h1 { font-size: 20px; }
+          .headerBrandMotif { left: 58%; width: 150px; height: 150px; border-width: 21px; opacity: .8; }
+          .modeSwitch { width: 190px; }
+          .modeSwitchBtn { min-height: 36px; }
+          .tabsRow { margin-top: 7px; }
+          .emptyState { min-height: 120px; padding: 18px 10px; }
+          .panel { margin-top: 8px; }
+        }
+
+        @media (max-width: 560px) {
+          .headerContext { flex-wrap: wrap; gap: 5px 7px; }
+          .headerStoreName { max-width: 150px; }
+          .workerBadge { max-width: 140px; }
+          .operationsLine { grid-template-columns: 1fr; gap: 9px; }
+          .headerBrandMotif { display: none; }
+          .modeRow { width: 100%; }
+          .modeSwitch { width: 100%; }
+        }
+
+        @media (max-width: 430px) {
+          .btn.topActionBtn { min-height: 38px; padding: 8px 8px; font-size: 11px; }
+          .btn.topActionBtn .staffIcon { width: 14px; height: 14px; }
+          .operationsLine { padding: 9px 10px; }
+        }
+
       `}</style>
 
       <header className="topbar">
         <div className="titleBlock">
           <div className="titleTop">
-            <h1 className="h1">직원 화면</h1>
+            <div className="brandArea">
+              <RionBrand product staff />
+              <span className="workspaceBadge">STORE STAFF</span>
+            </div>
+
+            <div className="headerContext" aria-label="현재 매장과 담당 직원">
+              <strong className="headerStoreName">{storeDisplayName}</strong>
+              <span className="headerContextDot" aria-hidden="true">·</span>
+              <span className={workerBadgeClass}>{workerRoleText}</span>
+              <button type="button" className="btn workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
+            </div>
 
             <div className="topActions">
               <button
-                className="btn btnPrimary topActionBtn"
+                type="button"
+                className="btn topActionBtn"
+                aria-label="관리자 홈으로 이동"
                 onClick={() =>
                   (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
                 }
               >
-                관리자
+                <StaffIcon name="home" />
+                <span>관리자 홈</span>
               </button>
-              <a className="btn topActionBtn" href="/logout">로그아웃</a>
+              <a className="btn topActionBtn" href="/logout" aria-label="로그아웃">
+                <StaffIcon name="logout" />
+                <span>로그아웃</span>
+              </a>
             </div>
           </div>
 
-          <div className="staffToolbar" aria-label="직원 화면 작업 상태">
-            <div className="contextLine" aria-label="매장과 담당 직원">
-              <span className="storeBadge">매장 · {storeDisplayName}</span>
-              <span className={workerBadgeClass}>담당 · {workerRoleText}</span>
-              <button className="btn btnSmall workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
+          <div className="operationsLine" aria-label="현재 주문 운영 정보">
+            <div className="pageIntro">
+              <span className="pageEyebrow">ORDER OPERATIONS</span>
+              <h1 className="h1">주문 운영</h1>
             </div>
-
+            <span className="headerBrandMotif" aria-hidden="true" />
             <div className="modeRow">
-              <p className="modeLabel">운영 방식</p>
-              <div className="modeSwitch" role="group" aria-label="모드전환">
+              <div className="modeSwitch" role="group" aria-label="운영 방식 전환">
                 <button
                   type="button"
                   className={`modeSwitchBtn ${staffViewMode === "simple" ? "modeSwitchBtnOn" : ""}`}
                   aria-pressed={staffViewMode === "simple"}
                   onClick={() => updateStaffViewMode("simple")}
                 >
-                  기본 모드
+                  기본 운영
                 </button>
                 <button
                   type="button"
@@ -2595,7 +3226,7 @@ function StaffPageInner() {
                   aria-pressed={staffViewMode === "station"}
                   onClick={() => updateStaffViewMode("station")}
                 >
-                  분업 모드
+                  분업 운영
                 </button>
               </div>
             </div>
@@ -2669,7 +3300,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              주문확인 ({counts.active})
+              <span>진행 중</span><span className="tabCount">{counts.active}</span>
             </button>
             <button
               className={`chip ${listTab === "completed" ? "chipOn" : ""}`}
@@ -2678,7 +3309,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              완료 ({counts.completed})
+              <span>완료</span><span className="tabCount">{counts.completed}</span>
             </button>
           </div>
         </div>
@@ -2692,7 +3323,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              주문확인 ({stationCounts.order})
+              <span>접수</span><span className="tabCount">{stationCounts.order}</span>
             </button>
             <button
               className={`chip ${stationTab === "make" ? "chipOn" : ""}`}
@@ -2701,7 +3332,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              제조 ({stationCounts.make})
+              <span>제조</span><span className="tabCount">{stationCounts.make}</span>
             </button>
             <button
               className={`chip ${stationTab === "ready" ? "chipOn" : ""}`}
@@ -2710,7 +3341,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              준비 ({stationCounts.ready})
+              <span>준비</span><span className="tabCount">{stationCounts.ready}</span>
             </button>
             <button
               className={`chip ${stationTab === "history" ? "chipOn" : ""}`}
@@ -2719,7 +3350,7 @@ function StaffPageInner() {
                 setMobileView("list");
               }}
             >
-              완료 ({stationCounts.history})
+              <span>완료</span><span className="tabCount">{stationCounts.history}</span>
             </button>
           </div>
         </div>
@@ -2727,19 +3358,21 @@ function StaffPageInner() {
       {modeToast ? <p className="modeToast">{modeToast}</p> : null}
       {newOrderPopup ? (
         <div className="newOrderPopup" role="alert" aria-live="assertive">
-          <div className="rowBetween" style={{ gap: 8, alignItems: "center" }}>
-            <div className="newOrderPopupTitle">신규 주문 접수 · 주문번호 {newOrderPopup.displayNo}</div>
+          <div className="newOrderPopupContent">
+            <span className="newOrderIcon" aria-hidden="true"><StaffIcon name="bell" /></span>
+            <div>
+              <div className="newOrderPopupTitle">새 주문이 도착했어요</div>
+              <div className="newOrderPopupText">주문번호 {newOrderPopup.displayNo}</div>
+            </div>
             <div className="itemQuickActions" style={{ marginTop: 0 }}>
-              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>확인</button>
+              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>주문 확인</button>
               <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>닫기</button>
             </div>
           </div>
         </div>
       ) : null}
-      <p className="tabHint">{tabGuideText}</p>
-
       <div className="panel">
-        <section className={`card ${mobileView === "detail" ? "mobileHide" : ""}`}>
+        <section className={`card ${filteredOrders.length === 0 ? "cardEmpty" : ""} ${mobileView === "detail" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
             <h2 className="cardTitle">{listTitle}</h2>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -2752,7 +3385,7 @@ function StaffPageInner() {
                   disabled={waitingItemIdsForBatch.length === 0}
                   style={{ opacity: waitingItemIdsForBatch.length ? 1 : 0.45 }}
                 >
-                  ▶ 제조시작
+                  <StaffIcon name="play" /> 제조 시작
                 </button>
               ) : null}
             </div>
@@ -2761,9 +3394,14 @@ function StaffPageInner() {
           {!storeId ? (
             <p className="muted">매장이 선택되지 않았습니다. 관리자에서 매장을 선택하고 다시 들어와 주세요.</p>
           ) : staffViewMode === "station" && stationTab === "make" ? (
-            makeGroups.length === 0 ? <p className="muted">제조 대기/진행 아이템이 없습니다.</p> : (
+            makeGroups.length === 0 ? (
+              <div className="emptyState">
+                <StaffIcon name="order" className="emptyStateIcon" />
+                <strong>제조 대기 중인 메뉴가 없습니다</strong>
+                <span>접수된 주문의 제조를 시작하면 이곳에 표시됩니다.</span>
+              </div>
+            ) : (
               <div className="list">
-                <p className="muted" style={{ marginBottom: 8 }}>주문확인 후, 제조시작 버튼을 눌러주세요.</p>
                 {makeGroupsByCategory.map(([categoryName, rows]) => (
                   <div key={`make_cat_${categoryName}`} style={{ display: "grid", gap: 8 }}>
                     <div
@@ -2797,7 +3435,7 @@ function StaffPageInner() {
                                 className="quickActionBtn quickActionBtnPrimary"
                                 onClick={() => updateOrderItemsInDb(g.itemIds, { status: "done" })}
                               >
-                                ✓ 제조완료
+                                <StaffIcon name="check" /> 제조 완료
                               </button>
                             ) : (
                               <span className="muted" style={{ fontWeight: 800 }}>대기</span>
@@ -2820,13 +3458,19 @@ function StaffPageInner() {
                     disabled={makingItemIdsForBatch.length === 0}
                     style={{ opacity: makingItemIdsForBatch.length ? 1 : 0.45 }}
                   >
-                    ✓ 전체 제조완료
+                    <StaffIcon name="check" /> 전체 제조 완료
                   </button>
                 </div>
               </div>
             )
           ) : staffViewMode === "station" && stationTab === "ready" ? (
-            readyOrders.length === 0 ? <p className="muted">준비 확인 대기 주문이 없습니다.</p> : (
+            readyOrders.length === 0 ? (
+              <div className="emptyState">
+                <StaffIcon name="order" className="emptyStateIcon" />
+                <strong>준비 확인할 주문이 없습니다</strong>
+                <span>제조가 완료된 메뉴가 이곳에 표시됩니다.</span>
+              </div>
+            ) : (
               <div className="list">
                 {readyOrders.map((o) => {
                   const doneItems = o.items.filter((it) => it.status === "done");
@@ -2909,7 +3553,7 @@ function StaffPageInner() {
                           disabled={!doneItems.length}
                           style={{ opacity: doneItems.length ? 1 : 0.45 }}
                         >
-                          ✓ 전체확인
+                          <StaffIcon name="check" /> 전체 확인
                         </button>
                         <button
                           type="button"
@@ -2918,7 +3562,7 @@ function StaffPageInner() {
                           disabled={!canCompleteOrder}
                           style={{ opacity: canCompleteOrder ? 1 : 0.45 }}
                         >
-                          ✓ 전달 완료
+                          <StaffIcon name="package-check" /> 전달 완료
                         </button>
                       </div>
                     </div>
@@ -2927,7 +3571,11 @@ function StaffPageInner() {
               </div>
             )
           ) : filteredOrders.length === 0 ? (
-            <p className="muted">해당 조건의 주문이 없습니다.</p>
+            <div className="emptyState">
+              <StaffIcon name="order" className="emptyStateIcon" />
+              <strong>{resolvedStaffEmptyState.title}</strong>
+              <span>{resolvedStaffEmptyState.description}</span>
+            </div>
           ) : (
             <div className="list">
               {filteredOrders.map((o) => {
@@ -2955,7 +3603,7 @@ function StaffPageInner() {
                       <div className="bigNo">
                         {o.displayNo}
                         {o.buzzerNo ? ` · 벨 ${o.buzzerNo}` : ""}
-                        {showNew ? <span className="badge badgeHot">NEW</span> : null}
+                        {showNew ? <span className="badge badgeHot">신규</span> : null}
                       </div>
                       <div className="orderMetaRight">
                         <span className="elapsedBadge">{formatElapsedMin(o.createdAt)}</span>
@@ -2991,6 +3639,7 @@ function StaffPageInner() {
                               advanceOrder(o);
                             }}
                           >
+                            <StaffIcon name={statusActionIcon(o.status)} />
                             {statusButtonLabelForView(o.status)}
                           </button>
                         </div>
@@ -3003,7 +3652,7 @@ function StaffPageInner() {
           )}
         </section>
 
-        <section className={`card ${mobileView === "list" ? "mobileHide" : ""}`}>
+        <section className={`card ${!selected ? "cardEmpty" : ""} ${mobileView === "list" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
             <h2 className="cardTitle">주문 상세</h2>
             <button
@@ -3011,7 +3660,8 @@ function StaffPageInner() {
               onClick={() => setMobileView("list")}
               style={{ display: mobileView === "detail" ? "inline-flex" : "none" }}
             >
-              주문 목록
+              <StaffIcon name="arrow-left" />
+              <span>주문 목록</span>
             </button>
           </div>
 
@@ -3079,16 +3729,20 @@ function StaffPageInner() {
                 <span className="badge">완료 {counts.completed}건</span>
                 <span className="badge">전체 {counts.all}건</span>
               </div>
-              <div className="itemQuickActions">
-                <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
-                  주문확인 탭 보기
-                </button>
-                {staffViewMode === "station" ? (
+              {((staffViewMode === "simple" ? listTab !== "active" : stationTab !== "order") || (staffViewMode === "station" && stationTab !== "make")) ? (
+                <div className="itemQuickActions">
+                  {(staffViewMode === "simple" ? listTab !== "active" : stationTab !== "order") ? (
+                    <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>
+                      접수 탭으로 이동
+                    </button>
+                  ) : null}
+                  {staffViewMode === "station" && stationTab !== "make" ? (
                   <button type="button" className="quickActionBtn" onClick={() => setStationTab("make")}>
                     제조 탭 보기
                   </button>
-                ) : null}
-              </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : (
             <>
@@ -3267,6 +3921,7 @@ function StaffPageInner() {
                         opacity: canAdvanceSelected ? 1 : 0.5,
                       }}
                     >
+                      <StaffIcon name={statusActionIcon(selected.status)} />
                       {statusButtonLabelForView(selected.status)}
                     </button>
 
@@ -3314,6 +3969,7 @@ function StaffPageInner() {
                 disabled={!canAdvanceSelected}
                 style={{ opacity: canAdvanceSelected ? 1 : 0.5 }}
               >
+                <StaffIcon name={statusActionIcon(selected.status)} />
                 {statusButtonLabelForView(selected.status)}
               </button>
 
