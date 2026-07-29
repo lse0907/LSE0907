@@ -2980,48 +2980,68 @@ function StaffPageInner() {
         /* Compact operational header and restrained RION signatures */
         .topbar { padding: 15px 17px 16px; }
         .titleBlock { gap: 10px; }
-        .titleTop { min-height: 42px; padding-bottom: 10px; }
+        .titleTop { min-height: 42px; grid-template-columns: auto minmax(0, 1fr) auto; padding-bottom: 10px; }
         .workspaceBadge { display: inline-flex; }
+        .headerContext {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 0 14px;
+        }
+        .headerStoreName {
+          overflow: hidden;
+          max-width: 190px;
+          color: var(--brand);
+          font-size: 13px;
+          font-weight: 900;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .headerContextDot { color: #a5b0bf; font-weight: 900; }
         .operationsLine {
+          position: relative;
+          isolation: isolate;
           display: grid;
-          grid-template-columns: minmax(125px, .82fr) minmax(135px, .85fr) minmax(210px, 1.2fr) minmax(190px, 1fr);
-          align-items: stretch;
-          gap: 0;
+          grid-template-columns: minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 18px;
           min-width: 0;
           overflow: hidden;
           border: 1px solid #dfe6f0;
           border-radius: 15px;
-          background: #f8faff;
+          padding: 11px 13px;
+          background: linear-gradient(135deg, #fff 0%, #fbfdff 55%, #f5f9ff 100%);
         }
-        .operationCell {
-          min-width: 0;
-          min-height: 66px;
-          padding: 10px 13px;
-          display: grid;
-          align-content: center;
-          gap: 4px;
-          background: transparent;
+        .operationsLine > *:not(.headerBrandMotif) { position: relative; z-index: 1; }
+        .headerBrandMotif {
+          position: absolute;
+          z-index: 0;
+          top: 50%;
+          left: 62%;
+          width: 190px;
+          height: 190px;
+          border: 25px solid rgba(15, 31, 61, .035);
+          border-radius: 50%;
+          box-shadow: 0 0 0 17px rgba(37, 99, 235, .022);
+          pointer-events: none;
+          transform: translate(-50%, -50%);
         }
-        .operationCell + .operationCell { border-left: 1px solid #e2e8f1; }
-        .contextStore, .contextWorker { border-left: 1px solid #e2e8f1; }
-        .pageIntro { gap: 2px; min-width: 0; }
+        .pageIntro { display: grid; gap: 2px; min-width: 0; }
         .pageEyebrow { font-size: 9px; letter-spacing: .12em; }
         .h1 { font-size: 23px; line-height: 1.1; letter-spacing: -.04em; }
         .pageDesc { display: none; }
-        .staffToolbar, .contextLine { display: contents; }
-        .contextKey { display: block; color: #8290a3; font-size: 10px; font-weight: 900; }
-        .contextItem { min-width: 0; }
-        .contextItem:first-child::after { content: none; }
-        .contextItem strong { overflow: hidden; max-width: 100%; color: var(--brand); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-        .workerValueRow { min-width: 0; display: flex; align-items: center; gap: 7px; }
-        .workerBadge { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .workerActionBtn { min-height: 32px; margin-left: auto; padding: 6px 9px; font-size: 10px; white-space: nowrap; }
+        .workerBadge { min-width: 0; overflow: hidden; max-width: 160px; text-overflow: ellipsis; white-space: nowrap; }
+        .workerActionBtn { min-height: 32px; padding: 6px 9px; font-size: 10px; white-space: nowrap; }
         .modeRow {
-          border-left: 1px solid #e2e8f1;
+          display: block;
+          padding: 0;
+          border: 0;
+          background: transparent;
         }
-        .modeLabel { display: block; margin: 0; color: #8290a3; font-size: 10px; font-weight: 900; }
-        .modeDescription { display: none; }
-        .modeSwitch { display: flex; width: 100%; max-width: 220px; padding: 3px; }
+        .modeLabel, .modeDescription { display: none; }
+        .modeSwitch { display: flex; width: 210px; padding: 3px; }
         .modeSwitchBtn { flex: 1; min-height: 34px; padding: 6px 9px; }
         .staffIcon { width: 16px; height: 16px; flex: 0 0 auto; }
         .topActions { gap: 7px; }
@@ -3101,7 +3121,9 @@ function StaffPageInner() {
 
         @media (max-width: 1023px) {
           .topbar { padding: 13px 14px 14px; }
-          .operationsLine { grid-template-columns: minmax(120px, .8fr) minmax(130px, .85fr) minmax(200px, 1.2fr) minmax(180px, 1fr); }
+          .headerContext { padding-inline: 8px; }
+          .headerStoreName { max-width: 130px; }
+          .workerBadge { max-width: 120px; }
           .workerActionBtn { min-height: 34px; padding: 6px 8px; font-size: 10px; }
           .modeSwitchBtn { font-size: 11px; }
         }
@@ -3109,18 +3131,21 @@ function StaffPageInner() {
         @media (max-width: 900px) {
           .topbar { padding: 10px 11px 11px; }
           .titleBlock { gap: 8px; }
-          .titleTop { min-height: 38px; padding-bottom: 7px; }
+          .titleTop { min-height: 38px; grid-template-columns: minmax(0, 1fr) auto; padding-bottom: 7px; }
           .workspaceBadge { display: none; }
-          .operationsLine { grid-template-columns: 1fr 1fr; }
-          .pageIntro { min-width: 0; }
+          .headerContext {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            justify-content: flex-start;
+            padding: 8px 0 0;
+            border-top: 1px solid var(--line);
+          }
+          .headerStoreName { max-width: 220px; }
+          .operationsLine { grid-template-columns: minmax(0, 1fr) auto; }
           .pageEyebrow { display: block; font-size: 8px; }
           .h1 { font-size: 20px; }
-          .operationCell { min-height: 62px; padding: 9px 11px; }
-          .pageIntro { border-left: 0; }
-          .contextStore { border-left: 1px solid #e2e8f1; }
-          .contextWorker { border-top: 1px solid #e2e8f1; border-left: 0; }
-          .modeRow { border-top: 1px solid #e2e8f1; border-left: 1px solid #e2e8f1; }
-          .modeSwitch { width: 100%; }
+          .headerBrandMotif { left: 58%; width: 150px; height: 150px; border-width: 21px; opacity: .8; }
+          .modeSwitch { width: 190px; }
           .modeSwitchBtn { min-height: 36px; }
           .tabsRow { margin-top: 7px; }
           .emptyState { min-height: 120px; padding: 18px 10px; }
@@ -3128,19 +3153,19 @@ function StaffPageInner() {
         }
 
         @media (max-width: 560px) {
-          .pageIntro { grid-column: 1 / -1; min-height: 55px; }
-          .contextStore { border-top: 1px solid #e2e8f1; border-left: 0; }
-          .contextWorker { border-top: 1px solid #e2e8f1; border-left: 1px solid #e2e8f1; }
-          .modeRow { grid-column: 1 / -1; border-top: 1px solid #e2e8f1; border-left: 0; }
-          .workerValueRow { align-items: flex-start; flex-wrap: wrap; gap: 5px; }
-          .workerActionBtn { margin-left: 0; }
+          .headerContext { flex-wrap: wrap; gap: 5px 7px; }
+          .headerStoreName { max-width: 150px; }
+          .workerBadge { max-width: 140px; }
+          .operationsLine { grid-template-columns: 1fr; gap: 9px; }
+          .headerBrandMotif { display: none; }
+          .modeRow { width: 100%; }
+          .modeSwitch { width: 100%; }
         }
 
         @media (max-width: 430px) {
           .btn.topActionBtn { min-height: 38px; padding: 8px 8px; font-size: 11px; }
           .btn.topActionBtn .staffIcon { width: 14px; height: 14px; }
-          .operationCell { padding: 8px 9px; }
-          .contextItem strong, .workerBadge { max-width: 100%; }
+          .operationsLine { padding: 9px 10px; }
         }
 
       `}</style>
@@ -3151,6 +3176,13 @@ function StaffPageInner() {
             <div className="brandArea">
               <RionBrand product staff />
               <span className="workspaceBadge">STORE STAFF</span>
+            </div>
+
+            <div className="headerContext" aria-label="현재 매장과 담당 직원">
+              <strong className="headerStoreName">{storeDisplayName}</strong>
+              <span className="headerContextDot" aria-hidden="true">·</span>
+              <span className={workerBadgeClass}>{workerRoleText}</span>
+              <button type="button" className="btn workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
             </div>
 
             <div className="topActions">
@@ -3173,24 +3205,29 @@ function StaffPageInner() {
           </div>
 
           <div className="operationsLine" aria-label="현재 주문 운영 정보">
-            <div className="pageIntro operationCell">
+            <div className="pageIntro">
               <span className="pageEyebrow">ORDER OPERATIONS</span>
               <h1 className="h1">주문 운영</h1>
             </div>
-
-            <div className="staffToolbar" aria-label="직원 화면 운영 정보">
-              <div className="contextLine" aria-label="매장과 담당 직원">
-                <div className="contextItem contextStore operationCell">
-                  <span className="contextKey">현재 매장</span>
-                  <strong>{storeDisplayName}</strong>
-                </div>
-                <div className="contextItem contextWorker operationCell">
-                  <span className="contextKey">현재 담당</span>
-                  <div className="workerValueRow">
-                    <span className={workerBadgeClass}>{workerRoleText}</span>
-                    <button type="button" className="btn workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
-                  </div>
-                </div>
+            <span className="headerBrandMotif" aria-hidden="true" />
+            <div className="modeRow">
+              <div className="modeSwitch" role="group" aria-label="운영 방식 전환">
+                <button
+                  type="button"
+                  className={`modeSwitchBtn ${staffViewMode === "simple" ? "modeSwitchBtnOn" : ""}`}
+                  aria-pressed={staffViewMode === "simple"}
+                  onClick={() => updateStaffViewMode("simple")}
+                >
+                  기본 운영
+                </button>
+                <button
+                  type="button"
+                  className={`modeSwitchBtn ${staffViewMode === "station" ? "modeSwitchBtnOn" : ""}`}
+                  aria-pressed={staffViewMode === "station"}
+                  onClick={() => updateStaffViewMode("station")}
+                >
+                  분업 운영
+                </button>
               </div>
 
               <div className="modeRow operationCell">
