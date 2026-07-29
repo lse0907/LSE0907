@@ -3154,6 +3154,9 @@ function StaffPageInner() {
                   </button>
                 </div>
               </div>
+              <p className="modeDescription">
+                {staffViewMode === "simple" ? "주문 단위로 전체 과정을 처리합니다." : "접수·제조·준비를 단계별로 처리합니다."}
+              </p>
             </div>
           </div>
 
