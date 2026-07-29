@@ -3229,6 +3229,31 @@ function StaffPageInner() {
                   분업 운영
                 </button>
               </div>
+
+              <div className="modeRow operationCell">
+                <p className="modeLabel">운영 방식</p>
+                <div className="modeSwitch" role="group" aria-label="운영 방식 전환">
+                  <button
+                    type="button"
+                    className={`modeSwitchBtn ${staffViewMode === "simple" ? "modeSwitchBtnOn" : ""}`}
+                    aria-pressed={staffViewMode === "simple"}
+                    onClick={() => updateStaffViewMode("simple")}
+                  >
+                    기본 운영
+                  </button>
+                  <button
+                    type="button"
+                    className={`modeSwitchBtn ${staffViewMode === "station" ? "modeSwitchBtnOn" : ""}`}
+                    aria-pressed={staffViewMode === "station"}
+                    onClick={() => updateStaffViewMode("station")}
+                  >
+                    분업 운영
+                  </button>
+                </div>
+              </div>
+              <p className="modeDescription">
+                {staffViewMode === "simple" ? "주문 단위로 전체 과정을 처리합니다." : "접수·제조·준비를 단계별로 처리합니다."}
+              </p>
             </div>
           </div>
 
