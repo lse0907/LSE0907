@@ -996,6 +996,18 @@ function StaffPageInner() {
     return { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." };
   }, [listTab, staffViewMode, stationTab]);
 
+  const emptyListCopy = useMemo(() => {
+    if (staffViewMode === "simple") {
+      return listTab === "completed"
+        ? { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." }
+        : { title: "현재 진행 중인 주문이 없습니다", description: "새 주문이 들어오면 이곳에 바로 표시됩니다." };
+    }
+    if (stationTab === "order") return { title: "현재 접수할 주문이 없습니다", description: "새 주문이 들어오면 이곳에 바로 표시됩니다." };
+    if (stationTab === "make") return { title: "제조 대기 중인 메뉴가 없습니다", description: "접수된 주문의 제조를 시작하면 이곳에 표시됩니다." };
+    if (stationTab === "ready") return { title: "준비 확인할 주문이 없습니다", description: "제조가 완료된 메뉴가 이곳에 표시됩니다." };
+    return { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." };
+  }, [listTab, staffViewMode, stationTab]);
+
   const statusButtonLabelForView = (s: OrderStatus) => {
     if (staffViewMode === "simple") {
       if (s === "new") return "주문 확인";
@@ -3222,6 +3234,9 @@ function StaffPageInner() {
                   </button>
                 </div>
               </div>
+              <p className="modeDescription">
+                {staffViewMode === "simple" ? "주문 단위로 전체 과정을 처리합니다." : "접수·제조·준비를 단계별로 처리합니다."}
+              </p>
             </div>
           </div>
 
