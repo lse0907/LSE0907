@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
@@ -12,6 +12,22 @@ type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "complet
 type PaymentStatus = "not_required" | "pending" | "paid";
 type StaffViewMode = "simple" | "station";
 type ItemStatus = "waiting" | "making" | "done";
+type StaffIconName = "home" | "logout" | "arrow-left" | "check" | "play" | "package-check" | "bell" | "order";
+
+function StaffIcon({ name, className = "staffIcon" }: { name: StaffIconName; className?: string }) {
+  const paths: Record<StaffIconName, ReactNode> = {
+    home: <><path d="M3 9.2 10 3l7 6.2v7.3a.5.5 0 0 1-.5.5h-4.2v-5H7.7v5H3.5a.5.5 0 0 1-.5-.5V9.2Z" /></>,
+    logout: <><path d="M8 3H4.5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1H8" /><path d="M12.5 6.5 16 10l-3.5 3.5M7 10h9" /></>,
+    "arrow-left": <><path d="m9 5-5 5 5 5M4 10h12" /></>,
+    check: <><circle cx="10" cy="10" r="7" /><path d="m6.8 10.1 2.1 2.2 4.5-4.7" /></>,
+    play: <><circle cx="10" cy="10" r="7" /><path d="m8.4 7 4.6 3-4.6 3V7Z" /></>,
+    "package-check": <><path d="m4 6 6-3 6 3v8l-6 3-6-3V6Z" /><path d="m4 6 6 3 6-3M10 9v4" /><path d="m12.2 14.1 1.1 1.1 2.2-2.4" /></>,
+    bell: <><path d="M5.5 14h9l-1.2-1.8V8a3.3 3.3 0 0 0-6.6 0v4.2L5.5 14Z" /><path d="M8.5 16.2h3" /></>,
+    order: <><path d="M5 3.5h10v13H5z" /><path d="M7.5 7h5M7.5 10h5M7.5 13h3" /></>,
+  };
+
+  return <svg className={className} viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
 
 type SelectedOptionItem = {
   id: string;
@@ -253,9 +269,9 @@ function nextStatus(s: OrderStatus): OrderStatus {
 
 function statusButtonLabel(s: OrderStatus) {
   if (s === "new") return "주문 확인";
-  if (s === "checked") return "▶ 제조 시작";
+  if (s === "checked") return "제조 시작";
   if (s === "making") return "준비 완료";
-  if (s === "ready_for_packing") return "✓ 전달 완료";
+  if (s === "ready_for_packing") return "전달 완료";
   if (s === "completed") return "완료됨";
   return "취소됨";
 }
@@ -968,13 +984,17 @@ function StaffPageInner() {
     return "완료/취소";
   }, [staffViewMode, stationTab]);
 
-  const tabGuideText = useMemo(() => {
-    if (staffViewMode === "simple") return "주문 확인 → 제조 완료 → 전달 완료";
-    if (stationTab === "order") return "새 주문을 확인해 주세요.";
-    if (stationTab === "make") return "제조할 메뉴를 확인해 주세요.";
-    if (stationTab === "ready") return "준비 완료 여부를 확인해 주세요.";
-    return "";
-  }, [staffViewMode, stationTab]);
+  const resolvedStaffEmptyState = useMemo(() => {
+    if (staffViewMode === "simple") {
+      return listTab === "completed"
+        ? { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." }
+        : { title: "현재 진행 중인 주문이 없습니다", description: "새 주문이 들어오면 이곳에 바로 표시됩니다." };
+    }
+    if (stationTab === "order") return { title: "현재 접수할 주문이 없습니다", description: "새 주문이 들어오면 이곳에 바로 표시됩니다." };
+    if (stationTab === "make") return { title: "제조 대기 중인 메뉴가 없습니다", description: "접수된 주문의 제조를 시작하면 이곳에 표시됩니다." };
+    if (stationTab === "ready") return { title: "준비 확인할 주문이 없습니다", description: "제조가 완료된 메뉴가 이곳에 표시됩니다." };
+    return { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." };
+  }, [listTab, staffViewMode, stationTab]);
 
   const emptyListCopy = useMemo(() => {
     if (staffViewMode === "simple") {
@@ -990,11 +1010,17 @@ function StaffPageInner() {
 
   const statusButtonLabelForView = (s: OrderStatus) => {
     if (staffViewMode === "simple") {
-      if (s === "new") return "✓ 주문 확인";
-      if (s === "checked" || s === "making") return "✓ 제조 완료";
-      if (s === "ready_for_packing") return "✓ 전달 완료";
+      if (s === "new") return "주문 확인";
+      if (s === "checked" || s === "making") return "제조 완료";
+      if (s === "ready_for_packing") return "전달 완료";
     }
     return statusButtonLabel(s);
+  };
+
+  const statusActionIcon = (s: OrderStatus): StaffIconName => {
+    if (staffViewMode !== "simple" && s === "checked") return "play";
+    if (s === "ready_for_packing") return "package-check";
+    return "check";
   };
 
   const nextStatusForView = (s: OrderStatus): OrderStatus => {
@@ -2970,7 +2996,7 @@ function StaffPageInner() {
         .workspaceBadge { display: inline-flex; }
         .operationsLine {
           display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto;
+          grid-template-columns: auto minmax(0, 1fr);
           align-items: center;
           gap: 14px;
           min-width: 0;
@@ -2979,7 +3005,19 @@ function StaffPageInner() {
         .pageEyebrow { font-size: 9px; letter-spacing: .12em; }
         .h1 { font-size: 23px; line-height: 1.1; letter-spacing: -.04em; }
         .pageDesc { display: none; }
-        .staffToolbar { display: contents; }
+        .staffToolbar {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          justify-items: end;
+          gap: 7px;
+          min-width: 0;
+          padding: 0;
+          overflow: visible;
+          border: 0;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+        }
         .contextLine {
           min-width: 0;
           padding: 0;
@@ -3002,6 +3040,38 @@ function StaffPageInner() {
         .modeLabel, .modeDescription { display: none; }
         .modeSwitch { display: flex; width: 190px; padding: 3px; }
         .modeSwitchBtn { flex: 1; min-height: 34px; padding: 6px 9px; }
+        .staffIcon { width: 16px; height: 16px; flex: 0 0 auto; }
+        .topActions { gap: 7px; }
+        .btn.topActionBtn {
+          min-height: 40px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 9px 12px;
+          font-family: inherit;
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1.2;
+          appearance: none;
+        }
+        .quickActionBtn, .actionBtn, .backBtn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .newOrderIcon {
+          width: 34px;
+          height: 34px;
+          display: inline-grid;
+          place-items: center;
+          border-radius: 11px;
+          background: #dceaff;
+          color: var(--brand-blue);
+        }
+        .newOrderIcon .staffIcon { width: 19px; height: 19px; }
+        .emptyStateIcon { width: 32px; height: 32px; margin-bottom: 4px; color: #4877ba; opacity: .82; }
         .tabsRow { margin-top: 10px; border-radius: 14px; }
         .chip { position: relative; border-radius: 10px; }
         .chip::after {
@@ -3044,16 +3114,17 @@ function StaffPageInner() {
         }
         .emptyState strong { color: var(--text); font-size: 15px; }
         .emptyState span { font-size: 12px; line-height: 1.5; word-break: keep-all; }
+        .panel { margin-top: 10px; }
 
         @media (max-width: 1023px) {
           .topbar { padding: 13px 14px 14px; }
-          .operationsLine { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; }
+          .operationsLine { grid-template-columns: auto minmax(0, 1fr); gap: 12px; }
           .contextLine { gap: 7px; }
           .contextDivider { display: none; }
           .contextItem strong { max-width: 125px; }
           .workerBadge { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
           .workerActionBtn { min-height: 34px; padding: 6px 8px; font-size: 10px; }
-          .modeSwitch { width: 170px; }
+          .modeSwitch { width: 190px; }
           .modeSwitchBtn { font-size: 11px; }
         }
 
@@ -3066,6 +3137,7 @@ function StaffPageInner() {
           .pageIntro { display: grid; min-width: 0; }
           .pageEyebrow { display: block; font-size: 8px; }
           .h1 { font-size: 20px; }
+          .staffToolbar { width: 100%; justify-items: stretch; gap: 7px; }
           .contextLine {
             justify-content: flex-start;
             padding: 7px 0 0;
@@ -3080,9 +3152,12 @@ function StaffPageInner() {
           .modeSwitchBtn { min-height: 36px; }
           .tabsRow { margin-top: 7px; }
           .emptyState { min-height: 120px; padding: 18px 10px; }
+          .panel { margin-top: 8px; }
         }
 
         @media (max-width: 430px) {
+          .btn.topActionBtn { min-height: 38px; padding: 8px 8px; font-size: 11px; }
+          .btn.topActionBtn .staffIcon { width: 14px; height: 14px; }
           .contextLine { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
           .contextItem:first-child { grid-column: 1; }
           .contextItem:last-of-type { grid-column: 1; }
@@ -3104,13 +3179,18 @@ function StaffPageInner() {
               <button
                 type="button"
                 className="btn topActionBtn"
+                aria-label="관리자 홈으로 이동"
                 onClick={() =>
                   (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
                 }
               >
-                관리자
+                <StaffIcon name="home" />
+                <span>관리자 홈</span>
               </button>
-              <a className="btn topActionBtn" href="/logout">로그아웃</a>
+              <a className="btn topActionBtn" href="/logout" aria-label="로그아웃">
+                <StaffIcon name="logout" />
+                <span>로그아웃</span>
+              </a>
             </div>
           </div>
 
@@ -3287,7 +3367,7 @@ function StaffPageInner() {
       {newOrderPopup ? (
         <div className="newOrderPopup" role="alert" aria-live="assertive">
           <div className="newOrderPopupContent">
-            <span className="newOrderDot" aria-hidden="true" />
+            <span className="newOrderIcon" aria-hidden="true"><StaffIcon name="bell" /></span>
             <div>
               <div className="newOrderPopupTitle">새 주문이 도착했어요</div>
               <div className="newOrderPopupText">주문번호 {newOrderPopup.displayNo}</div>
@@ -3299,8 +3379,6 @@ function StaffPageInner() {
           </div>
         </div>
       ) : null}
-      <p className="tabHint">{tabGuideText}</p>
-
       <div className="panel">
         <section className={`card ${filteredOrders.length === 0 ? "cardEmpty" : ""} ${mobileView === "detail" ? "mobileHide" : ""}`}>
           <div className="cardTitleRow">
@@ -3315,7 +3393,7 @@ function StaffPageInner() {
                   disabled={waitingItemIdsForBatch.length === 0}
                   style={{ opacity: waitingItemIdsForBatch.length ? 1 : 0.45 }}
                 >
-                  ▶ 제조시작
+                  <StaffIcon name="play" /> 제조 시작
                 </button>
               ) : null}
             </div>
@@ -3326,13 +3404,12 @@ function StaffPageInner() {
           ) : staffViewMode === "station" && stationTab === "make" ? (
             makeGroups.length === 0 ? (
               <div className="emptyState">
-                <span className="emptyStateMark" aria-hidden="true" />
+                <StaffIcon name="order" className="emptyStateIcon" />
                 <strong>제조 대기 중인 메뉴가 없습니다</strong>
                 <span>접수된 주문의 제조를 시작하면 이곳에 표시됩니다.</span>
               </div>
             ) : (
               <div className="list">
-                <p className="muted" style={{ marginBottom: 8 }}>주문확인 후, 제조시작 버튼을 눌러주세요.</p>
                 {makeGroupsByCategory.map(([categoryName, rows]) => (
                   <div key={`make_cat_${categoryName}`} style={{ display: "grid", gap: 8 }}>
                     <div
@@ -3366,7 +3443,7 @@ function StaffPageInner() {
                                 className="quickActionBtn quickActionBtnPrimary"
                                 onClick={() => updateOrderItemsInDb(g.itemIds, { status: "done" })}
                               >
-                                ✓ 제조완료
+                                <StaffIcon name="check" /> 제조 완료
                               </button>
                             ) : (
                               <span className="muted" style={{ fontWeight: 800 }}>대기</span>
@@ -3389,7 +3466,7 @@ function StaffPageInner() {
                     disabled={makingItemIdsForBatch.length === 0}
                     style={{ opacity: makingItemIdsForBatch.length ? 1 : 0.45 }}
                   >
-                    ✓ 전체 제조완료
+                    <StaffIcon name="check" /> 전체 제조 완료
                   </button>
                 </div>
               </div>
@@ -3397,7 +3474,7 @@ function StaffPageInner() {
           ) : staffViewMode === "station" && stationTab === "ready" ? (
             readyOrders.length === 0 ? (
               <div className="emptyState">
-                <span className="emptyStateMark" aria-hidden="true" />
+                <StaffIcon name="order" className="emptyStateIcon" />
                 <strong>준비 확인할 주문이 없습니다</strong>
                 <span>제조가 완료된 메뉴가 이곳에 표시됩니다.</span>
               </div>
@@ -3484,7 +3561,7 @@ function StaffPageInner() {
                           disabled={!doneItems.length}
                           style={{ opacity: doneItems.length ? 1 : 0.45 }}
                         >
-                          ✓ 전체확인
+                          <StaffIcon name="check" /> 전체 확인
                         </button>
                         <button
                           type="button"
@@ -3493,7 +3570,7 @@ function StaffPageInner() {
                           disabled={!canCompleteOrder}
                           style={{ opacity: canCompleteOrder ? 1 : 0.45 }}
                         >
-                          ✓ 전달 완료
+                          <StaffIcon name="package-check" /> 전달 완료
                         </button>
                       </div>
                     </div>
@@ -3503,9 +3580,9 @@ function StaffPageInner() {
             )
           ) : filteredOrders.length === 0 ? (
             <div className="emptyState">
-              <span className="emptyStateMark" aria-hidden="true" />
-              <strong>{emptyListCopy.title}</strong>
-              <span>{emptyListCopy.description}</span>
+              <StaffIcon name="order" className="emptyStateIcon" />
+              <strong>{resolvedStaffEmptyState.title}</strong>
+              <span>{resolvedStaffEmptyState.description}</span>
             </div>
           ) : (
             <div className="list">
@@ -3570,6 +3647,7 @@ function StaffPageInner() {
                               advanceOrder(o);
                             }}
                           >
+                            <StaffIcon name={statusActionIcon(o.status)} />
                             {statusButtonLabelForView(o.status)}
                           </button>
                         </div>
@@ -3590,7 +3668,8 @@ function StaffPageInner() {
               onClick={() => setMobileView("list")}
               style={{ display: mobileView === "detail" ? "inline-flex" : "none" }}
             >
-              주문 목록
+              <StaffIcon name="arrow-left" />
+              <span>주문 목록</span>
             </button>
           </div>
 
@@ -3850,6 +3929,7 @@ function StaffPageInner() {
                         opacity: canAdvanceSelected ? 1 : 0.5,
                       }}
                     >
+                      <StaffIcon name={statusActionIcon(selected.status)} />
                       {statusButtonLabelForView(selected.status)}
                     </button>
 
@@ -3897,6 +3977,7 @@ function StaffPageInner() {
                 disabled={!canAdvanceSelected}
                 style={{ opacity: canAdvanceSelected ? 1 : 0.5 }}
               >
+                <StaffIcon name={statusActionIcon(selected.status)} />
                 {statusButtonLabelForView(selected.status)}
               </button>
 
