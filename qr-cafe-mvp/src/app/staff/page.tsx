@@ -996,18 +996,6 @@ function StaffPageInner() {
     return { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." };
   }, [listTab, staffViewMode, stationTab]);
 
-  const emptyListCopy = useMemo(() => {
-    if (staffViewMode === "simple") {
-      return listTab === "completed"
-        ? { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." }
-        : { title: "현재 진행 중인 주문이 없습니다", description: "새 주문이 들어오면 이곳에 바로 표시됩니다." };
-    }
-    if (stationTab === "order") return { title: "현재 접수할 주문이 없습니다", description: "새 주문이 들어오면 이곳에 바로 표시됩니다." };
-    if (stationTab === "make") return { title: "제조 대기 중인 메뉴가 없습니다", description: "접수된 주문의 제조를 시작하면 이곳에 표시됩니다." };
-    if (stationTab === "ready") return { title: "준비 확인할 주문이 없습니다", description: "제조가 완료된 메뉴가 이곳에 표시됩니다." };
-    return { title: "오늘 완료된 주문이 없습니다", description: "완료 및 취소된 주문을 이곳에서 확인할 수 있습니다." };
-  }, [listTab, staffViewMode, stationTab]);
-
   const statusButtonLabelForView = (s: OrderStatus) => {
     if (staffViewMode === "simple") {
       if (s === "new") return "주문 확인";
@@ -2996,49 +2984,44 @@ function StaffPageInner() {
         .workspaceBadge { display: inline-flex; }
         .operationsLine {
           display: grid;
-          grid-template-columns: auto minmax(0, 1fr);
-          align-items: center;
-          gap: 14px;
+          grid-template-columns: minmax(125px, .82fr) minmax(135px, .85fr) minmax(210px, 1.2fr) minmax(190px, 1fr);
+          align-items: stretch;
+          gap: 0;
           min-width: 0;
+          overflow: hidden;
+          border: 1px solid #dfe6f0;
+          border-radius: 15px;
+          background: #f8faff;
         }
-        .pageIntro { display: grid; gap: 2px; min-width: 105px; }
+        .operationCell {
+          min-width: 0;
+          min-height: 66px;
+          padding: 10px 13px;
+          display: grid;
+          align-content: center;
+          gap: 4px;
+          background: transparent;
+        }
+        .operationCell + .operationCell { border-left: 1px solid #e2e8f1; }
+        .contextStore, .contextWorker { border-left: 1px solid #e2e8f1; }
+        .pageIntro { gap: 2px; min-width: 0; }
         .pageEyebrow { font-size: 9px; letter-spacing: .12em; }
         .h1 { font-size: 23px; line-height: 1.1; letter-spacing: -.04em; }
         .pageDesc { display: none; }
-        .staffToolbar {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr);
-          justify-items: end;
-          gap: 7px;
-          min-width: 0;
-          padding: 0;
-          overflow: visible;
-          border: 0;
-          border-radius: 0;
-          background: transparent;
-          box-shadow: none;
-        }
-        .contextLine {
-          min-width: 0;
-          padding: 0;
-          flex-wrap: nowrap;
-          justify-content: flex-end;
-          gap: 9px;
-        }
-        .contextKey { display: inline; color: #8290a3; font-size: 10px; }
-        .contextDivider { display: block; height: 22px; }
-        .contextItem:first-child { flex: 0 1 auto; overflow: hidden; }
+        .staffToolbar, .contextLine { display: contents; }
+        .contextKey { display: block; color: #8290a3; font-size: 10px; font-weight: 900; }
+        .contextItem { min-width: 0; }
         .contextItem:first-child::after { content: none; }
-        .contextItem strong { max-width: 180px; font-size: 13px; }
-        .workerActionBtn { min-height: 36px; margin-left: 0; padding: 7px 10px; }
+        .contextItem strong { overflow: hidden; max-width: 100%; color: var(--brand); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+        .workerValueRow { min-width: 0; display: flex; align-items: center; gap: 7px; }
+        .workerBadge { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .workerActionBtn { min-height: 32px; margin-left: auto; padding: 6px 9px; font-size: 10px; white-space: nowrap; }
         .modeRow {
-          display: block;
-          padding: 0;
-          border: 0;
-          background: transparent;
+          border-left: 1px solid #e2e8f1;
         }
-        .modeLabel, .modeDescription { display: none; }
-        .modeSwitch { display: flex; width: 190px; padding: 3px; }
+        .modeLabel { display: block; margin: 0; color: #8290a3; font-size: 10px; font-weight: 900; }
+        .modeDescription { display: none; }
+        .modeSwitch { display: flex; width: 100%; max-width: 220px; padding: 3px; }
         .modeSwitchBtn { flex: 1; min-height: 34px; padding: 6px 9px; }
         .staffIcon { width: 16px; height: 16px; flex: 0 0 auto; }
         .topActions { gap: 7px; }
@@ -3118,36 +3101,25 @@ function StaffPageInner() {
 
         @media (max-width: 1023px) {
           .topbar { padding: 13px 14px 14px; }
-          .operationsLine { grid-template-columns: auto minmax(0, 1fr); gap: 12px; }
-          .contextLine { gap: 7px; }
-          .contextDivider { display: none; }
-          .contextItem strong { max-width: 125px; }
-          .workerBadge { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+          .operationsLine { grid-template-columns: minmax(120px, .8fr) minmax(130px, .85fr) minmax(200px, 1.2fr) minmax(180px, 1fr); }
           .workerActionBtn { min-height: 34px; padding: 6px 8px; font-size: 10px; }
-          .modeSwitch { width: 190px; }
           .modeSwitchBtn { font-size: 11px; }
         }
 
-        @media (max-width: 767px) {
+        @media (max-width: 900px) {
           .topbar { padding: 10px 11px 11px; }
           .titleBlock { gap: 8px; }
           .titleTop { min-height: 38px; padding-bottom: 7px; }
           .workspaceBadge { display: none; }
-          .operationsLine { grid-template-columns: 1fr; gap: 7px; }
-          .pageIntro { display: grid; min-width: 0; }
+          .operationsLine { grid-template-columns: 1fr 1fr; }
+          .pageIntro { min-width: 0; }
           .pageEyebrow { display: block; font-size: 8px; }
           .h1 { font-size: 20px; }
-          .staffToolbar { width: 100%; justify-items: stretch; gap: 7px; }
-          .contextLine {
-            justify-content: flex-start;
-            padding: 7px 0 0;
-            border-top: 1px solid var(--line);
-            gap: 6px;
-          }
-          .contextItem:first-child { flex: 1 1 auto; }
-          .contextItem strong { max-width: 120px; }
-          .workerActionBtn { margin-left: auto; white-space: nowrap; }
-          .modeRow { padding-top: 0; }
+          .operationCell { min-height: 62px; padding: 9px 11px; }
+          .pageIntro { border-left: 0; }
+          .contextStore { border-left: 1px solid #e2e8f1; }
+          .contextWorker { border-top: 1px solid #e2e8f1; border-left: 0; }
+          .modeRow { border-top: 1px solid #e2e8f1; border-left: 1px solid #e2e8f1; }
           .modeSwitch { width: 100%; }
           .modeSwitchBtn { min-height: 36px; }
           .tabsRow { margin-top: 7px; }
@@ -3155,14 +3127,20 @@ function StaffPageInner() {
           .panel { margin-top: 8px; }
         }
 
+        @media (max-width: 560px) {
+          .pageIntro { grid-column: 1 / -1; min-height: 55px; }
+          .contextStore { border-top: 1px solid #e2e8f1; border-left: 0; }
+          .contextWorker { border-top: 1px solid #e2e8f1; border-left: 1px solid #e2e8f1; }
+          .modeRow { grid-column: 1 / -1; border-top: 1px solid #e2e8f1; border-left: 0; }
+          .workerValueRow { align-items: flex-start; flex-wrap: wrap; gap: 5px; }
+          .workerActionBtn { margin-left: 0; }
+        }
+
         @media (max-width: 430px) {
           .btn.topActionBtn { min-height: 38px; padding: 8px 8px; font-size: 11px; }
           .btn.topActionBtn .staffIcon { width: 14px; height: 14px; }
-          .contextLine { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
-          .contextItem:first-child { grid-column: 1; }
-          .contextItem:last-of-type { grid-column: 1; }
-          .workerActionBtn { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
-          .contextItem strong, .workerBadge { max-width: 160px; }
+          .operationCell { padding: 8px 9px; }
+          .contextItem strong, .workerBadge { max-width: 100%; }
         }
 
       `}</style>
@@ -3194,27 +3172,29 @@ function StaffPageInner() {
             </div>
           </div>
 
-          <div className="operationsLine">
-            <div className="pageIntro">
+          <div className="operationsLine" aria-label="현재 주문 운영 정보">
+            <div className="pageIntro operationCell">
               <span className="pageEyebrow">ORDER OPERATIONS</span>
               <h1 className="h1">주문 운영</h1>
             </div>
 
             <div className="staffToolbar" aria-label="직원 화면 운영 정보">
               <div className="contextLine" aria-label="매장과 담당 직원">
-                <span className="contextItem">
-                  <span className="contextKey">매장</span>
+                <div className="contextItem contextStore operationCell">
+                  <span className="contextKey">현재 매장</span>
                   <strong>{storeDisplayName}</strong>
-                </span>
-                <span className="contextDivider" aria-hidden="true" />
-                <span className="contextItem">
-                  <span className="contextKey">담당</span>
-                  <span className={workerBadgeClass}>{workerRoleText}</span>
-                </span>
-                <button type="button" className="btn workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
+                </div>
+                <div className="contextItem contextWorker operationCell">
+                  <span className="contextKey">현재 담당</span>
+                  <div className="workerValueRow">
+                    <span className={workerBadgeClass}>{workerRoleText}</span>
+                    <button type="button" className="btn workerActionBtn" onClick={() => setWorkerPinModalOpen(true)}>{workerChangeLabel}</button>
+                  </div>
+                </div>
               </div>
 
-              <div className="modeRow">
+              <div className="modeRow operationCell">
+                <p className="modeLabel">운영 방식</p>
                 <div className="modeSwitch" role="group" aria-label="운영 방식 전환">
                   <button
                     type="button"
