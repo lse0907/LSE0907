@@ -4,15 +4,22 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStoreProfile } from "./lib/storeProfile";
-import { getStoreIdFromSearchParams, lsLastOrderIdKey, lsLastOrderTokenKey } from "./lib/storeScope";
+import {
+  getStoreIdFromSearchParams,
+  lsLastOrderIdKey,
+  lsLastOrderTokenKey,
+} from "./lib/storeScope";
 import { supabase } from "./lib/supabaseClient";
+import { CustomerBrand } from "./_components/CustomerBrand";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 type BarcodeScanResult = { rawValue?: string };
 type BarcodeDetectorLike = {
   detect: (input: HTMLVideoElement) => Promise<BarcodeScanResult[]>;
 };
-type BarcodeDetectorCtor = new (opts: { formats: string[] }) => BarcodeDetectorLike;
+type BarcodeDetectorCtor = new (opts: {
+  formats: string[];
+}) => BarcodeDetectorLike;
 
 function HomeStartInner() {
   const router = useRouter();
@@ -41,10 +48,14 @@ function HomeStartInner() {
       const lastOrderKey = lsLastOrderIdKey(storeId);
       const v = (localStorage.getItem(lastOrderKey) || "").trim();
       setLastOrderId(v);
-      const token = (localStorage.getItem(lsLastOrderTokenKey(storeId)) || "").trim();
+      const token = (
+        localStorage.getItem(lsLastOrderTokenKey(storeId)) || ""
+      ).trim();
       setLastOrderToken(token);
 
-      const hidden = (localStorage.getItem(orderHiddenKey(storeId)) || "").trim();
+      const hidden = (
+        localStorage.getItem(orderHiddenKey(storeId)) || ""
+      ).trim();
       setOrderHidden(hidden === "true");
     } catch {
       setLastOrderId("");
@@ -83,10 +94,13 @@ function HomeStartInner() {
   const overlayBg = useMemo(() => {
     if (!mounted) return fallbackOverlay;
 
-    const strength = Math.max(0, Math.min(100, Number(profile.mainImageOverlayStrength ?? 55)));
-    const aTop = 0.10 + 0.35 * (strength / 100); // 0.10 ~ 0.45
+    const strength = Math.max(
+      0,
+      Math.min(100, Number(profile.mainImageOverlayStrength ?? 55)),
+    );
+    const aTop = 0.1 + 0.35 * (strength / 100); // 0.10 ~ 0.45
     const aMid = 0.18 + 0.45 * (strength / 100); // 0.18 ~ 0.63
-    const aBot = 0.25 + 0.60 * (strength / 100); // 0.25 ~ 0.85
+    const aBot = 0.25 + 0.6 * (strength / 100); // 0.25 ~ 0.85
 
     return `linear-gradient(
       to bottom,
@@ -114,8 +128,8 @@ function HomeStartInner() {
     if (!lastOrderId) return;
     router.push(
       `/status?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(
-        lastOrderId
-      )}&accessToken=${encodeURIComponent(lastOrderToken)}`
+        lastOrderId,
+      )}&accessToken=${encodeURIComponent(lastOrderToken)}`,
     );
   };
 
@@ -178,9 +192,13 @@ function HomeStartInner() {
       setScanError("브라우저 환경에서만 QR 스캔을 사용할 수 있어요.");
       return;
     }
-    const detectorCtor = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
+    const detectorCtor = (
+      window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }
+    ).BarcodeDetector;
     if (!detectorCtor) {
-      setScanError("현재 브라우저는 실시간 QR 스캔을 지원하지 않아요. 최신 Chrome/Safari를 사용해 주세요.");
+      setScanError(
+        "현재 브라우저는 실시간 QR 스캔을 지원하지 않아요. 최신 Chrome/Safari를 사용해 주세요.",
+      );
       return;
     }
 
@@ -213,7 +231,9 @@ function HomeStartInner() {
         }
       }, 500);
     } catch {
-      setScanError("카메라 권한이 없거나 기기에서 카메라를 사용할 수 없습니다.");
+      setScanError(
+        "카메라 권한이 없거나 기기에서 카메라를 사용할 수 없습니다.",
+      );
     }
   };
 
@@ -225,7 +245,12 @@ function HomeStartInner() {
             min-height: 100vh;
             display: grid;
             place-items: center;
-            background: radial-gradient(circle at 20% 10%, #2d3748 0%, #111827 45%, #0b1220 100%);
+            background: radial-gradient(
+              circle at 20% 10%,
+              #2d3748 0%,
+              #111827 45%,
+              #0b1220 100%
+            );
             color: #fff;
             padding: 20px;
           }
@@ -290,7 +315,15 @@ function HomeStartInner() {
           }
         `}</style>
         <section className="card">
-          <p style={{ margin: 0, fontWeight: 800, color: "rgba(255,255,255,0.75)" }}>RION Labs</p>
+          <p
+            style={{
+              margin: 0,
+              fontWeight: 800,
+              color: "rgba(255,255,255,0.75)",
+            }}
+          >
+            RION Labs
+          </p>
           <h1 className="title">RION Order</h1>
           <p className="sub">매장 QR을 스캔해 바로 주문을 시작하세요.</p>
           <button className="btnPrimary" onClick={startQrScanner}>
@@ -305,7 +338,10 @@ function HomeStartInner() {
             </div>
           ) : null}
           {scanError ? <p className="err">{scanError}</p> : null}
-          <button className="btnGhost" onClick={() => router.push("/login?next=%2Fme")}>
+          <button
+            className="btnGhost"
+            onClick={() => router.push("/login?next=%2Fme")}
+          >
             로그인
           </button>
         </section>
@@ -527,7 +563,11 @@ function HomeStartInner() {
       <section className="hero">
         {HERO_IMAGE ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img className="heroImg" src={HERO_IMAGE} alt="store hero" />
+          <img
+            className="heroImg"
+            src={HERO_IMAGE}
+            alt={`${STORE_NAME} 대표 이미지`}
+          />
         ) : null}
 
         {/* ✅ hydration-safe */}
@@ -541,7 +581,7 @@ function HomeStartInner() {
                   className="topBtn"
                   onClick={() =>
                     router.push(
-                      `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`
+                      `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`,
                     )
                   }
                 >
@@ -559,14 +599,27 @@ function HomeStartInner() {
               </>
             ) : (
               <>
-                <button className="topBtn" onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}>
+                <button
+                  className="topBtn"
+                  onClick={() =>
+                    router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
+                  }
+                >
                   로그인
                 </button>
-                <button className="topBtn" onClick={() => router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)}>
+                <button
+                  className="topBtn"
+                  onClick={() =>
+                    router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)
+                  }
+                >
                   회원가입
                 </button>
               </>
             )}
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <CustomerBrand compact inverse poweredBy />
           </div>
           <div className="logoRow">
             {LOGO_IMAGE ? (
