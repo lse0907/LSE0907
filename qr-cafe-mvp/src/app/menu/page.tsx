@@ -7,6 +7,7 @@ import { useMenuItems, MenuItem } from "@/app/lib/menuStore";
 import { useStoreProfile } from "@/app/lib/storeProfile";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getStoreIdFromSearchParams } from "@/app/lib/storeScope";
+import { CustomerBrand } from "@/app/_components/CustomerBrand";
 
 type SelectedOptionItem = {
   id: string;
@@ -111,7 +112,10 @@ function buildOptionSignature(groups: SelectedGroup[]) {
     .map((g) => ({
       groupId: String(g.groupId || ""),
       items: (Array.isArray(g.items) ? g.items : [])
-        .map((it) => ({ id: String(it.id || ""), qty: Math.max(0, Number(it.qty || 0)) }))
+        .map((it) => ({
+          id: String(it.id || ""),
+          qty: Math.max(0, Number(it.qty || 0)),
+        }))
         .filter((it) => it.id && it.qty > 0)
         .sort((a, b) => a.id.localeCompare(b.id)),
     }))
@@ -131,7 +135,11 @@ function MenuPageInner() {
   //    그래서 이 페이지에서 storeId 바뀔 때마다 refresh를 확실히 호출해주고,
   //    옵션은 여기서 직접 storeId 기반으로 쿼리함.
   const { profile } = useStoreProfile(storeId);
-  const { items: menuItems, loading: menuLoading, refresh: refreshMenu } = useMenuItems(storeId);
+  const {
+    items: menuItems,
+    loading: menuLoading,
+    refresh: refreshMenu,
+  } = useMenuItems(storeId);
 
   const table = (sp.get("table") || "").trim();
   const isTableQr = !!table;
@@ -141,14 +149,16 @@ function MenuPageInner() {
   }, [sp]);
   const cartStorageKey = useMemo(
     () => `qrCafeCart:${storeId}:${isTableQr ? table : "counter"}`,
-    [storeId, isTableQr, table]
+    [storeId, isTableQr, table],
   );
 
   const [optionsData, setOptionsData] = useState<OptionData>({
     groups: [],
     items: [],
   });
-  const [menuOptionPrices, setMenuOptionPrices] = useState<MenuOptionPrice[]>([]);
+  const [menuOptionPrices, setMenuOptionPrices] = useState<MenuOptionPrice[]>(
+    [],
+  );
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
@@ -163,7 +173,9 @@ function MenuPageInner() {
   const [optOpen, setOptOpen] = useState(false);
   const [optTarget, setOptTarget] = useState<MenuItem | null>(null);
 
-  const [optSel, setOptSel] = useState<Record<string, Record<string, number>>>({});
+  const [optSel, setOptSel] = useState<Record<string, Record<string, number>>>(
+    {},
+  );
   const [optQty, setOptQty] = useState(1);
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
@@ -182,7 +194,11 @@ function MenuPageInner() {
     let gData: any[] | null = (gRes.data as any[] | null) ?? null;
     let gErr: any = gRes.error;
 
-    if (gErr && gErr.code === "42703" && String(gErr.message || "").includes("sort_order")) {
+    if (
+      gErr &&
+      gErr.code === "42703" &&
+      String(gErr.message || "").includes("sort_order")
+    ) {
       const fallback = await supabase
         .from("option_groups")
         .select("id,name,required,min,max,store_id,created_at")
@@ -192,21 +208,23 @@ function MenuPageInner() {
       gErr = fallback.error;
     }
 
-    const [{ data: iData, error: iErr }, { data: pData, error: pErr }] = await Promise.all([
-      supabase
-        .from("option_items")
-        .select("id,group_id,name,price_delta,store_id,created_at")
-        .eq("store_id", storeId)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("menu_option_prices")
-        .select("menu_id,option_item_id,price_delta,store_id")
-        .eq("store_id", storeId),
-    ]);
+    const [{ data: iData, error: iErr }, { data: pData, error: pErr }] =
+      await Promise.all([
+        supabase
+          .from("option_items")
+          .select("id,group_id,name,price_delta,store_id,created_at")
+          .eq("store_id", storeId)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("menu_option_prices")
+          .select("menu_id,option_item_id,price_delta,store_id")
+          .eq("store_id", storeId),
+      ]);
 
     if (gErr) console.error("[menu] fetch option_groups error:", gErr.message);
     if (iErr) console.error("[menu] fetch option_items error:", iErr.message);
-    if (pErr) console.error("[menu] fetch menu_option_prices error:", pErr.message);
+    if (pErr)
+      console.error("[menu] fetch menu_option_prices error:", pErr.message);
 
     const groups: OptionGroup[] = (Array.isArray(gData) ? gData : [])
       .map((g: any) => ({
@@ -241,7 +259,6 @@ function MenuPageInner() {
     setOptionsLoading(false);
   };
 
-
   const fetchCategoriesFromDb = async () => {
     const { data, error } = await supabase
       .from("menu_categories")
@@ -259,11 +276,15 @@ function MenuPageInner() {
       return;
     }
 
-    const rows = (Array.isArray(data) ? data : []).map((row: any) => ({
-      id: toStr(row.id).trim(),
-      name: toStr(row.name).trim(),
-      sortOrder: Number.isFinite(Number(row.sort_order)) ? toInt(row.sort_order, 0) : 0,
-    })).filter((row) => row.id && row.name);
+    const rows = (Array.isArray(data) ? data : [])
+      .map((row: any) => ({
+        id: toStr(row.id).trim(),
+        name: toStr(row.name).trim(),
+        sortOrder: Number.isFinite(Number(row.sort_order))
+          ? toInt(row.sort_order, 0)
+          : 0,
+      }))
+      .filter((row) => row.id && row.name);
 
     setCategories(rows);
   };
@@ -366,21 +387,26 @@ function MenuPageInner() {
     const sorted = [...(menuItems || [])].sort((a: any, b: any) => {
       const ao = Number((a as any).sortOrder ?? 999999);
       const bo = Number((b as any).sortOrder ?? 999999);
-            if (ao !== bo) return ao - bo;
-      return String((a as any).name || "").localeCompare(String((b as any).name || ""));
+      if (ao !== bo) return ao - bo;
+      return String((a as any).name || "").localeCompare(
+        String((b as any).name || ""),
+      );
     });
     return sorted;
   }, [menuItems]);
 
   const menuSections = useMemo<MenuSection[]>(() => {
     if (selectedCategoryId !== "all") {
-      const selectedCategory = categories.find((cat) => cat.id === selectedCategoryId);
+      const selectedCategory = categories.find(
+        (cat) => cat.id === selectedCategoryId,
+      );
       return [
         {
           id: selectedCategoryId,
           name: selectedCategory?.name || "카테고리",
           items: sortedMenuItems.filter(
-            (m: any) => String((m as any).categoryId || "") === selectedCategoryId
+            (m: any) =>
+              String((m as any).categoryId || "") === selectedCategoryId,
           ),
         },
       ];
@@ -395,20 +421,34 @@ function MenuPageInner() {
     });
 
     const sections: MenuSection[] = categories
-      .map((cat) => ({ id: cat.id, name: cat.name, items: byCategory.get(cat.id) || [] }))
+      .map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        items: byCategory.get(cat.id) || [],
+      }))
       .filter((section) => section.items.length > 0);
 
-    const uncategorized = sortedMenuItems.filter((item: any) => !String(item.categoryId || "").trim());
+    const uncategorized = sortedMenuItems.filter(
+      (item: any) => !String(item.categoryId || "").trim(),
+    );
     if (uncategorized.length > 0) {
-      sections.push({ id: "uncategorized", name: "기타", items: uncategorized });
+      sections.push({
+        id: "uncategorized",
+        name: "기타",
+        items: uncategorized,
+      });
     }
 
     return sections;
   }, [categories, selectedCategoryId, sortedMenuItems]);
 
-  const list = useMemo(() => menuSections.flatMap((section) => section.items), [menuSections]);
+  const list = useMemo(
+    () => menuSections.flatMap((section) => section.items),
+    [menuSections],
+  );
 
-  const highlightedCategoryId = selectedCategoryId === "all" ? scrollCategoryId : selectedCategoryId;
+  const highlightedCategoryId =
+    selectedCategoryId === "all" ? scrollCategoryId : selectedCategoryId;
 
   useEffect(() => {
     if (selectedCategoryId !== "all") return;
@@ -424,15 +464,17 @@ function MenuPageInner() {
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
 
         if (!visible) return;
-        const sectionId = visible.target.getAttribute("data-section-id") || "all";
-        const isKnown = sectionId === "all" || categories.some((cat) => cat.id === sectionId);
+        const sectionId =
+          visible.target.getAttribute("data-section-id") || "all";
+        const isKnown =
+          sectionId === "all" || categories.some((cat) => cat.id === sectionId);
         setScrollCategoryId(isKnown ? sectionId : "all");
       },
       {
         root: null,
         rootMargin: "-90px 0px -60% 0px",
         threshold: [0.1, 0.35, 0.65],
-      }
+      },
     );
 
     menuSections.forEach((section) => {
@@ -467,7 +509,11 @@ function MenuPageInner() {
     if (selectedCategoryId === "all") return;
     const el = menuContentRef.current;
     if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY - Math.max(0, topStickyHeight) - 12;
+    const top =
+      el.getBoundingClientRect().top +
+      window.scrollY -
+      Math.max(0, topStickyHeight) -
+      12;
     window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
   }, [selectedCategoryId, topStickyHeight]);
 
@@ -478,14 +524,18 @@ function MenuPageInner() {
     }
     const el = sectionRefs.current[categoryId];
     if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY - Math.max(0, topStickyHeight) - 8;
+    const top =
+      el.getBoundingClientRect().top +
+      window.scrollY -
+      Math.max(0, topStickyHeight) -
+      8;
     window.scrollTo({ top, behavior: "smooth" });
   };
 
   const headerImage = profile.mainImage || "/hero.jpg";
   const headerOverlayStrength = Math.max(
     0,
-    Math.min(100, Number((profile as any).mainImageOverlayStrength ?? 55))
+    Math.min(100, Number((profile as any).mainImageOverlayStrength ?? 55)),
   );
   const overlayBg = useMemo(() => {
     const aTop = 0.1 + 0.35 * (headerOverlayStrength / 100);
@@ -503,7 +553,7 @@ function MenuPageInner() {
     const totalCount = cartLines.reduce((s, x) => s + (x.qty || 0), 0);
     const totalPrice = cartLines.reduce(
       (s, x) => s + (x.basePrice + x.optionTotal) * (x.qty || 0),
-      0
+      0,
     );
     return { totalCount, totalPrice };
   }, [cartLines]);
@@ -541,7 +591,9 @@ function MenuPageInner() {
 
   const incSimple = (m: MenuItem) => {
     setCartLines((prev) => {
-      const idx = prev.findIndex((x) => x.menuId === m.id && x.options.length === 0);
+      const idx = prev.findIndex(
+        (x) => x.menuId === m.id && x.options.length === 0,
+      );
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], qty: (next[idx].qty || 0) + 1 };
@@ -565,7 +617,9 @@ function MenuPageInner() {
 
   const decSimple = (m: MenuItem) => {
     setCartLines((prev) => {
-      const idx = prev.findIndex((x) => x.menuId === m.id && x.options.length === 0);
+      const idx = prev.findIndex(
+        (x) => x.menuId === m.id && x.options.length === 0,
+      );
       if (idx < 0) return prev;
       const next = [...prev];
       const q = Math.max(0, (next[idx].qty || 0) - 1);
@@ -626,7 +680,10 @@ function MenuPageInner() {
 
   const getSelectedQty = (gid: string) => {
     const picked = optSel[gid] || {};
-    return Object.values(picked).reduce((sum, n) => sum + Math.max(0, Number(n || 0)), 0);
+    return Object.values(picked).reduce(
+      (sum, n) => sum + Math.max(0, Number(n || 0)),
+      0,
+    );
   };
 
   const setOptionItemQty = (
@@ -634,7 +691,7 @@ function MenuPageInner() {
     itemId: string,
     nextQtyRaw: number,
     max: number,
-    isSingle: boolean
+    isSingle: boolean,
   ) => {
     setOptSel((prev) => {
       const groupMap = { ...(prev[gid] || {}) };
@@ -646,10 +703,13 @@ function MenuPageInner() {
       }
 
       const othersTotal = Object.entries(groupMap)
-              .filter(([id]) => id !== itemId)
+        .filter(([id]) => id !== itemId)
         .reduce((sum, [, q]) => sum + Math.max(0, Number(q || 0)), 0);
 
-      const allowed = Math.max(0, Math.min(nextQty, Math.max(0, max - othersTotal)));
+      const allowed = Math.max(
+        0,
+        Math.min(nextQty, Math.max(0, max - othersTotal)),
+      );
 
       if (allowed <= 0) delete groupMap[itemId];
       else groupMap[itemId] = allowed;
@@ -659,7 +719,6 @@ function MenuPageInner() {
   };
 
   const validateOpt = () => {
-
     if (!optTarget) return { ok: false, msg: "대상 메뉴가 없습니다." };
     const groupIds: string[] = Array.isArray((optTarget as any).optionGroupIds)
       ? (optTarget as any).optionGroupIds
@@ -669,23 +728,32 @@ function MenuPageInner() {
       const g = findGroup(gid);
       if (!g) continue;
       const picked = optSel[gid] || {};
-      const selectedQty = Object.values(picked).reduce((sum, n) => sum + Math.max(0, Number(n || 0)), 0);
+      const selectedQty = Object.values(picked).reduce(
+        (sum, n) => sum + Math.max(0, Number(n || 0)),
+        0,
+      );
       const requiredMin = g.required ? 1 : 0;
       const min = Math.max(requiredMin, Math.max(0, Number(g.min ?? 0)));
       const max = Math.max(min, Number(g.max ?? min));
 
       if (selectedQty < min) {
-        return { ok: false, msg: `“${g.name}” 옵션은 최소 ${min}개 선택이 필요합니다.` };
+        return {
+          ok: false,
+          msg: `“${g.name}” 옵션은 최소 ${min}개 선택이 필요합니다.`,
+        };
       }
       if (selectedQty > max) {
-        return { ok: false, msg: `“${g.name}” 옵션은 최대 ${max}개까지 선택 가능합니다.` };
+        return {
+          ok: false,
+          msg: `“${g.name}” 옵션은 최대 ${max}개까지 선택 가능합니다.`,
+        };
       }
     }
     return { ok: true, msg: "" };
   };
 
   const buildSelectedGroups = (
-    m: MenuItem
+    m: MenuItem,
   ): { groups: SelectedGroup[]; optionTotal: number } => {
     const groupIds: string[] = Array.isArray((m as any).optionGroupIds)
       ? (m as any).optionGroupIds
@@ -702,7 +770,10 @@ function MenuPageInner() {
       const allItems = groupItems(gid);
 
       const selectedItems: SelectedOptionItem[] = Object.entries(pickedMap)
-        .map(([id, qty]) => ({ item: allItems.find((x) => x.id === id), qty: Math.max(0, Number(qty || 0)) }))
+        .map(([id, qty]) => ({
+          item: allItems.find((x) => x.id === id),
+          qty: Math.max(0, Number(qty || 0)),
+        }))
         .filter((x) => !!x.item && x.qty > 0)
         .map((x: any) => ({
           id: x.item.id,
@@ -711,7 +782,11 @@ function MenuPageInner() {
           qty: x.qty,
         }));
 
-      const sum = selectedItems.reduce((s, x) => s + Number(x.priceDelta || 0) * Math.max(1, Number(x.qty || 0)), 0);
+      const sum = selectedItems.reduce(
+        (s, x) =>
+          s + Number(x.priceDelta || 0) * Math.max(1, Number(x.qty || 0)),
+        0,
+      );
       optionTotal += sum;
 
       groups.push({
@@ -749,12 +824,17 @@ function MenuPageInner() {
 
     setCartLines((prev) => {
       const idx = prev.findIndex(
-        (x) => x.menuId === optTarget.id && buildOptionSignature(x.options) === nextSig
+        (x) =>
+          x.menuId === optTarget.id &&
+          buildOptionSignature(x.options) === nextSig,
       );
 
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], qty: Math.max(1, (next[idx].qty || 0) + Math.max(1, optQty)) };
+        next[idx] = {
+          ...next[idx],
+          qty: Math.max(1, (next[idx].qty || 0) + Math.max(1, optQty)),
+        };
         return next;
       }
 
@@ -782,7 +862,10 @@ function MenuPageInner() {
   const selectedOptionSummary = useMemo(() => {
     if (!optTarget) return { selectedQty: 0, optionTotal: 0 };
     const { optionTotal } = buildSelectedGroups(optTarget);
-    const selectedQty = Object.keys(optSel || {}).reduce((sum, gid) => sum + getSelectedQty(gid), 0);
+    const selectedQty = Object.keys(optSel || {}).reduce(
+      (sum, gid) => sum + getSelectedQty(gid),
+      0,
+    );
     return { selectedQty, optionTotal };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [optTarget, optSel, optionsData]);
@@ -807,12 +890,12 @@ function MenuPageInner() {
       <style jsx global>{`
         :root {
           color-scheme: light;
-          --bg: #f6f7f9;
+          --bg: #f3f5f8;
           --card: #ffffff;
-          --text: #111827;
-          --muted: #6b7280;
-          --line: #e5e7eb;
-          --brand: #111827;
+          --text: #14213a;
+          --muted: #667085;
+          --line: #dfe4eb;
+          --brand: #0f1f3d;
           --radius: 16px;
         }
         body {
@@ -824,7 +907,9 @@ function MenuPageInner() {
       <style jsx>{`
         .wrap {
           min-height: 100vh;
-          padding-bottom: 92px; /* 하단 고정바 공간 */
+          padding-bottom: calc(
+            104px + env(safe-area-inset-bottom)
+          ); /* 하단 고정바 공간 */
         }
 
         .topSticky {
@@ -923,11 +1008,11 @@ function MenuPageInner() {
           gap: 12px;
         }
         .catTabs {
-          display:flex;
-          gap:8px;
-          overflow-x:auto;
-          padding-bottom:2px;
-                  }
+          display: flex;
+          gap: 8px;
+          overflow-x: auto;
+          padding-bottom: 2px;
+        }
         .catTabs::-webkit-scrollbar {
           display: none;
         }
@@ -983,20 +1068,20 @@ function MenuPageInner() {
           display: none;
         }
         .catTab {
-          white-space:nowrap;
-          border:1px solid var(--line);
-          background:#fff;
-          color:var(--text);
+          white-space: nowrap;
+          border: 1px solid var(--line);
+          background: #fff;
+          color: var(--text);
           -webkit-text-fill-color: currentColor;
-          border-radius:999px;
-          padding:8px 12px;
-          font-weight:900;
-          cursor:pointer;
+          border-radius: 999px;
+          padding: 8px 12px;
+          font-weight: 900;
+          cursor: pointer;
         }
         .catTabOn {
-          background:var(--brand);
-          border-color:var(--brand);
-          color:#fff;
+          background: var(--brand);
+          border-color: var(--brand);
+          color: #fff;
         }
 
         .menuCard {
@@ -1004,7 +1089,7 @@ function MenuPageInner() {
           border: 1px solid var(--line);
           border-radius: var(--radius);
           padding: 12px;
-          box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+          box-shadow: 0 12px 30px rgba(15, 31, 61, 0.07);
           display: grid;
           gap: 10px;
         }
@@ -1077,9 +1162,9 @@ function MenuPageInner() {
           align-items: center;
         }
         .qbtn {
-          width: 38px;
-          height: 38px;
-          border-radius: 12px;
+          width: 44px;
+          height: 44px;
+          border-radius: 13px;
           border: 1px solid var(--line);
           background: #fff;
           color: var(--text);
@@ -1252,7 +1337,7 @@ function MenuPageInner() {
           font-weight: 850;
           font-size: 12px;
         }
-                  .iList {
+        .iList {
           margin-top: 10px;
           display: grid;
           gap: 8px;
@@ -1382,7 +1467,11 @@ function MenuPageInner() {
       <div className="topSticky" ref={topStickyRef}>
         <section className="hero">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="heroImg" src={headerImage} alt="hero" />
+          <img
+            className="heroImg"
+            src={headerImage}
+            alt={`${profile.storeName || "매장"} 대표 이미지`}
+          />
           <div className="overlay" style={{ background: overlayBg }} />
           <div className="heroInner">
             <div className="topActions">
@@ -1392,7 +1481,7 @@ function MenuPageInner() {
                     className="topBtn"
                     onClick={() =>
                       router.push(
-                        `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`
+                        `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`,
                       )
                     }
                   >
@@ -1411,18 +1500,33 @@ function MenuPageInner() {
                 </>
               ) : (
                 <>
-                  <button className="topBtn" onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}>
+                  <button
+                    className="topBtn"
+                    onClick={() =>
+                      router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
+                    }
+                  >
                     로그인
                   </button>
-                  <button className="topBtn" onClick={() => router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)}>
+                  <button
+                    className="topBtn"
+                    onClick={() =>
+                      router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)
+                    }
+                  >
                     회원가입
                   </button>
                 </>
               )}
             </div>
+            <div style={{ marginTop: 18 }}>
+              <CustomerBrand compact inverse poweredBy />
+            </div>
             <div className="titleRow">
               <h1 className="h1">{profile.storeName || "메뉴"}</h1>
-              <p className="sub">{isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}</p>
+              <p className="sub">
+                {isTableQr ? `테이블 ${table} 주문` : "카운터 주문"}
+              </p>
             </div>
           </div>
         </section>
@@ -1441,22 +1545,37 @@ function MenuPageInner() {
             >
               {customerUserId ? (
                 <span>
-                  <span style={{ color: "#334155", fontWeight: 700 }}>내 등급:</span>{" "}
-                  <b style={{ color: "#1d4ed8" }}>{tierLabel(wallet?.tier)}</b> ·{" "}
-                  <span style={{ color: "#334155", fontWeight: 700 }}>내 포인트:</span>{" "}
-                  <b style={{ color: "#7c3aed" }}>{fmt(Number(wallet?.point_balance || 0))}P</b> ·{" "}
-                  <span style={{ color: "#334155", fontWeight: 700 }}>내 쿠폰:</span>{" "}
+                  <span style={{ color: "#334155", fontWeight: 700 }}>
+                    내 등급:
+                  </span>{" "}
+                  <b style={{ color: "#1d4ed8" }}>{tierLabel(wallet?.tier)}</b>{" "}
+                  ·{" "}
+                  <span style={{ color: "#334155", fontWeight: 700 }}>
+                    내 포인트:
+                  </span>{" "}
+                  <b style={{ color: "#7c3aed" }}>
+                    {fmt(Number(wallet?.point_balance || 0))}P
+                  </b>{" "}
+                  ·{" "}
+                  <span style={{ color: "#334155", fontWeight: 700 }}>
+                    내 쿠폰:
+                  </span>{" "}
                   <b style={{ color: "#be123c" }}>{issuedCouponCount}장</b>
                 </span>
               ) : (
                 <span>
-                  비회원 주문 중 · 회원가입하면 주문 시 매장별 포인트를 적립받을 수 있어요.
+                  비회원 주문 중 · 회원가입하면 주문 시 매장별 포인트를 적립받을
+                  수 있어요.
                 </span>
               )}
             </div>
 
             {!menuLoading && !optionsLoading ? (
-              <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
+              <div
+                className="catTabs"
+                role="tablist"
+                aria-label="메뉴 카테고리"
+              >
                 <button
                   className={`catTab ${highlightedCategoryId === "all" ? "catTabOn" : ""}`}
                   onClick={() => {
@@ -1507,11 +1626,14 @@ function MenuPageInner() {
                 }}
                 style={{ display: "grid", gap: 10 }}
               >
-                {selectedCategoryId === "all" ? <div className="sectionTitle">{section.name}</div> : null}
+                {selectedCategoryId === "all" ? (
+                  <div className="sectionTitle">{section.name}</div>
+                ) : null}
 
                 {section.items.map((m: any) => {
                   const hasOptions =
-                    Array.isArray(m.optionGroupIds) && m.optionGroupIds.length > 0;
+                    Array.isArray(m.optionGroupIds) &&
+                    m.optionGroupIds.length > 0;
 
                   const simpleQty = simpleQtyByMenuId[m.id] || 0;
 
@@ -1529,11 +1651,17 @@ function MenuPageInner() {
 
                         <div style={{ minWidth: 0 }}>
                           <p className="name">{m.name}</p>
-                          <div className="price">{fmt(Number(m.price || 0))}원</div>
+                          <div className="price">
+                            {fmt(Number(m.price || 0))}원
+                          </div>
 
-                          {m.isSoldOut ? <div className="soldout">품절</div> : null}
+                          {m.isSoldOut ? (
+                            <div className="soldout">품절</div>
+                          ) : null}
 
-                          {hasOptions ? <div className="metaLine">옵션 선택</div> : null}
+                          {hasOptions ? (
+                            <div className="metaLine">옵션 선택</div>
+                          ) : null}
                         </div>
 
                         {simpleQty === 0 ? (
@@ -1575,7 +1703,7 @@ function MenuPageInner() {
           )}
         </div>
       </section>
-            {totals.totalCount > 0 ? (
+      {totals.totalCount > 0 ? (
         <section className="bottomBar">
           <div className="bottomInner">
             <div className="sumText">
@@ -1636,104 +1764,132 @@ function MenuPageInner() {
                   return 0;
                 })
                 .map((gid: string) => {
-                const g = findGroup(gid);
-                if (!g) return null;
+                  const g = findGroup(gid);
+                  if (!g) return null;
 
-                const items = groupItems(gid);
-                const requiredMin = g.required ? 1 : 0;
-                const min = Math.max(requiredMin, Math.max(0, Number(g.min ?? 0)));
-                const max = Math.max(min, Number(g.max ?? min));
-                const hintText = g.required ? `필수 · 최소 ${min}개` : `선택 · 최대 ${max}개`;
+                  const items = groupItems(gid);
+                  const requiredMin = g.required ? 1 : 0;
+                  const min = Math.max(
+                    requiredMin,
+                    Math.max(0, Number(g.min ?? 0)),
+                  );
+                  const max = Math.max(min, Number(g.max ?? min));
+                  const hintText = g.required
+                    ? `필수 · 최소 ${min}개`
+                    : `선택 · 최대 ${max}개`;
 
-                if (items.length === 0) {
+                  if (items.length === 0) {
+                    return (
+                      <div key={gid} className="gCard">
+                        <div className="gTitleRow">
+                          <div className="gName">
+                            {g.name}
+                            {g.required ? (
+                              <span className="reqBadge">필수</span>
+                            ) : null}
+                          </div>
+                          <div className="gHint">{hintText}</div>
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 10,
+                            color: "#b45309",
+                            fontWeight: 900,
+                            fontSize: 12,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          * 이 그룹({gid})에 연결된 option_items가 없습니다.
+                          <br />
+                          Supabase option_items의 group_id 값이 "{gid}"인지
+                          확인하세요.
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const picked = optSel[gid] || {};
+                  const isSingle = max === 1;
+
                   return (
                     <div key={gid} className="gCard">
                       <div className="gTitleRow">
                         <div className="gName">
                           {g.name}
-                          {g.required ? <span className="reqBadge">필수</span> : null}
+                          {g.required ? (
+                            <span className="reqBadge">필수</span>
+                          ) : null}
                         </div>
-                        <div className="gHint">
-                          {hintText}
-                        </div>
+                        <div className="gHint">{hintText}</div>
                       </div>
-                      <div
-                        style={{
-                          marginTop: 10,
-                          color: "#b45309",
-                          fontWeight: 900,
-                          fontSize: 12,
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        * 이 그룹({gid})에 연결된 option_items가 없습니다.
-                        <br />
-                        Supabase option_items의 group_id 값이 "{gid}"인지 확인하세요.
+
+                      <div className="iList">
+                        {items.map((it) => {
+                          const qty = Math.max(0, Number(picked[it.id] || 0));
+                          const checked = qty > 0;
+                          return (
+                            <div key={it.id} className="iRow">
+                              <div className="iLeft">
+                                {checked ? (
+                                  <span className="iState">선택됨</span>
+                                ) : null}
+                                <div className="iName">{it.name}</div>
+                              </div>
+
+                              <div className="iRight">
+                                <div className="iPrice">
+                                  {resolveOptionPrice(optTarget.id, it) >= 0
+                                    ? `+${fmt(resolveOptionPrice(optTarget.id, it))}`
+                                    : `-${fmt(Math.abs(resolveOptionPrice(optTarget.id, it)))}`}
+                                  원
+                                </div>
+                                <div className="iQtyBox">
+                                  <button
+                                    type="button"
+                                    className="miniBtn"
+                                    onClick={() =>
+                                      setOptionItemQty(
+                                        gid,
+                                        it.id,
+                                        qty - 1,
+                                        max,
+                                        isSingle,
+                                      )
+                                    }
+                                    disabled={qty <= 0}
+                                  >
+                                    -
+                                  </button>
+                                  <b className="iQtyNum">{qty}</b>
+                                  <button
+                                    type="button"
+                                    className="miniBtn"
+                                    onClick={() =>
+                                      setOptionItemQty(
+                                        gid,
+                                        it.id,
+                                        qty + 1,
+                                        max,
+                                        isSingle,
+                                      )
+                                    }
+                                    disabled={
+                                      isSingle
+                                        ? qty >= 1
+                                        : getSelectedQty(gid) >= max
+                                    }
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
-                }
-
-                const picked = optSel[gid] || {};
-                const isSingle = max === 1;
-
-                return (
-                  <div key={gid} className="gCard">
-                    <div className="gTitleRow">
-                      <div className="gName">
-                        {g.name}
-                        {g.required ? <span className="reqBadge">필수</span> : null}
-                      </div>
-                      <div className="gHint">
-                        {hintText}
-                      </div>
-                    </div>
-
-                    <div className="iList">
-                      {items.map((it) => {
-                        const qty = Math.max(0, Number(picked[it.id] || 0));
-                        const checked = qty > 0;
-                        return (
-                          <div key={it.id} className="iRow">
-                            <div className="iLeft">
-                              {checked ? <span className="iState">선택됨</span> : null}
-                              <div className="iName">{it.name}</div>
-                            </div>
-
-                            <div className="iRight">
-                              <div className="iPrice">
-                                {resolveOptionPrice(optTarget.id, it) >= 0
-                                  ? `+${fmt(resolveOptionPrice(optTarget.id, it))}`
-                                  : `-${fmt(Math.abs(resolveOptionPrice(optTarget.id, it)))}`}
-                                원
-                              </div>
-                              <div className="iQtyBox">
-                                <button
-                                  type="button"
-                                  className="miniBtn"
-                                  onClick={() => setOptionItemQty(gid, it.id, qty - 1, max, isSingle)}
-                                  disabled={qty <= 0}
-                                >
-                                  -
-                                </button>
-                                <b className="iQtyNum">{qty}</b>
-                                <button
-                                  type="button"
-                                  className="miniBtn"
-                                  onClick={() => setOptionItemQty(gid, it.id, qty + 1, max, isSingle)}
-                                  disabled={isSingle ? qty >= 1 : getSelectedQty(gid) >= max}
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                })}
             </div>
 
             <div className="modalFoot">
@@ -1742,7 +1898,10 @@ function MenuPageInner() {
                 <b>{fmt(modalPrice * Math.max(1, optQty))}원</b>
               </div>
 
-              <div className="mini" style={{ color: "#475569", fontWeight: 850 }}>
+              <div
+                className="mini"
+                style={{ color: "#475569", fontWeight: 850 }}
+              >
                 <span>선택 옵션 합계</span>
                 <b>
                   {selectedOptionSummary.selectedQty}개 · +
@@ -1753,11 +1912,19 @@ function MenuPageInner() {
               <div className="orderQtyRow">
                 <span>주문 수량</span>
                 <div className="orderQtyBox">
-                  <button type="button" className="miniBtn" onClick={() => setOptQty((q) => Math.max(1, q - 1))}>
+                  <button
+                    type="button"
+                    className="miniBtn"
+                    onClick={() => setOptQty((q) => Math.max(1, q - 1))}
+                  >
                     -
                   </button>
                   <b className="iQtyNum">{optQty}</b>
-                  <button type="button" className="miniBtn" onClick={() => setOptQty((q) => Math.min(99, q + 1))}>
+                  <button
+                    type="button"
+                    className="miniBtn"
+                    onClick={() => setOptQty((q) => Math.min(99, q + 1))}
+                  >
                     +
                   </button>
                 </div>
@@ -1775,7 +1942,13 @@ function MenuPageInner() {
 }
 export default function MenuPage() {
   return (
-    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="card">
+          <p className="muted">로딩 중...</p>
+        </div>
+      }
+    >
       <MenuPageInner />
     </Suspense>
   );
