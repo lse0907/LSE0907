@@ -3,7 +3,10 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { CustomerBrand } from "@/app/_components/CustomerBrand";
+import {
+  CustomerTrustFooter,
+  StoreIdentity,
+} from "@/app/_components/StoreCustomerBrand";
 import { lsLastOrderIdKey, lsLastOrderTokenKey } from "@/app/lib/storeScope";
 
 type SelectedOptionItem = {
@@ -239,7 +242,7 @@ function ConfirmSuccessPageInner() {
   return (
     <main className="paymentPage customer-page">
       <section className="paymentCard" aria-live="polite">
-        <CustomerBrand compact />
+        <StoreIdentity storeId={storeId} compact />
         <div
           className={`loader ${status === "error" ? "loaderError" : ""}`}
           aria-hidden="true"
@@ -280,6 +283,7 @@ function ConfirmSuccessPageInner() {
             </button>
           </div>
         ) : null}
+        <CustomerTrustFooter />
       </section>
       <style jsx>{`
         .paymentPage {

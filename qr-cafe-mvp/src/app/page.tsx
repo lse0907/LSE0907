@@ -10,7 +10,7 @@ import {
   lsLastOrderTokenKey,
 } from "./lib/storeScope";
 import { supabase } from "./lib/supabaseClient";
-import { CustomerBrand } from "./_components/CustomerBrand";
+import { CustomerTrustFooter } from "./_components/StoreCustomerBrand";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 type BarcodeScanResult = { rawValue?: string };
@@ -80,7 +80,6 @@ function HomeStartInner() {
   const STORE_NAME = profile.storeName;
   const STORE_DESC = profile.storeDesc;
   const HERO_IMAGE = profile.mainImage;
-  const LOGO_IMAGE = profile.logoImage;
 
   // ✅ 서버/첫 렌더에서는 고정값(항상 동일) 사용
   const fallbackOverlay = `linear-gradient(
@@ -618,21 +617,7 @@ function HomeStartInner() {
               </>
             )}
           </div>
-          <div style={{ marginBottom: 16 }}>
-            <CustomerBrand compact inverse poweredBy />
-          </div>
           <div className="logoRow">
-            {LOGO_IMAGE ? (
-              <div className="logo">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={LOGO_IMAGE} alt="logo" />
-              </div>
-            ) : (
-              <div className="logo" aria-hidden="true">
-                <span style={{ color: "white", fontWeight: 950 }}>QR</span>
-              </div>
-            )}
-
             <div style={{ minWidth: 0 }}>
               <h1 className="storeName">{STORE_NAME}</h1>
               <div className="tag">
@@ -664,6 +649,7 @@ function HomeStartInner() {
           </div>
         </div>
       </section>
+      <CustomerTrustFooter />
     </main>
   );
 }

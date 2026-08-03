@@ -7,7 +7,7 @@ import { useMenuItems, MenuItem } from "@/app/lib/menuStore";
 import { useStoreProfile } from "@/app/lib/storeProfile";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getStoreIdFromSearchParams } from "@/app/lib/storeScope";
-import { CustomerBrand } from "@/app/_components/CustomerBrand";
+import { CustomerTrustFooter } from "@/app/_components/StoreCustomerBrand";
 
 type SelectedOptionItem = {
   id: string;
@@ -1584,9 +1584,6 @@ function MenuPageInner() {
                 </>
               )}
             </div>
-            <div style={{ marginTop: 18 }}>
-              <CustomerBrand compact inverse poweredBy />
-            </div>
             <div className="titleRow">
               <h1 className="h1">{profile.storeName || "메뉴"}</h1>
               <p className="sub">
@@ -1798,6 +1795,7 @@ function MenuPageInner() {
           )}
         </div>
       </section>
+      <CustomerTrustFooter />
       {totals.totalCount > 0 ? (
         <section className="bottomBar">
           <div className="bottomInner">
