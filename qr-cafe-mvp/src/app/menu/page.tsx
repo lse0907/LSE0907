@@ -1856,6 +1856,7 @@ function MenuPageInner() {
                               ? `${min}~${max}개`
                               : `최대 ${max}개`}
                         </div>
+                        <div className="gHint">{hintText}</div>
                       </div>
                       {optError?.groupId === gid ? (
                         <p className="gError" role="alert">
