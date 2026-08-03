@@ -1584,6 +1584,9 @@ function MenuPageInner() {
                 </>
               )}
             </div>
+            <div style={{ marginTop: 18 }}>
+              <CustomerBrand compact inverse poweredBy />
+            </div>
             <div className="titleRow">
               <h1 className="h1">{profile.storeName || "메뉴"}</h1>
               <p className="sub">

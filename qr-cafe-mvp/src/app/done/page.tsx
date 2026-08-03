@@ -578,6 +578,40 @@ function DonePageInner() {
                 </button>
               </div>
             </div>
+            <div style={{ fontSize: 48, fontWeight: 950, marginTop: 6 }}>
+              {order.displayNo}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gap: 6,
+              fontWeight: 850,
+              color: "#111827",
+            }}
+          >
+            <div>
+              총 수량: <b>{order.totalCount}</b>
+            </div>
+            <div>
+              총 금액: <b>{fmt(order.totalPrice)}원</b>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 6,
+              lineHeight: 1.5,
+              fontWeight: 850,
+              color: "#374151",
+            }}
+          >
+            {order.status === "completed"
+              ? "수령 처리가 완료되었습니다."
+              : order.status === "cancelled"
+                ? "취소된 주문입니다."
+                : "상태 화면에서 준비 완료 알림을 확인할 수 있어요."}
           </div>
         ) : null}
       </main>

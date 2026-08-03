@@ -618,6 +618,9 @@ function HomeStartInner() {
               </>
             )}
           </div>
+          <div style={{ marginBottom: 16 }}>
+            <CustomerBrand compact inverse poweredBy />
+          </div>
           <div className="logoRow">
             {LOGO_IMAGE ? (
               <div className="logo">
