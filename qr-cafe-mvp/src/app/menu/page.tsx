@@ -177,6 +177,11 @@ function MenuPageInner() {
     {},
   );
   const [optQty, setOptQty] = useState(1);
+  const [optError, setOptError] = useState<{
+    groupId: string;
+    message: string;
+  } | null>(null);
+  const optionGroupRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [customerUserId, setCustomerUserId] = useState<string | null>(null);
   const [wallet, setWallet] = useState<WalletSummary | null>(null);
   const [issuedCouponCount, setIssuedCouponCount] = useState(0);
@@ -569,26 +574,6 @@ function MenuPageInner() {
     return map;
   }, [cartLines]);
 
-  // ✅ 하단바 요약
-  const cartSummary = useMemo(() => {
-    if (!cartLines.length) return { text: "", distinctCount: 0 };
-
-    const map = new Map<string, number>();
-    for (const ln of cartLines) {
-      const key = ln.name;
-      map.set(key, (map.get(key) || 0) + (ln.qty || 0));
-    }
-
-    const entries = Array.from(map.entries());
-    const distinctCount = entries.length;
-
-    const top2 = entries.slice(0, 2).map(([name, q]) => `${name}×${q}`);
-    const rest = distinctCount - top2.length;
-
-    const text = rest > 0 ? `${top2.join(", ")} 외 ${rest}개` : top2.join(", ");
-    return { text, distinctCount };
-  }, [cartLines]);
-
   const incSimple = (m: MenuItem) => {
     setCartLines((prev) => {
       const idx = prev.findIndex(
@@ -645,9 +630,32 @@ function MenuPageInner() {
     groupIds.forEach((gid) => (init[gid] = {}));
     setOptSel(init);
     setOptQty(1);
+    setOptError(null);
     setOptTarget(m);
     setOptOpen(true);
   };
+
+  const closeOptions = () => {
+    setOptOpen(false);
+    setOptTarget(null);
+    setOptSel({});
+    setOptQty(1);
+    setOptError(null);
+  };
+
+  useEffect(() => {
+    if (!optOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeOptions();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [optOpen]);
 
   const onMinus = (m: MenuItem) => {
     const groupIds: string[] = Array.isArray((m as any).optionGroupIds)
@@ -719,7 +727,8 @@ function MenuPageInner() {
   };
 
   const validateOpt = () => {
-    if (!optTarget) return { ok: false, msg: "대상 메뉴가 없습니다." };
+    if (!optTarget)
+      return { ok: false, groupId: "", msg: "메뉴를 다시 선택해 주세요." };
     const groupIds: string[] = Array.isArray((optTarget as any).optionGroupIds)
       ? (optTarget as any).optionGroupIds
       : [];
@@ -739,17 +748,22 @@ function MenuPageInner() {
       if (selectedQty < min) {
         return {
           ok: false,
-          msg: `“${g.name}” 옵션은 최소 ${min}개 선택이 필요합니다.`,
+          groupId: gid,
+          msg:
+            min === 1
+              ? `${g.name} 선택이 필요해요.`
+              : `${g.name} ${min}개 이상 선택해 주세요.`,
         };
       }
       if (selectedQty > max) {
         return {
           ok: false,
-          msg: `“${g.name}” 옵션은 최대 ${max}개까지 선택 가능합니다.`,
+          groupId: gid,
+          msg: `최대 ${max}개까지 선택할 수 있어요.`,
         };
       }
     }
-    return { ok: true, msg: "" };
+    return { ok: true, groupId: "", msg: "" };
   };
 
   const buildSelectedGroups = (
@@ -814,7 +828,13 @@ function MenuPageInner() {
     if (!optTarget) return;
     const v = validateOpt();
     if (!v.ok) {
-      alert(v.msg);
+      setOptError({ groupId: v.groupId, message: v.msg });
+      requestAnimationFrame(() => {
+        optionGroupRefs.current[v.groupId]?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      });
       return;
     }
 
@@ -853,22 +873,8 @@ function MenuPageInner() {
       ];
     });
 
-    setOptOpen(false);
-    setOptTarget(null);
-    setOptSel({});
-    setOptQty(1);
+    closeOptions();
   };
-
-  const selectedOptionSummary = useMemo(() => {
-    if (!optTarget) return { selectedQty: 0, optionTotal: 0 };
-    const { optionTotal } = buildSelectedGroups(optTarget);
-    const selectedQty = Object.keys(optSel || {}).reduce(
-      (sum, gid) => sum + getSelectedQty(gid),
-      0,
-    );
-    return { selectedQty, optionTotal };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [optTarget, optSel, optionsData]);
 
   const goConfirm = () => {
     if (totals.totalCount === 0) return;
@@ -1016,57 +1022,6 @@ function MenuPageInner() {
         .catTabs::-webkit-scrollbar {
           display: none;
         }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
-        .catTabs::-webkit-scrollbar {
-          display: none;
-        }
         .catTab {
           white-space: nowrap;
           border: 1px solid var(--line);
@@ -1074,7 +1029,8 @@ function MenuPageInner() {
           color: var(--text);
           -webkit-text-fill-color: currentColor;
           border-radius: 999px;
-          padding: 8px 12px;
+          min-height: 44px;
+          padding: 10px 14px;
           font-weight: 900;
           cursor: pointer;
         }
@@ -1183,8 +1139,8 @@ function MenuPageInner() {
         }
 
         .addBtn {
-          height: 38px;
-          padding: 0 12px;
+          min-height: 44px;
+          padding: 0 14px;
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
@@ -1205,7 +1161,7 @@ function MenuPageInner() {
           right: 0;
           bottom: 0;
           z-index: 30;
-          padding: 10px 12px;
+          padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
           background: rgba(246, 247, 249, 0.92);
           backdrop-filter: blur(10px);
           border-top: 1px solid var(--line);
@@ -1242,7 +1198,8 @@ function MenuPageInner() {
         .btnPrimary {
           border: 0;
           border-radius: 14px;
-          padding: 12px 14px;
+          min-height: 52px;
+          padding: 12px 16px;
           background: var(--brand);
           color: #fff;
           font-weight: 950;
@@ -1262,7 +1219,7 @@ function MenuPageInner() {
           z-index: 50;
           display: grid;
           place-items: end center;
-          padding: 12px;
+          padding: 12px 12px max(12px, env(safe-area-inset-bottom));
         }
         .modal {
           width: 100%;
@@ -1270,8 +1227,11 @@ function MenuPageInner() {
           background: #fff;
           border-radius: 18px;
           border: 1px solid var(--line);
+          max-height: min(90dvh, 760px);
           overflow: hidden;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+          display: grid;
+          grid-template-rows: auto minmax(0, 1fr) auto;
         }
         .modalHead {
           padding: 12px 14px;
@@ -1292,7 +1252,9 @@ function MenuPageInner() {
           color: var(--text);
           -webkit-text-fill-color: currentColor;
           border-radius: 12px;
-          padding: 8px 10px;
+          min-width: 44px;
+          min-height: 44px;
+          padding: 8px 12px;
           font-weight: 950;
           cursor: pointer;
         }
@@ -1300,14 +1262,25 @@ function MenuPageInner() {
           padding: 12px 14px;
           display: grid;
           gap: 12px;
-          max-height: 65vh;
+          min-height: 0;
           overflow: auto;
+          overscroll-behavior: contain;
         }
         .gCard {
           border: 1px solid var(--line);
           border-radius: 16px;
           padding: 12px;
           background: #fff;
+        }
+        .gCardError {
+          border-color: #ef4444;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+        }
+        .gError {
+          margin-top: 8px;
+          color: #b91c1c;
+          font-size: 13px;
+          font-weight: 800;
         }
         .gTitleRow {
           display: flex;
@@ -1351,6 +1324,17 @@ function MenuPageInner() {
           border-radius: 14px;
           padding: 10px;
           background: #fff;
+          min-height: 56px;
+          cursor: pointer;
+          transition:
+            border-color 0.16s ease,
+            background 0.16s ease,
+            box-shadow 0.16s ease;
+        }
+        .iRowSelected {
+          border-color: #7385a1;
+          background: #f3f6fa;
+          box-shadow: inset 0 0 0 1px rgba(15, 31, 61, 0.08);
         }
         .iLeft {
           display: flex;
@@ -1359,14 +1343,28 @@ function MenuPageInner() {
           min-width: 0;
         }
         .iState {
-          color: #2563eb;
-          border: 1px solid #bfdbfe;
-          background: #eff6ff;
+          display: grid;
+          place-items: center;
+          width: 24px;
+          height: 24px;
+          flex: 0 0 24px;
+          color: #fff;
+          background: var(--brand);
           border-radius: 999px;
-          font-size: 11px;
+          font-size: 13px;
           font-weight: 900;
-          padding: 2px 8px;
-          white-space: nowrap;
+        }
+        .iChoice {
+          display: grid;
+          place-items: center;
+          width: 24px;
+          height: 24px;
+          flex: 0 0 24px;
+          color: #64748b;
+          border: 1px solid #cbd5e1;
+          border-radius: 999px;
+          font-size: 16px;
+          font-weight: 800;
         }
         .iName {
           font-weight: 900;
@@ -1392,8 +1390,8 @@ function MenuPageInner() {
           background: #f8fafc;
         }
         .miniBtn {
-          width: 24px;
-          height: 24px;
+          width: 44px;
+          height: 44px;
           border-radius: 999px;
           border: 1px solid #cbd5e1;
           background: #fff;
@@ -1417,6 +1415,7 @@ function MenuPageInner() {
           display: grid;
           gap: 10px;
           background: #fff;
+          padding-bottom: max(12px, env(safe-area-inset-bottom));
         }
         .mini {
           display: flex;
@@ -1437,7 +1436,7 @@ function MenuPageInner() {
           gap: 8px;
           border: 1px solid var(--line);
           border-radius: 999px;
-          padding: 2px 6px;
+          padding: 2px 4px;
           background: #f8fafc;
         }
 
@@ -1446,11 +1445,23 @@ function MenuPageInner() {
             height: 128px;
           }
           .menuRow {
-            grid-template-columns: 86px 1fr auto;
+            grid-template-columns: 82px minmax(0, 1fr);
           }
           .imgBox {
-            width: 86px;
-            height: 68px;
+            width: 82px;
+            height: 72px;
+          }
+          .menuRow > :last-child {
+            grid-column: 2;
+            justify-self: end;
+          }
+          .modalBg {
+            padding: 0;
+          }
+          .modal {
+            max-height: 92dvh;
+            border-radius: 22px 22px 0 0;
+            border-bottom: 0;
           }
           .sumMain {
             font-size: 15px;
@@ -1614,7 +1625,7 @@ function MenuPageInner() {
             </div>
           ) : showEmpty ? (
             <div style={{ color: "#6b7280", fontWeight: 850, padding: 12 }}>
-              등록된 메뉴가 없습니다. (DB에 menu_items를 넣었는지 확인해 주세요)
+              준비된 메뉴가 없어요.
             </div>
           ) : (
             menuSections.map((section) => (
@@ -1636,6 +1647,11 @@ function MenuPageInner() {
                     m.optionGroupIds.length > 0;
 
                   const simpleQty = simpleQtyByMenuId[m.id] || 0;
+                  const optionQty = cartLines
+                    .filter(
+                      (line) => line.menuId === m.id && line.options.length > 0,
+                    )
+                    .reduce((sum, line) => sum + line.qty, 0);
 
                   return (
                     <div key={m.id} className="menuCard">
@@ -1660,7 +1676,11 @@ function MenuPageInner() {
                           ) : null}
 
                           {hasOptions ? (
-                            <div className="metaLine">옵션 선택</div>
+                            <div className="metaLine">
+                              {optionQty > 0
+                                ? `장바구니 ${optionQty}개`
+                                : "옵션 있음"}
+                            </div>
                           ) : null}
                         </div>
 
@@ -1669,9 +1689,13 @@ function MenuPageInner() {
                             className="addBtn"
                             onClick={() => onPlus(m)}
                             disabled={m.isSoldOut}
-                            aria-label={hasOptions ? "add-with-options" : "add"}
+                            aria-label={
+                              hasOptions
+                                ? `${m.name} 옵션 선택`
+                                : `${m.name} 담기`
+                            }
                           >
-                            담기
+                            {hasOptions ? "옵션 선택" : "담기"}
                           </button>
                         ) : (
                           <div className="qtyBox">
@@ -1679,7 +1703,7 @@ function MenuPageInner() {
                               className="qbtn"
                               onClick={() => onMinus(m)}
                               disabled={m.isSoldOut || simpleQty === 0}
-                              aria-label="minus"
+                              aria-label={`${m.name} 수량 줄이기`}
                             >
                               -
                             </button>
@@ -1688,7 +1712,7 @@ function MenuPageInner() {
                               className="qbtn"
                               onClick={() => onPlus(m)}
                               disabled={m.isSoldOut}
-                              aria-label="plus"
+                              aria-label={`${m.name} 수량 늘리기`}
                             >
                               +
                             </button>
@@ -1707,10 +1731,8 @@ function MenuPageInner() {
         <section className="bottomBar">
           <div className="bottomInner">
             <div className="sumText">
-              <div className="sumTop">{cartSummary.text || "장바구니"}</div>
-              <div className="sumMain">
-                총 {totals.totalCount}개 · {fmt(totals.totalPrice)}원
-              </div>
+              <div className="sumTop">장바구니 {totals.totalCount}개</div>
+              <div className="sumMain">{fmt(totals.totalPrice)}원</div>
             </div>
 
             <button className="btnPrimary" onClick={goConfirm}>
@@ -1721,26 +1743,22 @@ function MenuPageInner() {
       ) : null}
 
       {optOpen && optTarget ? (
-        <div
-          className="modalBg"
-          onClick={() => {
-            setOptOpen(false);
-            setOptTarget(null);
-            setOptSel({});
-            setOptQty(1);
-          }}
-        >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modalBg" role="presentation">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="option-dialog-title"
+          >
             <div className="modalHead">
-              <h2 className="modalTitle">{optTarget.name} · 옵션 선택</h2>
+              <h2 className="modalTitle" id="option-dialog-title">
+                {optTarget.name}
+              </h2>
               <button
+                type="button"
                 className="xbtn"
-                onClick={() => {
-                  setOptOpen(false);
-                  setOptTarget(null);
-                  setOptSel({});
-                  setOptQty(1);
-                }}
+                onClick={closeOptions}
+                aria-label="옵션 선택 닫기"
               >
                 닫기
               </button>
@@ -1774,13 +1792,16 @@ function MenuPageInner() {
                     Math.max(0, Number(g.min ?? 0)),
                   );
                   const max = Math.max(min, Number(g.max ?? min));
-                  const hintText = g.required
-                    ? `필수 · 최소 ${min}개`
-                    : `선택 · 최대 ${max}개`;
 
                   if (items.length === 0) {
                     return (
-                      <div key={gid} className="gCard">
+                      <div
+                        key={gid}
+                        ref={(element) => {
+                          optionGroupRefs.current[gid] = element;
+                        }}
+                        className={`gCard ${optError?.groupId === gid ? "gCardError" : ""}`}
+                      >
                         <div className="gTitleRow">
                           <div className="gName">
                             {g.name}
@@ -1788,7 +1809,7 @@ function MenuPageInner() {
                               <span className="reqBadge">필수</span>
                             ) : null}
                           </div>
-                          <div className="gHint">{hintText}</div>
+                          <div className="gHint">선택 불가</div>
                         </div>
                         <div
                           style={{
@@ -1799,20 +1820,33 @@ function MenuPageInner() {
                             lineHeight: 1.4,
                           }}
                         >
-                          * 이 그룹({gid})에 연결된 option_items가 없습니다.
-                          <br />
-                          Supabase option_items의 group_id 값이 "{gid}"인지
-                          확인하세요.
+                          지금은 선택할 수 없어요.
                         </div>
+                        {optError?.groupId === gid ? (
+                          <p className="gError" role="alert">
+                            {optError.message}
+                          </p>
+                        ) : null}
                       </div>
                     );
                   }
 
                   const picked = optSel[gid] || {};
                   const isSingle = max === 1;
+                  const selectionHint = isSingle
+                    ? "1개 선택"
+                    : g.required
+                      ? `${min}~${max}개`
+                      : `최대 ${max}개`;
 
                   return (
-                    <div key={gid} className="gCard">
+                    <div
+                      key={gid}
+                      ref={(element) => {
+                        optionGroupRefs.current[gid] = element;
+                      }}
+                      className={`gCard ${optError?.groupId === gid ? "gCardError" : ""}`}
+                    >
                       <div className="gTitleRow">
                         <div className="gName">
                           {g.name}
@@ -1820,68 +1854,125 @@ function MenuPageInner() {
                             <span className="reqBadge">필수</span>
                           ) : null}
                         </div>
-                        <div className="gHint">{hintText}</div>
+                        <div className="gHint">{selectionHint}</div>
                       </div>
+                      {optError?.groupId === gid ? (
+                        <p className="gError" role="alert">
+                          {optError.message}
+                        </p>
+                      ) : null}
 
                       <div className="iList">
                         {items.map((it) => {
                           const qty = Math.max(0, Number(picked[it.id] || 0));
                           const checked = qty > 0;
                           return (
-                            <div key={it.id} className="iRow">
+                            <div
+                              key={it.id}
+                              className={`iRow ${checked ? "iRowSelected" : ""}`}
+                              role={isSingle ? "radio" : "checkbox"}
+                              aria-checked={checked}
+                              tabIndex={0}
+                              onClick={() => {
+                                setOptionItemQty(
+                                  gid,
+                                  it.id,
+                                  isSingle ? 1 : checked ? 0 : 1,
+                                  max,
+                                  isSingle,
+                                );
+                                if (optError?.groupId === gid)
+                                  setOptError(null);
+                              }}
+                              onKeyDown={(event) => {
+                                if (
+                                  event.key === "Enter" ||
+                                  event.key === " "
+                                ) {
+                                  event.preventDefault();
+                                  setOptionItemQty(
+                                    gid,
+                                    it.id,
+                                    isSingle ? 1 : checked ? 0 : 1,
+                                    max,
+                                    isSingle,
+                                  );
+                                  if (optError?.groupId === gid)
+                                    setOptError(null);
+                                }
+                              }}
+                            >
                               <div className="iLeft">
                                 {checked ? (
-                                  <span className="iState">선택됨</span>
-                                ) : null}
+                                  <span className="iState" aria-hidden="true">
+                                    ✓
+                                  </span>
+                                ) : (
+                                  <span className="iChoice" aria-hidden="true">
+                                    {isSingle ? "○" : "+"}
+                                  </span>
+                                )}
                                 <div className="iName">{it.name}</div>
                               </div>
 
                               <div className="iRight">
                                 <div className="iPrice">
-                                  {resolveOptionPrice(optTarget.id, it) >= 0
-                                    ? `+${fmt(resolveOptionPrice(optTarget.id, it))}`
-                                    : `-${fmt(Math.abs(resolveOptionPrice(optTarget.id, it)))}`}
-                                  원
+                                  {resolveOptionPrice(optTarget.id, it) === 0
+                                    ? "기본"
+                                    : resolveOptionPrice(optTarget.id, it) > 0
+                                      ? `+${fmt(resolveOptionPrice(optTarget.id, it))}`
+                                      : `-${fmt(Math.abs(resolveOptionPrice(optTarget.id, it)))}`}
+                                  {resolveOptionPrice(optTarget.id, it) === 0
+                                    ? ""
+                                    : "원"}
                                 </div>
-                                <div className="iQtyBox">
-                                  <button
-                                    type="button"
-                                    className="miniBtn"
-                                    onClick={() =>
-                                      setOptionItemQty(
-                                        gid,
-                                        it.id,
-                                        qty - 1,
-                                        max,
-                                        isSingle,
-                                      )
-                                    }
-                                    disabled={qty <= 0}
-                                  >
-                                    -
-                                  </button>
-                                  <b className="iQtyNum">{qty}</b>
-                                  <button
-                                    type="button"
-                                    className="miniBtn"
-                                    onClick={() =>
-                                      setOptionItemQty(
-                                        gid,
-                                        it.id,
-                                        qty + 1,
-                                        max,
-                                        isSingle,
-                                      )
-                                    }
-                                    disabled={
-                                      isSingle
-                                        ? qty >= 1
-                                        : getSelectedQty(gid) >= max
-                                    }
-                                  >
-                                    +
-                                  </button>
-                                </div>
+                                {!isSingle ? (
+                                  <div className="iQtyBox">
+                                    <button
+                                      type="button"
+                                      className="miniBtn"
+                                      aria-label={`${it.name} 수량 줄이기`}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setOptionItemQty(
+                                          gid,
+                                          it.id,
+                                          qty - 1,
+                                          max,
+                                          isSingle,
+                                        );
+                                      }}
+                                      disabled={qty <= 0}
+                                    >
+                                      -
+                                    </button>
+                                    <b className="iQtyNum">{qty}</b>
+                                    <button
+                                      type="button"
+                                      className="miniBtn"
+                                      aria-label={`${it.name} 수량 늘리기`}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setOptionItemQty(
+                                          gid,
+                                          it.id,
+                                          qty + 1,
+                                          max,
+                                          isSingle,
+                                        );
+                                        if (optError?.groupId === gid)
+                                          setOptError(null);
+                                      }}
+                                      disabled={
+                                        isSingle
+                                          ? qty >= 1
+                                          : getSelectedQty(gid) >= max
+                                      }
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
                           );
@@ -1893,29 +1984,14 @@ function MenuPageInner() {
             </div>
 
             <div className="modalFoot">
-              <div className="mini">
-                <span>예상 가격({optQty}개)</span>
-                <b>{fmt(modalPrice * Math.max(1, optQty))}원</b>
-              </div>
-
-              <div
-                className="mini"
-                style={{ color: "#475569", fontWeight: 850 }}
-              >
-                <span>선택 옵션 합계</span>
-                <b>
-                  {selectedOptionSummary.selectedQty}개 · +
-                  {fmt(selectedOptionSummary.optionTotal)}원/개
-                </b>
-              </div>
-
               <div className="orderQtyRow">
-                <span>주문 수량</span>
+                <span>수량</span>
                 <div className="orderQtyBox">
                   <button
                     type="button"
                     className="miniBtn"
                     onClick={() => setOptQty((q) => Math.max(1, q - 1))}
+                    aria-label="주문 수량 줄이기"
                   >
                     -
                   </button>
@@ -1924,14 +2000,20 @@ function MenuPageInner() {
                     type="button"
                     className="miniBtn"
                     onClick={() => setOptQty((q) => Math.min(99, q + 1))}
+                    aria-label="주문 수량 늘리기"
                   >
                     +
                   </button>
                 </div>
               </div>
 
+              <div className="mini">
+                <span>총금액</span>
+                <b>{fmt(modalPrice * Math.max(1, optQty))}원</b>
+              </div>
+
               <button className="btnPrimary" onClick={onConfirmOptions}>
-                담기 ({fmt(modalPrice * Math.max(1, optQty))}원)
+                {fmt(modalPrice * Math.max(1, optQty))}원 담기
               </button>
             </div>
           </div>
