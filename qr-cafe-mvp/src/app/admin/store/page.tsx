@@ -1457,6 +1457,22 @@ function AdminstorePageInner() {
                 {uploadingLogo ? (
                   <div className="hint">업로드 중...</div>
                 ) : null}
+                {(draft as any).logoImage ? (
+                  <div className="logoRow" style={{ marginTop: 10 }}>
+                    <div
+                      className="logo"
+                      style={{ background: "#fff", borderColor: "#dfe4eb" }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={(draft as any).logoImage}
+                        alt="현재 등록된 로고"
+                        style={{ objectFit: "contain", padding: 5 }}
+                      />
+                    </div>
+                    <span className="hint">현재 등록된 로고</span>
+                  </div>
+                ) : null}
               </div>
             </div>
 

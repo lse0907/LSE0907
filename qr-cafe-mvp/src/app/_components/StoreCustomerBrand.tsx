@@ -65,7 +65,7 @@ export function StoreIdentity({
           border-radius: 14px;
           background: #fff;
           color: #0f1f3d;
-          font-size: 18px;
+          font-size: 20px;
           font-weight: 950;
           box-shadow: 0 5px 16px rgba(15, 31, 61, 0.08);
         }
@@ -79,7 +79,7 @@ export function StoreIdentity({
           min-width: 0;
           overflow: hidden;
           color: inherit;
-          font-size: 18px;
+          font-size: 20px;
           font-weight: 900;
           letter-spacing: -0.025em;
           text-overflow: ellipsis;
@@ -91,7 +91,12 @@ export function StoreIdentity({
           border-radius: 12px;
         }
         .compact .storeName {
-          font-size: 16px;
+          font-size: 18px;
+        }
+        @media (max-width: 340px) {
+          .compact .storeName {
+            font-size: 17px;
+          }
         }
         .inverse {
           color: #fff;
