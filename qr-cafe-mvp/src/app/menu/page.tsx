@@ -1048,6 +1048,17 @@ function MenuPageInner() {
           box-shadow: 0 12px 30px rgba(15, 31, 61, 0.07);
           display: grid;
           gap: 10px;
+          transition:
+            border-color 0.16s ease,
+            background 0.16s ease,
+            box-shadow 0.16s ease;
+        }
+        .menuCardSelected {
+          border-color: #9aa9bf;
+          background: #f8fafd;
+          box-shadow:
+            inset 3px 0 0 var(--brand),
+            0 12px 30px rgba(15, 31, 61, 0.08);
         }
         .sectionTitle {
           margin: 2px 2px 0;
@@ -1070,6 +1081,7 @@ function MenuPageInner() {
           overflow: hidden;
           display: grid;
           place-items: center;
+          position: relative;
         }
         .imgBox img {
           width: 100%;
@@ -1080,6 +1092,22 @@ function MenuPageInner() {
           color: #9ca3af;
           font-weight: 950;
           font-size: 12px;
+        }
+        .cartCheck {
+          position: absolute;
+          top: 5px;
+          right: 5px;
+          display: grid;
+          place-items: center;
+          width: 22px;
+          height: 22px;
+          border: 2px solid #fff;
+          border-radius: 999px;
+          background: var(--brand);
+          color: #fff;
+          font-size: 12px;
+          font-weight: 950;
+          box-shadow: 0 3px 10px rgba(15, 31, 61, 0.24);
         }
 
         .name {
@@ -1445,15 +1473,22 @@ function MenuPageInner() {
             height: 128px;
           }
           .menuRow {
-            grid-template-columns: 82px minmax(0, 1fr);
+            grid-template-columns: 72px minmax(0, 1fr) auto;
+            gap: 10px;
           }
           .imgBox {
-            width: 82px;
+            width: 72px;
             height: 72px;
           }
-          .menuRow > :last-child {
-            grid-column: 2;
-            justify-self: end;
+          .addBtn {
+            min-width: 58px;
+            padding: 0 10px;
+          }
+          .qtyBox {
+            gap: 5px;
+          }
+          .qnum {
+            width: 18px;
           }
           .modalBg {
             padding: 0;
@@ -1471,6 +1506,25 @@ function MenuPageInner() {
           }
           .iRight {
             justify-items: end;
+          }
+        }
+        @media (max-width: 340px) {
+          .menuRow {
+            grid-template-columns: 68px minmax(0, 1fr);
+          }
+          .imgBox {
+            width: 68px;
+            height: 68px;
+          }
+          .menuRow > :last-child {
+            grid-column: 1 / -1;
+            justify-self: stretch;
+          }
+          .menuRow > .addBtn {
+            width: 100%;
+          }
+          .menuRow > .qtyBox {
+            justify-self: end;
           }
         }
       `}</style>
@@ -1652,9 +1706,14 @@ function MenuPageInner() {
                       (line) => line.menuId === m.id && line.options.length > 0,
                     )
                     .reduce((sum, line) => sum + line.qty, 0);
+                  const cartQty = simpleQty + optionQty;
+                  const isInCart = cartQty > 0;
 
                   return (
-                    <div key={m.id} className="menuCard">
+                    <div
+                      key={m.id}
+                      className={`menuCard ${isInCart ? "menuCardSelected" : ""}`}
+                    >
                       <div className="menuRow">
                         <div className="imgBox">
                           {(m.image || "").trim() ? (
@@ -1663,6 +1722,14 @@ function MenuPageInner() {
                           ) : (
                             <div className="noImg">NO IMG</div>
                           )}
+                          {isInCart ? (
+                            <span
+                              className="cartCheck"
+                              aria-label={`장바구니 ${cartQty}개`}
+                            >
+                              ✓
+                            </span>
+                          ) : null}
                         </div>
 
                         <div style={{ minWidth: 0 }}>
@@ -1678,7 +1745,7 @@ function MenuPageInner() {
                           {hasOptions ? (
                             <div className="metaLine">
                               {optionQty > 0
-                                ? `장바구니 ${optionQty}개`
+                                ? `${optionQty}개 담김`
                                 : "옵션 있음"}
                             </div>
                           ) : null}
@@ -1695,7 +1762,11 @@ function MenuPageInner() {
                                 : `${m.name} 담기`
                             }
                           >
-                            {hasOptions ? "옵션 선택" : "담기"}
+                            {hasOptions
+                              ? optionQty > 0
+                                ? "추가"
+                                : "선택"
+                              : "담기"}
                           </button>
                         ) : (
                           <div className="qtyBox">
