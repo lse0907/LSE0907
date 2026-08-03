@@ -5,7 +5,10 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { CustomerBrand } from "@/app/_components/CustomerBrand";
+import {
+  CustomerTrustFooter,
+  StoreIdentity,
+} from "@/app/_components/StoreCustomerBrand";
 import {
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
@@ -271,13 +274,14 @@ function DonePageInner() {
             color: "#111827",
           }}
         >
-          <CustomerBrand compact />
+          <StoreIdentity storeId={storeIdForLinks} compact />
           <h1 style={{ fontSize: 22, fontWeight: 900, marginTop: 24 }}>
             주문 접수 완료
           </h1>
           <p style={{ marginTop: 10, color: "#6b7280", fontWeight: 800 }}>
             주문 정보를 불러오는 중...
           </p>
+          <CustomerTrustFooter />
         </main>
       </>
     );
@@ -295,7 +299,7 @@ function DonePageInner() {
             color: "#111827",
           }}
         >
-          <CustomerBrand compact />
+          <StoreIdentity storeId={storeIdForLinks} compact />
           <h1 style={{ fontSize: 22, fontWeight: 900, marginTop: 24 }}>
             주문 접수 완료
           </h1>
@@ -322,6 +326,7 @@ function DonePageInner() {
               홈으로
             </Link>
           </div>
+          <CustomerTrustFooter />
         </main>
       </>
     );
@@ -338,7 +343,7 @@ function DonePageInner() {
           color: "#111827",
         }}
       >
-        <CustomerBrand compact />
+        <StoreIdentity storeId={storeIdForLinks} compact />
         <h1
           style={{
             fontSize: 28,
@@ -559,6 +564,7 @@ function DonePageInner() {
             </div>
           </div>
         ) : null}
+        <CustomerTrustFooter />
       </main>
     </>
   );
