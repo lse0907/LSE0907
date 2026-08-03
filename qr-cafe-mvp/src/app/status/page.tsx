@@ -5,10 +5,21 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { lsLastOrderIdKey, lsLastOrderTokenKey, resolveStoreId } from "@/app/lib/storeScope";
+import { CustomerPageHeader } from "@/app/_components/CustomerBrand";
+import {
+  lsLastOrderIdKey,
+  lsLastOrderTokenKey,
+  resolveStoreId,
+} from "@/app/lib/storeScope";
 
 type OrderMode = "dine-in" | "takeout";
-type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
+type OrderStatus =
+  | "new"
+  | "checked"
+  | "making"
+  | "ready_for_packing"
+  | "completed"
+  | "cancelled";
 
 type DbOrderRow = {
   id: string;
@@ -44,9 +55,15 @@ const STATUS_COPY: Record<OrderStatus, { title: string; desc: string }> = {
   new: { title: "주문이 접수됐어요", desc: "매장 확인을 기다리고 있어요." },
   checked: { title: "매장이 확인했어요", desc: "곧 제조가 시작됩니다." },
   making: { title: "메뉴를 준비 중이에요", desc: "잠시만 기다려 주세요." },
-  ready_for_packing: { title: "준비가 완료됐어요", desc: "픽업/수령해 주세요." },
+  ready_for_packing: {
+    title: "준비가 완료됐어요",
+    desc: "픽업/수령해 주세요.",
+  },
   completed: { title: "수령 완료", desc: "이용해 주셔서 감사합니다." },
-  cancelled: { title: "주문이 취소됐어요", desc: "필요하면 다시 주문해 주세요." },
+  cancelled: {
+    title: "주문이 취소됐어요",
+    desc: "필요하면 다시 주문해 주세요.",
+  },
 };
 
 const ORDER_STEPS: Array<{ status: OrderStatus; label: string }> = [
@@ -69,7 +86,14 @@ function normalizeMode(v: unknown): OrderMode {
 
 function normalizeStatus(v: unknown): OrderStatus {
   const s = String(v || "").trim();
-  if (s === "checked" || s === "making" || s === "ready_for_packing" || s === "completed" || s === "cancelled") return s;
+  if (
+    s === "checked" ||
+    s === "making" ||
+    s === "ready_for_packing" ||
+    s === "completed" ||
+    s === "cancelled"
+  )
+    return s;
   if (s === "ready") return "ready_for_packing";
   if (s === "done") return "completed";
   if (s === "canceled") return "cancelled";
@@ -145,8 +169,12 @@ function StatusPageInner() {
 
   useEffect(() => {
     if (!storeId) return;
-    setLastOrderId((localStorage.getItem(lsLastOrderIdKey(storeId)) || "").trim());
-    setLastOrderToken((localStorage.getItem(lsLastOrderTokenKey(storeId)) || "").trim());
+    setLastOrderId(
+      (localStorage.getItem(lsLastOrderIdKey(storeId)) || "").trim(),
+    );
+    setLastOrderToken(
+      (localStorage.getItem(lsLastOrderTokenKey(storeId)) || "").trim(),
+    );
   }, [storeId]);
 
   const orderId = useMemo(() => {
@@ -172,7 +200,9 @@ function StatusPageInner() {
   const fetchOrder = async (id: string) => {
     setErrMsg("");
     if (!accessToken) {
-      setErrMsg("주문 확인용 토큰이 없습니다. 주문 완료 화면에서 다시 진입해주세요.");
+      setErrMsg(
+        "주문 확인용 토큰이 없습니다. 주문 완료 화면에서 다시 진입해주세요.",
+      );
       setOrder(null);
       return;
     }
@@ -483,15 +513,31 @@ function StatusPageInner() {
         }
       `}</style>
 
-      <h1 className="h1">주문 상태</h1>
+      <CustomerPageHeader
+        title="주문 진행 상황"
+        description="매장 상태가 자동으로 업데이트됩니다. 이 화면에서 준비 완료를 확인해 주세요."
+        context={
+          visibleOrder
+            ? `${visibleOrder.mode === "dine-in" ? (visibleOrder.table ? `테이블 ${visibleOrder.table}` : "매장 이용") : "포장 주문"} · 주문 ${visibleOrder.displayNo}`
+            : "실시간 주문 조회"
+        }
+      />
 
-      <div className="topRow">
-        <button className="btn" onClick={onRefresh} disabled={!orderId || loading}>
+      <div className="topRow" style={{ marginTop: 14 }}>
+        <button
+          className="btn"
+          onClick={onRefresh}
+          disabled={!orderId || loading}
+        >
           새로고침
         </button>
 
         {visibleOrder?.status === "new" ? (
-          <button className="btn" onClick={() => setShowCancelConfirm(true)} disabled={cancelling}>
+          <button
+            className="btn"
+            onClick={() => setShowCancelConfirm(true)}
+            disabled={cancelling}
+          >
             {cancelling ? "취소 처리 중..." : "주문 취소"}
           </button>
         ) : null}
@@ -525,7 +571,8 @@ function StatusPageInner() {
             <div className="meta">
               {visibleOrder.mode === "dine-in" ? (
                 <span>
-                  매장 이용{visibleOrder.table ? ` · 테이블 ${visibleOrder.table}` : ""}
+                  매장 이용
+                  {visibleOrder.table ? ` · 테이블 ${visibleOrder.table}` : ""}
                 </span>
               ) : (
                 <span>포장</span>
@@ -553,10 +600,19 @@ function StatusPageInner() {
             ) : (
               <div className="steps" aria-label="주문 진행 단계">
                 {ORDER_STEPS.map((step, idx) => {
-                  const className = idx < activeStepIndex ? "step stepDone" : idx === activeStepIndex ? "step stepNow" : "step";
+                  const className =
+                    idx < activeStepIndex
+                      ? "step stepDone"
+                      : idx === activeStepIndex
+                        ? "step stepNow"
+                        : "step";
                   return (
                     <div key={step.status} className={className}>
-                      {idx < activeStepIndex ? "✓ " : idx === activeStepIndex ? "● " : "○ "}
+                      {idx < activeStepIndex
+                        ? "✓ "
+                        : idx === activeStepIndex
+                          ? "● "
+                          : "○ "}
                       {step.label}
                     </div>
                   );
@@ -573,12 +629,25 @@ function StatusPageInner() {
                 * 진동벨은 직원이 지급한 경우에만 표시됩니다.
               </div>
             ) : null}
-            <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              style={{
+                marginTop: 12,
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               {visibleOrder.status === "new" ? (
-                <button className="btn" onClick={() => setShowCancelConfirm(true)} disabled={cancelling}>
+                <button
+                  className="btn"
+                  onClick={() => setShowCancelConfirm(true)}
+                  disabled={cancelling}
+                >
                   {cancelling ? "취소 처리 중..." : "주문 취소"}
                 </button>
-              ) : visibleOrder.status === "completed" || visibleOrder.status === "cancelled" ? (
+              ) : visibleOrder.status === "completed" ||
+                visibleOrder.status === "cancelled" ? (
                 <button className="btn" onClick={clearStoredOrder}>
                   확인 완료
                 </button>
@@ -594,7 +663,6 @@ function StatusPageInner() {
         </>
       )}
 
-
       {showCancelConfirm && visibleOrder ? (
         <div className="dim" role="dialog" aria-modal="true">
           <div className="popup">
@@ -602,10 +670,18 @@ function StatusPageInner() {
             <p className="popupDesc">매장 확인 전까지만 취소할 수 있어요.</p>
             {errMsg ? <div className="err">{errMsg}</div> : null}
             <div className="popupBtnRow">
-              <button className="popupBtn" onClick={() => setShowCancelConfirm(false)} disabled={cancelling}>
+              <button
+                className="popupBtn"
+                onClick={() => setShowCancelConfirm(false)}
+                disabled={cancelling}
+              >
                 닫기
               </button>
-              <button className="popupBtn popupBtnPrimary" onClick={onCancelOrder} disabled={cancelling}>
+              <button
+                className="popupBtn popupBtnPrimary"
+                onClick={onCancelOrder}
+                disabled={cancelling}
+              >
                 {cancelling ? "처리 중..." : "취소하기"}
               </button>
             </div>
@@ -639,7 +715,13 @@ function StatusPageInner() {
 }
 export default function StatusPage() {
   return (
-    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="card">
+          <p className="muted">로딩 중...</p>
+        </div>
+      }
+    >
       <StatusPageInner />
     </Suspense>
   );

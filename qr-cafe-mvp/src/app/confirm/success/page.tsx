@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
+import { CustomerBrand } from "@/app/_components/CustomerBrand";
 import { lsLastOrderIdKey, lsLastOrderTokenKey } from "@/app/lib/storeScope";
 
 type SelectedOptionItem = {
@@ -58,18 +59,30 @@ function ConfirmSuccessPageInner() {
 
   const storeId = useMemo(() => String(sp.get("store") || "").trim(), [sp]);
   const poid = useMemo(() => String(sp.get("poid") || "").trim(), [sp]);
-  const paymentKey = useMemo(() => String(sp.get("paymentKey") || "").trim(), [sp]);
+  const paymentKey = useMemo(
+    () => String(sp.get("paymentKey") || "").trim(),
+    [sp],
+  );
   const orderId = useMemo(() => String(sp.get("orderId") || "").trim(), [sp]);
   const amount = useMemo(() => Number(sp.get("amount") || 0), [sp]);
 
-  const [status, setStatus] = useState<"idle" | "working" | "done" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "working" | "done" | "error">(
+    "idle",
+  );
   const [message, setMessage] = useState("결제 확인을 준비중입니다.");
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      if (!storeId || !poid || !paymentKey || !orderId || !Number.isFinite(amount) || amount <= 0) {
+      if (
+        !storeId ||
+        !poid ||
+        !paymentKey ||
+        !orderId ||
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
         setStatus("error");
         setMessage("결제 정보가 올바르지 않습니다.");
         return;
@@ -91,7 +104,12 @@ function ConfirmSuccessPageInner() {
         return;
       }
 
-      if (!pending || pending.storeId !== storeId || !Array.isArray(pending.cartLines) || !pending.cartLines.length) {
+      if (
+        !pending ||
+        pending.storeId !== storeId ||
+        !Array.isArray(pending.cartLines) ||
+        !pending.cartLines.length
+      ) {
         setStatus("error");
         setMessage("주문 정보가 올바르지 않습니다.");
         return;
@@ -100,8 +118,8 @@ function ConfirmSuccessPageInner() {
       if (pending.createdOrderId && pending.createdAccessToken) {
         router.replace(
           `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(pending.createdOrderId)}&accessToken=${encodeURIComponent(
-            pending.createdAccessToken
-          )}`
+            pending.createdAccessToken,
+          )}`,
         );
         return;
       }
@@ -109,7 +127,9 @@ function ConfirmSuccessPageInner() {
       try {
         if (mounted) {
           setStatus("working");
-          setMessage(pending.paymentConfirmed ? "주문 접수 중..." : "결제 확인 중...");
+          setMessage(
+            pending.paymentConfirmed ? "주문 접수 중..." : "결제 확인 중...",
+          );
         }
 
         if (!pending.paymentConfirmed) {
@@ -121,11 +141,16 @@ function ConfirmSuccessPageInner() {
 
           const confirmJson = await confirmRes.json();
           if (!confirmRes.ok || !confirmJson?.ok) {
-            throw new Error(String(confirmJson?.message || "결제 확인에 실패했습니다."));
+            throw new Error(
+              String(confirmJson?.message || "결제 확인에 실패했습니다."),
+            );
           }
 
           pending = { ...pending, paymentConfirmed: true };
-          localStorage.setItem(`${PREPAY_PENDING_KEY}:${poid}`, JSON.stringify(pending));
+          localStorage.setItem(
+            `${PREPAY_PENDING_KEY}:${poid}`,
+            JSON.stringify(pending),
+          );
         }
 
         let loyaltyCustomerUserId = pending.customerUserId || null;
@@ -155,7 +180,12 @@ function ConfirmSuccessPageInner() {
 
         const createJson = await createRes.json();
         if (!createRes.ok || !createJson?.ok || !createJson?.order) {
-          throw new Error(String(createJson?.message || "결제 완료. 주문 접수 재시도가 필요합니다."));
+          throw new Error(
+            String(
+              createJson?.message ||
+                "결제 완료. 주문 접수 재시도가 필요합니다.",
+            ),
+          );
         }
 
         const created = createJson.order;
@@ -167,7 +197,11 @@ function ConfirmSuccessPageInner() {
 
         localStorage.setItem(
           `${PREPAY_PENDING_KEY}:${poid}`,
-          JSON.stringify({ ...pending, createdOrderId: newOrderId, createdAccessToken: accessToken })
+          JSON.stringify({
+            ...pending,
+            createdOrderId: newOrderId,
+            createdAccessToken: accessToken,
+          }),
         );
         localStorage.setItem(lsLastOrderIdKey(storeId), newOrderId);
         localStorage.setItem(lsLastOrderTokenKey(storeId), accessToken);
@@ -186,7 +220,7 @@ function ConfirmSuccessPageInner() {
         }
 
         router.replace(
-          `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(newOrderId)}&accessToken=${encodeURIComponent(accessToken)}`
+          `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(newOrderId)}&accessToken=${encodeURIComponent(accessToken)}`,
         );
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -203,31 +237,158 @@ function ConfirmSuccessPageInner() {
   }, [amount, orderId, paymentKey, poid, retryCount, router, storeId]);
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
-      <h1 style={{ margin: 0, fontWeight: 950 }}>결제 처리</h1>
-      <p style={{ marginTop: 12, color: status === "error" ? "crimson" : "#374151", fontWeight: 800 }}>{message}</p>
-      {status === "error" ? (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-          <button
-            onClick={() => setRetryCount((x) => x + 1)}
-            style={{ padding: 12, borderRadius: 12, fontWeight: 900 }}
-          >
-            다시 확인
-          </button>
-          <button
-            onClick={() => router.push(`/confirm?store=${encodeURIComponent(storeId)}`)}
-            style={{ padding: 12, borderRadius: 12, fontWeight: 900 }}
-          >
-            주문 확인으로
-          </button>
+    <main className="paymentPage customer-page">
+      <section className="paymentCard" aria-live="polite">
+        <CustomerBrand compact />
+        <div
+          className={`loader ${status === "error" ? "loaderError" : ""}`}
+          aria-hidden="true"
+        >
+          {status === "error" ? "!" : ""}
         </div>
-      ) : null}
+        <span className="eyebrow">
+          {status === "error" ? "처리 확인 필요" : "안전한 결제 처리"}
+        </span>
+        <h1>
+          {status === "error"
+            ? "결제 처리를 확인해 주세요"
+            : "주문을 안전하게 처리하고 있어요"}
+        </h1>
+        <p className={status === "error" ? "message error" : "message"}>
+          {message}
+        </p>
+        {status !== "error" ? (
+          <p className="notice">
+            완료될 때까지 이 화면을 닫거나 뒤로 이동하지 마세요.
+          </p>
+        ) : null}
+        {status === "error" ? (
+          <div className="actions">
+            <button
+              className="secondary"
+              onClick={() => setRetryCount((x) => x + 1)}
+            >
+              다시 확인
+            </button>
+            <button
+              className="primary"
+              onClick={() =>
+                router.push(`/confirm?store=${encodeURIComponent(storeId)}`)
+              }
+            >
+              주문 확인으로
+            </button>
+          </div>
+        ) : null}
+      </section>
+      <style jsx>{`
+        .paymentPage {
+          display: grid;
+          place-items: center;
+          padding: 24px 16px;
+        }
+        .paymentCard {
+          width: 100%;
+          max-width: 520px;
+          padding: 24px;
+          border: 1px solid var(--customer-line);
+          border-radius: 24px;
+          background: #fff;
+          box-shadow: var(--customer-shadow);
+        }
+        .loader {
+          width: 58px;
+          height: 58px;
+          margin-top: 34px;
+          border: 5px solid #dbe3ef;
+          border-top-color: var(--rion-navy);
+          border-radius: 50%;
+          animation: spin 0.9s linear infinite;
+        }
+        .loaderError {
+          display: grid;
+          place-items: center;
+          border: 0;
+          border-radius: 18px;
+          background: #fff1f2;
+          color: #be123c;
+          font-size: 28px;
+          font-weight: 900;
+          animation: none;
+        }
+        .eyebrow {
+          display: block;
+          margin-top: 22px;
+          color: #526680;
+          font-size: 12px;
+          font-weight: 800;
+        }
+        h1 {
+          margin: 8px 0 0;
+          color: var(--rion-navy);
+          font-size: 30px;
+          line-height: 1.2;
+          letter-spacing: -0.045em;
+        }
+        .message {
+          margin: 12px 0 0;
+          color: var(--customer-muted);
+          font-weight: 650;
+          line-height: 1.65;
+        }
+        .message.error {
+          color: #9f1239;
+        }
+        .notice {
+          margin: 20px 0 0;
+          padding: 12px 14px;
+          border-radius: 12px;
+          background: #f1f5f9;
+          color: #475569;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.5;
+        }
+        .actions {
+          display: flex;
+          gap: 10px;
+          margin-top: 22px;
+        }
+        button {
+          flex: 1;
+          min-height: 50px;
+          padding: 0 18px;
+          border-radius: 14px;
+          font-weight: 800;
+        }
+        .primary {
+          border: 1px solid var(--rion-navy);
+          background: var(--rion-navy);
+          color: #fff;
+        }
+        .secondary {
+          border: 1px solid var(--customer-line);
+          background: #fff;
+          color: var(--customer-ink);
+        }
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </main>
   );
 }
 export default function ConfirmSuccessPage() {
   return (
-    <Suspense fallback={<div className="card"><p className="muted">로딩 중...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="card">
+          <p className="muted">로딩 중...</p>
+        </div>
+      }
+    >
       <ConfirmSuccessPageInner />
     </Suspense>
   );
