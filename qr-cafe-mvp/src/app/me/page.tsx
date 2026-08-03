@@ -100,10 +100,6 @@ function MePageInner() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const storeFromQuery = useMemo(
-    () => String(sp.get("store") || "").trim(),
-    [sp],
-  );
   const returnTo = useMemo(
     () => String(sp.get("return_to") || sp.get("next") || "").trim(),
     [sp],
@@ -293,7 +289,7 @@ function MePageInner() {
       }
       stopScanner();
       router.push(
-        `/menu?store=${encodeURIComponent(sid)}${asUrl.searchParams.get("table") ? `&table=${encodeURIComponent(asUrl.searchParams.get("table") || "")}` : ""}`,
+        `/?store=${encodeURIComponent(sid)}${asUrl.searchParams.get("table") ? `&table=${encodeURIComponent(asUrl.searchParams.get("table") || "")}` : ""}`,
       );
     } catch {
       setScanError("인식된 QR 형식이 올바르지 않습니다.");
@@ -571,27 +567,28 @@ function MePageInner() {
                 onClick={() => {
                   if (isSafeInternalPath(returnTo))
                     return router.push(returnTo);
-                  const sid = storeFromQuery || wallets[0]?.store_id || "";
-                  router.push(
-                    sid ? `/menu?store=${encodeURIComponent(sid)}` : "/",
-                  );
+                  startQrScanner();
                 }}
                 style={actionBtnStyle}
               >
-                주문하러 가기
+                {isSafeInternalPath(returnTo)
+                  ? "주문 화면으로 돌아가기"
+                  : "QR 스캔하고 주문하기"}
               </button>
-              <button
-                type="button"
-                onClick={startQrScanner}
-                style={{
-                  ...secondaryBtnStyle,
-                  border: `1px solid ${theme.btnSecondaryBorder}`,
-                  background: theme.btnSecondaryBg,
-                  color: theme.btnSecondaryText,
-                }}
-              >
-                <span aria-hidden>⌁</span> QR 스캔
-              </button>
+              {isSafeInternalPath(returnTo) ? (
+                <button
+                  type="button"
+                  onClick={startQrScanner}
+                  style={{
+                    ...secondaryBtnStyle,
+                    border: `1px solid ${theme.btnSecondaryBorder}`,
+                    background: theme.btnSecondaryBg,
+                    color: theme.btnSecondaryText,
+                  }}
+                >
+                  <span aria-hidden>⌁</span> 다른 매장 QR 스캔
+                </button>
+              ) : null}
             </>
           }
         />

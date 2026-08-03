@@ -11,6 +11,11 @@ import {
 } from "./lib/storeScope";
 import { supabase } from "./lib/supabaseClient";
 import { CustomerTrustFooter } from "./_components/StoreCustomerBrand";
+import { CustomerBrand } from "./_components/CustomerBrand";
+import {
+  CustomerLoadingState,
+  StoreAccessError,
+} from "./_components/CustomerLoadingState";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 type BarcodeScanResult = { rawValue?: string };
@@ -27,7 +32,12 @@ function HomeStartInner() {
   const rawStoreId = useMemo(() => (sp.get("store") || "").trim(), [sp]);
   const isStoreScoped = !!rawStoreId;
   const storeId = useMemo(() => getStoreIdFromSearchParams(sp), [sp]);
-  const { profile } = useStoreProfile(storeId);
+  const {
+    profile,
+    loading: profileLoading,
+    loadError,
+    refresh,
+  } = useStoreProfile(storeId);
 
   // ✅ hydration mismatch 방지 + localStorage 안전 처리
   const [mounted, setMounted] = useState(false);
@@ -35,6 +45,7 @@ function HomeStartInner() {
   const [lastOrderToken, setLastOrderToken] = useState<string>("");
   const [orderHidden, setOrderHidden] = useState<boolean>(false);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [scanError, setScanError] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -64,10 +75,24 @@ function HomeStartInner() {
   }, [storeId]);
 
   useEffect(() => {
+    let alive = true;
     (async () => {
       const { data } = await supabase.auth.getUser();
-      setAuthUserId(data?.user?.id || null);
+      if (alive) {
+        setAuthUserId(data?.user?.id || null);
+        setAuthLoading(false);
+      }
     })();
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setAuthUserId(session?.user?.id || null);
+        setAuthLoading(false);
+      },
+    );
+    return () => {
+      alive = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   // 테이블 QR이면 /?table=3
@@ -257,14 +282,15 @@ function HomeStartInner() {
             width: min(560px, 100%);
             border-radius: 20px;
             border: 1px solid rgba(255, 255, 255, 0.15);
-            background: rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(6px);
-            padding: 20px;
+            background: rgba(255, 255, 255, 0.09);
+            backdrop-filter: blur(14px);
+            padding: 28px 22px;
             display: grid;
             gap: 14px;
           }
           .title {
-            font-size: 28px;
+            margin: 12px 0 0;
+            font-size: clamp(30px, 8vw, 44px);
             font-weight: 900;
           }
           .sub {
@@ -275,6 +301,7 @@ function HomeStartInner() {
           .btnPrimary {
             border: 0;
             border-radius: 14px;
+            min-height: 56px;
             padding: 14px;
             background: #fff;
             color: #111827;
@@ -291,13 +318,15 @@ function HomeStartInner() {
             cursor: pointer;
           }
           .scanPane {
-            margin-top: 8px;
-            border-radius: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            background: rgba(17, 24, 39, 0.75);
-            padding: 10px;
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background: #0b1220;
+            padding: calc(18px + env(safe-area-inset-top)) 16px
+              calc(18px + env(safe-area-inset-bottom));
             display: grid;
             gap: 8px;
+            align-content: center;
           }
           .video {
             width: 100%;
@@ -305,6 +334,9 @@ function HomeStartInner() {
             background: #000;
             aspect-ratio: 3 / 4;
             object-fit: cover;
+            max-height: 72dvh;
+            max-width: 480px;
+            margin: 0 auto;
           }
           .err {
             color: #fecaca;
@@ -312,21 +344,24 @@ function HomeStartInner() {
             font-size: 13px;
             white-space: pre-line;
           }
+          @media (min-width: 640px) {
+            .scanPane {
+              background: rgba(11, 18, 32, 0.94);
+            }
+            .video {
+              border: 1px solid rgba(255, 255, 255, 0.25);
+            }
+          }
         `}</style>
         <section className="card">
-          <p
-            style={{
-              margin: 0,
-              fontWeight: 800,
-              color: "rgba(255,255,255,0.75)",
-            }}
-          >
-            RION Labs
+          <CustomerBrand inverse />
+          <h1 className="title">QR로 주문을 시작하세요</h1>
+          <p className="sub">
+            테이블이나 카운터의 QR을 스캔하면 해당 매장의 주문 화면으로
+            연결됩니다.
           </p>
-          <h1 className="title">RION Order</h1>
-          <p className="sub">매장 QR을 스캔해 바로 주문을 시작하세요.</p>
           <button className="btnPrimary" onClick={startQrScanner}>
-            QR 스캔 시작
+            QR 스캔하고 주문하기
           </button>
           {scannerOpen ? (
             <div className="scanPane">
@@ -337,16 +372,36 @@ function HomeStartInner() {
             </div>
           ) : null}
           {scanError ? <p className="err">{scanError}</p> : null}
-          <button
-            className="btnGhost"
-            onClick={() => router.push("/login?next=%2Fme")}
-          >
-            로그인
-          </button>
+          {!authLoading ? (
+            authUserId ? (
+              <button className="btnGhost" onClick={() => router.push("/me")}>
+                내 주문·혜택
+              </button>
+            ) : (
+              <button
+                className="btnGhost"
+                onClick={() => router.push("/login?next=%2Fme")}
+              >
+                로그인
+              </button>
+            )
+          ) : (
+            <div style={{ minHeight: 44 }} aria-hidden />
+          )}
         </section>
       </main>
     );
   }
+
+  if (profileLoading) return <CustomerLoadingState />;
+  if (loadError || !profile.storeName)
+    return (
+      <StoreAccessError
+        message={loadError || "등록된 매장을 찾을 수 없어요."}
+        onRetry={refresh}
+        onScan={() => router.push("/")}
+      />
+    );
 
   return (
     <main className="wrap">
