@@ -74,7 +74,7 @@ function MePageInner() {
   const [scanError, setScanError] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [showStores, setShowStores] = useState(false);
+  const [showStores, setShowStores] = useState(true);
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<"recent" | "orders" | "points">(
     "recent",
@@ -96,18 +96,10 @@ function MePageInner() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [savingBasic, setSavingBasic] = useState(false);
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const storeFromQuery = useMemo(
-    () => String(sp.get("store") || "").trim(),
-    [sp],
-  );
   const returnTo = useMemo(
     () => String(sp.get("return_to") || sp.get("next") || "").trim(),
     [sp],
@@ -115,14 +107,6 @@ function MePageInner() {
 
   const isSafeInternalPath = (v: string) =>
     !!v && v.startsWith("/") && !v.startsWith("//");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => setIsDark(!!e.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, []);
 
   useEffect(() => {
     (async () => {
@@ -305,7 +289,7 @@ function MePageInner() {
       }
       stopScanner();
       router.push(
-        `/menu?store=${encodeURIComponent(sid)}${asUrl.searchParams.get("table") ? `&table=${encodeURIComponent(asUrl.searchParams.get("table") || "")}` : ""}`,
+        `/?store=${encodeURIComponent(sid)}${asUrl.searchParams.get("table") ? `&table=${encodeURIComponent(asUrl.searchParams.get("table") || "")}` : ""}`,
       );
     } catch {
       setScanError("인식된 QR 형식이 올바르지 않습니다.");
@@ -502,102 +486,113 @@ function MePageInner() {
     setSavingBasic(false);
   };
 
-  const theme = useMemo(() => {
-    if (isDark) {
-      return {
-        textSubtle: "#cbd5e1",
-        cardBg: "#111827",
-        cardBorder: "#374151",
-        cardText: "#f3f4f6",
-        itemBg: "#0f172a",
-        itemBorder: "#334155",
-        btnSecondaryBg: "#1f2937",
-        btnSecondaryBorder: "#374151",
-        btnSecondaryText: "#f9fafb",
-        inputBg: "#0b1220",
-        inputText: "#e5e7eb",
-        accent: "#93c5fd",
-      };
-    }
-    return {
-      textSubtle: "#6b7280",
-      cardBg: "#ffffff",
-      cardBorder: "#e5e7eb",
-      cardText: "#111827",
-      itemBg: "#ffffff",
-      itemBorder: "#e5e7eb",
-      btnSecondaryBg: "#ffffff",
-      btnSecondaryBorder: "#d1d5db",
-      btnSecondaryText: "#111827",
-      inputBg: "#ffffff",
-      inputText: "#111827",
-      accent: "#2563eb",
-    };
-  }, [isDark]);
+  const theme = {
+    textSubtle: "#6b7280",
+    cardBg: "#ffffff",
+    cardBorder: "#e5e7eb",
+    cardText: "#111827",
+    itemBg: "#f8fafc",
+    itemBorder: "#e5e7eb",
+    btnSecondaryBg: "#ffffff",
+    btnSecondaryBorder: "#d1d5db",
+    btnSecondaryText: "#111827",
+    inputBg: "#ffffff",
+    inputText: "#111827",
+    accent: "#2563eb",
+  };
 
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: 24 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 8,
-          flexWrap: "wrap",
-        }}
-      >
-        <CustomerPageHeader
-          title={
-            profile?.name ? `${profile.name}님의 RION` : "나의 주문과 혜택"
+    <main
+      style={{
+        maxWidth: 760,
+        margin: "0 auto",
+        padding: "20px 16px 40px",
+        color: theme.cardText,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <style jsx global>{`
+        :root {
+          color-scheme: light;
+        }
+        body {
+          background: #f3f5f8;
+          color: #111827;
+        }
+        .benefitGrid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .benefitItem {
+          display: grid;
+          gap: 5px;
+          min-width: 0;
+          padding: 14px 10px;
+          border: 1px solid #e5e7eb;
+          border-radius: 14px;
+          background: #f8fafc;
+          text-align: center;
+        }
+        .benefitItem span {
+          color: #6b7280;
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .benefitItem strong {
+          color: #0f1f3d;
+          font-size: clamp(16px, 4vw, 21px);
+          overflow-wrap: anywhere;
+        }
+        @media (max-width: 359px) {
+          .benefitGrid {
+            grid-template-columns: 1fr;
           }
-          description="포인트와 쿠폰, 자주 이용하는 매장을 한곳에서 확인하세요."
+        }
+      `}</style>
+      <div>
+        <CustomerPageHeader
+          title="내 주문·혜택"
+          description={
+            profile?.name
+              ? `${profile.name}님, 이용 중인 매장의 포인트와 쿠폰을 확인하세요.`
+              : "이용 중인 매장의 포인트와 쿠폰을 확인하세요."
+          }
           context={`${wallets.length}개 매장 · 쿠폰 ${summary.totalCoupons}장`}
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSafeInternalPath(returnTo))
+                    return router.push(returnTo);
+                  startQrScanner();
+                }}
+                style={actionBtnStyle}
+              >
+                {isSafeInternalPath(returnTo)
+                  ? "주문 화면으로 돌아가기"
+                  : "QR 스캔하고 주문하기"}
+              </button>
+              {isSafeInternalPath(returnTo) ? (
+                <button
+                  type="button"
+                  onClick={startQrScanner}
+                  style={{
+                    ...secondaryBtnStyle,
+                    border: `1px solid ${theme.btnSecondaryBorder}`,
+                    background: theme.btnSecondaryBg,
+                    color: theme.btnSecondaryText,
+                  }}
+                >
+                  <span aria-hidden>⌁</span> 다른 매장 QR 스캔
+                </button>
+              ) : null}
+            </>
+          }
         />
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 6,
-            marginLeft: "auto",
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              if (isSafeInternalPath(returnTo)) {
-                router.push(returnTo);
-                return;
-              }
-              const sid = storeFromQuery || wallets[0]?.store_id || "";
-              if (!sid) {
-                router.push("/");
-                return;
-              }
-              router.push(`/menu?store=${encodeURIComponent(sid)}`);
-            }}
-            style={actionBtnStyle}
-          >
-            주문화면
-          </button>
-          <button
-            type="button"
-            onClick={startQrScanner}
-            style={{
-              ...secondaryBtnStyle,
-              border: `1px solid ${theme.btnSecondaryBorder}`,
-              background: theme.btnSecondaryBg,
-              color: theme.btnSecondaryText,
-            }}
-          >
-            <span aria-hidden>⌁</span> QR 스캔
-          </button>
-        </div>
       </div>
-      <p style={{ color: theme.textSubtle, marginTop: 8, fontWeight: 700 }}>
-        RION Order 내 정보와 매장별 포인트/쿠폰 혜택을 확인할 수 있어요.
-      </p>
 
       {loading ? <p style={{ marginTop: 14 }}>불러오는 중...</p> : null}
       {msg ? (
@@ -645,6 +640,7 @@ function MePageInner() {
         <section
           style={{
             ...cardStyle,
+            order: 5,
             border: `1px solid ${theme.cardBorder}`,
             background: theme.cardBg,
             color: theme.cardText,
@@ -761,21 +757,27 @@ function MePageInner() {
         <section
           style={{
             ...cardStyle,
+            order: 3,
             border: `1px solid ${theme.cardBorder}`,
             background: theme.cardBg,
             color: theme.cardText,
           }}
         >
           <h2 style={sectionTitleStyle}>혜택 요약</h2>
-          <p>
-            <b>전체 매장 수:</b> {summary.stores}개
-          </p>
-          <p>
-            <b>전체 포인트:</b> {summary.totalPoints.toLocaleString()}P
-          </p>
-          <p>
-            <b>전체 보유쿠폰:</b> {summary.totalCoupons}장
-          </p>
+          <div className="benefitGrid">
+            <div className="benefitItem">
+              <span>이용 매장</span>
+              <strong>{summary.stores}곳</strong>
+            </div>
+            <div className="benefitItem">
+              <span>내 포인트</span>
+              <strong>{summary.totalPoints.toLocaleString()}P</strong>
+            </div>
+            <div className="benefitItem">
+              <span>내 쿠폰</span>
+              <strong>{summary.totalCoupons}장</strong>
+            </div>
+          </div>
           <button
             type="button"
             style={{ ...actionBtnStyle, marginTop: 10 }}
@@ -790,6 +792,7 @@ function MePageInner() {
         <section
           style={{
             ...cardStyle,
+            order: 4,
             border: `1px solid ${theme.cardBorder}`,
             background: theme.cardBg,
             color: theme.cardText,

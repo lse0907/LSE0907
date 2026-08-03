@@ -5,7 +5,10 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { CustomerPageHeader } from "@/app/_components/CustomerBrand";
+import {
+  CustomerTrustFooter,
+  StoreCustomerHeader,
+} from "@/app/_components/StoreCustomerBrand";
 import {
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
@@ -513,7 +516,8 @@ function StatusPageInner() {
         }
       `}</style>
 
-      <CustomerPageHeader
+      <StoreCustomerHeader
+        storeId={storeId}
         title="주문 진행 상황"
         description="매장 상태가 자동으로 업데이트됩니다. 이 화면에서 준비 완료를 확인해 주세요."
         context={
@@ -710,6 +714,7 @@ function StatusPageInner() {
           </div>
         </div>
       ) : null}
+      <CustomerTrustFooter />
     </main>
   );
 }

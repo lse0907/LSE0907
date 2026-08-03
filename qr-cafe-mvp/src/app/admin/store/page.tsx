@@ -100,8 +100,10 @@ function AdminstorePageInner() {
   const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
   const [storeStatus, setStoreStatus] = useState<StoreStatus>("active");
   const [statusSaving, setStatusSaving] = useState(false);
-  const [deleteEligibility, setDeleteEligibility] = useState<DeleteEligibility | null>(null);
-  const [deleteEligibilityLoading, setDeleteEligibilityLoading] = useState(false);
+  const [deleteEligibility, setDeleteEligibility] =
+    useState<DeleteEligibility | null>(null);
+  const [deleteEligibilityLoading, setDeleteEligibilityLoading] =
+    useState(false);
   const [deleteEligibilityError, setDeleteEligibilityError] = useState("");
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -183,8 +185,13 @@ function AdminstorePageInner() {
     () => calcRemainingDays(storeCreatedAt),
     [storeCreatedAt],
   );
-  const deleteConfirmTarget = String((draft as any)?.storeName || profile?.storeName || storeId || "").trim();
-  const canSubmitDelete = !!deleteConfirmTarget && deleteConfirmText.trim() === deleteConfirmTarget && !deleteSaving;
+  const deleteConfirmTarget = String(
+    (draft as any)?.storeName || profile?.storeName || storeId || "",
+  ).trim();
+  const canSubmitDelete =
+    !!deleteConfirmTarget &&
+    deleteConfirmText.trim() === deleteConfirmTarget &&
+    !deleteSaving;
 
   // ✅ 미리보기용 오버레이 계산(0~100)
   const strength = clampOverlay(
@@ -248,7 +255,10 @@ function AdminstorePageInner() {
   const refreshDeleteEligibility = async () => {
     if (!storeId) return;
     if (storeStatus === "deleted") {
-      setDeleteEligibility({ canDelete: false, message: "이미 삭제된 매장입니다." });
+      setDeleteEligibility({
+        canDelete: false,
+        message: "이미 삭제된 매장입니다.",
+      });
       setDeleteEligibilityError("");
       setDeleteEligibilityLoading(false);
       return;
@@ -256,14 +266,22 @@ function AdminstorePageInner() {
     setDeleteEligibilityLoading(true);
     setDeleteEligibilityError("");
     try {
-      const { data, error } = await supabase.rpc("admin_check_store_delete_eligibility", {
-        p_store_id: storeId,
-      });
+      const { data, error } = await supabase.rpc(
+        "admin_check_store_delete_eligibility",
+        {
+          p_store_id: storeId,
+        },
+      );
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       setDeleteEligibility({
         canDelete: Boolean(row?.can_delete),
-        message: String(row?.message || (row?.can_delete ? "운영 이력이 없어 삭제할 수 있습니다." : "운영 이력이 있어 삭제할 수 없습니다.")),
+        message: String(
+          row?.message ||
+            (row?.can_delete
+              ? "운영 이력이 없어 삭제할 수 있습니다."
+              : "운영 이력이 있어 삭제할 수 없습니다."),
+        ),
       });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
@@ -297,9 +315,12 @@ function AdminstorePageInner() {
     setDeleteSaving(true);
     setUploadMsg("");
     try {
-      const { data, error } = await supabase.rpc("admin_soft_delete_store_if_unused", {
-        p_store_id: storeId,
-      });
+      const { data, error } = await supabase.rpc(
+        "admin_soft_delete_store_if_unused",
+        {
+          p_store_id: storeId,
+        },
+      );
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row?.deleted) {
@@ -307,9 +328,16 @@ function AdminstorePageInner() {
         setDeleteConfirmText("");
         setDeleteEligibility({
           canDelete: false,
-          message: String(row?.message || "운영 이력이 있어 삭제할 수 없습니다."),
+          message: String(
+            row?.message || "운영 이력이 있어 삭제할 수 없습니다.",
+          ),
         });
-        setUploadMsg(String(row?.message || "운영 이력이 있어 삭제할 수 없습니다. 운영 중단은 비활성화를 사용하세요."));
+        setUploadMsg(
+          String(
+            row?.message ||
+              "운영 이력이 있어 삭제할 수 없습니다. 운영 중단은 비활성화를 사용하세요.",
+          ),
+        );
         void refreshDeleteEligibility();
         return;
       }
@@ -424,7 +452,10 @@ function AdminstorePageInner() {
     const path = `${storeId}/${kind}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage
       .from(STORE_IMAGE_BUCKET)
-      .upload(path, uploadFile, { upsert: true, contentType: uploadFile.type || undefined });
+      .upload(path, uploadFile, {
+        upsert: true,
+        contentType: uploadFile.type || undefined,
+      });
     if (error) throw error;
 
     const { data } = supabase.storage
@@ -1117,8 +1148,12 @@ function AdminstorePageInner() {
           .operationGrid {
             grid-template-columns: 1fr;
           }
-          .formStack { order: 1; }
-          .sideStack { order: 2; }
+          .formStack {
+            order: 1;
+          }
+          .sideStack {
+            order: 2;
+          }
 
           .operationStrip {
             align-items: stretch;
@@ -1153,8 +1188,12 @@ function AdminstorePageInner() {
           .previewWrap {
             gap: 8px;
           }
-          .previewWrap .hero { height: 150px; }
-          .previewWrap .previewCard { display: none; }
+          .previewWrap .hero {
+            height: 150px;
+          }
+          .previewWrap .previewCard {
+            display: none;
+          }
 
           .cardTitle {
             font-size: 15px;
@@ -1251,7 +1290,14 @@ function AdminstorePageInner() {
         }
       `}</style>
 
-      <AdminPageHeader title="매장 정보" description="고객에게 표시되는 매장 정보와 운영 설정을 관리합니다." storeId={storeId} storeName={String((draft as any)?.storeName || profile?.storeName || "")} />
+      <AdminPageHeader
+        title="매장 정보"
+        description="고객에게 표시되는 매장 정보와 운영 설정을 관리합니다."
+        storeId={storeId}
+        storeName={String(
+          (draft as any)?.storeName || profile?.storeName || "",
+        )}
+      />
 
       <div className="pageMeta">
         <div className="badgeRow">
@@ -1312,24 +1358,6 @@ function AdminstorePageInner() {
 
               <div className="heroInner">
                 <div className="logoRow">
-                  {(draft as any).logoImage ? (
-                    <div className="logo">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={(draft as any).logoImage} alt="logo" />
-                    </div>
-                  ) : (
-                    <div className="logo" aria-hidden="true">
-                      <span
-                        style={{
-                          color: "white",
-                          fontWeight: 900,
-                          fontSize: 12,
-                        }}
-                      >
-                        logo
-                      </span>
-                    </div>
-                  )}
                   <div style={{ minWidth: 0 }}>
                     <h3 className="storeName">
                       {(draft as any).storeName || "매장명"}
@@ -1340,6 +1368,35 @@ function AdminstorePageInner() {
             </div>
 
             <div className="previewCard">
+              <div className="logoRow" style={{ marginBottom: 12 }}>
+                <div
+                  className="logo"
+                  style={{ background: "#fff", borderColor: "#dfe4eb" }}
+                >
+                  {(draft as any).logoImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={(draft as any).logoImage}
+                      alt="등록한 매장 로고"
+                      style={{ objectFit: "contain", padding: 5 }}
+                    />
+                  ) : (
+                    <span style={{ color: "#0f1f3d", fontWeight: 900 }}>
+                      {
+                        Array.from(
+                          String((draft as any).storeName || "매장"),
+                        )[0]
+                      }
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <strong>{(draft as any).storeName || "매장명"}</strong>
+                  <div className="hint">
+                    로고는 밝은 고객 화면에서 표시됩니다.
+                  </div>
+                </div>
+              </div>
               <p className="descText">
                 {(draft as any).storeDesc || "매장 설명이 여기에 표시됩니다."}
               </p>
@@ -1400,6 +1457,22 @@ function AdminstorePageInner() {
                 {uploadingLogo ? (
                   <div className="hint">업로드 중...</div>
                 ) : null}
+                {(draft as any).logoImage ? (
+                  <div className="logoRow" style={{ marginTop: 10 }}>
+                    <div
+                      className="logo"
+                      style={{ background: "#fff", borderColor: "#dfe4eb" }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={(draft as any).logoImage}
+                        alt="현재 등록된 로고"
+                        style={{ objectFit: "contain", padding: 5 }}
+                      />
+                    </div>
+                    <span className="hint">현재 등록된 로고</span>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1439,7 +1512,11 @@ function AdminstorePageInner() {
           </section>
         </div>
 
-        <div className="formStack" role="group" aria-label="매장 기본 및 추가 정보">
+        <div
+          className="formStack"
+          role="group"
+          aria-label="매장 기본 및 추가 정보"
+        >
           <section className="card" aria-labelledby="store-basic-info-title">
             <div className="basicHead">
               <div>
@@ -1714,7 +1791,9 @@ function AdminstorePageInner() {
                   주문/결제/구독 이력이 없는 매장만 삭제할 수 있습니다.
                 </div>
                 {deleteEligibilityLoading ? (
-                  <div className="deleteState">삭제 가능 여부를 확인 중입니다.</div>
+                  <div className="deleteState">
+                    삭제 가능 여부를 확인 중입니다.
+                  </div>
                 ) : deleteEligibilityError ? (
                   <div className="deleteState deleteStateWarn">
                     {deleteEligibilityError}
@@ -1724,7 +1803,8 @@ function AdminstorePageInner() {
                 ) : deleteEligibility?.canDelete ? (
                   <>
                     <div className="deleteState deleteStateOk">
-                      {deleteEligibility.message || "운영 이력이 없어 삭제할 수 있습니다."}
+                      {deleteEligibility.message ||
+                        "운영 이력이 없어 삭제할 수 있습니다."}
                     </div>
                     <button
                       className="btn btnDanger btnCompact"
@@ -1737,7 +1817,8 @@ function AdminstorePageInner() {
                   </>
                 ) : (
                   <div className="deleteState">
-                    {deleteEligibility?.message || "운영 이력이 있어 삭제할 수 없습니다."}
+                    {deleteEligibility?.message ||
+                      "운영 이력이 있어 삭제할 수 없습니다."}
                     <br />
                     운영 중단은 비활성화를 사용하세요.
                   </div>

@@ -5,7 +5,10 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { setCurrentStoreId } from "@/app/lib/currentStore";
-import { DEFAULT_STORE_PROFILE, saveStoreProfile } from "@/app/lib/storeProfile";
+import {
+  DEFAULT_STORE_PROFILE,
+  saveStoreProfile,
+} from "@/app/lib/storeProfile";
 import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 import { prepareStoreImage } from "@/app/lib/storeImageUpload";
 import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
@@ -13,7 +16,8 @@ import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 const STORE_IMAGE_BUCKET = "store-assets";
 
 function clampOverlay(v: number) {
-  if (!Number.isFinite(v)) return DEFAULT_STORE_PROFILE.mainImageOverlayStrength;
+  if (!Number.isFinite(v))
+    return DEFAULT_STORE_PROFILE.mainImageOverlayStrength;
   return Math.max(0, Math.min(100, Math.round(v)));
 }
 
@@ -31,7 +35,9 @@ export default function AdminStoreCreatePage() {
   const [storeDesc, setStoreDesc] = useState("");
   const [mainImage, setMainImage] = useState("");
   const [logoImage, setLogoImage] = useState("");
-  const [overlayStrength, setOverlayStrength] = useState(DEFAULT_STORE_PROFILE.mainImageOverlayStrength);
+  const [overlayStrength, setOverlayStrength] = useState(
+    DEFAULT_STORE_PROFILE.mainImageOverlayStrength,
+  );
 
   const [bizNo, setBizNo] = useState("");
   const [industry, setIndustry] = useState("");
@@ -95,13 +101,17 @@ export default function AdminStoreCreatePage() {
     const uploadFile = await prepareStoreImage(file);
     const ext = getFileExt(uploadFile.name) || "png";
     const path = `${trimmedStoreId}/${kind}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from(STORE_IMAGE_BUCKET).upload(path, uploadFile, {
-      upsert: true,
-      contentType: uploadFile.type || undefined,
-    });
+    const { error } = await supabase.storage
+      .from(STORE_IMAGE_BUCKET)
+      .upload(path, uploadFile, {
+        upsert: true,
+        contentType: uploadFile.type || undefined,
+      });
     if (error) throw error;
 
-    const { data } = supabase.storage.from(STORE_IMAGE_BUCKET).getPublicUrl(path);
+    const { data } = supabase.storage
+      .from(STORE_IMAGE_BUCKET)
+      .getPublicUrl(path);
     return data.publicUrl || "";
   };
 
@@ -146,7 +156,11 @@ export default function AdminStoreCreatePage() {
 
     setCreating(true);
     try {
-      const check = await supabase.from("stores").select("store_id").eq("store_id", id).maybeSingle();
+      const check = await supabase
+        .from("stores")
+        .select("store_id")
+        .eq("store_id", id)
+        .maybeSingle();
       if (check.error) throw check.error;
       if (check.data) {
         setMsg("이미 사용 중인 매장 ID입니다. 다른 ID를 입력해주세요.");
@@ -167,7 +181,9 @@ export default function AdminStoreCreatePage() {
 
       if (insStore.error) {
         if (String(insStore.error.message || "").includes("owner_user_id")) {
-          const retry = await supabase.from("stores").insert([{ store_id: id, store_name: name } as any]);
+          const retry = await supabase
+            .from("stores")
+            .insert([{ store_id: id, store_name: name } as any]);
           if (retry.error) throw retry.error;
         } else {
           throw insStore.error;
@@ -194,8 +210,13 @@ export default function AdminStoreCreatePage() {
           })
           .eq("store_id", id);
         if (imageErr) {
-          console.error("[admin/store/create] image update error:", imageErr.message);
-          setMsg("이미지는 저장되지 않았습니다. 매장 정보에서 다시 저장해주세요.");
+          console.error(
+            "[admin/store/create] image update error:",
+            imageErr.message,
+          );
+          setMsg(
+            "이미지는 저장되지 않았습니다. 매장 정보에서 다시 저장해주세요.",
+          );
         }
       }
 
@@ -627,8 +648,12 @@ export default function AdminStoreCreatePage() {
           .extraInfoGrid {
             grid-template-columns: 1fr;
           }
-          .formStack { order: 1; }
-          .sideStack { order: 2; }
+          .formStack {
+            order: 1;
+          }
+          .sideStack {
+            order: 2;
+          }
           .addressRow {
             flex-direction: column;
             align-items: stretch;
@@ -643,14 +668,20 @@ export default function AdminStoreCreatePage() {
           .hero {
             height: 150px;
           }
-          .previewCard { display: none; }
+          .previewCard {
+            padding: 10px;
+          }
           .storeName {
             font-size: 18px;
           }
         }
       `}</style>
 
-      <AdminPageHeader title="매장 만들기" description="필수 정보를 입력하면 바로 초기 설정을 이어갈 수 있습니다." eyebrow="NEW STORE" />
+      <AdminPageHeader
+        title="매장 만들기"
+        description="필수 정보를 입력하면 바로 초기 설정을 이어갈 수 있습니다."
+        eyebrow="NEW STORE"
+      />
 
       {msg ? <div className="alert">{msg}</div> : null}
 
@@ -670,16 +701,6 @@ export default function AdminStoreCreatePage() {
 
               <div className="heroInner">
                 <div className="logoRow">
-                  {logoImage ? (
-                    <div className="logo">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={logoImage} alt="logo" />
-                    </div>
-                  ) : (
-                    <div className="logo" aria-hidden="true">
-                      <span style={{ color: "white", fontWeight: 900, fontSize: 12 }}>logo</span>
-                    </div>
-                  )}
                   <div style={{ minWidth: 0 }}>
                     <h3 className="storeName">{storeName || "매장명"}</h3>
                   </div>
@@ -688,7 +709,34 @@ export default function AdminStoreCreatePage() {
             </div>
 
             <div className="previewCard">
-              <p className="descText">{storeDesc || "매장 설명이 여기에 표시됩니다."}</p>
+              <div className="logoRow" style={{ marginBottom: 12 }}>
+                <div
+                  className="logo"
+                  style={{ background: "#fff", borderColor: "#dfe4eb" }}
+                >
+                  {logoImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoImage}
+                      alt="등록할 매장 로고"
+                      style={{ objectFit: "contain", padding: 5 }}
+                    />
+                  ) : (
+                    <span style={{ color: "#0f1f3d", fontWeight: 900 }}>
+                      {Array.from(storeName || "매장")[0]}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <strong>{storeName || "매장명"}</strong>
+                  <div className="hint">
+                    로고는 밝은 고객 화면에서 표시됩니다.
+                  </div>
+                </div>
+              </div>
+              <p className="descText">
+                {storeDesc || "매장 설명이 여기에 표시됩니다."}
+              </p>
             </div>
           </section>
 
@@ -713,7 +761,11 @@ export default function AdminStoreCreatePage() {
                   disabled={uploadingMain}
                 />
                 <div className="hint hintWrap">
-                  {uploadingMain ? "업로드 중..." : mainImage ? "대표 이미지 등록 완료" : "아직 등록된 이미지가 없습니다."}
+                  {uploadingMain
+                    ? "업로드 중..."
+                    : mainImage
+                      ? "대표 이미지 등록 완료"
+                      : "아직 등록된 이미지가 없습니다."}
                 </div>
               </div>
 
@@ -734,8 +786,28 @@ export default function AdminStoreCreatePage() {
                   disabled={uploadingLogo}
                 />
                 <div className="hint hintWrap">
-                  {uploadingLogo ? "업로드 중..." : logoImage ? "로고 이미지 등록 완료" : "아직 등록된 이미지가 없습니다."}
+                  {uploadingLogo
+                    ? "업로드 중..."
+                    : logoImage
+                      ? "로고 이미지 등록 완료"
+                      : "아직 등록된 이미지가 없습니다."}
                 </div>
+                {logoImage ? (
+                  <div className="logoRow">
+                    <div
+                      className="logo"
+                      style={{ background: "#fff", borderColor: "#dfe4eb" }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={logoImage}
+                        alt="선택한 로고 미리보기"
+                        style={{ objectFit: "contain", padding: 5 }}
+                      />
+                    </div>
+                    <span className="hint">현재 선택한 로고</span>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -748,13 +820,17 @@ export default function AdminStoreCreatePage() {
                   min={0}
                   max={100}
                   value={overlayStrength}
-                  onChange={(e) => setOverlayStrength(clampOverlay(Number(e.target.value)))}
+                  onChange={(e) =>
+                    setOverlayStrength(clampOverlay(Number(e.target.value)))
+                  }
                 />
                 <input
                   className="input"
                   inputMode="numeric"
                   value={String(overlayStrength)}
-                  onChange={(e) => setOverlayStrength(clampOverlay(Number(e.target.value)))}
+                  onChange={(e) =>
+                    setOverlayStrength(clampOverlay(Number(e.target.value)))
+                  }
                 />
               </div>
             </div>
@@ -764,7 +840,9 @@ export default function AdminStoreCreatePage() {
         <div className="formStack" role="group" aria-label="매장 기본 정보">
           <section className="card" aria-labelledby="store-create-basic-title">
             <div className="basicHead">
-              <h2 className="cardTitle" id="store-create-basic-title">기본 정보</h2>
+              <h2 className="cardTitle" id="store-create-basic-title">
+                기본 정보
+              </h2>
               <span className="statusBadge">생성 전</span>
             </div>
 
@@ -795,7 +873,9 @@ export default function AdminStoreCreatePage() {
             </div>
 
             <div className="field">
-              <div className="label">매장 설명 <span className="pill">선택</span></div>
+              <div className="label">
+                매장 설명 <span className="pill">선택</span>
+              </div>
               <textarea
                 className="textarea"
                 value={storeDesc}
@@ -821,8 +901,17 @@ export default function AdminStoreCreatePage() {
                 매장 주소 <span className="pill">필수</span>
               </div>
               <div className="addressRow">
-                <input className="input" value={address} readOnly placeholder="주소 검색으로 입력" />
-                <button type="button" className="btn addressSearchBtn" onClick={openAddressSearch}>
+                <input
+                  className="input"
+                  value={address}
+                  readOnly
+                  placeholder="주소 검색으로 입력"
+                />
+                <button
+                  type="button"
+                  className="btn addressSearchBtn"
+                  onClick={openAddressSearch}
+                >
                   주소 검색
                 </button>
               </div>
@@ -900,9 +989,16 @@ export default function AdminStoreCreatePage() {
         <section className="card createActionCard">
           <div className="createActionText">
             <h2 className="cardTitle">매장 생성</h2>
-            <p className="hint">필수 정보를 확인한 뒤 매장을 생성하면 초기 설정 화면으로 이동합니다.</p>
+            <p className="hint">
+              필수 정보를 확인한 뒤 매장을 생성하면 초기 설정 화면으로
+              이동합니다.
+            </p>
           </div>
-          <button className="btn btnPrimary" onClick={onCreate} disabled={creating}>
+          <button
+            className="btn btnPrimary"
+            onClick={onCreate}
+            disabled={creating}
+          >
             {creating ? "생성 중..." : "매장 생성"}
           </button>
         </section>
@@ -913,14 +1009,23 @@ export default function AdminStoreCreatePage() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modalHead">
               <b style={{ fontSize: 16 }}>주소 검색</b>
-              <button type="button" className="btn" onClick={closeAddressSearch}>
+              <button
+                type="button"
+                className="btn"
+                onClick={closeAddressSearch}
+              >
                 닫기
               </button>
             </div>
             <div style={{ marginTop: 12 }}>
-              <DaumPostcodeEmbed onComplete={onCompleteAddress} autoClose={false} />
+              <DaumPostcodeEmbed
+                onComplete={onCompleteAddress}
+                autoClose={false}
+              />
             </div>
-            <p className="hint" style={{ marginTop: 10 }}>도로명 주소를 검색하세요.</p>
+            <p className="hint" style={{ marginTop: 10 }}>
+              도로명 주소를 검색하세요.
+            </p>
           </div>
         </div>
       ) : null}

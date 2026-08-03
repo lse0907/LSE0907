@@ -2,7 +2,10 @@
 
 import { Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CustomerBrand } from "@/app/_components/CustomerBrand";
+import {
+  CustomerTrustFooter,
+  StoreIdentity,
+} from "@/app/_components/StoreCustomerBrand";
 
 function ConfirmFailPageInner() {
   const router = useRouter();
@@ -15,7 +18,7 @@ function ConfirmFailPageInner() {
   return (
     <main className="failPage customer-page">
       <section className="failCard">
-        <CustomerBrand compact />
+        <StoreIdentity storeId={storeId} compact />
         <div className="failIcon" aria-hidden="true">
           !
         </div>
@@ -50,6 +53,7 @@ function ConfirmFailPageInner() {
             {message ? <p>사유: {message}</p> : null}
           </details>
         ) : null}
+        <CustomerTrustFooter />
       </section>
       <style jsx>{`
         .failPage {

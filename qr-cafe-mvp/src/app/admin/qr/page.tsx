@@ -188,8 +188,8 @@ function AdminQrPageInner() {
     setOrigin(window.location.origin);
   }, []);
 
-  const storeName = profile?.storeName ?? "카페 브라운";
-  const mainImage = profile?.mainImage ?? "/hero.jpg";
+  const storeName = profile?.storeName || "매장명 미등록";
+  const mainImage = profile?.mainImage || "";
   const logoImage = profile?.logoImage ?? "";
 
   const pendingTableNumbers = useMemo(() => {
