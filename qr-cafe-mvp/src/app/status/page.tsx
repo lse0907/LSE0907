@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   CustomerTrustFooter,
@@ -134,6 +134,7 @@ function speakReadyOnce() {
 }
 
 function StatusPageInner() {
+  const router = useRouter();
   const sp = useSearchParams();
 
   const orderIdFromQuery = (sp.get("orderId") || "").trim();
@@ -188,7 +189,7 @@ function StatusPageInner() {
     return accessTokenFromQuery || lastOrderToken || "";
   }, [accessTokenFromQuery, lastOrderToken]);
 
-  const clearStoredOrder = () => {
+  const clearStoredOrder = async () => {
     try {
       localStorage.removeItem(lsLastOrderIdKey(storeId));
       localStorage.removeItem(lsLastOrderTokenKey(storeId));
@@ -198,6 +199,8 @@ function StatusPageInner() {
     setLastStoreId("");
     setLastOrderToken("");
     setOrder(null);
+    const { data } = await supabase.auth.getUser();
+    router.replace(data.user ? "/me" : "/");
   };
 
   const fetchOrder = async (id: string) => {
@@ -652,8 +655,8 @@ function StatusPageInner() {
                 </button>
               ) : visibleOrder.status === "completed" ||
                 visibleOrder.status === "cancelled" ? (
-                <button className="btn" onClick={clearStoredOrder}>
-                  확인 완료
+                <button className="btn" onClick={() => void clearStoredOrder()}>
+                  주문 종료
                 </button>
               ) : (
                 <span className="hint" style={{ marginTop: 0 }}>
