@@ -1340,6 +1340,161 @@ function MePageInner() {
           </div>
         </CustomerSheet>
       ) : null}
+
+      {activePanel === "orders" ? (
+        <CustomerSheet title="주문 내역" onClose={() => setActivePanel(null)}>
+          <div className="sheetList">
+            {ordersLoading ? (
+              <p>불러오는 중...</p>
+            ) : ordersError ? (
+              <p>{ordersError}</p>
+            ) : recentOrders.length === 0 ? (
+              <div className="sheetCard">
+                <h3>아직 주문 내역이 없어요</h3>
+                <p>QR을 스캔해 첫 주문을 시작해 보세요.</p>
+                <button
+                  className="sheetAction"
+                  onClick={() => {
+                    setActivePanel(null);
+                    startQrScanner();
+                  }}
+                >
+                  QR 주문
+                </button>
+              </div>
+            ) : (
+              recentOrders.map((order) => (
+                <article className="sheetCard" key={order.id}>
+                  <div className="sheetCardHead">
+                    <h3>{order.store.name}</h3>
+                    <span
+                      className={`statusBadge ${orderStatusTone(order.status)}`}
+                    >
+                      {orderStatusLabel(order.status)}
+                    </span>
+                  </div>
+                  <p>
+                    {formatOrderDate(order.created_at)} · 주문{" "}
+                    {order.display_no || "-"}
+                  </p>
+                  <p>
+                    {Number(order.total_count || 0)}개 ·{" "}
+                    {formatWon(Number(order.total_price || 0))}
+                    {Number(order.earned_points || 0) > 0
+                      ? ` · +${Number(order.earned_points).toLocaleString()}P`
+                      : ""}
+                  </p>
+                </article>
+              ))
+            )}
+          </div>
+        </CustomerSheet>
+      ) : null}
+
+      {activePanel === "stores" ? (
+        <CustomerSheet
+          title={`내 매장 ${wallets.length}곳`}
+          onClose={() => setActivePanel(null)}
+        >
+          <div className="sheetList">
+            {wallets.length === 0 ? (
+              <div className="sheetCard">
+                <h3>이용 중인 매장이 없어요</h3>
+                <p>QR 주문 후 포인트와 쿠폰을 확인할 수 있어요.</p>
+              </div>
+            ) : (
+              visibleWallets.map((w) => {
+                const sid = String(w.store_id || "");
+                return (
+                  <article className="sheetCard" key={sid}>
+                    <div className="sheetCardHead">
+                      <h3>{storeNameMap[sid] || "매장"}</h3>
+                      <span className="statusBadge">{tierLabel(w.tier)}</span>
+                    </div>
+                    <p>
+                      <b>
+                        매장 포인트{" "}
+                        {Number(w.point_balance || 0).toLocaleString()}P
+                      </b>{" "}
+                      · 쿠폰 {couponCountMap[sid] || 0}장
+                    </p>
+                    <p>
+                      주문 {Number(w.lifetime_orders || 0)}회 · 누적{" "}
+                      {formatWon(w.lifetime_spent)}
+                    </p>
+                    <button
+                      className="sheetAction"
+                      onClick={() =>
+                        router.push(`/menu?store=${encodeURIComponent(sid)}`)
+                      }
+                    >
+                      메뉴 보기
+                    </button>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </CustomerSheet>
+      ) : null}
+
+      {activePanel === "account" ? (
+        <CustomerSheet title="계정 정보" onClose={() => setActivePanel(null)}>
+          <div className="sheetCard">
+            {editingBasic ? (
+              <div style={{ display: "grid", gap: 12 }}>
+                <label>
+                  이름
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    style={{ ...inputStyle, width: "100%" }}
+                  />
+                </label>
+                <label>
+                  전화번호
+                  <input
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(formatPhone(e.target.value))}
+                    style={{ ...inputStyle, width: "100%" }}
+                  />
+                </label>
+                <button
+                  className="sheetAction"
+                  onClick={saveBasicProfile}
+                  disabled={savingBasic}
+                >
+                  {savingBasic ? "저장 중" : "저장"}
+                </button>
+              </div>
+            ) : (
+              <>
+                <p>
+                  <b>이메일</b>
+                  <br />
+                  {email || "-"}
+                </p>
+                <p>
+                  <b>이름</b>
+                  <br />
+                  {profile?.name || "-"}
+                </p>
+                <p>
+                  <b>전화번호</b>
+                  <br />
+                  {profile?.phone || "-"}
+                </p>
+                <button
+                  className="sheetAction"
+                  onClick={() => setEditingBasic(true)}
+                >
+                  수정
+                </button>
+              </>
+            )}
+          </div>
+        </CustomerSheet>
+      ) : null}
     </main>
   );
 }
