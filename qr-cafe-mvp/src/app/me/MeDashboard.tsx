@@ -6,15 +6,22 @@ import { supabase } from "../lib/supabaseClient";
 import { CustomerBrand } from "../_components/CustomerBrand";
 import { CustomerIcon } from "../_components/CustomerIcon";
 import { CustomerSheet } from "../_components/CustomerSheet";
-
-type WalletRow = {
-  store_id: string;
-  point_balance: number;
-  tier: "general" | "regular" | "vip" | string;
-  lifetime_spent: number;
-  lifetime_orders: number;
-  updated_at?: string | null;
-};
+import { MeBenefitSections } from "./MeBenefitSections";
+import {
+  OrderDetailSheet,
+  OrderHistorySheet,
+  RecentOrderCard,
+} from "./MeOrderSections";
+import {
+  type BenefitView,
+  type CustomerCoupon,
+  type CustomerOrder,
+  type WalletRow,
+  formatWon,
+  orderStatusLabel,
+  orderStatusTone,
+  tierLabel,
+} from "./meUtils";
 
 type ProfileRow = {
   name: string | null;
@@ -25,30 +32,6 @@ type StoreNameRow = {
   store_id: string;
   store_name: string | null;
 };
-type CustomerOrder = {
-  id: string;
-  store_id: string;
-  created_at: string;
-  display_no: string | null;
-  total_count: number | null;
-  total_price: number | null;
-  status: string;
-  earned_points: number | null;
-  store: { name: string; logo: string };
-};
-type CustomerCoupon = {
-  id: string;
-  store_id: string;
-  expires_at: string | null;
-  template: {
-    name: string | null;
-    discount_type: string | null;
-    discount_value: number | null;
-    min_order_amount: number | null;
-    max_discount_amount: number | null;
-  } | null;
-};
-
 type BarcodeScanResult = { rawValue?: string };
 type BarcodeDetectorLike = {
   detect: (input: HTMLVideoElement) => Promise<BarcodeScanResult[]>;
@@ -56,67 +39,6 @@ type BarcodeDetectorLike = {
 type BarcodeDetectorCtor = new (opts: {
   formats: string[];
 }) => BarcodeDetectorLike;
-
-function tierLabel(raw: string | null | undefined) {
-  const v = String(raw || "").toLowerCase();
-  if (v === "vip") return "VIP";
-  if (v === "regular") return "단골";
-  return "일반";
-}
-
-function formatWon(v: number) {
-  return `${Math.max(0, Number(v || 0)).toLocaleString()}원`;
-}
-function couponBenefitText(coupon: CustomerCoupon) {
-  const template = coupon.template;
-  if (!template) return "혜택 정보를 확인해 주세요.";
-  const value = Math.max(0, Number(template.discount_value || 0));
-  const discount =
-    template.discount_type === "percent"
-      ? `${value}% 할인`
-      : `${value.toLocaleString()}원 할인`;
-  const conditions = [
-    Number(template.min_order_amount || 0) > 0
-      ? `${Number(template.min_order_amount).toLocaleString()}원 이상 주문`
-      : "",
-    Number(template.max_discount_amount || 0) > 0
-      ? `최대 ${Number(template.max_discount_amount).toLocaleString()}원`
-      : "",
-  ].filter(Boolean);
-  return [discount, ...conditions].join(" · ");
-}
-function orderStatusLabel(status: string) {
-  return (
-    (
-      {
-        new: "접수 대기",
-        checked: "매장 확인",
-        making: "준비 중",
-        ready_for_packing: "준비 완료",
-        completed: "수령 완료",
-        cancelled: "주문 취소",
-      } as Record<string, string>
-    )[status] || "확인 중"
-  );
-}
-function orderStatusTone(status: string) {
-  if (status === "completed") return "success";
-  if (status === "cancelled") return "danger";
-  if (status === "making") return "warning";
-  if (status === "ready_for_packing") return "ready";
-  return "info";
-}
-function formatOrderDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? ""
-    : new Intl.DateTimeFormat("ko-KR", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(date);
-}
 
 function formatPhone(raw: string) {
   const digits = String(raw || "")
@@ -147,9 +69,7 @@ export function MeDashboard() {
     {},
   );
   const [coupons, setCoupons] = useState<CustomerCoupon[]>([]);
-  const [benefitView, setBenefitView] = useState<
-    "stores" | "points" | "coupons" | null
-  >(null);
+  const [benefitView, setBenefitView] = useState<BenefitView>(null);
   const [orderBannerDismissed, setOrderBannerDismissed] = useState(false);
   const [scanError, setScanError] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -177,6 +97,9 @@ export function MeDashboard() {
   const [recentOrders, setRecentOrders] = useState<CustomerOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState<CustomerOrder | null>(
+    null,
+  );
   const ordersRequestRef = useRef(false);
   const [cartSummary, setCartSummary] = useState<{
     storageKey: string;
@@ -814,6 +737,20 @@ export function MeDashboard() {
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 8px;
         }
+        .benefitSection {
+          order: 3;
+          margin-top: 16px;
+          padding: 16px;
+          border: 1px solid #dfe4eb;
+          border-radius: 16px;
+          background: #fff;
+          color: #111827;
+        }
+        .benefitSection h2 {
+          margin: 0 0 12px;
+          color: #0f1f3d;
+          font-size: 19px;
+        }
         .benefitItem {
           display: grid;
           gap: 5px;
@@ -893,6 +830,49 @@ export function MeDashboard() {
           gap: 10px;
           color: #0f1f3d;
         }
+        .benefitRowHead > strong:first-child {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .benefitTotal {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px;
+          border-radius: 13px;
+          background: #edf3ff;
+          color: #0f1f3d;
+          font-weight: 800;
+        }
+        .benefitMoreButton {
+          min-height: 46px;
+          border: 1px solid #cbd9f3;
+          border-radius: 13px;
+          background: #fff;
+          color: #315fba;
+          font-weight: 900;
+        }
+        .expiryBadge {
+          flex: 0 0 auto;
+          padding: 5px 8px;
+          border-radius: 999px;
+          background: #edf1f7;
+          color: #475467;
+          font-size: 11px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+        .expiryBadge.soon {
+          background: #fff4df;
+          color: #9a5b00;
+        }
+        .expiryBadge.urgent {
+          background: #fff0f0;
+          color: #b42318;
+        }
         .benefitRow p {
           margin: 0;
           color: #667085;
@@ -933,6 +913,49 @@ export function MeDashboard() {
           align-content: center;
           gap: 10px;
           box-shadow: 0 8px 24px rgba(15, 31, 61, 0.05);
+        }
+        .recentOrderCard {
+          width: 100%;
+          min-height: 112px;
+          padding: 14px;
+          border: 1px solid #d8e2f2;
+          border-radius: 17px;
+          background: #fff;
+          color: #111827;
+          text-align: left;
+          display: grid;
+          grid-template-columns: 40px minmax(0, 1fr) auto;
+          gap: 10px;
+          box-shadow: 0 8px 24px rgba(15, 31, 61, 0.05);
+        }
+        .recentOrderCard .quickCopy strong {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .recentOrderLink {
+          grid-column: 2 / -1;
+          color: #315fba;
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .recentOrderEmpty {
+          margin-top: 20px;
+          padding: 16px;
+          border: 1px dashed #cbd5e1;
+          border-radius: 16px;
+          background: #fff;
+        }
+        .recentOrderEmpty h2 {
+          margin: 0;
+          color: #0f1f3d;
+          font-size: 19px;
+        }
+        .recentOrderEmpty p:not(.sectionLabel) {
+          margin: 8px 0 0;
+          color: #667085;
+          font-size: 13px;
+          line-height: 1.55;
         }
         .quickIcon {
           width: 40px;
@@ -977,6 +1000,36 @@ export function MeDashboard() {
           border: 1px solid #e1e7ef;
           border-radius: 16px;
           background: #f8fafc;
+        }
+        .sheetOrderButton {
+          width: 100%;
+          display: grid;
+          gap: 7px;
+          color: #475467;
+          text-align: left;
+        }
+        .sheetOrderButton > span:not(.sheetCardHead) {
+          font-size: 13px;
+        }
+        .orderDetailList {
+          display: grid;
+          gap: 0;
+          margin: 14px 0 0;
+        }
+        .orderDetailList > div {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 11px 0;
+          border-bottom: 1px solid #e1e7ef;
+        }
+        .orderDetailList dt {
+          color: #667085;
+        }
+        .orderDetailList dd {
+          margin: 0;
+          color: #0f1f3d;
+          font-weight: 900;
         }
         .sheetCardHead {
           display: flex;
@@ -1053,6 +1106,13 @@ export function MeDashboard() {
           }
           .quickCopy small {
             display: none;
+          }
+          .recentOrderCard {
+            grid-template-columns: 34px minmax(0, 1fr);
+          }
+          .recentOrderCard .statusBadge {
+            grid-column: 2;
+            justify-self: start;
           }
         }
       `}</style>
@@ -1204,40 +1264,30 @@ export function MeDashboard() {
         </button>
       </div>
       {!ordersLoading && recentOrder ? (
-        <>
-          <div className="sectionHeading">
-            <div>
-              <p className="sectionLabel">RECENT ORDER</p>
-              <h2>최근 주문</h2>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="quickCard"
-            style={{
-              marginTop: 12,
-              width: "100%",
-              gridTemplateColumns: "40px 1fr auto",
-            }}
-            onClick={() => openPanel("orders")}
-          >
-            <span className="quickIcon">
-              <CustomerIcon name="orders" />
-            </span>
-            <span className="quickCopy">
-              <strong>{recentOrder.store.name}</strong>
-              <small>
-                {formatOrderDate(recentOrder.created_at)} ·{" "}
-                {formatWon(Number(recentOrder.total_price || 0))}
-              </small>
-            </span>
-            <span
-              className={`statusBadge ${orderStatusTone(recentOrder.status)}`}
+        <RecentOrderCard
+          order={recentOrder}
+          onOpen={() => setSelectedOrder(recentOrder)}
+        />
+      ) : null}
+      {!ordersLoading && !recentOrder ? (
+        <section className="recentOrderEmpty">
+          <p className="sectionLabel">RECENT ORDER</p>
+          <h2>최근 주문</h2>
+          <p>
+            {activeOrder
+              ? "진행 중인 주문이 완료되면 최근 주문에 표시돼요."
+              : "아직 주문 내역이 없어요. QR을 스캔해 첫 주문을 시작해 보세요."}
+          </p>
+          {!activeOrder ? (
+            <button
+              type="button"
+              className="sheetAction"
+              onClick={startQrScanner}
             >
-              {orderStatusLabel(recentOrder.status)}
-            </span>
-          </button>
-        </>
+              QR 주문 시작
+            </button>
+          ) : null}
+        </section>
       ) : null}
 
       {loading ? (
@@ -1308,163 +1358,41 @@ export function MeDashboard() {
       ) : null}
 
       {!loading ? (
-        <section
-          style={{
-            ...cardStyle,
-            order: 3,
-            border: `1px solid ${theme.cardBorder}`,
-            background: theme.cardBg,
-            color: theme.cardText,
-          }}
-        >
-          <p className="sectionLabel">MY BENEFITS</p>
-          <h2 style={sectionTitleStyle}>혜택 요약</h2>
-          <div className="benefitGrid">
-            {(
-              [
-                ["stores", "이용 매장", `${summary.stores}곳`],
-                [
-                  "points",
-                  "총 보유 포인트",
-                  `${summary.totalPoints.toLocaleString()}P`,
-                ],
-                ["coupons", "내 쿠폰", `${summary.totalCoupons}장`],
-              ] as const
-            ).map(([key, label, value]) => (
-              <button
-                type="button"
-                className={`benefitItem ${benefitView === key ? "active" : ""}`}
-                aria-pressed={benefitView === key}
-                onClick={() =>
-                  setBenefitView((current) => (current === key ? null : key))
-                }
-                key={key}
-              >
-                <span>{label}</span>
-                <strong>{value}</strong>
-              </button>
-            ))}
-          </div>
-          {benefitView ? (
-            <div className="benefitDetail" aria-live="polite">
-              {benefitView === "coupons" ? (
-                coupons.length ? (
-                  coupons.map((coupon) => (
-                    <article className="benefitRow" key={coupon.id}>
-                      <div className="benefitRowHead">
-                        <strong>{coupon.template?.name || "매장 쿠폰"}</strong>
-                        <span>{storeNameMap[coupon.store_id] || "매장"}</span>
-                      </div>
-                      <p>{couponBenefitText(coupon)}</p>
-                      <p>
-                        {coupon.expires_at
-                          ? `${new Date(coupon.expires_at).toLocaleDateString("ko-KR")}까지`
-                          : "사용 기한 제한 없음"}
-                      </p>
-                    </article>
-                  ))
-                ) : (
-                  <div className="benefitRow">
-                    <p>사용할 수 있는 쿠폰이 없어요.</p>
-                  </div>
-                )
-              ) : wallets.length ? (
-                wallets.map((wallet) => (
-                  <article
-                    className="benefitRow"
-                    key={`${benefitView}-${wallet.store_id}`}
-                  >
-                    <div className="benefitRowHead">
-                      <strong>{storeNameMap[wallet.store_id] || "매장"}</strong>
-                      {benefitView === "points" ? (
-                        <strong>
-                          {Number(wallet.point_balance || 0).toLocaleString()}P
-                        </strong>
-                      ) : (
-                        <span>{tierLabel(wallet.tier)}</span>
-                      )}
-                    </div>
-                    {benefitView === "stores" ? (
-                      <p>
-                        주문 {Number(wallet.lifetime_orders || 0)}회 · 매장
-                        포인트{" "}
-                        {Number(wallet.point_balance || 0).toLocaleString()}P ·
-                        쿠폰 {couponCountMap[wallet.store_id] || 0}장
-                      </p>
-                    ) : (
-                      <p>이 매장에서 사용할 수 있는 포인트예요.</p>
-                    )}
-                  </article>
-                ))
-              ) : (
-                <div className="benefitRow">
-                  <p>아직 이용한 매장이 없어요.</p>
-                </div>
-              )}
-            </div>
-          ) : null}
-        </section>
+        <MeBenefitSections
+          view={benefitView}
+          onChange={setBenefitView}
+          wallets={wallets}
+          coupons={coupons}
+          storeNameMap={storeNameMap}
+          couponCountMap={couponCountMap}
+          totalPoints={summary.totalPoints}
+          totalCoupons={summary.totalCoupons}
+        />
       ) : null}
 
       {activePanel === "orders" ? (
-        <CustomerSheet title="주문 내역" onClose={() => setActivePanel(null)}>
-          <div className="sheetList">
-            {ordersLoading ? (
-              <p>불러오는 중...</p>
-            ) : ordersError ? (
-              <div className="sheetCard" role="alert">
-                <h3>주문 정보를 불러오지 못했어요.</h3>
-                <p>잠시 후 다시 시도해 주세요.</p>
-                <button
-                  type="button"
-                  className="sheetAction"
-                  onClick={() => void loadOrders()}
-                >
-                  다시 불러오기
-                </button>
-              </div>
-            ) : recentOrders.length === 0 ? (
-              <div className="sheetCard">
-                <h3>아직 주문 내역이 없어요</h3>
-                <p>QR을 스캔해 첫 주문을 시작해 보세요.</p>
-                <button
-                  type="button"
-                  className="sheetAction"
-                  onClick={() => {
-                    setActivePanel(null);
-                    startQrScanner();
-                  }}
-                >
-                  QR 주문
-                </button>
-              </div>
-            ) : (
-              recentOrders.map((order) => (
-                <article className="sheetCard" key={order.id}>
-                  <div className="sheetCardHead">
-                    <h3>{order.store.name}</h3>
-                    <span
-                      className={`statusBadge ${orderStatusTone(order.status)}`}
-                    >
-                      {orderStatusLabel(order.status)}
-                    </span>
-                  </div>
-                  <p>
-                    {formatOrderDate(order.created_at)} · 주문{" "}
-                    {order.display_no || "-"}
-                  </p>
-                  <p>
-                    {Number(order.total_count || 0)}개 ·{" "}
-                    {formatWon(Number(order.total_price || 0))}
-                    {Number(order.earned_points || 0) > 0
-                      ? ` · +${Number(order.earned_points).toLocaleString()}P`
-                      : ""}
-                  </p>
-                </article>
-              ))
-            )}
-          </div>
-        </CustomerSheet>
+        <OrderHistorySheet
+          orders={recentOrders}
+          loading={ordersLoading}
+          error={ordersError}
+          onRetry={() => void loadOrders()}
+          onClose={() => setActivePanel(null)}
+          onSelect={(order) => {
+            setActivePanel(null);
+            setSelectedOrder(order);
+          }}
+          onStartQr={() => {
+            setActivePanel(null);
+            void startQrScanner();
+          }}
+        />
+      ) : null}
+
+      {selectedOrder ? (
+        <OrderDetailSheet
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+        />
       ) : null}
 
       {activePanel === "stores" ? (
@@ -1577,18 +1505,6 @@ export function MeDashboard() {
     </main>
   );
 }
-
-const cardStyle: React.CSSProperties = {
-  marginTop: 16,
-  borderRadius: 12,
-  padding: 14,
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 18,
-  fontWeight: 900,
-  margin: "0 0 10px",
-};
 
 const inputStyle: React.CSSProperties = {
   padding: "10px 12px",
