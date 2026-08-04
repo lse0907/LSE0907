@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
-import { CustomerPageHeader } from "../_components/CustomerBrand";
+import { CustomerBrand } from "../_components/CustomerBrand";
 import { CustomerIcon } from "../_components/CustomerIcon";
 import { CustomerSheet } from "../_components/CustomerSheet";
 
@@ -69,6 +69,13 @@ function orderStatusLabel(status: string) {
     )[status] || "확인 중"
   );
 }
+function orderStatusTone(status: string) {
+  if (status === "completed") return "success";
+  if (status === "cancelled") return "danger";
+  if (status === "making") return "warning";
+  if (status === "ready_for_packing") return "ready";
+  return "info";
+}
 function formatOrderDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
@@ -112,7 +119,7 @@ function MePageInner() {
   const [scanError, setScanError] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [showStores, setShowStores] = useState(true);
+  const showStores = true;
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<"recent" | "orders" | "points">(
     "recent",
@@ -144,6 +151,7 @@ function MePageInner() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const scanRequestRef = useRef(0);
   const returnTo = useMemo(
     () => String(sp.get("return_to") || sp.get("next") || "").trim(),
     [sp],
@@ -296,6 +304,7 @@ function MePageInner() {
   }, [router]);
 
   const stopScanner = () => {
+    scanRequestRef.current += 1;
     if (scanIntervalRef.current != null) {
       window.clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
@@ -376,6 +385,9 @@ function MePageInner() {
   };
 
   const startQrScanner = async () => {
+    setActivePanel(null);
+    stopScanner();
+    const requestId = scanRequestRef.current;
     setScanError("");
     setScannerOpen(true);
 
@@ -394,6 +406,10 @@ function MePageInner() {
         video: { facingMode: { ideal: "environment" } },
         audio: false,
       });
+      if (requestId !== scanRequestRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
@@ -422,6 +438,16 @@ function MePageInner() {
         "카메라 권한이 없거나 기기에서 카메라를 사용할 수 없습니다.",
       );
     }
+  };
+
+  const openPanel = (panel: "orders" | "stores" | "account") => {
+    stopScanner();
+    setActivePanel(panel);
+  };
+
+  const returnToOrder = () => {
+    stopScanner();
+    if (isSafeInternalPath(returnTo)) router.push(returnTo);
   };
 
   const summary = useMemo(() => {
@@ -599,6 +625,83 @@ function MePageInner() {
           background: #f3f5f8;
           color: #111827;
         }
+        .meHero {
+          padding: 20px;
+          border: 1px solid #dfe4eb;
+          border-radius: 22px;
+          background: linear-gradient(145deg, #fff 0%, #f8fafc 100%);
+          box-shadow: 0 18px 48px rgba(15, 31, 61, 0.08);
+        }
+        .meBrand {
+          display: flex;
+          align-items: center;
+          min-height: 30px;
+        }
+        .sectionLabel {
+          margin: 0 0 5px;
+          color: #315fba;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 0.15em;
+          line-height: 1.3;
+        }
+        .meHero h1 {
+          margin: 0;
+          color: #0f1f3d;
+          font-size: clamp(27px, 7vw, 36px);
+          line-height: 1.12;
+          letter-spacing: -0.045em;
+        }
+        .meHeroDescription {
+          margin: 9px 0 0;
+          color: #5c6678;
+          font-size: 14px;
+          font-weight: 600;
+          line-height: 1.6;
+        }
+        .meContext {
+          display: inline-flex;
+          margin-top: 14px;
+          min-height: 28px;
+          align-items: center;
+          padding: 5px 10px;
+          border-radius: 999px;
+          background: #e9eef6;
+          color: #30415f;
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .returnButton {
+          width: 100%;
+          min-height: 46px;
+          margin-top: 16px;
+          border: 0;
+          border-radius: 13px;
+          background: #0f1f3d;
+          color: #fff;
+          font-size: 14px;
+          font-weight: 900;
+        }
+        .sectionHeading {
+          display: flex;
+          align-items: end;
+          justify-content: space-between;
+          gap: 12px;
+          margin: 20px 2px 9px;
+        }
+        .sectionHeading h2 {
+          margin: 0;
+          color: #0f1f3d;
+          font-size: 19px;
+        }
+        .sectionLink {
+          min-height: 36px;
+          border: 0;
+          background: transparent;
+          color: #315fba;
+          font-size: 12px;
+          font-weight: 900;
+        }
         .benefitGrid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -633,11 +736,10 @@ function MePageInner() {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 10px;
-          margin-top: 16px;
         }
         .quickCard {
-          min-height: 112px;
-          padding: 14px;
+          min-height: 92px;
+          padding: 12px;
           border: 1px solid #e1e7ef;
           border-radius: 17px;
           background: #fff;
@@ -659,8 +761,8 @@ function MePageInner() {
           color: #235da8;
         }
         .quickIcon.purple {
-          background: #f2edff;
-          color: #7650c7;
+          background: #e8edf7;
+          color: #0f1f3d;
         }
         .quickIcon.green {
           background: #ecf9f2;
@@ -726,6 +828,28 @@ function MePageInner() {
           font-size: 11px;
           font-weight: 900;
         }
+        .statusBadge.success {
+          background: #e9f8ef;
+          color: #137a45;
+        }
+        .statusBadge.danger {
+          background: #fff0f0;
+          color: #b42318;
+        }
+        .statusBadge.warning {
+          background: #fff4df;
+          color: #9a5b00;
+        }
+        .statusBadge.ready {
+          background: #f0ebff;
+          color: #6941c6;
+        }
+        @media (max-width: 520px) {
+          .meHero {
+            padding: 17px;
+            border-radius: 18px;
+          }
+        }
         @media (max-width: 340px) {
           .quickGrid {
             gap: 8px;
@@ -743,51 +867,41 @@ function MePageInner() {
           }
         }
       `}</style>
-      <div>
-        <CustomerPageHeader
-          title="내 주문·혜택"
-          description={
-            profile?.name
-              ? `${profile.name}님, 이용 중인 매장의 포인트와 쿠폰을 확인하세요.`
-              : "이용 중인 매장의 포인트와 쿠폰을 확인하세요."
-          }
-          context={`${wallets.length}개 매장 · 쿠폰 ${summary.totalCoupons}장`}
-          actions={
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isSafeInternalPath(returnTo))
-                    return router.push(returnTo);
-                  startQrScanner();
-                }}
-                style={actionBtnStyle}
-              >
-                {isSafeInternalPath(returnTo)
-                  ? "주문 화면으로 돌아가기"
-                  : "QR 스캔하고 주문하기"}
-              </button>
-              {isSafeInternalPath(returnTo) ? (
-                <button
-                  type="button"
-                  onClick={startQrScanner}
-                  style={{
-                    ...secondaryBtnStyle,
-                    border: `1px solid ${theme.btnSecondaryBorder}`,
-                    background: theme.btnSecondaryBg,
-                    color: theme.btnSecondaryText,
-                  }}
-                >
-                  <span aria-hidden>⌁</span> 다른 매장 QR 스캔
-                </button>
-              ) : null}
-            </>
-          }
-        />
-      </div>
+      <header className="meHero">
+        <div className="meBrand">
+          <CustomerBrand />
+        </div>
+        <div style={{ marginTop: 22 }}>
+          <p className="sectionLabel">MY RION</p>
+          <h1>내 주문·혜택</h1>
+          <p className="meHeroDescription">
+            {profile?.name
+              ? `${profile.name}님, 매장별 포인트와 쿠폰을 확인하세요.`
+              : "매장별 포인트와 쿠폰을 확인하세요."}
+          </p>
+          <span className="meContext">
+            {wallets.length}개 매장 · 쿠폰 {summary.totalCoupons}장
+          </span>
+        </div>
+        {isSafeInternalPath(returnTo) ? (
+          <button
+            className="returnButton"
+            type="button"
+            onClick={returnToOrder}
+          >
+            주문으로 돌아가기
+          </button>
+        ) : null}
+      </header>
 
+      <div className="sectionHeading">
+        <div>
+          <p className="sectionLabel">QUICK MENU</p>
+          <h2>빠른 메뉴</h2>
+        </div>
+      </div>
       <div className="quickGrid" aria-label="빠른 메뉴">
-        <button className="quickCard" onClick={() => setActivePanel("orders")}>
+        <button className="quickCard" onClick={() => openPanel("orders")}>
           <span className="quickIcon">
             <CustomerIcon name="orders" />
           </span>
@@ -796,7 +910,7 @@ function MePageInner() {
             <small>최근 주문 확인</small>
           </span>
         </button>
-        <button className="quickCard" onClick={() => setActivePanel("stores")}>
+        <button className="quickCard" onClick={() => openPanel("stores")}>
           <span className="quickIcon green">
             <CustomerIcon name="store" />
           </span>
@@ -811,10 +925,10 @@ function MePageInner() {
           </span>
           <span className="quickCopy">
             <strong>QR 주문</strong>
-            <small>새 주문 시작</small>
+            <small>매장 QR 스캔</small>
           </span>
         </button>
-        <button className="quickCard" onClick={() => setActivePanel("account")}>
+        <button className="quickCard" onClick={() => openPanel("account")}>
           <span className="quickIcon gray">
             <CustomerIcon name="user" />
           </span>
@@ -825,29 +939,42 @@ function MePageInner() {
         </button>
       </div>
       {!ordersLoading && recentOrders[0] ? (
-        <button
-          className="quickCard"
-          style={{
-            marginTop: 12,
-            width: "100%",
-            gridTemplateColumns: "40px 1fr auto",
-          }}
-          onClick={() => setActivePanel("orders")}
-        >
-          <span className="quickIcon">
-            <CustomerIcon name="orders" />
-          </span>
-          <span className="quickCopy">
-            <strong>{recentOrders[0].store.name}</strong>
-            <small>
-              {formatOrderDate(recentOrders[0].created_at)} ·{" "}
-              {formatWon(Number(recentOrders[0].total_price || 0))}
-            </small>
-          </span>
-          <span className="statusBadge">
-            {orderStatusLabel(recentOrders[0].status)}
-          </span>
-        </button>
+        <>
+          <div className="sectionHeading">
+            <div>
+              <p className="sectionLabel">RECENT ORDER</p>
+              <h2>최근 주문</h2>
+            </div>
+            <button className="sectionLink" onClick={() => openPanel("orders")}>
+              전체 보기 →
+            </button>
+          </div>
+          <button
+            className="quickCard"
+            style={{
+              marginTop: 12,
+              width: "100%",
+              gridTemplateColumns: "40px 1fr auto",
+            }}
+            onClick={() => openPanel("orders")}
+          >
+            <span className="quickIcon">
+              <CustomerIcon name="orders" />
+            </span>
+            <span className="quickCopy">
+              <strong>{recentOrders[0].store.name}</strong>
+              <small>
+                {formatOrderDate(recentOrders[0].created_at)} ·{" "}
+                {formatWon(Number(recentOrders[0].total_price || 0))}
+              </small>
+            </span>
+            <span
+              className={`statusBadge ${orderStatusTone(recentOrders[0].status)}`}
+            >
+              {orderStatusLabel(recentOrders[0].status)}
+            </span>
+          </button>
+        </>
       ) : null}
 
       {loading ? <p style={{ marginTop: 14 }}>불러오는 중...</p> : null}
@@ -871,6 +998,12 @@ function MePageInner() {
             background: theme.cardBg,
           }}
         >
+          <div>
+            <p className="sectionLabel">QR SCAN</p>
+            <p style={{ margin: "0 0 10px", fontWeight: 800 }}>
+              매장 QR을 화면 안에 맞춰주세요.
+            </p>
+          </div>
           <video ref={videoRef} style={videoStyle} muted playsInline />
           <button
             type="button"
@@ -1020,6 +1153,7 @@ function MePageInner() {
             color: theme.cardText,
           }}
         >
+          <p className="sectionLabel">MY BENEFITS</p>
           <h2 style={sectionTitleStyle}>혜택 요약</h2>
           <div className="benefitGrid">
             <div className="benefitItem">
@@ -1035,13 +1169,6 @@ function MePageInner() {
               <strong>{summary.totalCoupons}장</strong>
             </div>
           </div>
-          <button
-            type="button"
-            style={{ ...actionBtnStyle, marginTop: 10 }}
-            onClick={() => setShowStores((p) => !p)}
-          >
-            {showStores ? "내 매장 접기" : "내 매장 보기"}
-          </button>
         </section>
       ) : null}
 
@@ -1221,7 +1348,9 @@ function MePageInner() {
                 <article className="sheetCard" key={order.id}>
                   <div className="sheetCardHead">
                     <h3>{order.store.name}</h3>
-                    <span className="statusBadge">
+                    <span
+                      className={`statusBadge ${orderStatusTone(order.status)}`}
+                    >
                       {orderStatusLabel(order.status)}
                     </span>
                   </div>
