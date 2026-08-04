@@ -3,7 +3,9 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
-import { CustomerPageHeader } from "../_components/CustomerBrand";
+import { CustomerBrand } from "../_components/CustomerBrand";
+import { CustomerIcon } from "../_components/CustomerIcon";
+import { CustomerSheet } from "../_components/CustomerSheet";
 
 type WalletRow = {
   store_id: string;
@@ -23,6 +25,29 @@ type StoreNameRow = {
   store_id: string;
   store_name: string | null;
 };
+type CustomerOrder = {
+  id: string;
+  store_id: string;
+  created_at: string;
+  display_no: string | null;
+  total_count: number | null;
+  total_price: number | null;
+  status: string;
+  earned_points: number | null;
+  store: { name: string; logo: string };
+};
+type CustomerCoupon = {
+  id: string;
+  store_id: string;
+  expires_at: string | null;
+  template: {
+    name: string | null;
+    discount_type: string | null;
+    discount_value: number | null;
+    min_order_amount: number | null;
+    max_discount_amount: number | null;
+  } | null;
+};
 
 type BarcodeScanResult = { rawValue?: string };
 type BarcodeDetectorLike = {
@@ -41,6 +66,56 @@ function tierLabel(raw: string | null | undefined) {
 
 function formatWon(v: number) {
   return `${Math.max(0, Number(v || 0)).toLocaleString()}원`;
+}
+function couponBenefitText(coupon: CustomerCoupon) {
+  const template = coupon.template;
+  if (!template) return "혜택 정보를 확인해 주세요.";
+  const value = Math.max(0, Number(template.discount_value || 0));
+  const discount =
+    template.discount_type === "percent"
+      ? `${value}% 할인`
+      : `${value.toLocaleString()}원 할인`;
+  const conditions = [
+    Number(template.min_order_amount || 0) > 0
+      ? `${Number(template.min_order_amount).toLocaleString()}원 이상 주문`
+      : "",
+    Number(template.max_discount_amount || 0) > 0
+      ? `최대 ${Number(template.max_discount_amount).toLocaleString()}원`
+      : "",
+  ].filter(Boolean);
+  return [discount, ...conditions].join(" · ");
+}
+function orderStatusLabel(status: string) {
+  return (
+    (
+      {
+        new: "접수 대기",
+        checked: "매장 확인",
+        making: "준비 중",
+        ready_for_packing: "준비 완료",
+        completed: "수령 완료",
+        cancelled: "주문 취소",
+      } as Record<string, string>
+    )[status] || "확인 중"
+  );
+}
+function orderStatusTone(status: string) {
+  if (status === "completed") return "success";
+  if (status === "cancelled") return "danger";
+  if (status === "making") return "warning";
+  if (status === "ready_for_packing") return "ready";
+  return "info";
+}
+function formatOrderDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : new Intl.DateTimeFormat("ko-KR", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(date);
 }
 
 function formatPhone(raw: string) {
@@ -71,10 +146,15 @@ function MePageInner() {
   const [couponCountMap, setCouponCountMap] = useState<Record<string, number>>(
     {},
   );
+  const [coupons, setCoupons] = useState<CustomerCoupon[]>([]);
+  const [benefitView, setBenefitView] = useState<
+    "stores" | "points" | "coupons"
+  >("stores");
+  const [orderBannerDismissed, setOrderBannerDismissed] = useState(false);
   const [scanError, setScanError] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [showStores, setShowStores] = useState(false);
+  const showStores = true;
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<"recent" | "orders" | "points">(
     "recent",
@@ -96,18 +176,17 @@ function MePageInner() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [savingBasic, setSavingBasic] = useState(false);
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
+  const [activePanel, setActivePanel] = useState<
+    "orders" | "stores" | "account" | null
+  >(null);
+  const [recentOrders, setRecentOrders] = useState<CustomerOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const storeFromQuery = useMemo(
-    () => String(sp.get("store") || "").trim(),
-    [sp],
-  );
+  const scanRequestRef = useRef(0);
   const returnTo = useMemo(
     () => String(sp.get("return_to") || sp.get("next") || "").trim(),
     [sp],
@@ -115,14 +194,6 @@ function MePageInner() {
 
   const isSafeInternalPath = (v: string) =>
     !!v && v.startsWith("/") && !v.startsWith("//");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => setIsDark(!!e.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, []);
 
   useEffect(() => {
     (async () => {
@@ -154,7 +225,9 @@ function MePageInner() {
           .order("updated_at", { ascending: false }),
         supabase
           .from("customer_coupons")
-          .select("store_id,expires_at")
+          .select(
+            "id,store_id,expires_at,template:store_coupon_templates(name,discount_type,discount_value,min_order_amount,max_discount_amount)",
+          )
           .eq("customer_user_id", uid)
           .eq("status", "issued")
           .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`),
@@ -188,10 +261,8 @@ function MePageInner() {
             `쿠폰 조회 실패: ${couponRes.error.message}`,
         );
       } else {
-        const rows = (couponRes.data || []) as Array<{
-          store_id: string | null;
-          expires_at?: string | null;
-        }>;
+        const rows = (couponRes.data || []) as unknown as CustomerCoupon[];
+        setCoupons(rows);
         const map: Record<string, number> = {};
         for (const row of rows) {
           const sid = String(row.store_id || "").trim();
@@ -268,6 +339,7 @@ function MePageInner() {
   }, [router]);
 
   const stopScanner = () => {
+    scanRequestRef.current += 1;
     if (scanIntervalRef.current != null) {
       window.clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
@@ -289,6 +361,41 @@ function MePageInner() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!currentUserId) return;
+    let alive = true;
+    Promise.resolve()
+      .then(() => {
+        if (!alive) return;
+        setOrdersLoading(true);
+        setOrdersError("");
+        return fetch("/api/customer/orders");
+      })
+      .then((res) => {
+        if (!res) return null;
+        return res.json();
+      })
+      .then((json) => {
+        if (!alive || !json) return;
+        if (!json?.ok)
+          throw new Error(json?.message || "주문 내역을 불러오지 못했어요.");
+        setRecentOrders(Array.isArray(json.orders) ? json.orders : []);
+      })
+      .catch(
+        (error) =>
+          alive &&
+          setOrdersError(
+            error instanceof Error
+              ? error.message
+              : "주문 내역을 불러오지 못했어요.",
+          ),
+      )
+      .finally(() => alive && setOrdersLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [currentUserId]);
+
   const moveByScannedText = (raw: string) => {
     const text = String(raw || "").trim();
     if (!text) return;
@@ -305,7 +412,7 @@ function MePageInner() {
       }
       stopScanner();
       router.push(
-        `/menu?store=${encodeURIComponent(sid)}${asUrl.searchParams.get("table") ? `&table=${encodeURIComponent(asUrl.searchParams.get("table") || "")}` : ""}`,
+        `/?store=${encodeURIComponent(sid)}${asUrl.searchParams.get("table") ? `&table=${encodeURIComponent(asUrl.searchParams.get("table") || "")}` : ""}`,
       );
     } catch {
       setScanError("인식된 QR 형식이 올바르지 않습니다.");
@@ -313,6 +420,9 @@ function MePageInner() {
   };
 
   const startQrScanner = async () => {
+    setActivePanel(null);
+    stopScanner();
+    const requestId = scanRequestRef.current;
     setScanError("");
     setScannerOpen(true);
 
@@ -331,6 +441,10 @@ function MePageInner() {
         video: { facingMode: { ideal: "environment" } },
         audio: false,
       });
+      if (requestId !== scanRequestRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
@@ -361,6 +475,16 @@ function MePageInner() {
     }
   };
 
+  const openPanel = (panel: "orders" | "stores" | "account") => {
+    stopScanner();
+    setActivePanel(panel);
+  };
+
+  const returnToOrder = () => {
+    stopScanner();
+    if (isSafeInternalPath(returnTo)) router.push(returnTo);
+  };
+
   const summary = useMemo(() => {
     const totalPoints = wallets.reduce(
       (acc, row) => acc + Math.max(0, Number(row.point_balance || 0)),
@@ -372,6 +496,16 @@ function MePageInner() {
     );
     return { totalPoints, stores: wallets.length, totalCoupons };
   }, [wallets, couponCountMap]);
+
+  const activeOrder = useMemo(
+    () =>
+      recentOrders.find((order) =>
+        ["new", "checked", "making", "ready_for_packing"].includes(
+          order.status,
+        ),
+      ) || null,
+    [recentOrders],
+  );
 
   const favoriteSet = useMemo(
     () => new Set(favoriteStoreIds),
@@ -502,102 +636,533 @@ function MePageInner() {
     setSavingBasic(false);
   };
 
-  const theme = useMemo(() => {
-    if (isDark) {
-      return {
-        textSubtle: "#cbd5e1",
-        cardBg: "#111827",
-        cardBorder: "#374151",
-        cardText: "#f3f4f6",
-        itemBg: "#0f172a",
-        itemBorder: "#334155",
-        btnSecondaryBg: "#1f2937",
-        btnSecondaryBorder: "#374151",
-        btnSecondaryText: "#f9fafb",
-        inputBg: "#0b1220",
-        inputText: "#e5e7eb",
-        accent: "#93c5fd",
-      };
-    }
-    return {
-      textSubtle: "#6b7280",
-      cardBg: "#ffffff",
-      cardBorder: "#e5e7eb",
-      cardText: "#111827",
-      itemBg: "#ffffff",
-      itemBorder: "#e5e7eb",
-      btnSecondaryBg: "#ffffff",
-      btnSecondaryBorder: "#d1d5db",
-      btnSecondaryText: "#111827",
-      inputBg: "#ffffff",
-      inputText: "#111827",
-      accent: "#2563eb",
-    };
-  }, [isDark]);
+  const theme = {
+    textSubtle: "#6b7280",
+    cardBg: "#ffffff",
+    cardBorder: "#e5e7eb",
+    cardText: "#111827",
+    itemBg: "#f8fafc",
+    itemBorder: "#e5e7eb",
+    btnSecondaryBg: "#ffffff",
+    btnSecondaryBorder: "#d1d5db",
+    btnSecondaryText: "#111827",
+    inputBg: "#ffffff",
+    inputText: "#111827",
+    accent: "#2563eb",
+  };
 
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: 24 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 8,
-          flexWrap: "wrap",
-        }}
-      >
-        <CustomerPageHeader
-          title={
-            profile?.name ? `${profile.name}님의 RION` : "나의 주문과 혜택"
+    <main
+      style={{
+        maxWidth: 760,
+        margin: "0 auto",
+        padding: "20px 16px 40px",
+        color: theme.cardText,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <style jsx global>{`
+        :root {
+          color-scheme: light;
+        }
+        body {
+          background: #f3f5f8;
+          color: #111827;
+        }
+        .meHero {
+          padding: 20px;
+          border: 1px solid #dfe4eb;
+          border-radius: 22px;
+          background: linear-gradient(145deg, #fff 0%, #f8fafc 100%);
+          box-shadow: 0 18px 48px rgba(15, 31, 61, 0.08);
+        }
+        .meBrand {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          min-height: 30px;
+        }
+        .meBrandName {
+          display: grid;
+          gap: 1px;
+          color: #0f1f3d;
+          line-height: 1.1;
+        }
+        .meBrandName strong {
+          font-size: 16px;
+          letter-spacing: -0.02em;
+        }
+        .meBrandName small {
+          color: #667085;
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .sectionLabel {
+          margin: 0 0 5px;
+          color: #315fba;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 0.15em;
+          line-height: 1.3;
+        }
+        .meHero h1 {
+          margin: 0;
+          color: #0f1f3d;
+          font-size: clamp(27px, 7vw, 36px);
+          line-height: 1.12;
+          letter-spacing: -0.045em;
+        }
+        .meHeroDescription {
+          margin: 9px 0 0;
+          color: #5c6678;
+          font-size: 14px;
+          font-weight: 600;
+          line-height: 1.6;
+        }
+        .meContext {
+          display: inline-flex;
+          margin-top: 14px;
+          min-height: 28px;
+          align-items: center;
+          padding: 5px 10px;
+          border-radius: 999px;
+          background: #e9eef6;
+          color: #30415f;
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .returnButton {
+          width: 100%;
+          min-height: 46px;
+          margin-top: 16px;
+          border: 0;
+          border-radius: 13px;
+          background: #0f1f3d;
+          color: #fff;
+          font-size: 14px;
+          font-weight: 900;
+        }
+        .activeOrderBanner {
+          display: grid;
+          gap: 11px;
+          margin-top: 16px;
+          padding: 14px;
+          border: 1px solid #cbd9f3;
+          border-radius: 16px;
+          background: #f3f7ff;
+        }
+        .activeOrderTop {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .activeOrderTop strong {
+          display: block;
+          color: #0f1f3d;
+          font-size: 16px;
+        }
+        .activeOrderTop p {
+          margin: 4px 0 0;
+          color: #5c6678;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .activeOrderActions {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 8px;
+        }
+        .dismissButton {
+          min-height: 46px;
+          padding: 0 14px;
+          border: 1px solid #c6cfdd;
+          border-radius: 13px;
+          background: #fff;
+          color: #475467;
+          font-weight: 850;
+        }
+        .sectionHeading {
+          display: flex;
+          align-items: end;
+          justify-content: space-between;
+          gap: 12px;
+          margin: 20px 2px 9px;
+        }
+        .sectionHeading h2 {
+          margin: 0;
+          color: #0f1f3d;
+          font-size: 19px;
+        }
+        .sectionLink {
+          min-height: 36px;
+          border: 0;
+          background: transparent;
+          color: #315fba;
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .benefitGrid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .benefitItem {
+          display: grid;
+          gap: 5px;
+          min-width: 0;
+          padding: 14px 10px;
+          border: 1px solid #e5e7eb;
+          border-radius: 14px;
+          background: #f8fafc;
+          text-align: center;
+          color: #0f1f3d;
+        }
+        button.benefitItem {
+          cursor: pointer;
+        }
+        .benefitItem.active {
+          border-color: #315fba;
+          background: #edf3ff;
+          box-shadow: 0 0 0 1px #315fba inset;
+        }
+        .benefitItem span {
+          color: #6b7280;
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .benefitItem strong {
+          color: #0f1f3d;
+          font-size: clamp(16px, 4vw, 21px);
+          overflow-wrap: anywhere;
+        }
+        .benefitDetail {
+          display: grid;
+          gap: 9px;
+          margin-top: 12px;
+          padding-top: 12px;
+          border-top: 1px solid #e5e7eb;
+        }
+        .benefitRow {
+          display: grid;
+          gap: 4px;
+          padding: 12px;
+          border: 1px solid #e1e7ef;
+          border-radius: 13px;
+          background: #f8fafc;
+        }
+        .benefitRowHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          color: #0f1f3d;
+        }
+        .benefitRow p {
+          margin: 0;
+          color: #667085;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+        @media (max-width: 359px) {
+          .benefitGrid {
+            grid-template-columns: 1fr;
           }
-          description="포인트와 쿠폰, 자주 이용하는 매장을 한곳에서 확인하세요."
-          context={`${wallets.length}개 매장 · 쿠폰 ${summary.totalCoupons}장`}
-        />
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 6,
-            marginLeft: "auto",
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              if (isSafeInternalPath(returnTo)) {
-                router.push(returnTo);
-                return;
-              }
-              const sid = storeFromQuery || wallets[0]?.store_id || "";
-              if (!sid) {
-                router.push("/");
-                return;
-              }
-              router.push(`/menu?store=${encodeURIComponent(sid)}`);
-            }}
-            style={actionBtnStyle}
-          >
-            주문화면
-          </button>
-          <button
-            type="button"
-            onClick={startQrScanner}
-            style={{
-              ...secondaryBtnStyle,
-              border: `1px solid ${theme.btnSecondaryBorder}`,
-              background: theme.btnSecondaryBg,
-              color: theme.btnSecondaryText,
-            }}
-          >
-            <span aria-hidden>⌁</span> QR 스캔
-          </button>
+        }
+        .quickGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .quickCard {
+          min-height: 92px;
+          padding: 12px;
+          border: 1px solid #e1e7ef;
+          border-radius: 17px;
+          background: #fff;
+          color: #111827;
+          text-align: left;
+          display: grid;
+          grid-template-columns: 40px 1fr;
+          align-content: center;
+          gap: 10px;
+          box-shadow: 0 8px 24px rgba(15, 31, 61, 0.05);
+        }
+        .quickIcon {
+          width: 40px;
+          height: 40px;
+          border-radius: 13px;
+          display: grid;
+          place-items: center;
+          background: #eaf2ff;
+          color: #235da8;
+        }
+        .quickIcon.purple {
+          background: #e8edf7;
+          color: #0f1f3d;
+        }
+        .quickIcon.green {
+          background: #ecf9f2;
+          color: #168657;
+        }
+        .quickIcon.gray {
+          background: #edf1f7;
+          color: #405a7c;
+        }
+        .quickCopy {
+          display: grid;
+          gap: 3px;
+          min-width: 0;
+        }
+        .quickCopy strong {
+          font-size: 15px;
+        }
+        .quickCopy small {
+          color: #6b7280;
+          font-size: 11px;
+          line-height: 1.4;
+        }
+        .sheetList {
+          display: grid;
+          gap: 10px;
+        }
+        .sheetCard {
+          padding: 15px;
+          border: 1px solid #e1e7ef;
+          border-radius: 16px;
+          background: #f8fafc;
+        }
+        .sheetCardHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .sheetCard h3 {
+          margin: 0;
+          font-size: 17px;
+        }
+        .sheetCard p {
+          margin: 7px 0 0;
+          color: #667085;
+          font-size: 13px;
+        }
+        .sheetAction {
+          width: 100%;
+          min-height: 46px;
+          margin-top: 12px;
+          border: 0;
+          border-radius: 12px;
+          background: #0f1f3d;
+          color: #fff;
+          font-weight: 900;
+        }
+        .statusBadge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 28px;
+          padding: 5px 8px;
+          border-radius: 999px;
+          background: #eaf2ff;
+          color: #235da8;
+          font-size: 11px;
+          font-weight: 900;
+          line-height: 1;
+          white-space: nowrap;
+        }
+        .statusBadge.success {
+          background: #e9f8ef;
+          color: #137a45;
+        }
+        .statusBadge.danger {
+          background: #fff0f0;
+          color: #b42318;
+        }
+        .statusBadge.warning {
+          background: #fff4df;
+          color: #9a5b00;
+        }
+        .statusBadge.ready {
+          background: #f0ebff;
+          color: #6941c6;
+        }
+        @media (max-width: 520px) {
+          .meHero {
+            padding: 17px;
+            border-radius: 18px;
+          }
+        }
+        @media (max-width: 340px) {
+          .quickGrid {
+            gap: 8px;
+          }
+          .quickCard {
+            padding: 11px;
+            grid-template-columns: 34px 1fr;
+          }
+          .quickIcon {
+            width: 34px;
+            height: 34px;
+          }
+          .quickCopy small {
+            display: none;
+          }
+        }
+      `}</style>
+      <header className="meHero">
+        <div className="meBrand">
+          <CustomerBrand compact />
+          <span className="meBrandName">
+            <strong>RION Order</strong>
+            <small>주문·혜택 서비스</small>
+          </span>
+        </div>
+        <div style={{ marginTop: 22 }}>
+          <p className="sectionLabel">MY RION</p>
+          <h1>내 주문·혜택</h1>
+          <p className="meHeroDescription">
+            {profile?.name
+              ? `${profile.name}님, 매장별 포인트와 쿠폰을 확인하세요.`
+              : "매장별 포인트와 쿠폰을 확인하세요."}
+          </p>
+          <span className="meContext">
+            {wallets.length}개 매장 · 쿠폰 {summary.totalCoupons}장
+          </span>
+        </div>
+        {(isSafeInternalPath(returnTo) || activeOrder) &&
+        !orderBannerDismissed ? (
+          <section className="activeOrderBanner" aria-label="진행 중인 주문">
+            <div className="activeOrderTop">
+              <div>
+                <p className="sectionLabel">CURRENT ORDER</p>
+                <strong>
+                  {activeOrder?.store.name ||
+                    storeNameMap[String(sp.get("store") || "")] ||
+                    "이용 중인 매장"}
+                </strong>
+                <p>
+                  {activeOrder
+                    ? `${Number(activeOrder.total_count || 0)}개 · ${formatWon(Number(activeOrder.total_price || 0))}`
+                    : "이어서 주문할 수 있어요."}
+                </p>
+              </div>
+              {activeOrder ? (
+                <span
+                  className={`statusBadge ${orderStatusTone(activeOrder.status)}`}
+                >
+                  {orderStatusLabel(activeOrder.status)}
+                </span>
+              ) : null}
+            </div>
+            <div className="activeOrderActions">
+              <button
+                className="returnButton"
+                style={{ marginTop: 0 }}
+                type="button"
+                onClick={() =>
+                  isSafeInternalPath(returnTo)
+                    ? returnToOrder()
+                    : openPanel("orders")
+                }
+              >
+                {isSafeInternalPath(returnTo)
+                  ? "주문 계속하기"
+                  : "주문 상태 보기"}
+              </button>
+              <button
+                className="dismissButton"
+                type="button"
+                onClick={() => setOrderBannerDismissed(true)}
+                aria-label="진행 중인 주문 안내 닫기"
+              >
+                닫기
+              </button>
+            </div>
+          </section>
+        ) : null}
+      </header>
+
+      <div className="sectionHeading">
+        <div>
+          <p className="sectionLabel">QUICK MENU</p>
+          <h2>빠른 메뉴</h2>
         </div>
       </div>
-      <p style={{ color: theme.textSubtle, marginTop: 8, fontWeight: 700 }}>
-        RION Order 내 정보와 매장별 포인트/쿠폰 혜택을 확인할 수 있어요.
-      </p>
+      <div className="quickGrid" aria-label="빠른 메뉴">
+        <button className="quickCard" onClick={() => openPanel("orders")}>
+          <span className="quickIcon">
+            <CustomerIcon name="orders" />
+          </span>
+          <span className="quickCopy">
+            <strong>주문 내역</strong>
+            <small>최근 주문 확인</small>
+          </span>
+        </button>
+        <button className="quickCard" onClick={() => openPanel("stores")}>
+          <span className="quickIcon green">
+            <CustomerIcon name="store" />
+          </span>
+          <span className="quickCopy">
+            <strong>내 매장</strong>
+            <small>포인트·쿠폰</small>
+          </span>
+        </button>
+        <button className="quickCard" onClick={startQrScanner}>
+          <span className="quickIcon purple">
+            <CustomerIcon name="qr" />
+          </span>
+          <span className="quickCopy">
+            <strong>QR 주문</strong>
+            <small>매장 QR 스캔</small>
+          </span>
+        </button>
+        <button className="quickCard" onClick={() => openPanel("account")}>
+          <span className="quickIcon gray">
+            <CustomerIcon name="user" />
+          </span>
+          <span className="quickCopy">
+            <strong>계정 정보</strong>
+            <small>확인·수정</small>
+          </span>
+        </button>
+      </div>
+      {!ordersLoading && recentOrders[0] ? (
+        <>
+          <div className="sectionHeading">
+            <div>
+              <p className="sectionLabel">RECENT ORDER</p>
+              <h2>최근 주문</h2>
+            </div>
+          </div>
+          <button
+            className="quickCard"
+            style={{
+              marginTop: 12,
+              width: "100%",
+              gridTemplateColumns: "40px 1fr auto",
+            }}
+            onClick={() => openPanel("orders")}
+          >
+            <span className="quickIcon">
+              <CustomerIcon name="orders" />
+            </span>
+            <span className="quickCopy">
+              <strong>{recentOrders[0].store.name}</strong>
+              <small>
+                {formatOrderDate(recentOrders[0].created_at)} ·{" "}
+                {formatWon(Number(recentOrders[0].total_price || 0))}
+              </small>
+            </span>
+            <span
+              className={`statusBadge ${orderStatusTone(recentOrders[0].status)}`}
+            >
+              {orderStatusLabel(recentOrders[0].status)}
+            </span>
+          </button>
+        </>
+      ) : null}
 
       {loading ? <p style={{ marginTop: 14 }}>불러오는 중...</p> : null}
       {msg ? (
@@ -620,6 +1185,12 @@ function MePageInner() {
             background: theme.cardBg,
           }}
         >
+          <div>
+            <p className="sectionLabel">QR SCAN</p>
+            <p style={{ margin: "0 0 10px", fontWeight: 800 }}>
+              매장 QR을 화면 안에 맞춰주세요.
+            </p>
+          </div>
           <video ref={videoRef} style={videoStyle} muted playsInline />
           <button
             type="button"
@@ -645,6 +1216,8 @@ function MePageInner() {
         <section
           style={{
             ...cardStyle,
+            order: 5,
+            display: "none",
             border: `1px solid ${theme.cardBorder}`,
             background: theme.cardBg,
             color: theme.cardText,
@@ -761,28 +1334,93 @@ function MePageInner() {
         <section
           style={{
             ...cardStyle,
+            order: 3,
             border: `1px solid ${theme.cardBorder}`,
             background: theme.cardBg,
             color: theme.cardText,
           }}
         >
+          <p className="sectionLabel">MY BENEFITS</p>
           <h2 style={sectionTitleStyle}>혜택 요약</h2>
-          <p>
-            <b>전체 매장 수:</b> {summary.stores}개
-          </p>
-          <p>
-            <b>전체 포인트:</b> {summary.totalPoints.toLocaleString()}P
-          </p>
-          <p>
-            <b>전체 보유쿠폰:</b> {summary.totalCoupons}장
-          </p>
-          <button
-            type="button"
-            style={{ ...actionBtnStyle, marginTop: 10 }}
-            onClick={() => setShowStores((p) => !p)}
-          >
-            {showStores ? "내 매장 접기" : "내 매장 보기"}
-          </button>
+          <div className="benefitGrid">
+            {(
+              [
+                ["stores", "이용 매장", `${summary.stores}곳`],
+                [
+                  "points",
+                  "총 보유 포인트",
+                  `${summary.totalPoints.toLocaleString()}P`,
+                ],
+                ["coupons", "내 쿠폰", `${summary.totalCoupons}장`],
+              ] as const
+            ).map(([key, label, value]) => (
+              <button
+                type="button"
+                className={`benefitItem ${benefitView === key ? "active" : ""}`}
+                aria-pressed={benefitView === key}
+                onClick={() => setBenefitView(key)}
+                key={key}
+              >
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </button>
+            ))}
+          </div>
+          <div className="benefitDetail" aria-live="polite">
+            {benefitView === "coupons" ? (
+              coupons.length ? (
+                coupons.map((coupon) => (
+                  <article className="benefitRow" key={coupon.id}>
+                    <div className="benefitRowHead">
+                      <strong>{coupon.template?.name || "매장 쿠폰"}</strong>
+                      <span>{storeNameMap[coupon.store_id] || "매장"}</span>
+                    </div>
+                    <p>{couponBenefitText(coupon)}</p>
+                    <p>
+                      {coupon.expires_at
+                        ? `${new Date(coupon.expires_at).toLocaleDateString("ko-KR")}까지`
+                        : "사용 기한 제한 없음"}
+                    </p>
+                  </article>
+                ))
+              ) : (
+                <div className="benefitRow">
+                  <p>사용할 수 있는 쿠폰이 없어요.</p>
+                </div>
+              )
+            ) : wallets.length ? (
+              wallets.map((wallet) => (
+                <article
+                  className="benefitRow"
+                  key={`${benefitView}-${wallet.store_id}`}
+                >
+                  <div className="benefitRowHead">
+                    <strong>{storeNameMap[wallet.store_id] || "매장"}</strong>
+                    {benefitView === "points" ? (
+                      <strong>
+                        {Number(wallet.point_balance || 0).toLocaleString()}P
+                      </strong>
+                    ) : (
+                      <span>{tierLabel(wallet.tier)}</span>
+                    )}
+                  </div>
+                  {benefitView === "stores" ? (
+                    <p>
+                      주문 {Number(wallet.lifetime_orders || 0)}회 · 매장 포인트{" "}
+                      {Number(wallet.point_balance || 0).toLocaleString()}P ·
+                      쿠폰 {couponCountMap[wallet.store_id] || 0}장
+                    </p>
+                  ) : (
+                    <p>이 매장에서 사용할 수 있는 포인트예요.</p>
+                  )}
+                </article>
+              ))
+            ) : (
+              <div className="benefitRow">
+                <p>아직 이용한 매장이 없어요.</p>
+              </div>
+            )}
+          </div>
         </section>
       ) : null}
 
@@ -790,6 +1428,8 @@ function MePageInner() {
         <section
           style={{
             ...cardStyle,
+            order: 4,
+            display: "none",
             border: `1px solid ${theme.cardBorder}`,
             background: theme.cardBg,
             color: theme.cardText,
@@ -932,6 +1572,161 @@ function MePageInner() {
             </div>
           )}
         </section>
+      ) : null}
+
+      {activePanel === "orders" ? (
+        <CustomerSheet title="주문 내역" onClose={() => setActivePanel(null)}>
+          <div className="sheetList">
+            {ordersLoading ? (
+              <p>불러오는 중...</p>
+            ) : ordersError ? (
+              <p>{ordersError}</p>
+            ) : recentOrders.length === 0 ? (
+              <div className="sheetCard">
+                <h3>아직 주문 내역이 없어요</h3>
+                <p>QR을 스캔해 첫 주문을 시작해 보세요.</p>
+                <button
+                  className="sheetAction"
+                  onClick={() => {
+                    setActivePanel(null);
+                    startQrScanner();
+                  }}
+                >
+                  QR 주문
+                </button>
+              </div>
+            ) : (
+              recentOrders.map((order) => (
+                <article className="sheetCard" key={order.id}>
+                  <div className="sheetCardHead">
+                    <h3>{order.store.name}</h3>
+                    <span
+                      className={`statusBadge ${orderStatusTone(order.status)}`}
+                    >
+                      {orderStatusLabel(order.status)}
+                    </span>
+                  </div>
+                  <p>
+                    {formatOrderDate(order.created_at)} · 주문{" "}
+                    {order.display_no || "-"}
+                  </p>
+                  <p>
+                    {Number(order.total_count || 0)}개 ·{" "}
+                    {formatWon(Number(order.total_price || 0))}
+                    {Number(order.earned_points || 0) > 0
+                      ? ` · +${Number(order.earned_points).toLocaleString()}P`
+                      : ""}
+                  </p>
+                </article>
+              ))
+            )}
+          </div>
+        </CustomerSheet>
+      ) : null}
+
+      {activePanel === "stores" ? (
+        <CustomerSheet
+          title={`내 매장 ${wallets.length}곳`}
+          onClose={() => setActivePanel(null)}
+        >
+          <div className="sheetList">
+            {wallets.length === 0 ? (
+              <div className="sheetCard">
+                <h3>이용 중인 매장이 없어요</h3>
+                <p>QR 주문 후 포인트와 쿠폰을 확인할 수 있어요.</p>
+              </div>
+            ) : (
+              visibleWallets.map((w) => {
+                const sid = String(w.store_id || "");
+                return (
+                  <article className="sheetCard" key={sid}>
+                    <div className="sheetCardHead">
+                      <h3>{storeNameMap[sid] || "매장"}</h3>
+                      <span className="statusBadge">{tierLabel(w.tier)}</span>
+                    </div>
+                    <p>
+                      <b>
+                        매장 포인트{" "}
+                        {Number(w.point_balance || 0).toLocaleString()}P
+                      </b>{" "}
+                      · 쿠폰 {couponCountMap[sid] || 0}장
+                    </p>
+                    <p>
+                      주문 {Number(w.lifetime_orders || 0)}회 · 누적{" "}
+                      {formatWon(w.lifetime_spent)}
+                    </p>
+                    <button
+                      className="sheetAction"
+                      onClick={() =>
+                        router.push(`/menu?store=${encodeURIComponent(sid)}`)
+                      }
+                    >
+                      메뉴 보기
+                    </button>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </CustomerSheet>
+      ) : null}
+
+      {activePanel === "account" ? (
+        <CustomerSheet title="계정 정보" onClose={() => setActivePanel(null)}>
+          <div className="sheetCard">
+            {editingBasic ? (
+              <div style={{ display: "grid", gap: 12 }}>
+                <label>
+                  이름
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    style={{ ...inputStyle, width: "100%" }}
+                  />
+                </label>
+                <label>
+                  전화번호
+                  <input
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(formatPhone(e.target.value))}
+                    style={{ ...inputStyle, width: "100%" }}
+                  />
+                </label>
+                <button
+                  className="sheetAction"
+                  onClick={saveBasicProfile}
+                  disabled={savingBasic}
+                >
+                  {savingBasic ? "저장 중" : "저장"}
+                </button>
+              </div>
+            ) : (
+              <>
+                <p>
+                  <b>이메일</b>
+                  <br />
+                  {email || "-"}
+                </p>
+                <p>
+                  <b>이름</b>
+                  <br />
+                  {profile?.name || "-"}
+                </p>
+                <p>
+                  <b>전화번호</b>
+                  <br />
+                  {profile?.phone || "-"}
+                </p>
+                <button
+                  className="sheetAction"
+                  onClick={() => setEditingBasic(true)}
+                >
+                  수정
+                </button>
+              </>
+            )}
+          </div>
+        </CustomerSheet>
       ) : null}
     </main>
   );
