@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
-import { CustomerBrand } from "../_components/CustomerBrand";
-import { CustomerIcon } from "../_components/CustomerIcon";
 import { CustomerSheet } from "../_components/CustomerSheet";
+import { MeAccountSheet } from "./MeAccountSheet";
 import { MeBenefitSections } from "./MeBenefitSections";
+import { MePlatformHeader } from "./MePlatformHeader";
+import { MeQrScannerSheet } from "./MeQrScannerSheet";
+import { MeQuickMenu } from "./MeQuickMenu";
 import {
   OrderDetailSheet,
   OrderHistorySheet,
@@ -91,6 +93,10 @@ export function MeDashboard() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [savingBasic, setSavingBasic] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [accountNotice, setAccountNotice] = useState("");
+  const [overlayResetKey, setOverlayResetKey] = useState(0);
   const [activePanel, setActivePanel] = useState<
     "orders" | "stores" | "account" | null
   >(null);
@@ -112,6 +118,7 @@ export function MeDashboard() {
   const scanIntervalRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanRequestRef = useRef(0);
+  const detectingRef = useRef(false);
   const returnTo = useMemo(
     () => String(sp.get("return_to") || sp.get("next") || "").trim(),
     [sp],
@@ -274,6 +281,7 @@ export function MeDashboard() {
       streamRef.current = null;
     }
     setScanning(false);
+    detectingRef.current = false;
     setScannerOpen(false);
   };
 
@@ -404,6 +412,8 @@ export function MeDashboard() {
 
   const startQrScanner = async () => {
     setActivePanel(null);
+    setSelectedOrder(null);
+    setOverlayResetKey((value) => value + 1);
     stopScanner();
     const requestId = scanRequestRef.current;
     setScanError("");
@@ -431,6 +441,8 @@ export function MeDashboard() {
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
         setScanError("카메라 초기화에 실패했어요.");
         return;
       }
@@ -441,7 +453,8 @@ export function MeDashboard() {
       setScanning(true);
 
       scanIntervalRef.current = window.setInterval(async () => {
-        if (!videoRef.current) return;
+        if (!videoRef.current || detectingRef.current) return;
+        detectingRef.current = true;
         try {
           const found = await detector.detect(videoRef.current);
           const first = Array.isArray(found) ? found[0] : null;
@@ -449,9 +462,16 @@ export function MeDashboard() {
           if (value) moveByScannedText(value);
         } catch {
           // keep scanning
+        } finally {
+          detectingRef.current = false;
         }
       }, 500);
     } catch {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      setScanning(false);
       setScanError(
         "카메라 권한이 없거나 기기에서 카메라를 사용할 수 없습니다.",
       );
@@ -460,6 +480,12 @@ export function MeDashboard() {
 
   const openPanel = (panel: "orders" | "stores" | "account") => {
     stopScanner();
+    setSelectedOrder(null);
+    setOverlayResetKey((value) => value + 1);
+    if (panel === "account") {
+      setAccountError("");
+      setAccountNotice("");
+    }
     setActivePanel(panel);
   };
 
@@ -519,11 +545,12 @@ export function MeDashboard() {
   );
 
   const saveBasicProfile = async () => {
-    setMsg("");
+    setAccountError("");
+    setAccountNotice("");
     setSavingBasic(true);
     const { data: authData, error: authErr } = await supabase.auth.getUser();
     if (authErr || !authData?.user) {
-      setMsg("로그인 정보가 만료되어 다시 로그인해 주세요.");
+      setAccountError("로그인 정보가 만료됐어요. 다시 로그인해 주세요.");
       setSavingBasic(false);
       return;
     }
@@ -536,9 +563,7 @@ export function MeDashboard() {
     };
 
     if (!isValidPhone(payload.phone || "")) {
-      setMsg(
-        "전화번호 형식이 올바르지 않아요. 숫자 기준 9~11자리로 입력해 주세요.",
-      );
+      setAccountError("전화번호를 다시 확인해 주세요.");
       setSavingBasic(false);
       return;
     }
@@ -550,7 +575,7 @@ export function MeDashboard() {
       .maybeSingle();
 
     if (error) {
-      setMsg(`기본 정보 저장 실패: ${error.message}`);
+      setAccountError("정보를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
       setSavingBasic(false);
       return;
     }
@@ -562,7 +587,24 @@ export function MeDashboard() {
       },
     );
     setEditingBasic(false);
+    setAccountNotice("정보를 수정했어요.");
     setSavingBasic(false);
+  };
+
+  const signOut = async () => {
+    setAccountError("");
+    setAccountNotice("");
+    setSigningOut(true);
+    stopScanner();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setAccountError("로그아웃하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setSigningOut(false);
+      return;
+    }
+    setActivePanel(null);
+    router.replace("/");
+    router.refresh();
   };
 
   const theme = {
@@ -611,6 +653,13 @@ export function MeDashboard() {
           align-items: center;
           gap: 9px;
           min-height: 30px;
+          width: fit-content;
+          min-height: 44px;
+          color: inherit;
+          text-decoration: none;
+        }
+        .meHeroCopy {
+          margin-top: 22px;
         }
         .meBrandName {
           display: grid;
@@ -914,6 +963,11 @@ export function MeDashboard() {
           gap: 10px;
           box-shadow: 0 8px 24px rgba(15, 31, 61, 0.05);
         }
+        .quickCard.emphasis {
+          border-color: #9db9e8;
+          background: #f3f7ff;
+          box-shadow: 0 8px 24px rgba(49, 95, 186, 0.1);
+        }
         .recentOrderCard {
           width: 100%;
           min-height: 112px;
@@ -1056,6 +1110,109 @@ export function MeDashboard() {
           color: #fff;
           font-weight: 900;
         }
+        .accountForm {
+          display: grid;
+          gap: 12px;
+        }
+        .accountForm label {
+          display: grid;
+          gap: 6px;
+          color: #344054;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .accountForm input {
+          width: 100%;
+          min-height: 46px;
+          padding: 10px 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 11px;
+          background: #fff;
+          color: #111827;
+          font: inherit;
+        }
+        .accountForm input[readonly] {
+          background: #f2f4f7;
+          color: #667085;
+        }
+        .accountActions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+        .accountActions .sheetAction {
+          margin-top: 0;
+        }
+        .accountSecondary,
+        .logoutButton {
+          min-height: 46px;
+          border: 1px solid #cfd6e1;
+          border-radius: 12px;
+          background: #fff;
+          color: #344054;
+          font-weight: 900;
+        }
+        .accountError {
+          margin: 0;
+          color: #b42318;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .accountNotice {
+          margin: 0;
+          color: #137a45;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .accountSummary hr {
+          margin: 16px 0;
+          border: 0;
+          border-top: 1px solid #e1e7ef;
+        }
+        .qrScanner {
+          display: grid;
+          gap: 10px;
+        }
+        .qrScannerGuide,
+        .qrScannerStatus {
+          margin: 0;
+          color: #667085;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.5;
+        }
+        .qrVideoFrame {
+          position: relative;
+          width: min(100%, 430px);
+          margin: 0 auto;
+          overflow: hidden;
+          border-radius: 16px;
+          background: #05070a;
+          aspect-ratio: 3 / 4;
+        }
+        .qrVideoFrame video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .qrTarget {
+          position: absolute;
+          inset: 23%;
+          border: 3px solid rgba(255, 255, 255, 0.92);
+          border-radius: 18px;
+          box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.28);
+        }
+        .qrScannerError {
+          padding: 12px;
+          border: 1px solid #f0d5a8;
+          border-radius: 12px;
+          background: #fffaf1;
+        }
+        .qrScannerError p {
+          margin: 5px 0 0;
+          color: #667085;
+          font-size: 13px;
+        }
         .statusBadge {
           display: inline-flex;
           align-items: center;
@@ -1116,28 +1273,12 @@ export function MeDashboard() {
           }
         }
       `}</style>
-      <header className="meHero">
-        <div className="meBrand">
-          <CustomerBrand compact />
-          <span className="meBrandName">
-            <strong>RION Order</strong>
-            <small>주문·혜택 서비스</small>
-          </span>
-        </div>
-        <div style={{ marginTop: 22 }}>
-          <p className="sectionLabel">MY RION</p>
-          <h1>내 주문·혜택</h1>
-          <p className="meHeroDescription">
-            {profile?.name
-              ? `${profile.name}님, 매장별 포인트와 쿠폰을 확인하세요.`
-              : "매장별 포인트와 쿠폰을 확인하세요."}
-          </p>
-          {!loading ? (
-            <span className="meContext">
-              {wallets.length}개 매장 · 쿠폰 {summary.totalCoupons}장
-            </span>
-          ) : null}
-        </div>
+      <MePlatformHeader
+        name={profile?.name}
+        loading={loading}
+        storeCount={wallets.length}
+        couponCount={summary.totalCoupons}
+      >
         {(cartSummary || activeOrder) && !orderBannerDismissed ? (
           <section className="activeOrderBanner" aria-label="진행 중인 주문">
             <div className="activeOrderTop">
@@ -1205,64 +1346,15 @@ export function MeDashboard() {
             </div>
           </section>
         ) : null}
-      </header>
+      </MePlatformHeader>
 
-      <div className="sectionHeading">
-        <div>
-          <p className="sectionLabel">QUICK MENU</p>
-          <h2>빠른 메뉴</h2>
-        </div>
-      </div>
-      <div className="quickGrid" aria-label="빠른 메뉴">
-        <button
-          type="button"
-          className="quickCard"
-          onClick={() => openPanel("orders")}
-        >
-          <span className="quickIcon">
-            <CustomerIcon name="orders" />
-          </span>
-          <span className="quickCopy">
-            <strong>주문 내역</strong>
-            <small>최근 주문 확인</small>
-          </span>
-        </button>
-        <button
-          type="button"
-          className="quickCard"
-          onClick={() => openPanel("stores")}
-        >
-          <span className="quickIcon green">
-            <CustomerIcon name="store" />
-          </span>
-          <span className="quickCopy">
-            <strong>내 매장</strong>
-            <small>포인트·쿠폰</small>
-          </span>
-        </button>
-        <button type="button" className="quickCard" onClick={startQrScanner}>
-          <span className="quickIcon purple">
-            <CustomerIcon name="qr" />
-          </span>
-          <span className="quickCopy">
-            <strong>QR 주문</strong>
-            <small>매장 QR 스캔</small>
-          </span>
-        </button>
-        <button
-          type="button"
-          className="quickCard"
-          onClick={() => openPanel("account")}
-        >
-          <span className="quickIcon gray">
-            <CustomerIcon name="user" />
-          </span>
-          <span className="quickCopy">
-            <strong>계정 정보</strong>
-            <small>확인·수정</small>
-          </span>
-        </button>
-      </div>
+      <MeQuickMenu
+        hasActiveOrder={Boolean(activeOrder)}
+        onOrders={() => openPanel("orders")}
+        onStores={() => openPanel("stores")}
+        onQr={() => void startQrScanner()}
+        onAccount={() => openPanel("account")}
+      />
       {!ordersLoading && recentOrder ? (
         <RecentOrderCard
           order={recentOrder}
@@ -1323,42 +1415,18 @@ export function MeDashboard() {
         </div>
       ) : null}
       {scannerOpen ? (
-        <section
-          style={{
-            ...scanCardStyle,
-            border: `1px solid ${theme.cardBorder}`,
-            background: theme.cardBg,
-          }}
-        >
-          <div>
-            <p className="sectionLabel">QR SCAN</p>
-            <p style={{ margin: "0 0 10px", fontWeight: 800 }}>
-              매장 QR을 화면 안에 맞춰주세요.
-            </p>
-          </div>
-          <video ref={videoRef} style={videoStyle} muted playsInline />
-          <button
-            type="button"
-            onClick={stopScanner}
-            style={{
-              ...secondaryBtnStyle,
-              border: `1px solid ${theme.btnSecondaryBorder}`,
-              background: theme.btnSecondaryBg,
-              color: theme.btnSecondaryText,
-            }}
-          >
-            {scanning ? "스캔 닫기" : "닫기"}
-          </button>
-          {scanError ? (
-            <p style={{ margin: 0, color: "#b91c1c", fontWeight: 800 }}>
-              {scanError}
-            </p>
-          ) : null}
-        </section>
+        <MeQrScannerSheet
+          videoRef={videoRef}
+          scanning={scanning}
+          error={scanError}
+          onRetry={() => void startQrScanner()}
+          onClose={stopScanner}
+        />
       ) : null}
 
       {!loading ? (
         <MeBenefitSections
+          key={overlayResetKey}
           view={benefitView}
           onChange={setBenefitView}
           wallets={wallets}
@@ -1444,93 +1512,40 @@ export function MeDashboard() {
       ) : null}
 
       {activePanel === "account" ? (
-        <CustomerSheet title="계정 정보" onClose={() => setActivePanel(null)}>
-          <div className="sheetCard">
-            {editingBasic ? (
-              <div style={{ display: "grid", gap: 12 }}>
-                <label>
-                  이름
-                  <input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    style={{ ...inputStyle, width: "100%" }}
-                  />
-                </label>
-                <label>
-                  전화번호
-                  <input
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(formatPhone(e.target.value))}
-                    style={{ ...inputStyle, width: "100%" }}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="sheetAction"
-                  onClick={saveBasicProfile}
-                  disabled={savingBasic}
-                >
-                  {savingBasic ? "저장 중" : "저장"}
-                </button>
-              </div>
-            ) : (
-              <>
-                <p>
-                  <b>이메일</b>
-                  <br />
-                  {email || "-"}
-                </p>
-                <p>
-                  <b>이름</b>
-                  <br />
-                  {profile?.name || "-"}
-                </p>
-                <p>
-                  <b>전화번호</b>
-                  <br />
-                  {profile?.phone || "-"}
-                </p>
-                <button
-                  type="button"
-                  className="sheetAction"
-                  onClick={() => setEditingBasic(true)}
-                >
-                  수정
-                </button>
-              </>
-            )}
-          </div>
-        </CustomerSheet>
+        <MeAccountSheet
+          email={email}
+          name={profile?.name}
+          phone={profile?.phone}
+          editing={editingBasic}
+          editName={editName}
+          editPhone={editPhone}
+          saving={savingBasic}
+          signingOut={signingOut}
+          error={accountError}
+          notice={accountNotice}
+          onEdit={() => {
+            setAccountError("");
+            setAccountNotice("");
+            setEditingBasic(true);
+          }}
+          onCancel={() => {
+            setAccountError("");
+            setAccountNotice("");
+            setEditingBasic(false);
+            setEditName(profile?.name || "");
+            setEditPhone(profile?.phone || "");
+          }}
+          onNameChange={setEditName}
+          onPhoneChange={(value) => setEditPhone(formatPhone(value))}
+          onSave={() => void saveBasicProfile()}
+          onSignOut={() => void signOut()}
+          onClose={() => {
+            setAccountError("");
+            setAccountNotice("");
+            setActivePanel(null);
+          }}
+        />
       ) : null}
     </main>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  fontWeight: 700,
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  fontWeight: 900,
-  cursor: "pointer",
-};
-
-const scanCardStyle: React.CSSProperties = {
-  marginTop: 12,
-  borderRadius: 12,
-  padding: 12,
-  display: "grid",
-  gap: 8,
-};
-
-const videoStyle: React.CSSProperties = {
-  width: "100%",
-  borderRadius: 10,
-  background: "#000",
-  aspectRatio: "3 / 4",
-  objectFit: "cover",
-};
