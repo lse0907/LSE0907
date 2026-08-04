@@ -1,28 +1,59 @@
 "use client";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { CustomerIcon } from "./CustomerIcon";
 
 export function CustomerSheet({
   title,
   onClose,
+  closeLabel,
   children,
 }: {
   title: string;
   onClose: () => void;
+  closeLabel?: string;
   children: ReactNode;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  const titleId = useId();
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     const previous = document.body.style.overflow;
+    const trigger =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     document.body.style.overflow = "hidden";
     closeRef.current?.focus();
-    const key = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+      if (event.key !== "Tab" || !sheetRef.current) return;
+      const focusable = Array.from(
+        sheetRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", key);
     return () => {
       document.body.style.overflow = previous;
       window.removeEventListener("keydown", key);
+      trigger?.focus();
     };
-  }, [onClose]);
+  }, []);
   return (
     <div
       className="backdrop"
@@ -30,15 +61,21 @@ export function CustomerSheet({
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <section
+        ref={sheetRef}
         className="sheet"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="customer-sheet-title"
+        aria-labelledby={titleId}
       >
         <div className="handle" aria-hidden="true" />
         <header>
-          <h2 id="customer-sheet-title">{title}</h2>
-          <button ref={closeRef} onClick={onClose} aria-label="닫기">
+          <h2 id={titleId}>{title}</h2>
+          <button
+            type="button"
+            ref={closeRef}
+            onClick={onClose}
+            aria-label={closeLabel || `${title} 닫기`}
+          >
             <CustomerIcon name="close" />
           </button>
         </header>
@@ -107,6 +144,25 @@ export function CustomerSheet({
           }
           .body {
             max-height: calc(84vh - 68px);
+          }
+        }
+        @media (prefers-reduced-motion: no-preference) {
+          .backdrop {
+            animation: sheetFade 180ms ease-out;
+          }
+          .sheet {
+            animation: sheetEnter 200ms ease-out;
+          }
+        }
+        @keyframes sheetFade {
+          from {
+            opacity: 0;
+          }
+        }
+        @keyframes sheetEnter {
+          from {
+            opacity: 0;
+            transform: translateY(16px);
           }
         }
       `}</style>
