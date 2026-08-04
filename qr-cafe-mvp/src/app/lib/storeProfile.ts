@@ -34,9 +34,9 @@ const STORE_PROFILE_LEGACY_SELECT = "store_name, main_image_url, logo_image_url,
 
 export const DEFAULT_STORE_PROFILE: StoreProfile = {
   staffViewMode: "simple",
-  storeName: "카페 브라운",
-  storeDesc: "QR로 간편하게 주문하고 기다리세요.\n주문 후 직원 안내에 따라 픽업/수령해 주세요.",
-  mainImage: "/hero.jpg",
+  storeName: "",
+  storeDesc: "",
+  mainImage: "",
   logoImage: "",
   mainImageOverlayStrength: 55,
   extra: {
@@ -182,6 +182,7 @@ export function useStoreProfile(storeId?: string) {
   const [profile, setProfile] = useState<StoreProfile>(DEFAULT_STORE_PROFILE);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -226,7 +227,13 @@ export function useStoreProfile(storeId?: string) {
       window.removeEventListener(STORE_PROFILE_UPDATED_EVENT, onUpdate as any);
       window.removeEventListener("storage", onStorage);
     };
-  }, [sid]);
+  }, [sid, reloadKey]);
 
-  return { profile, setProfile, loading, loadError };
+  return {
+    profile,
+    setProfile,
+    loading,
+    loadError,
+    refresh: () => setReloadKey((value) => value + 1),
+  };
 }

@@ -5,7 +5,10 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { CustomerPageHeader } from "@/app/_components/CustomerBrand";
+import {
+  CustomerTrustFooter,
+  StoreCustomerHeader,
+} from "@/app/_components/StoreCustomerBrand";
 import {
   getStoreIdFromSearchParams,
   lsLastOrderIdKey,
@@ -759,7 +762,8 @@ function ConfirmPageInner() {
           color: "#111827",
         }}
       >
-        <CustomerPageHeader
+        <StoreCustomerHeader
+          storeId={storeId}
           title="주문을 확인해 주세요"
           description="메뉴와 할인, 이용 방식을 확인한 뒤 주문을 완료해 주세요."
           context={
@@ -1513,6 +1517,7 @@ function ConfirmPageInner() {
               ? "결제 완료 후 주문이 접수됩니다."
               : "결제는 매장에서 진행됩니다."}
         </p>
+        <CustomerTrustFooter />
       </main>
     </>
   );
