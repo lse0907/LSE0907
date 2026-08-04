@@ -7,7 +7,11 @@ import { useMenuItems, MenuItem } from "@/app/lib/menuStore";
 import { useStoreProfile } from "@/app/lib/storeProfile";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getStoreIdFromSearchParams } from "@/app/lib/storeScope";
-import { CustomerBrand } from "@/app/_components/CustomerBrand";
+import { CustomerTrustFooter } from "@/app/_components/StoreCustomerBrand";
+import {
+  CustomerLoadingState,
+  StoreAccessError,
+} from "@/app/_components/CustomerLoadingState";
 
 type SelectedOptionItem = {
   id: string;
@@ -127,6 +131,7 @@ function buildOptionSignature(groups: SelectedGroup[]) {
 function MenuPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
+  const rawStoreId = (sp.get("store") || "").trim();
 
   // ✅ 멀티매장 핵심: URL(store) > env fallback
   const storeId = useMemo(() => getStoreIdFromSearchParams(sp), [sp]);
@@ -134,7 +139,12 @@ function MenuPageInner() {
   // ⚠️ useStoreProfile/useMenuItems는 아직 내부가 "store별"이 아님(로컬스토리지/ENV 기준).
   //    그래서 이 페이지에서 storeId 바뀔 때마다 refresh를 확실히 호출해주고,
   //    옵션은 여기서 직접 storeId 기반으로 쿼리함.
-  const { profile } = useStoreProfile(storeId);
+  const {
+    profile,
+    loading: profileLoading,
+    loadError: profileError,
+    refresh: refreshProfile,
+  } = useStoreProfile(storeId);
   const {
     items: menuItems,
     loading: menuLoading,
@@ -537,7 +547,7 @@ function MenuPageInner() {
     window.scrollTo({ top, behavior: "smooth" });
   };
 
-  const headerImage = profile.mainImage || "/hero.jpg";
+  const headerImage = profile.mainImage;
   const headerOverlayStrength = Math.max(
     0,
     Math.min(100, Number((profile as any).mainImageOverlayStrength ?? 55)),
@@ -890,6 +900,29 @@ function MenuPageInner() {
   };
 
   const showEmpty = !menuLoading && (!list || list.length === 0);
+
+  if (!rawStoreId)
+    return (
+      <StoreAccessError
+        message="매장 QR을 다시 스캔해 주세요."
+        onScan={() => router.push("/")}
+      />
+    );
+  if (profileLoading)
+    return (
+      <CustomerLoadingState
+        title="메뉴를 준비하고 있어요"
+        description="매장과 주문 정보를 확인하고 있어요."
+      />
+    );
+  if (profileError || !profile.storeName)
+    return (
+      <StoreAccessError
+        message={profileError || "등록된 매장을 찾을 수 없어요."}
+        onRetry={refreshProfile}
+        onScan={() => router.push("/")}
+      />
+    );
 
   return (
     <main className="wrap">
@@ -1532,11 +1565,13 @@ function MenuPageInner() {
       <div className="topSticky" ref={topStickyRef}>
         <section className="hero">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className="heroImg"
-            src={headerImage}
-            alt={`${profile.storeName || "매장"} 대표 이미지`}
-          />
+          {headerImage ? (
+            <img
+              className="heroImg"
+              src={headerImage}
+              alt={`${profile.storeName} 대표 이미지`}
+            />
+          ) : null}
           <div className="overlay" style={{ background: overlayBg }} />
           <div className="heroInner">
             <div className="topActions">
@@ -1583,9 +1618,6 @@ function MenuPageInner() {
                   </button>
                 </>
               )}
-            </div>
-            <div style={{ marginTop: 18 }}>
-              <CustomerBrand compact inverse poweredBy />
             </div>
             <div className="titleRow">
               <h1 className="h1">{profile.storeName || "메뉴"}</h1>
@@ -1798,6 +1830,7 @@ function MenuPageInner() {
           )}
         </div>
       </section>
+      <CustomerTrustFooter />
       {totals.totalCount > 0 ? (
         <section className="bottomBar">
           <div className="bottomInner">

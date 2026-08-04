@@ -3,9 +3,12 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { CustomerPageHeader } from "@/app/_components/CustomerBrand";
+import {
+  CustomerTrustFooter,
+  StoreCustomerHeader,
+} from "@/app/_components/StoreCustomerBrand";
 import {
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
@@ -131,6 +134,7 @@ function speakReadyOnce() {
 }
 
 function StatusPageInner() {
+  const router = useRouter();
   const sp = useSearchParams();
 
   const orderIdFromQuery = (sp.get("orderId") || "").trim();
@@ -185,7 +189,7 @@ function StatusPageInner() {
     return accessTokenFromQuery || lastOrderToken || "";
   }, [accessTokenFromQuery, lastOrderToken]);
 
-  const clearStoredOrder = () => {
+  const clearStoredOrder = async () => {
     try {
       localStorage.removeItem(lsLastOrderIdKey(storeId));
       localStorage.removeItem(lsLastOrderTokenKey(storeId));
@@ -195,6 +199,8 @@ function StatusPageInner() {
     setLastStoreId("");
     setLastOrderToken("");
     setOrder(null);
+    const { data } = await supabase.auth.getUser();
+    router.replace(data.user ? "/me" : "/");
   };
 
   const fetchOrder = async (id: string) => {
@@ -513,7 +519,8 @@ function StatusPageInner() {
         }
       `}</style>
 
-      <CustomerPageHeader
+      <StoreCustomerHeader
+        storeId={storeId}
         title="주문 진행 상황"
         description="매장 상태가 자동으로 업데이트됩니다. 이 화면에서 준비 완료를 확인해 주세요."
         context={
@@ -648,8 +655,8 @@ function StatusPageInner() {
                 </button>
               ) : visibleOrder.status === "completed" ||
                 visibleOrder.status === "cancelled" ? (
-                <button className="btn" onClick={clearStoredOrder}>
-                  확인 완료
+                <button className="btn" onClick={() => void clearStoredOrder()}>
+                  주문 종료
                 </button>
               ) : (
                 <span className="hint" style={{ marginTop: 0 }}>
@@ -710,6 +717,7 @@ function StatusPageInner() {
           </div>
         </div>
       ) : null}
+      <CustomerTrustFooter />
     </main>
   );
 }

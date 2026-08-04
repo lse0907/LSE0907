@@ -19,15 +19,11 @@ export function CustomerBrand({
         <span className="customerBrandPowered">Powered by</span>
       ) : null}
       <Image
-        src={inverse ? "/rion-logo-white.png" : "/rion-symbol.svg"}
-        width={32}
+        src={inverse ? "/rion-logo-white.png" : "/rion-logo-deepnavy.png"}
+        width={112}
         height={32}
-        alt=""
-        aria-hidden="true"
+        alt="RION Order"
       />
-      <span className="customerBrandName">
-        RION <b>Order</b>
-      </span>
       <style jsx>{`
         .customerBrand {
           display: inline-flex;
@@ -37,19 +33,10 @@ export function CustomerBrand({
           min-width: 0;
         }
         .customerBrand :global(img) {
-          width: 32px;
-          height: 32px;
+          width: auto;
+          height: 30px;
           object-fit: contain;
           flex: 0 0 auto;
-        }
-        .customerBrandName {
-          font-size: 17px;
-          font-weight: 800;
-          letter-spacing: -0.04em;
-          white-space: nowrap;
-        }
-        .customerBrandName b {
-          font-weight: 500;
         }
         .customerBrandPowered {
           color: #6b7280;
@@ -62,11 +49,8 @@ export function CustomerBrand({
           gap: 6px;
         }
         .customerBrandCompact :global(img) {
-          width: 24px;
+          width: auto;
           height: 24px;
-        }
-        .customerBrandCompact .customerBrandName {
-          font-size: 14px;
         }
         .customerBrandInverse {
           color: #fff;
