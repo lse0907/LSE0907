@@ -1043,9 +1043,14 @@ function StaffPageInner() {
 
   const advanceOrder = async (order: OrderRecord) => {
     if (!requireWorkerPin()) return;
-    await updateOrderInDb(order.id, { status: nextStatusForView(order.status) });
+    const updated = await updateOrderInDb(order.id, { status: nextStatusForView(order.status) });
+    if (!updated) return;
     if (staffViewMode === "simple" && order.status === "ready_for_packing") {
       setListTab("active");
+      setSelectedId(null);
+      setMobileView("list");
+    }
+    if (staffViewMode === "station" && order.status === "new") {
       setSelectedId(null);
       setMobileView("list");
     }
@@ -1300,19 +1305,23 @@ function StaffPageInner() {
     !!selected &&
     !(selected.status === "completed" || selected.status === "cancelled" || (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new"));
   const canCancelSelected = !!selected && !(selected.status === "completed" || selected.status === "cancelled");
+  const showDetailAdvanceAction =
+    !!selected && (staffViewMode !== "station" || (stationTab === "order" && selected.status === "new"));
+  const showDetailPaymentAction =
+    !!selected && staffViewMode !== "station" && prepayAddonActive && selected.paymentStatus === "pending";
 
   const updateOrderInDb = async (id: string, patch: Partial<OrderRecord>) => {
     const sid = storeIdRef.current || storeId;
-    if (!sid) return;
+    if (!sid) return false;
 
-    if (!requireWorkerPin()) return;
+    if (!requireWorkerPin()) return false;
     const payload: Record<string, unknown> = { storeId: sid, orderId: id };
     if (actorPinIdForEvent) payload.actorPinId = actorPinIdForEvent;
     if (typeof patch.buzzerNo !== "undefined") payload.buzzerNo = patch.buzzerNo || null;
     if (typeof patch.status !== "undefined") payload.status = patch.status;
     if (typeof patch.paymentStatus !== "undefined") payload.paymentStatus = patch.paymentStatus;
 
-    if (Object.keys(payload).length <= 2) return;
+    if (Object.keys(payload).length <= 2) return false;
 
     try {
       const res = await fetch("/api/orders/status", {
@@ -1325,10 +1334,12 @@ function StaffPageInner() {
         throw new Error(String(json?.message || "주문 상태 저장 실패"));
       }
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+      return true;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[staff] update order error:", msg);
       setErrMsg(`저장 실패: ${msg}`);
+      return false;
     }
   };
 
@@ -3962,7 +3973,7 @@ function StaffPageInner() {
               ) : null}
 
               <div className="actionRow">
-                {staffViewMode !== "station" ? (
+                {showDetailAdvanceAction ? (
                   <>
                     <button
                       className="actionBtn actionPrimary"
@@ -3976,7 +3987,7 @@ function StaffPageInner() {
                       {statusButtonLabelForView(selected.status)}
                     </button>
 
-                    {prepayAddonActive && selected.paymentStatus === "pending" ? (
+                    {showDetailPaymentAction ? (
                       <button
                         className="actionBtn"
                         style={{ borderColor: "var(--action-line)", color: "var(--action-blue)" }}
@@ -4011,8 +4022,8 @@ function StaffPageInner() {
       </div>
 
       {selected && mobileView === "detail" ? (
-        <div className={`actionDock ${prepayAddonActive && selected.paymentStatus === "pending" ? "actionDockTriple" : ""}`}>
-          {staffViewMode !== "station" ? (
+        <div className={`actionDock ${showDetailPaymentAction ? "actionDockTriple" : ""}`}>
+          {showDetailAdvanceAction ? (
             <>
               <button
                 className="actionBtn actionPrimary"
@@ -4024,7 +4035,7 @@ function StaffPageInner() {
                 {statusButtonLabelForView(selected.status)}
               </button>
 
-              {prepayAddonActive && selected.paymentStatus === "pending" ? (
+              {showDetailPaymentAction ? (
                 <button
                   className="actionBtn"
                   style={{ borderColor: "var(--action-line)", color: "var(--action-blue)" }}
