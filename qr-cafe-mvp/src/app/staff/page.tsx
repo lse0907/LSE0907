@@ -1314,15 +1314,17 @@ function StaffPageInner() {
     if (typeof patch.status === "undefined") return;
 
     try {
+      const requestBody: Record<string, unknown> = {
+        storeId: sid,
+        itemIds,
+        status: patch.status,
+      };
+      if (typeof patch.batch !== "undefined") requestBody.batch = patch.batch;
+
       const res = await fetch("/api/orders/items/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storeId: sid,
-          itemIds,
-          status: patch.status,
-          batch: typeof patch.batch === "undefined" ? null : patch.batch,
-        }),
+        body: JSON.stringify(requestBody),
       });
       const json = await res.json();
       if (!res.ok || !json?.ok) {
