@@ -137,7 +137,6 @@ const LAST_SPOKEN_KEY = "qrCafeStaffLastSpokenOrderId";
 const STAFF_POLL_INTERVAL_MS = 5000;
 const STAFF_VIEW_MODE_OVERRIDE_KEY = "qrCafeStaffViewModeOverride";
 const STAFF_WORKER_AUTO_LOCK_MS = 30 * 60 * 1000;
-const STAFF_SESSION_AUTO_LOGOUT_MS = 120 * 60 * 1000;
 
 function normalizeStaffViewMode(v: any): StaffViewMode {
   return String(v || "").trim() === "station" ? "station" : "simple";
@@ -404,6 +403,7 @@ function StaffPageInner() {
   const updateStaffViewMode = (next: StaffViewMode) => {
     const sid = storeIdRef.current || storeId;
     if (!sid) return;
+    if (!requireWorkerPin()) return;
     try {
       if (typeof window !== "undefined") {
         const key = `${STAFF_VIEW_MODE_OVERRIDE_KEY}:${sid}`;
@@ -538,14 +538,8 @@ function StaffPageInner() {
     };
     const events: Array<keyof WindowEventMap> = ["click", "keydown", "touchstart", "scroll"];
     events.forEach((eventName) => window.addEventListener(eventName, markActive, { passive: true }));
-    const timer = window.setInterval(async () => {
+    const timer = window.setInterval(() => {
       const idleMs = Date.now() - lastActivityAtRef.current;
-      if (idleMs >= STAFF_SESSION_AUTO_LOGOUT_MS) {
-        await supabase.auth.signOut();
-        const next = storeId ? `/staff?store=${encodeURIComponent(storeId)}` : "/staff";
-        window.location.href = `/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent("120분 미사용으로 로그아웃되었습니다.")}`;
-        return;
-      }
       if (idleMs >= STAFF_WORKER_AUTO_LOCK_MS && loginRole !== "owner" && currentWorker) {
         setCurrentWorker(null);
         setWorkerPinModalOpen(true);
@@ -563,6 +557,11 @@ function StaffPageInner() {
     setWorkerPinModalOpen(true);
     setPinMsg("담당 직원 확인이 필요합니다.");
     return false;
+  };
+
+  const goToAdminHome = () => {
+    if (!requireWorkerPin()) return;
+    window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin";
   };
 
   const actorPinIdForEvent = currentWorker?.isOwnerBypass ? null : currentWorker?.id || null;
@@ -936,6 +935,29 @@ function StaffPageInner() {
     setNewOrderPopup(null);
   };
 
+  const pendingNewOrderCount = useMemo(
+    () => orders.filter((order) => order.status === "new").length,
+    [orders]
+  );
+
+  const openNewOrderFromBanner = () => {
+    if (!newOrderPopup) return;
+    const orderId = newOrderPopup.id;
+    moveToOrderCheckTab();
+    setSelectedId(orderId);
+
+    if (window.matchMedia("(min-width: 901px)").matches) {
+      setMobileView("detail");
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`staff-order-${orderId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    });
+  };
+
   // ✅ 탭 필터 규칙
   // - 진행중: 날짜 상관없이 모두
   // - 완료/취소: 오늘 주문만
@@ -1021,9 +1043,14 @@ function StaffPageInner() {
 
   const advanceOrder = async (order: OrderRecord) => {
     if (!requireWorkerPin()) return;
-    await updateOrderInDb(order.id, { status: nextStatusForView(order.status) });
+    const updated = await updateOrderInDb(order.id, { status: nextStatusForView(order.status) });
+    if (!updated) return;
     if (staffViewMode === "simple" && order.status === "ready_for_packing") {
       setListTab("active");
+      setSelectedId(null);
+      setMobileView("list");
+    }
+    if (staffViewMode === "station" && order.status === "new") {
       setSelectedId(null);
       setMobileView("list");
     }
@@ -1038,6 +1065,7 @@ function StaffPageInner() {
     loginRole === "staff" && !(order.status === "new" || order.status === "checked");
 
   const openCancelModal = (order: OrderRecord) => {
+    if (!requireWorkerPin()) return;
     const needsManagerPin = cancelRequiresManagerPin(order);
     setCancelTarget({ id: order.id, displayNo: order.displayNo, status: order.status });
     setCancelNeedsManagerPin(needsManagerPin);
@@ -1055,6 +1083,7 @@ function StaffPageInner() {
 
   const confirmCancelOrder = async () => {
     if (!cancelTarget || cancelSubmitting) return;
+    if (!requireWorkerPin()) return;
     const id = cancelTarget.id;
     const sid = storeIdRef.current || storeId;
     if (!sid) return;
@@ -1244,6 +1273,7 @@ function StaffPageInner() {
   const togglePackingChecks = async (order: OrderRecord, nextChecked: boolean, targetItemId?: string) => {
     const sid = storeIdRef.current || storeId;
     if (!sid) return;
+    if (!requireWorkerPin()) return;
 
     const doneItems = order.items.filter((it) => it.status === "done");
     const targets = targetItemId ? doneItems.filter((it) => it.id === targetItemId) : doneItems;
@@ -1275,19 +1305,26 @@ function StaffPageInner() {
     !!selected &&
     !(selected.status === "completed" || selected.status === "cancelled" || (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new"));
   const canCancelSelected = !!selected && !(selected.status === "completed" || selected.status === "cancelled");
+  const showDetailAdvanceAction =
+    !!selected &&
+    (staffViewMode !== "station" ||
+      (stationTab === "order" && selected.status === "new") ||
+      (stationTab === "history" && isCompleted(selected.status)));
+  const showDetailPaymentAction =
+    !!selected && staffViewMode !== "station" && prepayAddonActive && selected.paymentStatus === "pending";
 
   const updateOrderInDb = async (id: string, patch: Partial<OrderRecord>) => {
     const sid = storeIdRef.current || storeId;
-    if (!sid) return;
+    if (!sid) return false;
 
-    if (!requireWorkerPin()) return;
+    if (!requireWorkerPin()) return false;
     const payload: Record<string, unknown> = { storeId: sid, orderId: id };
     if (actorPinIdForEvent) payload.actorPinId = actorPinIdForEvent;
     if (typeof patch.buzzerNo !== "undefined") payload.buzzerNo = patch.buzzerNo || null;
     if (typeof patch.status !== "undefined") payload.status = patch.status;
     if (typeof patch.paymentStatus !== "undefined") payload.paymentStatus = patch.paymentStatus;
 
-    if (Object.keys(payload).length <= 2) return;
+    if (Object.keys(payload).length <= 2) return false;
 
     try {
       const res = await fetch("/api/orders/status", {
@@ -1300,10 +1337,12 @@ function StaffPageInner() {
         throw new Error(String(json?.message || "주문 상태 저장 실패"));
       }
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+      return true;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[staff] update order error:", msg);
       setErrMsg(`저장 실패: ${msg}`);
+      return false;
     }
   };
 
@@ -1314,15 +1353,17 @@ function StaffPageInner() {
     if (typeof patch.status === "undefined") return;
 
     try {
+      const requestBody: Record<string, unknown> = {
+        storeId: sid,
+        itemIds,
+        status: patch.status,
+      };
+      if (typeof patch.batch !== "undefined") requestBody.batch = patch.batch;
+
       const res = await fetch("/api/orders/items/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storeId: sid,
-          itemIds,
-          status: patch.status,
-          batch: typeof patch.batch === "undefined" ? null : patch.batch,
-        }),
+        body: JSON.stringify(requestBody),
       });
       const json = await res.json();
       if (!res.ok || !json?.ok) {
@@ -1442,10 +1483,10 @@ function StaffPageInner() {
           display: inline-flex;
           align-items: center;
           min-height: 28px;
-          border: 1px solid #dbeafe;
+          border: 1px solid var(--action-line);
           border-radius: 999px;
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: var(--action-soft);
+          color: var(--action-blue);
           padding: 5px 10px;
           font-size: 13px;
           font-weight: 950;
@@ -1456,10 +1497,10 @@ function StaffPageInner() {
           margin-top: 10px;
           display: inline-flex;
           align-items: center;
-          border: 1px solid #fde68a;
+          border: 1px solid var(--warning-line);
           border-radius: 999px;
-          background: #fffbeb;
-          color: #92400e;
+          background: var(--warning-soft);
+          color: var(--warning);
           padding: 6px 10px;
           font-size: 12px;
           font-weight: 900;
@@ -1500,9 +1541,9 @@ function StaffPageInner() {
         }
 
         .workerBadgeManager {
-          background: #eff6ff;
-          border-color: #bfdbfe;
-          color: #1d4ed8;
+          background: var(--action-soft);
+          border-color: var(--action-line);
+          color: var(--action-blue);
         }
 
         .workerBadgeStaff {
@@ -1512,9 +1553,9 @@ function StaffPageInner() {
         }
 
         .workerBadgePending {
-          background: #fffbeb;
-          border-color: #fde68a;
-          color: #92400e;
+          background: var(--warning-soft);
+          border-color: var(--warning-line);
+          color: var(--warning);
         }
 
         .workerActions {
@@ -1729,7 +1770,7 @@ function StaffPageInner() {
         }
 
         .modeSwitchBtn:focus-visible {
-          outline: 2px solid #4f46e5;
+          outline: 2px solid var(--action-blue);
           outline-offset: 1px;
         }
 
@@ -1737,20 +1778,20 @@ function StaffPageInner() {
           margin: 6px 0 0 0;
           font-size: 12px;
           font-weight: 800;
-          color: #1d4ed8;
+          color: var(--action-blue);
         }
 
         .newOrderPopup {
           margin-top: 8px;
-          border: 1px solid #bfdbfe;
-          background: #eff6ff;
+          border: 1px solid var(--action-line);
+          background: var(--action-soft);
           border-radius: 12px;
           padding: 10px 12px;
         }
         .newOrderPopupTitle {
           font-size: 12px;
           font-weight: 900;
-          color: #1d4ed8;
+          color: var(--action-blue);
         }
         .newOrderPopupText {
           margin-top: 2px;
@@ -1878,9 +1919,9 @@ function StaffPageInner() {
         }
 
         .elapsedBadge {
-          border: 1px solid #fde68a;
-          background: #fffbeb;
-          color: #92400e;
+          border: 1px solid var(--warning-line);
+          background: var(--warning-soft);
+          color: var(--warning);
           border-radius: 999px;
           padding: 4px 8px;
           font-size: 11px;
@@ -1911,28 +1952,6 @@ function StaffPageInner() {
           font-weight: 900;
           cursor: pointer;
           transition: background-color 0.14s ease, transform 0.06s ease, box-shadow 0.14s ease;
-        }
-
-        .quickActionBtnPrimary {
-          border-color: #1d4ed8;
-          background: #2563eb;
-          color: #fff;
-          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
-        }
-
-        .quickActionBtnPrimary:hover {
-          background: #1d4ed8;
-        }
-
-        .quickActionBtnPrimary:active {
-          transform: translateY(1px);
-          background: #1e40af;
-          box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
-        }
-
-        .quickActionBtnPrimary:focus-visible {
-          outline: 2px solid #60a5fa;
-          outline-offset: 1px;
         }
 
         .readyItemSubRow {
@@ -2032,24 +2051,24 @@ function StaffPageInner() {
         }
 
         .badgeNew {
-          border-color: #dbeafe;
-          background: #eff6ff;
-          color: #1d4ed8;
+          border-color: var(--action-line);
+          background: var(--action-soft);
+          color: var(--action-blue);
         }
         .badgeChecked {
-          border-color: #e0e7ff;
-          background: #eef2ff;
-          color: #4338ca;
+          border-color: #d7dce8;
+          background: #f1f3f7;
+          color: #4a5870;
         }
         .badgeMaking {
-          border-color: #fef3c7;
-          background: #fffbeb;
-          color: #92400e;
+          border-color: var(--warning-line);
+          background: var(--warning-soft);
+          color: var(--warning);
         }
         .badgeReady {
-          border-color: #dcfce7;
-          background: #f0fdf4;
-          color: #166534;
+          border-color: var(--success-line);
+          background: var(--success-soft);
+          color: var(--success);
         }
         .badgeDone {
           border-color: #e5e7eb;
@@ -2057,16 +2076,16 @@ function StaffPageInner() {
           color: #374151;
         }
         .badgeCanceled {
-          border-color: #fee2e2;
-          background: #fef2f2;
-          color: #991b1b;
+          border-color: var(--danger-line);
+          background: var(--danger-soft);
+          color: var(--danger);
         }
 
         /* ✅ NEW 뱃지 */
         .badgeHot {
-          border-color: #fecaca;
-          background: #fff1f2;
-          color: #be123c;
+          border-color: var(--danger-line);
+          background: var(--danger-soft);
+          color: var(--danger);
         }
 
         .detailBox {
@@ -2284,18 +2303,6 @@ function StaffPageInner() {
           cursor: pointer;
         }
 
-        .actionPrimary {
-          background: var(--brand);
-          border-color: var(--brand);
-          color: #fff;
-        }
-
-        .actionCancel {
-          background: #fff;
-          border-color: #fecaca;
-          color: var(--danger);
-        }
-
         .hint {
           margin-top: 10px;
           color: var(--muted);
@@ -2306,7 +2313,7 @@ function StaffPageInner() {
 
         .err {
           margin-top: 8px;
-          color: #b91c1c;
+          color: var(--danger);
           font-weight: 900;
           font-size: 13px;
           word-break: break-all;
@@ -2586,9 +2593,22 @@ function StaffPageInner() {
           --muted: #667085;
           --line: #e4e9f2;
           --brand: #0f1f3d;
-          --brand-blue: #2563eb;
-          --brand-soft: #eef4ff;
-          --danger: #dc2626;
+          --brand-blue: #315f8f;
+          --brand-soft: #edf3f8;
+          --action-blue: #315f8f;
+          --action-hover: #28547a;
+          --action-active: #234e70;
+          --action-soft: #edf3f8;
+          --action-line: #c8d7e5;
+          --success: #2f6b55;
+          --success-soft: #eef6f2;
+          --success-line: #cfe3d9;
+          --warning: #8a6324;
+          --warning-soft: #fbf5e8;
+          --warning-line: #ead9b7;
+          --danger: #9a3e46;
+          --danger-soft: #fbf0f1;
+          --danger-line: #e8c8cc;
           --radius: 22px;
         }
 
@@ -2780,7 +2800,7 @@ function StaffPageInner() {
         }
 
         .chip:hover { background: #f3f6fb; }
-        .chipOn { border-color: #dbe6f8; background: var(--brand-soft); color: #1d4ed8; box-shadow: none; }
+        .chipOn { border-color: var(--action-line); background: var(--brand-soft); color: var(--action-blue); box-shadow: none; }
 
         .tabCount {
           display: inline-grid;
@@ -2795,21 +2815,21 @@ function StaffPageInner() {
           font-weight: 950;
         }
 
-        .chipOn .tabCount { background: #2563eb; color: #fff; }
+        .chipOn .tabCount { background: var(--action-blue); color: #fff; }
         .tabHint { margin: 8px 5px 0; color: #75849a; font-size: 12px; font-weight: 650; }
 
         .newOrderPopup {
           margin-top: 12px;
-          border-color: #b9d3ff;
+          border-color: var(--action-line);
           border-radius: 18px;
           padding: 13px 14px;
-          background: linear-gradient(135deg, #edf5ff, #f8fbff);
-          box-shadow: 0 10px 28px rgba(37, 99, 235, 0.1);
+          background: linear-gradient(135deg, var(--action-soft), #f8fbfd);
+          box-shadow: 0 10px 28px rgba(15, 31, 61, 0.09);
         }
 
         .newOrderPopupContent { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; }
-        .newOrderDot { width: 10px; height: 10px; border-radius: 999px; background: #2563eb; box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.12); }
-        .newOrderPopupTitle { color: #1d4ed8; font-size: 12px; }
+        .newOrderDot { width: 10px; height: 10px; border-radius: 999px; background: var(--action-blue); box-shadow: 0 0 0 5px rgba(49, 95, 143, 0.12); }
+        .newOrderPopupTitle { color: var(--action-blue); font-size: 12px; }
         .newOrderPopupText { margin-top: 2px; color: var(--brand); font-size: 17px; font-weight: 950; }
 
         .panel { gap: 18px; }
@@ -2833,22 +2853,31 @@ function StaffPageInner() {
         }
 
         .itemBtn:hover { border-color: #aebed4; box-shadow: 0 8px 22px rgba(30, 55, 90, 0.08); }
-        .itemBtnOn { border: 2px solid #4c82d8; background: #f8fbff; box-shadow: 0 10px 26px rgba(37, 99, 235, 0.12); }
+        .itemBtnOn { border: 2px solid #6286aa; background: #f7fafc; box-shadow: 0 10px 26px rgba(15, 31, 61, 0.1); }
         .bigNo { color: var(--brand); font-size: 21px; letter-spacing: -0.025em; }
 
-        .elapsedBadge { border-color: #f5d98e; background: #fff8e6; }
+        .elapsedBadge { border-color: var(--warning-line); background: var(--warning-soft); color: var(--warning); }
         .badge { border-color: #dfe6f0; }
-        .badgeHot { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+        .badgeHot { border-color: var(--danger-line); background: var(--danger-soft); color: var(--danger); }
 
         .quickActionBtn {
-          min-height: 38px;
+          min-height: 40px;
           border-color: #d9e1ed;
           padding: 8px 13px;
           color: var(--text);
           font-family: inherit;
+          font-size: 13px;
+          font-weight: 850;
         }
 
-        .quickActionBtnPrimary { border-color: var(--brand-blue); background: var(--brand-blue); color: #fff; }
+        .quickActionBtnPrimary {
+          border-color: var(--action-blue);
+          background: var(--action-blue);
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(15, 31, 61, 0.14);
+        }
+        .quickActionBtnPrimary:hover { border-color: var(--action-hover); background: var(--action-hover); }
+        .quickActionBtnPrimary:active { border-color: var(--action-active); background: var(--action-active); transform: translateY(1px); }
 
         .detailBox, .orderItemsBox {
           border-color: #dfe6f0;
@@ -2862,8 +2891,15 @@ function StaffPageInner() {
           font-family: inherit;
         }
 
-        .actionPrimary { background: var(--brand-blue); border-color: var(--brand-blue); }
-        .actionCancel { background: #fff8f8; border-color: #fecaca; color: var(--danger); }
+        .actionPrimary {
+          background: var(--action-blue);
+          border-color: var(--action-blue);
+          color: #fff;
+          box-shadow: 0 5px 14px rgba(15, 31, 61, 0.14);
+        }
+        .actionPrimary:hover { border-color: var(--action-hover); background: var(--action-hover); }
+        .actionPrimary:active { border-color: var(--action-active); background: var(--action-active); }
+        .actionCancel { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); }
         .actionBtn:disabled, .btn:disabled, .quickActionBtn:disabled { cursor: not-allowed; box-shadow: none; }
 
         .pinModal, .modalCard {
@@ -2938,6 +2974,7 @@ function StaffPageInner() {
           }
           .actionDockTriple { grid-template-columns: 1fr; }
           .dockSpacer { height: 96px; }
+          .quickActionBtn { min-height: 44px; }
         }
 
         @media (max-width: 640px) {
@@ -2960,12 +2997,12 @@ function StaffPageInner() {
           .tabCount { min-width: 20px; height: 20px; padding: 0 5px; font-size: 10px; }
           .newOrderPopupContent { grid-template-columns: auto minmax(0, 1fr); }
           .newOrderPopupContent .itemQuickActions { grid-column: 1 / -1; width: 100%; gap: 8px; }
-          .newOrderPopupContent .quickActionBtn { flex: 1; min-height: 44px; }
+          .newOrderPopupContent .quickActionBtn { flex: 1; min-height: 46px; }
           .panel { margin-top: 12px; }
           .card { padding: 14px; border-radius: 18px; }
           .itemBtn { padding: 13px; }
           .bigNo { font-size: 20px; }
-          .quickActionBtn { min-height: 42px; padding: 9px 12px; font-size: 13px; }
+          .quickActionBtn { min-height: 46px; padding: 10px 12px; font-size: 13px; }
           .actionDock { border-radius: 18px; padding: 10px; }
           .actionBtn { min-height: 50px; }
           .pinModal, .modalCard { border-radius: 20px; }
@@ -3094,7 +3131,7 @@ function StaffPageInner() {
           display: inline-grid;
           place-items: center;
           border-radius: 11px;
-          background: #dceaff;
+          background: var(--action-soft);
           color: var(--brand-blue);
         }
         .newOrderIcon .staffIcon { width: 19px; height: 19px; }
@@ -3210,9 +3247,7 @@ function StaffPageInner() {
                 type="button"
                 className="btn topActionBtn"
                 aria-label="관리자 홈으로 이동"
-                onClick={() =>
-                  (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
-                }
+                onClick={goToAdminHome}
               >
                 <StaffIcon name="home" />
                 <span>관리자 홈</span>
@@ -3388,12 +3423,14 @@ function StaffPageInner() {
           <div className="newOrderPopupContent">
             <span className="newOrderIcon" aria-hidden="true"><StaffIcon name="bell" /></span>
             <div>
-              <div className="newOrderPopupTitle">새 주문이 도착했어요</div>
-              <div className="newOrderPopupText">주문번호 {newOrderPopup.displayNo}</div>
+              <div className="newOrderPopupTitle">
+                {pendingNewOrderCount > 1 ? `새 주문 ${pendingNewOrderCount}건이 대기 중이에요` : "새 주문이 도착했어요"}
+              </div>
+              <div className="newOrderPopupText">최근 주문번호 {newOrderPopup.displayNo}</div>
             </div>
             <div className="itemQuickActions" style={{ marginTop: 0 }}>
-              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>주문 확인</button>
-              <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>닫기</button>
+              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={openNewOrderFromBanner}>주문 보기</button>
+              <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>나중에</button>
             </div>
           </div>
         </div>
@@ -3435,9 +3472,9 @@ function StaffPageInner() {
                       style={{
                         fontWeight: 900,
                         padding: "6px 10px",
-                        borderLeft: "4px solid #3b82f6",
-                        background: "#eff6ff",
-                        color: "#1e3a8a",
+                        borderLeft: "4px solid var(--action-blue)",
+                        background: "var(--action-soft)",
+                        color: "var(--action-active)",
                         borderRadius: 8,
                       }}
                     >
@@ -3553,7 +3590,7 @@ function StaffPageInner() {
                                   <button
                                     type="button"
                                     className={checked ? "quickActionBtn" : "quickActionBtn quickActionBtnPrimary"}
-                                    style={checked ? { minWidth: 60, borderColor: "#ef4444", color: "#b91c1c" } : { minWidth: 60 }}
+                                    style={checked ? { minWidth: 60, borderColor: "var(--danger-line)", color: "var(--danger)" } : { minWidth: 60 }}
                                     onClick={() => togglePackingChecks(o, !checked, it.id)}
                                   >
                                     {checked ? "취소" : "확인"}
@@ -3613,6 +3650,7 @@ function StaffPageInner() {
 
                 return (
                   <div
+                    id={`staff-order-${o.id}`}
                     key={o.id}
                     role="button"
                     tabIndex={0}
@@ -3789,8 +3827,8 @@ function StaffPageInner() {
               </div>
 
               {prepayAddonActive && selected.paymentStatus === "pending" ? (
-                <div className="detailBox" style={{ borderColor: "#f59e0b", background: "#fffbeb" }}>
-                  <b style={{ color: "#92400e" }}>선결재 옵션 매장: 결제완료 전에는 제조 시작이 불가합니다.</b>
+                <div className="detailBox" style={{ borderColor: "var(--warning-line)", background: "var(--warning-soft)" }}>
+                  <b style={{ color: "var(--warning)" }}>선결재 옵션 매장: 결제완료 전에는 제조 시작이 불가합니다.</b>
                 </div>
               ) : null}
 
@@ -3840,9 +3878,9 @@ function StaffPageInner() {
                             style={{
                               fontWeight: 900,
                               padding: "6px 10px",
-                              borderLeft: "4px solid #3b82f6",
-                              background: "#eff6ff",
-                              color: "#1e3a8a",
+                              borderLeft: "4px solid var(--action-blue)",
+                              background: "var(--action-soft)",
+                              color: "var(--action-active)",
                               borderRadius: 8,
                             }}
                           >
@@ -3938,7 +3976,7 @@ function StaffPageInner() {
               ) : null}
 
               <div className="actionRow">
-                {staffViewMode !== "station" ? (
+                {showDetailAdvanceAction ? (
                   <>
                     <button
                       className="actionBtn actionPrimary"
@@ -3952,10 +3990,10 @@ function StaffPageInner() {
                       {statusButtonLabelForView(selected.status)}
                     </button>
 
-                    {prepayAddonActive && selected.paymentStatus === "pending" ? (
+                    {showDetailPaymentAction ? (
                       <button
                         className="actionBtn"
-                        style={{ borderColor: "#2563eb", color: "#2563eb" }}
+                        style={{ borderColor: "var(--action-line)", color: "var(--action-blue)" }}
                         onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
                       >
                         결제완료 처리
@@ -3987,8 +4025,8 @@ function StaffPageInner() {
       </div>
 
       {selected && mobileView === "detail" ? (
-        <div className={`actionDock ${prepayAddonActive && selected.paymentStatus === "pending" ? "actionDockTriple" : ""}`}>
-          {staffViewMode !== "station" ? (
+        <div className={`actionDock ${showDetailPaymentAction ? "actionDockTriple" : ""}`}>
+          {showDetailAdvanceAction ? (
             <>
               <button
                 className="actionBtn actionPrimary"
@@ -4000,10 +4038,10 @@ function StaffPageInner() {
                 {statusButtonLabelForView(selected.status)}
               </button>
 
-              {prepayAddonActive && selected.paymentStatus === "pending" ? (
+              {showDetailPaymentAction ? (
                 <button
                   className="actionBtn"
-                  style={{ borderColor: "#2563eb", color: "#2563eb" }}
+                  style={{ borderColor: "var(--action-line)", color: "var(--action-blue)" }}
                   onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
                 >
                   결제완료 처리
