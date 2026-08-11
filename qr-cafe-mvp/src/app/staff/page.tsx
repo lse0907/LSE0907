@@ -137,7 +137,6 @@ const LAST_SPOKEN_KEY = "qrCafeStaffLastSpokenOrderId";
 const STAFF_POLL_INTERVAL_MS = 5000;
 const STAFF_VIEW_MODE_OVERRIDE_KEY = "qrCafeStaffViewModeOverride";
 const STAFF_WORKER_AUTO_LOCK_MS = 30 * 60 * 1000;
-const STAFF_SESSION_AUTO_LOGOUT_MS = 120 * 60 * 1000;
 
 function normalizeStaffViewMode(v: any): StaffViewMode {
   return String(v || "").trim() === "station" ? "station" : "simple";
@@ -404,6 +403,7 @@ function StaffPageInner() {
   const updateStaffViewMode = (next: StaffViewMode) => {
     const sid = storeIdRef.current || storeId;
     if (!sid) return;
+    if (!requireWorkerPin()) return;
     try {
       if (typeof window !== "undefined") {
         const key = `${STAFF_VIEW_MODE_OVERRIDE_KEY}:${sid}`;
@@ -538,14 +538,8 @@ function StaffPageInner() {
     };
     const events: Array<keyof WindowEventMap> = ["click", "keydown", "touchstart", "scroll"];
     events.forEach((eventName) => window.addEventListener(eventName, markActive, { passive: true }));
-    const timer = window.setInterval(async () => {
+    const timer = window.setInterval(() => {
       const idleMs = Date.now() - lastActivityAtRef.current;
-      if (idleMs >= STAFF_SESSION_AUTO_LOGOUT_MS) {
-        await supabase.auth.signOut();
-        const next = storeId ? `/staff?store=${encodeURIComponent(storeId)}` : "/staff";
-        window.location.href = `/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent("120분 미사용으로 로그아웃되었습니다.")}`;
-        return;
-      }
       if (idleMs >= STAFF_WORKER_AUTO_LOCK_MS && loginRole !== "owner" && currentWorker) {
         setCurrentWorker(null);
         setWorkerPinModalOpen(true);
@@ -563,6 +557,11 @@ function StaffPageInner() {
     setWorkerPinModalOpen(true);
     setPinMsg("담당 직원 확인이 필요합니다.");
     return false;
+  };
+
+  const goToAdminHome = () => {
+    if (!requireWorkerPin()) return;
+    window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin";
   };
 
   const actorPinIdForEvent = currentWorker?.isOwnerBypass ? null : currentWorker?.id || null;
@@ -936,6 +935,29 @@ function StaffPageInner() {
     setNewOrderPopup(null);
   };
 
+  const pendingNewOrderCount = useMemo(
+    () => orders.filter((order) => order.status === "new").length,
+    [orders]
+  );
+
+  const openNewOrderFromBanner = () => {
+    if (!newOrderPopup) return;
+    const orderId = newOrderPopup.id;
+    moveToOrderCheckTab();
+    setSelectedId(orderId);
+
+    if (window.matchMedia("(min-width: 901px)").matches) {
+      setMobileView("detail");
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`staff-order-${orderId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    });
+  };
+
   // ✅ 탭 필터 규칙
   // - 진행중: 날짜 상관없이 모두
   // - 완료/취소: 오늘 주문만
@@ -1038,6 +1060,7 @@ function StaffPageInner() {
     loginRole === "staff" && !(order.status === "new" || order.status === "checked");
 
   const openCancelModal = (order: OrderRecord) => {
+    if (!requireWorkerPin()) return;
     const needsManagerPin = cancelRequiresManagerPin(order);
     setCancelTarget({ id: order.id, displayNo: order.displayNo, status: order.status });
     setCancelNeedsManagerPin(needsManagerPin);
@@ -1055,6 +1078,7 @@ function StaffPageInner() {
 
   const confirmCancelOrder = async () => {
     if (!cancelTarget || cancelSubmitting) return;
+    if (!requireWorkerPin()) return;
     const id = cancelTarget.id;
     const sid = storeIdRef.current || storeId;
     if (!sid) return;
@@ -1244,6 +1268,7 @@ function StaffPageInner() {
   const togglePackingChecks = async (order: OrderRecord, nextChecked: boolean, targetItemId?: string) => {
     const sid = storeIdRef.current || storeId;
     if (!sid) return;
+    if (!requireWorkerPin()) return;
 
     const doneItems = order.items.filter((it) => it.status === "done");
     const targets = targetItemId ? doneItems.filter((it) => it.id === targetItemId) : doneItems;
@@ -1314,15 +1339,17 @@ function StaffPageInner() {
     if (typeof patch.status === "undefined") return;
 
     try {
+      const requestBody: Record<string, unknown> = {
+        storeId: sid,
+        itemIds,
+        status: patch.status,
+      };
+      if (typeof patch.batch !== "undefined") requestBody.batch = patch.batch;
+
       const res = await fetch("/api/orders/items/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storeId: sid,
-          itemIds,
-          status: patch.status,
-          batch: typeof patch.batch === "undefined" ? null : patch.batch,
-        }),
+        body: JSON.stringify(requestBody),
       });
       const json = await res.json();
       if (!res.ok || !json?.ok) {
@@ -3210,9 +3237,7 @@ function StaffPageInner() {
                 type="button"
                 className="btn topActionBtn"
                 aria-label="관리자 홈으로 이동"
-                onClick={() =>
-                  (window.location.href = storeId ? `/admin?store=${encodeURIComponent(storeId)}` : "/admin")
-                }
+                onClick={goToAdminHome}
               >
                 <StaffIcon name="home" />
                 <span>관리자 홈</span>
@@ -3388,12 +3413,14 @@ function StaffPageInner() {
           <div className="newOrderPopupContent">
             <span className="newOrderIcon" aria-hidden="true"><StaffIcon name="bell" /></span>
             <div>
-              <div className="newOrderPopupTitle">새 주문이 도착했어요</div>
-              <div className="newOrderPopupText">주문번호 {newOrderPopup.displayNo}</div>
+              <div className="newOrderPopupTitle">
+                {pendingNewOrderCount > 1 ? `새 주문 ${pendingNewOrderCount}건이 대기 중이에요` : "새 주문이 도착했어요"}
+              </div>
+              <div className="newOrderPopupText">최근 주문번호 {newOrderPopup.displayNo}</div>
             </div>
             <div className="itemQuickActions" style={{ marginTop: 0 }}>
-              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={moveToOrderCheckTab}>주문 확인</button>
-              <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>닫기</button>
+              <button type="button" className="quickActionBtn quickActionBtnPrimary" onClick={openNewOrderFromBanner}>주문 보기</button>
+              <button type="button" className="quickActionBtn" onClick={() => setNewOrderPopup(null)}>나중에</button>
             </div>
           </div>
         </div>
@@ -3613,6 +3640,7 @@ function StaffPageInner() {
 
                 return (
                   <div
+                    id={`staff-order-${o.id}`}
                     key={o.id}
                     role="button"
                     tabIndex={0}
