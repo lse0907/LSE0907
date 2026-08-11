@@ -1306,7 +1306,10 @@ function StaffPageInner() {
     !(selected.status === "completed" || selected.status === "cancelled" || (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new"));
   const canCancelSelected = !!selected && !(selected.status === "completed" || selected.status === "cancelled");
   const showDetailAdvanceAction =
-    !!selected && (staffViewMode !== "station" || (stationTab === "order" && selected.status === "new"));
+    !!selected &&
+    (staffViewMode !== "station" ||
+      (stationTab === "order" && selected.status === "new") ||
+      (stationTab === "history" && isCompleted(selected.status)));
   const showDetailPaymentAction =
     !!selected && staffViewMode !== "station" && prepayAddonActive && selected.paymentStatus === "pending";
 
