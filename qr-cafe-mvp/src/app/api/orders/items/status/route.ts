@@ -43,7 +43,13 @@ export async function POST(req: NextRequest) {
     }
 
     const payload: Record<string, unknown> = { status };
-    if (typeof body.batch !== "undefined") payload.batch = body.batch == null ? null : Math.max(0, Math.floor(Number(body.batch || 0)));
+    if (typeof body.batch !== "undefined" && body.batch !== null) {
+      const batch = Number(body.batch);
+      if (!Number.isFinite(batch) || batch < 0) {
+        return NextResponse.json({ ok: false, message: "제조 순번(batch)은 0 이상의 숫자여야 합니다." }, { status: 400 });
+      }
+      payload.batch = Math.floor(batch);
+    }
 
     const updateRes = await supabaseAdmin.from("order_items").update(payload).eq("store_id", storeId).in("id", itemIds);
     if (updateRes.error) return NextResponse.json({ ok: false, message: `아이템 상태 저장 실패: ${updateRes.error.message}` }, { status: 500 });
