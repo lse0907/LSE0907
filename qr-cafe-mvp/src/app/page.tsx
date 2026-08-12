@@ -17,6 +17,7 @@ import {
   StoreAccessError,
 } from "./_components/CustomerLoadingState";
 import { CustomerIcon } from "./_components/CustomerIcon";
+import { CustomerQrScannerSheet } from "./_components/CustomerQrScannerSheet";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 type BarcodeScanResult = { rawValue?: string };
@@ -326,27 +327,6 @@ function HomeStartInner() {
             font-weight: 650;
             cursor: pointer;
           }
-          .scanPane {
-            position: fixed;
-            inset: 0;
-            z-index: 100;
-            background: #0c1b35;
-            padding: calc(18px + env(safe-area-inset-top)) 16px
-              calc(18px + env(safe-area-inset-bottom));
-            display: grid;
-            gap: 8px;
-            align-content: center;
-          }
-          .video {
-            width: 100%;
-            border-radius: 20px;
-            background: #000;
-            aspect-ratio: 3 / 4;
-            object-fit: cover;
-            max-height: 72dvh;
-            max-width: 480px;
-            margin: 0 auto;
-          }
           .err {
             padding: 12px 14px;
             border-radius: 14px;
@@ -355,22 +335,6 @@ function HomeStartInner() {
             font-weight: 600;
             font-size: 13px;
             white-space: pre-line;
-          }
-          .scannerGuide {
-            width: min(480px, 100%);
-            margin: 0 auto 4px;
-            color: #fff;
-            font-size: 14px;
-            font-weight: 600;
-            text-align: center;
-          }
-          @media (min-width: 640px) {
-            .scanPane {
-              background: rgba(11, 18, 32, 0.94);
-            }
-            .video {
-              border: 1px solid rgba(255, 255, 255, 0.25);
-            }
           }
         `}</style>
         <section className="card">
@@ -384,15 +348,17 @@ function HomeStartInner() {
             <CustomerIcon name="qr" size={21} /> QR 스캔하고 주문하기
           </button>
           {scannerOpen ? (
-            <div className="scanPane">
-              <p className="scannerGuide">QR을 화면 안에 맞춰 주세요.</p>
-              <video ref={videoRef} className="video" muted playsInline />
-              <button className="btnGhost" onClick={stopScanner}>
-                {scanning ? "스캔 닫기" : "닫기"}
-              </button>
-            </div>
+            <CustomerQrScannerSheet
+              videoRef={videoRef}
+              scanning={scanning}
+              error={scanError}
+              onRetry={() => {
+                stopScanner();
+                void startQrScanner();
+              }}
+              onClose={stopScanner}
+            />
           ) : null}
-          {scanError ? <p className="err">{scanError}</p> : null}
           {!authLoading ? (
             authUserId ? (
               <button className="btnGhost" onClick={() => router.push("/me")}>
