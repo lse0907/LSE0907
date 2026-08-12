@@ -7,6 +7,7 @@ import {
   CustomerTrustFooter,
   StoreIdentity,
 } from "@/app/_components/StoreCustomerBrand";
+import { CustomerIcon } from "@/app/_components/CustomerIcon";
 import { lsLastOrderIdKey, lsLastOrderTokenKey } from "@/app/lib/storeScope";
 
 type SelectedOptionItem = {
@@ -247,15 +248,15 @@ function ConfirmSuccessPageInner() {
           className={`loader ${status === "error" ? "loaderError" : ""}`}
           aria-hidden="true"
         >
-          {status === "error" ? "!" : ""}
+          {status === "error" ? <CustomerIcon name="warning" size={28} /> : ""}
         </div>
         <span className="eyebrow">
-          {status === "error" ? "처리 확인 필요" : "안전한 결제 처리"}
+          {status === "error" ? "PAYMENT CHECK" : "SECURE PAYMENT"}
         </span>
         <h1>
           {status === "error"
-            ? "결제 처리를 확인해 주세요"
-            : "주문을 안전하게 처리하고 있어요"}
+            ? "결제 상태를 확인해 주세요"
+            : "결제를 확인하고 있어요"}
         </h1>
         <p className={status === "error" ? "message error" : "message"}>
           {message}
@@ -296,7 +297,7 @@ function ConfirmSuccessPageInner() {
           max-width: 520px;
           padding: 24px;
           border: 1px solid var(--customer-line);
-          border-radius: 24px;
+          border-radius: 22px;
           background: #fff;
           box-shadow: var(--customer-shadow);
         }
@@ -317,27 +318,29 @@ function ConfirmSuccessPageInner() {
           background: #fff1f2;
           color: #be123c;
           font-size: 28px;
-          font-weight: 900;
+          font-weight: 800;
           animation: none;
         }
         .eyebrow {
           display: block;
           margin-top: 22px;
-          color: #526680;
-          font-size: 12px;
+          color: #315fba;
+          font-size: 11px;
           font-weight: 800;
+          letter-spacing: 0.13em;
         }
         h1 {
           margin: 8px 0 0;
           color: var(--rion-navy);
-          font-size: 30px;
+          font-size: clamp(28px, 7vw, 34px);
+          font-weight: 850;
           line-height: 1.2;
           letter-spacing: -0.045em;
         }
         .message {
           margin: 12px 0 0;
           color: var(--customer-muted);
-          font-weight: 650;
+          font-weight: 500;
           line-height: 1.65;
         }
         .message.error {
@@ -350,7 +353,7 @@ function ConfirmSuccessPageInner() {
           background: #f1f5f9;
           color: #475569;
           font-size: 13px;
-          font-weight: 700;
+          font-weight: 500;
           line-height: 1.5;
         }
         .actions {
@@ -363,7 +366,7 @@ function ConfirmSuccessPageInner() {
           min-height: 50px;
           padding: 0 18px;
           border-radius: 14px;
-          font-weight: 800;
+          font-weight: 750;
         }
         .primary {
           border: 1px solid var(--rion-navy);

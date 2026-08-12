@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-img-element */
 // src/app/menu/page.tsx
 "use client";
 
@@ -12,6 +13,7 @@ import {
   CustomerLoadingState,
   StoreAccessError,
 } from "@/app/_components/CustomerLoadingState";
+import { CustomerIcon } from "@/app/_components/CustomerIcon";
 
 type SelectedOptionItem = {
   id: string;
@@ -558,9 +560,9 @@ function MenuPageInner() {
     const aBot = 0.25 + 0.6 * (headerOverlayStrength / 100);
     return `linear-gradient(
       to bottom,
-      rgba(0,0,0,${aTop}) 0%,
-      rgba(0,0,0,${aMid}) 55%,
-      rgba(0,0,0,${aBot}) 100%
+      rgba(8,22,45,${aTop}) 0%,
+      rgba(8,22,45,${aMid}) 55%,
+      rgba(8,22,45,${aBot}) 100%
     )`;
   }, [headerOverlayStrength]);
 
@@ -935,7 +937,7 @@ function MenuPageInner() {
           --muted: #667085;
           --line: #dfe4eb;
           --brand: #0f1f3d;
-          --radius: 16px;
+          --radius: 20px;
         }
         body {
           background: var(--bg);
@@ -962,9 +964,14 @@ function MenuPageInner() {
 
         .hero {
           position: relative;
-          height: 144px;
+          height: 132px;
           overflow: hidden;
-          background: linear-gradient(135deg, #111827 0%, #374151 100%);
+          background: linear-gradient(
+            125deg,
+            #0c1b35 0%,
+            #132d59 62%,
+            #1d4b8f 100%
+          );
         }
         .heroImg {
           position: absolute;
@@ -998,15 +1005,15 @@ function MenuPageInner() {
           border: 1px solid rgba(255, 255, 255, 0.35);
           background: rgba(17, 24, 39, 0.5);
           color: #fff;
-          font-weight: 900;
+          font-weight: 650;
           border-radius: 999px;
           padding: 6px 10px;
           font-size: 12px;
           cursor: pointer;
         }
         .stickyHead {
-          background: rgba(246, 247, 249, 0.95);
-          backdrop-filter: blur(8px);
+          background: rgba(243, 245, 248, 0.94);
+          backdrop-filter: blur(14px);
           border-bottom: 1px solid var(--line);
         }
         .stickyInner {
@@ -1025,20 +1032,20 @@ function MenuPageInner() {
         .h1 {
           margin: 0;
           color: #fff;
-          font-weight: 950;
-          font-size: 22px;
-          letter-spacing: -0.02em;
+          font-weight: 850;
+          font-size: clamp(22px, 5vw, 28px);
+          letter-spacing: -0.035em;
           text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
         }
         .sub {
           margin: 0;
           color: rgba(255, 255, 255, 0.9);
-          font-weight: 850;
+          font-weight: 600;
           font-size: 12px;
           text-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
         }
         .content {
-          padding: 10px 12px 28px;
+          padding: 16px 12px 32px;
         }
         .contentInner {
           max-width: 760px;
@@ -1064,21 +1071,54 @@ function MenuPageInner() {
           border-radius: 999px;
           min-height: 44px;
           padding: 10px 14px;
-          font-weight: 900;
+          font-weight: 650;
           cursor: pointer;
         }
         .catTabOn {
           background: var(--brand);
           border-color: var(--brand);
           color: #fff;
+          font-weight: 750;
+          box-shadow: 0 7px 16px rgba(15, 31, 61, 0.16);
+        }
+
+        .benefitBar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          min-height: 42px;
+          padding: 9px 11px;
+          border: 1px solid #d7e1f0;
+          border-radius: 13px;
+          background: linear-gradient(145deg, #f8fbff, #eef4fb);
+          color: #405069;
+          font-size: 12px;
+          font-weight: 550;
+          line-height: 1.45;
+        }
+        .benefitBar strong {
+          color: var(--rion-navy);
+          font-weight: 750;
+        }
+        .benefitCta {
+          flex: 0 0 auto;
+          min-height: 32px;
+          padding: 0 10px;
+          border: 1px solid #b9cae3;
+          border-radius: 999px;
+          background: #fff;
+          color: #214f96;
+          font-size: 11px;
+          font-weight: 700;
         }
 
         .menuCard {
           background: var(--card);
           border: 1px solid var(--line);
           border-radius: var(--radius);
-          padding: 12px;
-          box-shadow: 0 12px 30px rgba(15, 31, 61, 0.07);
+          padding: 13px;
+          box-shadow: 0 8px 24px rgba(15, 31, 61, 0.055);
           display: grid;
           gap: 10px;
           transition:
@@ -1094,10 +1134,24 @@ function MenuPageInner() {
             0 12px 30px rgba(15, 31, 61, 0.08);
         }
         .sectionTitle {
-          margin: 2px 2px 0;
-          font-size: 14px;
-          font-weight: 950;
-          color: #374151;
+          position: relative;
+          margin: 12px 3px 2px;
+          padding-left: 12px;
+          font-size: 19px;
+          font-weight: 800;
+          letter-spacing: -0.025em;
+          color: var(--rion-navy);
+        }
+        .sectionTitle::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 50%;
+          width: 4px;
+          height: 18px;
+          border-radius: 999px;
+          background: var(--customer-accent);
+          transform: translateY(-50%);
         }
         .menuRow {
           display: grid;
@@ -1122,9 +1176,13 @@ function MenuPageInner() {
           object-fit: cover;
         }
         .noImg {
-          color: #9ca3af;
-          font-weight: 950;
-          font-size: 12px;
+          display: grid;
+          justify-items: center;
+          gap: 4px;
+          color: #7b8798;
+          font-weight: 550;
+          font-size: 10px;
+          line-height: 1.2;
         }
         .cartCheck {
           position: absolute;
@@ -1139,27 +1197,30 @@ function MenuPageInner() {
           background: var(--brand);
           color: #fff;
           font-size: 12px;
-          font-weight: 950;
+          font-weight: 800;
           box-shadow: 0 3px 10px rgba(15, 31, 61, 0.24);
         }
 
         .name {
           margin: 0;
-          font-weight: 950;
-          font-size: 16px;
-          letter-spacing: -0.01em;
+          font-weight: 750;
+          font-size: 17px;
+          line-height: 1.35;
+          letter-spacing: -0.02em;
+          word-break: keep-all;
         }
         .price {
           margin-top: 4px;
           color: var(--muted);
-          font-weight: 850;
-          font-size: 13px;
+          color: var(--customer-ink);
+          font-weight: 700;
+          font-size: 15px;
         }
         .soldout {
           display: inline-flex;
           margin-top: 6px;
           font-size: 12px;
-          font-weight: 900;
+          font-weight: 650;
           padding: 4px 8px;
           border-radius: 999px;
           border: 1px solid var(--line);
@@ -1169,7 +1230,7 @@ function MenuPageInner() {
         .metaLine {
           margin-top: 6px;
           color: #6b7280;
-          font-weight: 850;
+          font-weight: 500;
           font-size: 12px;
         }
 
@@ -1186,7 +1247,7 @@ function MenuPageInner() {
           background: #fff;
           color: var(--text);
           -webkit-text-fill-color: currentColor;
-          font-weight: 950;
+          font-weight: 750;
           cursor: pointer;
         }
         .qbtn:disabled {
@@ -1196,7 +1257,7 @@ function MenuPageInner() {
         .qnum {
           width: 22px;
           text-align: center;
-          font-weight: 950;
+          font-weight: 750;
         }
 
         .addBtn {
@@ -1207,7 +1268,7 @@ function MenuPageInner() {
           background: #fff;
           color: var(--text);
           -webkit-text-fill-color: currentColor;
-          font-weight: 950;
+          font-weight: 700;
           cursor: pointer;
           white-space: nowrap;
         }
@@ -1223,9 +1284,10 @@ function MenuPageInner() {
           bottom: 0;
           z-index: 30;
           padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-          background: rgba(246, 247, 249, 0.92);
-          backdrop-filter: blur(10px);
+          background: rgba(255, 255, 255, 0.94);
+          backdrop-filter: blur(14px);
           border-top: 1px solid var(--line);
+          box-shadow: 0 -12px 32px rgba(15, 31, 61, 0.1);
         }
         .bottomInner {
           max-width: 760px;
@@ -1242,15 +1304,16 @@ function MenuPageInner() {
         }
         .sumTop {
           color: var(--muted);
-          font-weight: 900;
+          font-weight: 500;
           font-size: 12px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         .sumMain {
-          font-weight: 950;
-          font-size: 16px;
+          color: var(--rion-navy);
+          font-weight: 850;
+          font-size: 20px;
           letter-spacing: -0.01em;
           white-space: nowrap;
           overflow: hidden;
@@ -1263,8 +1326,8 @@ function MenuPageInner() {
           padding: 12px 16px;
           background: var(--brand);
           color: #fff;
-          font-weight: 950;
-          font-size: 14px;
+          font-weight: 750;
+          font-size: 15px;
           cursor: pointer;
           white-space: nowrap;
         }
@@ -1276,7 +1339,7 @@ function MenuPageInner() {
         .modalBg {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.35);
+          background: rgba(15, 31, 61, 0.52);
           z-index: 50;
           display: grid;
           place-items: end center;
@@ -1286,11 +1349,11 @@ function MenuPageInner() {
           width: 100%;
           max-width: 760px;
           background: #fff;
-          border-radius: 18px;
+          border-radius: 24px;
           border: 1px solid var(--line);
           max-height: min(90dvh, 760px);
           overflow: hidden;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+          box-shadow: var(--customer-shadow-strong);
           display: grid;
           grid-template-rows: auto minmax(0, 1fr) auto;
         }
@@ -1304,8 +1367,9 @@ function MenuPageInner() {
         }
         .modalTitle {
           margin: 0;
-          font-weight: 950;
-          font-size: 16px;
+          font-weight: 800;
+          font-size: 20px;
+          letter-spacing: -0.025em;
         }
         .xbtn {
           border: 1px solid var(--line);
@@ -1316,7 +1380,7 @@ function MenuPageInner() {
           min-width: 44px;
           min-height: 44px;
           padding: 8px 12px;
-          font-weight: 950;
+          font-weight: 700;
           cursor: pointer;
         }
         .modalBody {
@@ -1328,14 +1392,21 @@ function MenuPageInner() {
           overscroll-behavior: contain;
         }
         .gCard {
-          border: 1px solid var(--line);
-          border-radius: 16px;
-          padding: 12px;
-          background: #fff;
+          padding: 16px 0;
+          border: 0;
+          border-bottom: 1px solid var(--line);
+          background: transparent;
         }
         .gCardError {
           border-color: #ef4444;
+          padding: 14px;
+          border: 1px solid #ef4444;
+          border-radius: 16px;
+          background: #fffafa;
           box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+        }
+        .gCard:last-child {
+          border-bottom: 0;
         }
         .gError {
           margin-top: 8px;
@@ -1350,7 +1421,7 @@ function MenuPageInner() {
           align-items: baseline;
         }
         .gName {
-          font-weight: 950;
+          font-weight: 750;
           display: inline-flex;
           align-items: center;
           gap: 6px;
@@ -1362,13 +1433,13 @@ function MenuPageInner() {
           border-radius: 999px;
           padding: 2px 7px;
           font-size: 11px;
-          font-weight: 900;
+          font-weight: 650;
           line-height: 1.2;
           white-space: nowrap;
         }
         .gHint {
           color: var(--muted);
-          font-weight: 850;
+          font-weight: 500;
           font-size: 12px;
         }
         .iList {
@@ -1385,7 +1456,7 @@ function MenuPageInner() {
           border-radius: 14px;
           padding: 10px;
           background: #fff;
-          min-height: 56px;
+          min-height: 60px;
           cursor: pointer;
           transition:
             border-color 0.16s ease,
@@ -1393,8 +1464,8 @@ function MenuPageInner() {
             box-shadow 0.16s ease;
         }
         .iRowSelected {
-          border-color: #7385a1;
-          background: #f3f6fa;
+          border-color: var(--brand);
+          background: #eef4ff;
           box-shadow: inset 0 0 0 1px rgba(15, 31, 61, 0.08);
         }
         .iLeft {
@@ -1413,7 +1484,7 @@ function MenuPageInner() {
           background: var(--brand);
           border-radius: 999px;
           font-size: 13px;
-          font-weight: 900;
+          font-weight: 750;
         }
         .iChoice {
           display: grid;
@@ -1432,7 +1503,7 @@ function MenuPageInner() {
         }
         .iPrice {
           color: var(--muted);
-          font-weight: 850;
+          font-weight: 600;
           font-size: 12px;
           white-space: nowrap;
         }
@@ -1458,7 +1529,7 @@ function MenuPageInner() {
           background: #fff;
           color: var(--text);
           -webkit-text-fill-color: currentColor;
-          font-weight: 900;
+          font-weight: 700;
           cursor: pointer;
         }
         .miniBtn:disabled {
@@ -1482,7 +1553,7 @@ function MenuPageInner() {
           display: flex;
           justify-content: space-between;
           gap: 10px;
-          font-weight: 900;
+          font-weight: 700;
         }
         .orderQtyRow {
           display: flex;
@@ -1499,6 +1570,17 @@ function MenuPageInner() {
           border-radius: 999px;
           padding: 2px 4px;
           background: #f8fafc;
+        }
+
+        @media (min-width: 700px) {
+          .modalBg {
+            place-items: center;
+            padding: 24px;
+          }
+          .modal {
+            width: min(680px, 100%);
+            max-height: 84dvh;
+          }
         }
 
         @media (max-width: 520px) {
@@ -1564,7 +1646,6 @@ function MenuPageInner() {
 
       <div className="topSticky" ref={topStickyRef}>
         <section className="hero">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           {headerImage ? (
             <img
               className="heroImg"
@@ -1585,7 +1666,7 @@ function MenuPageInner() {
                       )
                     }
                   >
-                    내정보
+                    내 정보
                   </button>
                   <button
                     className="topBtn"
@@ -1630,40 +1711,29 @@ function MenuPageInner() {
 
         <section className="stickyHead">
           <div className="stickyInner">
-            <div
-              style={{
-                border: "1px solid #c7d2fe",
-                borderRadius: 10,
-                padding: "8px 10px",
-                background: "#eef2ff",
-                fontWeight: 800,
-                fontSize: 13,
-              }}
-            >
+            <div className="benefitBar">
               {customerUserId ? (
                 <span>
-                  <span style={{ color: "#334155", fontWeight: 700 }}>
-                    내 등급:
-                  </span>{" "}
-                  <b style={{ color: "#1d4ed8" }}>{tierLabel(wallet?.tier)}</b>{" "}
-                  ·{" "}
-                  <span style={{ color: "#334155", fontWeight: 700 }}>
-                    내 포인트:
-                  </span>{" "}
-                  <b style={{ color: "#7c3aed" }}>
-                    {fmt(Number(wallet?.point_balance || 0))}P
-                  </b>{" "}
-                  ·{" "}
-                  <span style={{ color: "#334155", fontWeight: 700 }}>
-                    내 쿠폰:
-                  </span>{" "}
-                  <b style={{ color: "#be123c" }}>{issuedCouponCount}장</b>
+                  회원 혜택 · <strong>{tierLabel(wallet?.tier)}</strong> ·{" "}
+                  <strong>{fmt(Number(wallet?.point_balance || 0))}P</strong> ·{" "}
+                  <strong>쿠폰 {issuedCouponCount}장</strong>
                 </span>
               ) : (
-                <span>
-                  비회원 주문 중 · 회원가입하면 주문 시 매장별 포인트를 적립받을
-                  수 있어요.
-                </span>
+                <>
+                  <span>
+                    회원으로 주문하면 매장별 포인트와 쿠폰 혜택을 받을 수
+                    있어요.
+                  </span>
+                  <button
+                    type="button"
+                    className="benefitCta"
+                    onClick={() =>
+                      router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)
+                    }
+                  >
+                    회원가입
+                  </button>
+                </>
               )}
             </div>
 
@@ -1706,12 +1776,12 @@ function MenuPageInner() {
       <section className="content">
         <div className="contentInner" ref={menuContentRef}>
           {menuLoading || optionsLoading ? (
-            <div style={{ color: "#6b7280", fontWeight: 850, padding: 12 }}>
-              데이터를 불러오는 중...
+            <div style={{ color: "#667085", fontWeight: 500, padding: 12 }}>
+              주문 가능한 메뉴를 불러오고 있어요.
             </div>
           ) : showEmpty ? (
-            <div style={{ color: "#6b7280", fontWeight: 850, padding: 12 }}>
-              준비된 메뉴가 없어요.
+            <div style={{ color: "#667085", fontWeight: 500, padding: 12 }}>
+              현재 주문 가능한 메뉴가 없어요.
             </div>
           ) : (
             menuSections.map((section) => (
@@ -1749,10 +1819,12 @@ function MenuPageInner() {
                       <div className="menuRow">
                         <div className="imgBox">
                           {(m.image || "").trim() ? (
-                            // eslint-disable-next-line @next/next/no-img-element
                             <img src={m.image} alt={m.name} />
                           ) : (
-                            <div className="noImg">NO IMG</div>
+                            <div className="noImg">
+                              <CustomerIcon name="image" size={21} />
+                              <span>이미지 준비 중</span>
+                            </div>
                           )}
                           {isInCart ? (
                             <span
@@ -1835,12 +1907,12 @@ function MenuPageInner() {
         <section className="bottomBar">
           <div className="bottomInner">
             <div className="sumText">
-              <div className="sumTop">장바구니 {totals.totalCount}개</div>
+              <div className="sumTop">장바구니 · {totals.totalCount}개</div>
               <div className="sumMain">{fmt(totals.totalPrice)}원</div>
             </div>
 
             <button className="btnPrimary" onClick={goConfirm}>
-              주문 확인
+              주문 확인하기
             </button>
           </div>
         </section>
@@ -2117,7 +2189,7 @@ function MenuPageInner() {
               </div>
 
               <button className="btnPrimary" onClick={onConfirmOptions}>
-                {fmt(modalPrice * Math.max(1, optQty))}원 담기
+                {fmt(modalPrice * Math.max(1, optQty))}원 · 장바구니에 담기
               </button>
             </div>
           </div>
