@@ -9,6 +9,7 @@ import {
   CustomerTrustFooter,
   StoreCustomerHeader,
 } from "@/app/_components/StoreCustomerBrand";
+import { CustomerOrderProgress } from "@/app/_components/CustomerOrderProgress";
 import {
   getStoreIdFromSearchParams,
   lsLastOrderIdKey,
@@ -726,22 +727,6 @@ function ConfirmPageInner() {
     setCartLines((prev) => prev.filter((ln) => ln.lineId !== lineId));
   };
 
-  const modeBtnStyle = (active: boolean, disabled: boolean) => ({
-    padding: 12,
-    flex: 1,
-    borderRadius: 12,
-    border: active ? "2px solid #111" : "1px solid #ddd",
-    background: "white",
-    color: "#111827",
-    WebkitTextFillColor: "currentColor" as const,
-    cursor: disabled ? "not-allowed" : "pointer",
-    fontWeight: 900,
-    opacity: disabled ? 0.55 : 1,
-  });
-
-  const dineInDisabled = false;
-  const takeoutDisabled = isTableQr;
-
   return (
     <>
       <style jsx global>{`
@@ -749,19 +734,453 @@ function ConfirmPageInner() {
           color-scheme: light;
         }
         body {
-          background: #f6f7f9;
-          color: #111827;
+          background: var(--customer-bg);
+          color: var(--customer-ink);
         }
       `}</style>
-      <main
-        className="customer-page"
-        style={{
-          padding: 16,
-          maxWidth: 760,
-          margin: "0 auto",
-          color: "#111827",
-        }}
-      >
+      <style jsx>{`
+        .confirmPage {
+          width: 100%;
+          max-width: 1180px;
+          min-height: 100dvh;
+          margin: 0 auto;
+          padding: 24px 20px 0;
+          color: var(--customer-ink);
+        }
+        .accountActions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 7px;
+          flex-wrap: wrap;
+        }
+        .accountButton {
+          min-height: 34px;
+          padding: 6px 10px;
+          border: 1px solid var(--customer-line);
+          border-radius: 999px;
+          background: #fff;
+          color: #30415f;
+          font-size: 12px;
+          font-weight: 650;
+          cursor: pointer;
+        }
+        .checkoutGrid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 340px;
+          gap: 20px;
+          margin-top: 22px;
+          align-items: start;
+        }
+        .checkoutMain {
+          min-width: 0;
+          display: grid;
+          gap: 16px;
+        }
+        .checkoutSection,
+        .summaryCard {
+          padding: 22px;
+          border: 1px solid var(--customer-line);
+          border-radius: 22px;
+          background: #fff;
+          box-shadow: 0 10px 28px rgba(15, 31, 61, 0.055);
+        }
+        .sectionHeading {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .sectionEyebrow {
+          display: block;
+          margin-bottom: 5px;
+          color: #315fba;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.13em;
+          line-height: 1.25;
+        }
+        h2 {
+          margin: 0;
+          color: var(--rion-navy);
+          font-size: 20px;
+          font-weight: 800;
+          line-height: 1.3;
+          letter-spacing: -0.025em;
+        }
+        .contextBadge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 28px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: #e9eef6;
+          color: #30415f;
+          font-size: 12px;
+          font-weight: 650;
+          white-space: nowrap;
+        }
+        .emptyCart {
+          margin: 14px 0 0;
+          padding: 13px 14px;
+          border-radius: 14px;
+          background: #fff1f2;
+          color: #9f1239;
+          font-size: 14px;
+          font-weight: 600;
+          line-height: 1.55;
+        }
+        .orderList {
+          display: grid;
+          gap: 10px;
+          margin-top: 14px;
+        }
+        .orderItem {
+          display: grid;
+          gap: 7px;
+          padding: 16px;
+          border: 1px solid var(--customer-line);
+          border-radius: 16px;
+          background: #fff;
+        }
+        .orderItemHead {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .orderItemHead > div {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          min-width: 0;
+        }
+        .orderItemHead strong {
+          color: var(--customer-ink);
+          font-size: 16px;
+          font-weight: 700;
+          line-height: 1.35;
+        }
+        .orderItemHead > strong {
+          flex: 0 0 auto;
+        }
+        .orderItemHead span {
+          flex: 0 0 auto;
+          color: var(--customer-muted);
+          font-size: 13px;
+          font-weight: 550;
+        }
+        .itemMeta,
+        .itemOptions {
+          color: var(--customer-muted);
+          font-size: 13px;
+          font-weight: 500;
+          line-height: 1.55;
+        }
+        .itemOptions {
+          color: #405069;
+        }
+        .quantityActions {
+          display: flex;
+          gap: 7px;
+          margin-top: 5px;
+        }
+        .quantityButton {
+          min-width: 44px;
+          min-height: 36px;
+          padding: 6px 11px;
+          border: 1px solid var(--customer-line);
+          border-radius: 11px;
+          background: #f8fafc;
+          color: var(--customer-ink);
+          font-size: 13px;
+          font-weight: 700;
+        }
+        .removeButton {
+          border-color: #fecdd3;
+          background: #fff7f8;
+          color: #9f1239;
+        }
+        .addMenuButton {
+          width: 100%;
+          min-height: 46px;
+          margin-top: 12px;
+          border: 1px dashed #b8c5d8;
+          border-radius: 13px;
+          background: #f8fafc;
+          color: #30415f;
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .orderSubtotal {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 18px;
+          padding-top: 16px;
+          border-top: 1px solid var(--customer-line);
+        }
+        .orderSubtotal span {
+          color: var(--customer-muted);
+          font-size: 14px;
+          font-weight: 550;
+        }
+        .orderSubtotal strong {
+          color: var(--rion-navy);
+          font-size: 22px;
+          font-weight: 800;
+          letter-spacing: -0.025em;
+        }
+        .benefitSection > p {
+          margin: 14px 0 0 !important;
+          color: #405069;
+          font-size: 14px;
+          font-weight: 600 !important;
+          line-height: 1.6;
+        }
+        .benefitSection label {
+          font-size: 14px;
+          font-weight: 650 !important;
+        }
+        .benefitSection input {
+          min-height: 44px;
+          color: var(--customer-ink);
+          font-weight: 650 !important;
+        }
+        .requestInput {
+          width: 100%;
+          min-height: 112px;
+          margin-top: 14px;
+          padding: 13px 14px;
+          resize: vertical;
+          border: 1px solid var(--customer-line);
+          border-radius: 14px;
+          background: #fbfcfe;
+          color: var(--customer-ink);
+          font-size: 15px;
+          font-weight: 500;
+          line-height: 1.6;
+        }
+        .requestInput::placeholder {
+          color: #98a2b3;
+        }
+        .requestInput:focus {
+          border-color: #7698d0;
+          background: #fff;
+          outline: 3px solid rgba(37, 99, 235, 0.12);
+        }
+        .fieldHint {
+          margin: 8px 0 0;
+          color: var(--customer-muted);
+          font-size: 13px;
+          font-weight: 500;
+          line-height: 1.55;
+        }
+        .modeButtons {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-top: 14px;
+        }
+        .modeButton {
+          min-height: 50px;
+          border: 1px solid var(--customer-line);
+          border-radius: 14px;
+          background: #fff;
+          color: var(--customer-ink);
+          font-size: 15px;
+          font-weight: 700;
+        }
+        .modeButton.active {
+          border-color: var(--rion-navy);
+          background: #eef4ff;
+          color: var(--rion-navy);
+          box-shadow: inset 0 0 0 1px var(--rion-navy);
+        }
+        .modeButton:disabled {
+          cursor: not-allowed;
+        }
+        .tableField {
+          margin-top: 14px;
+        }
+        .fieldLabel {
+          display: block;
+          color: #405069;
+          font-size: 14px;
+          font-weight: 650;
+        }
+        .tableInput {
+          display: block;
+          width: min(220px, 100%);
+          min-height: 46px;
+          margin-top: 8px;
+          padding: 10px 12px;
+          border: 1px solid var(--customer-line);
+          border-radius: 13px;
+          background: #fff;
+          color: var(--customer-ink);
+          font-size: 15px;
+          font-weight: 650;
+        }
+        .tableInput:disabled {
+          background: #f2f4f7;
+          color: #667085;
+        }
+        .checkoutAside {
+          position: sticky;
+          top: 18px;
+        }
+        .summaryCard h2 {
+          font-size: 22px;
+        }
+        .summaryList {
+          display: grid;
+          gap: 13px;
+          margin: 20px 0 0;
+        }
+        .summaryList > div {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .summaryList dt {
+          color: var(--customer-muted);
+          font-size: 14px;
+          font-weight: 500;
+        }
+        .summaryList dd {
+          margin: 0;
+          color: var(--customer-ink);
+          font-size: 15px;
+          font-weight: 700;
+        }
+        .summaryList .discount dd {
+          color: #1d4ed8;
+        }
+        .summaryList .summaryTotal {
+          margin-top: 4px;
+          padding-top: 17px;
+          border-top: 1px solid var(--customer-line);
+          align-items: flex-end;
+        }
+        .summaryList .summaryTotal dt {
+          color: var(--customer-ink);
+          font-weight: 700;
+        }
+        .summaryList .summaryTotal dd {
+          color: var(--rion-navy);
+          font-size: 25px;
+          font-weight: 900;
+          letter-spacing: -0.035em;
+        }
+        .submitError {
+          margin-top: 16px;
+          padding: 12px 13px;
+          border: 1px solid #fecdd3;
+          border-radius: 13px;
+          background: #fff1f2;
+          color: #9f1239;
+          font-size: 13px;
+          font-weight: 600;
+          line-height: 1.55;
+        }
+        .submitActions {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 9px;
+          margin-top: 20px;
+        }
+        .submitActions button {
+          min-height: 52px;
+          border-radius: 14px;
+          font-size: 15px;
+          font-weight: 700;
+        }
+        .submitButton {
+          grid-row: 1;
+          border: 1px solid var(--rion-navy);
+          background: var(--rion-navy);
+          color: #fff;
+          box-shadow: 0 10px 24px rgba(15, 31, 61, 0.2);
+        }
+        .submitButton:disabled {
+          opacity: 0.45;
+          box-shadow: none;
+        }
+        .backButton {
+          border: 1px solid var(--customer-line);
+          background: #fff;
+          color: var(--customer-ink);
+        }
+        .paymentNotice {
+          margin: 12px 0 0;
+          color: var(--customer-muted);
+          font-size: 13px;
+          font-weight: 500;
+          line-height: 1.55;
+          text-align: center;
+        }
+        @media (max-width: 860px) {
+          .confirmPage {
+            max-width: 760px;
+            padding: 18px 16px 0;
+          }
+          .checkoutGrid {
+            grid-template-columns: 1fr;
+          }
+          .checkoutAside {
+            position: static;
+          }
+          .summaryCard {
+            padding-bottom: calc(18px + env(safe-area-inset-bottom));
+          }
+          .submitActions {
+            grid-template-columns: 1fr 1.35fr;
+          }
+          .submitButton {
+            grid-row: auto;
+          }
+        }
+        @media (max-width: 520px) {
+          .confirmPage {
+            padding: 12px 12px 0;
+          }
+          .checkoutSection,
+          .summaryCard {
+            padding: 17px;
+            border-radius: 18px;
+          }
+          .checkoutGrid {
+            gap: 12px;
+            margin-top: 16px;
+          }
+          .orderItem {
+            padding: 14px;
+          }
+          .orderItemHead {
+            align-items: flex-start;
+          }
+          .orderItemHead > div {
+            display: grid;
+            gap: 2px;
+          }
+          .summaryCard {
+            margin: 0 -12px;
+            border-right: 0;
+            border-left: 0;
+            border-radius: 20px 20px 0 0;
+          }
+          .submitActions {
+            grid-template-columns: 1fr;
+          }
+          .submitButton {
+            grid-row: 1;
+          }
+        }
+      `}</style>
+      <main className="confirmPage customer-page">
         <StoreCustomerHeader
           storeId={storeId}
           title="주문을 확인해 주세요"
@@ -770,15 +1189,7 @@ function ConfirmPageInner() {
             isTableQr ? `테이블 ${tableFromMenu} · 매장 이용` : "카운터 주문"
           }
           actions={
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                flexWrap: "wrap",
-                justifyContent: "flex-end",
-              }}
-            >
+            <div className="accountActions">
               {customerUserId ? (
                 <>
                   <button
@@ -787,15 +1198,9 @@ function ConfirmPageInner() {
                         `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`,
                       )
                     }
-                    style={{
-                      borderRadius: 999,
-                      border: "1px solid #d1d5db",
-                      padding: "6px 10px",
-                      fontWeight: 900,
-                      background: "white",
-                    }}
+                    className="accountButton"
                   >
-                    내정보
+                    내 정보
                   </button>
                   <button
                     onClick={async () => {
@@ -804,13 +1209,7 @@ function ConfirmPageInner() {
                       setWallet(null);
                       setIssuedCouponCount(0);
                     }}
-                    style={{
-                      borderRadius: 999,
-                      border: "1px solid #d1d5db",
-                      padding: "6px 10px",
-                      fontWeight: 900,
-                      background: "white",
-                    }}
+                    className="accountButton"
                   >
                     로그아웃
                   </button>
@@ -821,13 +1220,7 @@ function ConfirmPageInner() {
                     onClick={() =>
                       router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
                     }
-                    style={{
-                      borderRadius: 999,
-                      border: "1px solid #d1d5db",
-                      padding: "6px 10px",
-                      fontWeight: 900,
-                      background: "white",
-                    }}
+                    className="accountButton"
                   >
                     로그인
                   </button>
@@ -835,13 +1228,7 @@ function ConfirmPageInner() {
                     onClick={() =>
                       router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)
                     }
-                    style={{
-                      borderRadius: 999,
-                      border: "1px solid #d1d5db",
-                      padding: "6px 10px",
-                      fontWeight: 900,
-                      background: "white",
-                    }}
+                    className="accountButton"
                   >
                     회원가입
                   </button>
@@ -850,673 +1237,557 @@ function ConfirmPageInner() {
             </div>
           }
         />
+        <CustomerOrderProgress activeIndex={1} />
 
-        <div style={{ marginTop: 18 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <h2 style={{ margin: 0, fontWeight: 950 }}>주문 내역</h2>
-            <span
-              style={{
-                border: "1px solid #d1d5db",
-                borderRadius: 999,
-                padding: "4px 10px",
-                color: "#374151",
-                fontWeight: 900,
-                fontSize: 12,
-                background: "white",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {isTableQr ? "QR 주문" : "카운터 주문"}
-            </span>
-          </div>
+        <div className="checkoutGrid">
+          <div className="checkoutMain">
+            <section className="checkoutSection orderSection">
+              <div className="sectionHeading">
+                <div>
+                  <span className="sectionEyebrow">ORDER DETAILS</span>
+                  <h2>주문 내역</h2>
+                </div>
+                <span className="contextBadge">
+                  {isTableQr ? "QR 주문" : "카운터 주문"}
+                </span>
+              </div>
 
-          {cartLines.length === 0 ? (
-            <p style={{ color: "crimson", fontWeight: 900, marginTop: 10 }}>
-              장바구니 데이터가 없습니다. 메뉴에서 다시 담아주세요.
-            </p>
-          ) : (
-            <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-              {cartLines.map((ln) => {
-                const unit = ln.basePrice + ln.optionTotal;
-                const optText =
-                  ln.options
-                    .map((g) => {
-                      if (!g.items?.length) return null;
-                      return g.items
-                        .map(
-                          (x) => `${x.name}×${Math.max(1, Number(x.qty || 1))}`,
-                        )
-                        .join(", ");
-                    })
-                    .filter(Boolean)
-                    .join(" / ") || "";
+              {cartLines.length === 0 ? (
+                <p className="emptyCart" role="alert">
+                  장바구니가 비어 있어요. 메뉴로 돌아가 상품을 담아 주세요.
+                </p>
+              ) : (
+                <div className="orderList">
+                  {cartLines.map((ln) => {
+                    const unit = ln.basePrice + ln.optionTotal;
+                    const optText =
+                      ln.options
+                        .map((g) => {
+                          if (!g.items?.length) return null;
+                          return g.items
+                            .map(
+                              (x) =>
+                                `${x.name}×${Math.max(1, Number(x.qty || 1))}`,
+                            )
+                            .join(", ");
+                        })
+                        .filter(Boolean)
+                        .join(" / ") || "";
 
-                return (
-                  <div
-                    key={ln.lineId}
-                    style={{
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 14,
-                      padding: 12,
-                      background: "white",
-                      display: "grid",
-                      gap: 6,
-                    }}
-                  >
-                    <div
+                    return (
+                      <article key={ln.lineId} className="orderItem">
+                        <div className="orderItemHead">
+                          <div>
+                            <strong>{ln.name}</strong>
+                            <span>{ln.qty}개</span>
+                          </div>
+                          <strong>{fmt(unit * ln.qty)}원</strong>
+                        </div>
+
+                        <div className="itemMeta">
+                          기본 {fmt(ln.basePrice)}원
+                          {ln.optionTotal
+                            ? ` + 옵션 ${fmt(ln.optionTotal)}원`
+                            : ""}
+                          {"  "}· 1개당 {fmt(unit)}원
+                        </div>
+
+                        {optText ? (
+                          <div className="itemOptions">옵션: {optText}</div>
+                        ) : null}
+
+                        <div className="quantityActions">
+                          {ln.qty <= 1 ? (
+                            <button
+                              onClick={() => removeLine(ln.lineId)}
+                              className="quantityButton removeButton"
+                            >
+                              삭제
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => decLine(ln.lineId)}
+                              className="quantityButton"
+                            >
+                              -1
+                            </button>
+                          )}
+                          <button
+                            onClick={() => incLine(ln.lineId)}
+                            className="quantityButton"
+                          >
+                            +1
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+              <button className="addMenuButton" onClick={goMenu}>
+                메뉴 더 담기
+              </button>
+              <div className="orderSubtotal">
+                <span>총 {totalCount}개</span>
+                <strong>{fmt(totalPrice)}원</strong>
+              </div>
+            </section>
+
+            <section className="checkoutSection benefitSection">
+              <div className="sectionHeading">
+                <div>
+                  <span className="sectionEyebrow">MY BENEFITS</span>
+                  <h2>할인 혜택</h2>
+                </div>
+              </div>
+              {customerUserId ? (
+                <>
+                  <p style={{ margin: 0, fontWeight: 600 }}>
+                    내 등급: <b>{tierLabel(wallet?.tier)}</b> · 내 포인트:{" "}
+                    <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 내 쿠폰:{" "}
+                    <b>{issuedCouponCount}장</b>
+                  </p>
+                  <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+                    <label
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: 10,
+                        display: "grid",
+                        gap: 6,
+                        fontWeight: 600,
+                        color: "#374151",
                       }}
                     >
-                      <div style={{ fontWeight: 950 }}>
-                        {ln.name} · {ln.qty}개
-                      </div>
-                      <div style={{ fontWeight: 950 }}>
-                        {fmt(unit * ln.qty)}원
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        color: "#6b7280",
-                        fontWeight: 850,
-                        fontSize: 13,
-                      }}
-                    >
-                      기본 {fmt(ln.basePrice)}원
-                      {ln.optionTotal ? ` + 옵션 ${fmt(ln.optionTotal)}원` : ""}
-                      {"  "}· 1개당 {fmt(unit)}원
-                    </div>
-
-                    {optText ? (
-                      <div
+                      포인트 사용
+                      <span
                         style={{
-                          color: "#111827",
-                          fontWeight: 850,
-                          fontSize: 13,
+                          color: "#6b7280",
+                          fontSize: 12,
+                          fontWeight: 700,
                         }}
                       >
-                        옵션: {optText}
-                      </div>
-                    ) : null}
-
-                    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                      {ln.qty <= 1 ? (
-                        <button
-                          onClick={() => removeLine(ln.lineId)}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: 10,
-                            border: "1px solid #ef4444",
-                            color: "#b91c1c",
-                            background: "white",
-                            fontWeight: 900,
-                          }}
-                        >
-                          삭제
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => decLine(ln.lineId)}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: 10,
-                            border: "1px solid #d1d5db",
-                            background: "white",
-                            fontWeight: 900,
-                          }}
-                        >
-                          -1
-                        </button>
-                      )}
-                      <button
-                        onClick={() => incLine(ln.lineId)}
+                        최대 {fmt(maxUsablePoints)}P · 최소{" "}
+                        {fmt(loyaltySettings.min_redeem_points)}P
+                      </span>
+                      <input
+                        value={usedPointsInput}
+                        onChange={(e) =>
+                          setUsedPointsInput(
+                            e.target.value.replace(/[^\d]/g, ""),
+                          )
+                        }
+                        disabled={!!selectedCouponIdForApply}
+                        inputMode="numeric"
                         style={{
-                          padding: "6px 10px",
+                          padding: 10,
                           borderRadius: 10,
                           border: "1px solid #d1d5db",
-                          background: "white",
-                          fontWeight: 900,
+                          fontWeight: 600,
+                          background: selectedCouponIdForApply
+                            ? "#f3f4f6"
+                            : "white",
+                        }}
+                      />
+                    </label>
+                    {pointUsageNotice ? (
+                      <p
+                        style={{
+                          margin: 0,
+                          color: "#b45309",
+                          fontSize: 12,
+                          fontWeight: 600,
                         }}
                       >
-                        +1
+                        {pointUsageNotice}
+                      </p>
+                    ) : null}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCouponId(null);
+                          setUsedPointsInput(String(maxUsablePoints));
+                        }}
+                        style={{
+                          border: "1px solid #d1d5db",
+                          borderRadius: 999,
+                          padding: "6px 10px",
+                          background: "white",
+                          fontWeight: 600,
+                        }}
+                      >
+                        최대 사용
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCouponId(null);
+                          setUsedPointsInput("0");
+                        }}
+                        style={{
+                          border: "1px solid #d1d5db",
+                          borderRadius: 999,
+                          padding: "6px 10px",
+                          background: "white",
+                          fontWeight: 600,
+                        }}
+                      >
+                        초기화
                       </button>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div style={{ marginTop: 12 }}>
-          <button
-            onClick={goMenu}
-            style={{
-              width: "100%",
-              padding: 12,
-              borderRadius: 12,
-              border: "1px solid #d1d5db",
-              background: "white",
-              fontWeight: 900,
-              color: "#111827",
-              WebkitTextFillColor: "currentColor",
-            }}
-          >
-            + 메뉴 더 담기
-          </button>
-        </div>
-
-        <div
-          style={{
-            marginTop: 18,
-            borderTop: "1px solid #eee",
-            paddingTop: 14,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ fontWeight: 900 }}>
-            총 수량: <b>{totalCount}</b>
-          </div>
-          <div style={{ fontWeight: 900 }}>
-            총 금액: <b>{fmt(totalPrice)}원</b>
-          </div>
-        </div>
-
-        <div
-          style={{
-            marginTop: 10,
-            border: "1px solid #e5e7eb",
-            borderRadius: 12,
-            padding: 12,
-            background: "#fff",
-          }}
-        >
-          {customerUserId ? (
-            <>
-              <p style={{ margin: 0, fontWeight: 800 }}>
-                내 등급: <b>{tierLabel(wallet?.tier)}</b> · 내 포인트:{" "}
-                <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 내 쿠폰:{" "}
-                <b>{issuedCouponCount}장</b>
-              </p>
-              <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-                <label
-                  style={{
-                    display: "grid",
-                    gap: 6,
-                    fontWeight: 800,
-                    color: "#374151",
-                  }}
-                >
-                  포인트 사용
-                  <span
-                    style={{ color: "#6b7280", fontSize: 12, fontWeight: 700 }}
-                  >
-                    최대 {fmt(maxUsablePoints)}P · 최소{" "}
-                    {fmt(loyaltySettings.min_redeem_points)}P
-                  </span>
-                  <input
-                    value={usedPointsInput}
-                    onChange={(e) =>
-                      setUsedPointsInput(e.target.value.replace(/[^\d]/g, ""))
-                    }
-                    disabled={!!selectedCouponIdForApply}
-                    inputMode="numeric"
-                    style={{
-                      padding: 10,
-                      borderRadius: 10,
-                      border: "1px solid #d1d5db",
-                      fontWeight: 800,
-                      background: selectedCouponIdForApply
-                        ? "#f3f4f6"
-                        : "white",
-                    }}
-                  />
-                </label>
-                {pointUsageNotice ? (
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#b45309",
-                      fontSize: 12,
-                      fontWeight: 800,
-                    }}
-                  >
-                    {pointUsageNotice}
-                  </p>
-                ) : null}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedCouponId(null);
-                      setUsedPointsInput(String(maxUsablePoints));
-                    }}
-                    style={{
-                      border: "1px solid #d1d5db",
-                      borderRadius: 999,
-                      padding: "6px 10px",
-                      background: "white",
-                      fontWeight: 800,
-                    }}
-                  >
-                    최대 사용
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedCouponId(null);
-                      setUsedPointsInput("0");
-                    }}
-                    style={{
-                      border: "1px solid #d1d5db",
-                      borderRadius: 999,
-                      padding: "6px 10px",
-                      background: "white",
-                      fontWeight: 800,
-                    }}
-                  >
-                    초기화
-                  </button>
-                </div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  {issuedCoupons.map((c) => {
-                    const tpl = c.template;
-                    if (!tpl) {
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          disabled
-                          style={{
-                            textAlign: "left",
-                            border: "1px solid #d1d5db",
-                            borderRadius: 12,
-                            padding: "10px 12px",
-                            background: "white",
-                            color: "#111827",
-                            fontWeight: 800,
-                            opacity: 0.6,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: 8,
-                            }}
-                          >
-                            <span style={{ fontWeight: 900 }}>
-                              사용 불가 쿠폰
-                            </span>
-                            <span style={{ color: "#374151", fontSize: 12 }}>
-                              템플릿 없음
-                            </span>
-                          </div>
-                          <div
-                            style={{
-                              marginTop: 4,
-                              color: "#b45309",
-                              fontSize: 12,
-                              fontWeight: 800,
-                            }}
-                          >
-                            쿠폰 템플릿 정보를 찾을 수 없어 사용할 수 없습니다.
-                            관리자에게 문의해 주세요.
-                          </div>
-                        </button>
-                      );
-                    }
-                    const orderAmount = Math.max(0, Math.floor(totalPrice));
-                    const minOrder = Math.max(
-                      0,
-                      Number(tpl.min_order_amount || 0),
-                    );
-                    const disabledByMin = orderAmount < minOrder;
-                    const maxDiscount =
-                      tpl.max_discount_amount == null
-                        ? null
-                        : Math.max(
-                            0,
-                            Math.floor(Number(tpl.max_discount_amount || 0)),
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {issuedCoupons.map((c) => {
+                        const tpl = c.template;
+                        if (!tpl) {
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              disabled
+                              style={{
+                                textAlign: "left",
+                                border: "1px solid #d1d5db",
+                                borderRadius: 12,
+                                padding: "10px 12px",
+                                background: "white",
+                                color: "#111827",
+                                fontWeight: 600,
+                                opacity: 0.6,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  gap: 8,
+                                }}
+                              >
+                                <span style={{ fontWeight: 700 }}>
+                                  사용 불가 쿠폰
+                                </span>
+                                <span
+                                  style={{ color: "#374151", fontSize: 12 }}
+                                >
+                                  템플릿 없음
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  marginTop: 4,
+                                  color: "#b45309",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                쿠폰 템플릿 정보를 찾을 수 없어 사용할 수
+                                없습니다. 관리자에게 문의해 주세요.
+                              </div>
+                            </button>
                           );
-                    const expectedDiscount =
-                      tpl.discount_type === "fixed_amount"
-                        ? Math.min(
-                            orderAmount,
-                            Math.max(
-                              0,
-                              Math.floor(Number(tpl.discount_value || 0)),
-                            ),
-                          )
-                        : Math.min(
-                            orderAmount,
-                            Math.min(
-                              Math.floor(
-                                (orderAmount *
-                                  Math.max(
-                                    0,
-                                    Number(tpl.discount_value || 0),
-                                  )) /
-                                  100,
-                              ),
-                              maxDiscount == null
-                                ? Math.floor(
+                        }
+                        const orderAmount = Math.max(0, Math.floor(totalPrice));
+                        const minOrder = Math.max(
+                          0,
+                          Number(tpl.min_order_amount || 0),
+                        );
+                        const disabledByMin = orderAmount < minOrder;
+                        const maxDiscount =
+                          tpl.max_discount_amount == null
+                            ? null
+                            : Math.max(
+                                0,
+                                Math.floor(
+                                  Number(tpl.max_discount_amount || 0),
+                                ),
+                              );
+                        const expectedDiscount =
+                          tpl.discount_type === "fixed_amount"
+                            ? Math.min(
+                                orderAmount,
+                                Math.max(
+                                  0,
+                                  Math.floor(Number(tpl.discount_value || 0)),
+                                ),
+                              )
+                            : Math.min(
+                                orderAmount,
+                                Math.min(
+                                  Math.floor(
                                     (orderAmount *
                                       Math.max(
                                         0,
                                         Number(tpl.discount_value || 0),
                                       )) /
                                       100,
-                                  )
-                                : maxDiscount,
-                            ),
-                          );
-                    const disabledByDiscount = expectedDiscount <= 0;
-                    const reason = disabledByMin
-                      ? `최소주문 ${fmt(minOrder)}원 이상 사용 가능`
-                      : disabledByDiscount
-                        ? "현재 주문에는 할인 적용이 어려워요"
-                        : null;
-                    const active = selectedCouponIdForApply === c.id;
-                    const expires = c.expires_at
-                      ? new Date(c.expires_at)
-                      : null;
-                    const expiresText =
-                      expires && Number.isFinite(expires.getTime())
-                        ? `만료 ${expires.toLocaleDateString()}`
-                        : "만료일 정보 없음";
-                    const label =
-                      tpl.discount_type === "fixed_amount"
-                        ? `정액 ${fmt(Number(tpl.discount_value || 0))}원`
-                        : `정률 ${Number(tpl.discount_value || 0)}%`;
+                                  ),
+                                  maxDiscount == null
+                                    ? Math.floor(
+                                        (orderAmount *
+                                          Math.max(
+                                            0,
+                                            Number(tpl.discount_value || 0),
+                                          )) /
+                                          100,
+                                      )
+                                    : maxDiscount,
+                                ),
+                              );
+                        const disabledByDiscount = expectedDiscount <= 0;
+                        const reason = disabledByMin
+                          ? `최소주문 ${fmt(minOrder)}원 이상 사용 가능`
+                          : disabledByDiscount
+                            ? "현재 주문에는 할인 적용이 어려워요"
+                            : null;
+                        const active = selectedCouponIdForApply === c.id;
+                        const expires = c.expires_at
+                          ? new Date(c.expires_at)
+                          : null;
+                        const expiresText =
+                          expires && Number.isFinite(expires.getTime())
+                            ? `만료 ${expires.toLocaleDateString()}`
+                            : "만료일 정보 없음";
+                        const label =
+                          tpl.discount_type === "fixed_amount"
+                            ? `정액 ${fmt(Number(tpl.discount_value || 0))}원`
+                            : `정률 ${Number(tpl.discount_value || 0)}%`;
 
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        disabled={!!reason}
-                        onClick={() => {
-                          setSelectedCouponId(c.id);
-                          setUsedPointsInput("0");
-                        }}
-                        style={{
-                          textAlign: "left",
-                          border: active
-                            ? "1px solid #111827"
-                            : "1px solid #d1d5db",
-                          borderRadius: 12,
-                          padding: "10px 12px",
-                          background: active ? "#f9fafb" : "white",
-                          color: "#111827",
-                          fontWeight: 800,
-                          opacity: reason ? 0.6 : 1,
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: 8,
-                          }}
-                        >
-                          <span style={{ fontWeight: 900 }}>{tpl.name}</span>
-                          <span
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            disabled={!!reason}
+                            onClick={() => {
+                              setSelectedCouponId(c.id);
+                              setUsedPointsInput("0");
+                            }}
                             style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 6,
+                              textAlign: "left",
+                              border: active
+                                ? "1px solid #111827"
+                                : "1px solid #d1d5db",
+                              borderRadius: 12,
+                              padding: "10px 12px",
+                              background: active ? "#f9fafb" : "white",
+                              color: "#111827",
+                              fontWeight: 600,
+                              opacity: reason ? 0.6 : 1,
                             }}
                           >
-                            {active ? (
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: 8,
+                              }}
+                            >
+                              <span style={{ fontWeight: 700 }}>
+                                {tpl.name}
+                              </span>
                               <span
                                 style={{
-                                  background: "#111827",
-                                  color: "white",
-                                  borderRadius: 999,
-                                  padding: "2px 8px",
-                                  fontSize: 11,
-                                  fontWeight: 900,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
                                 }}
                               >
-                                선택됨
+                                {active ? (
+                                  <span
+                                    style={{
+                                      background: "#111827",
+                                      color: "white",
+                                      borderRadius: 999,
+                                      padding: "2px 8px",
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    선택됨
+                                  </span>
+                                ) : null}
+                                <span
+                                  style={{ color: "#374151", fontSize: 12 }}
+                                >
+                                  {label}
+                                </span>
                               </span>
+                            </div>
+                            <div
+                              style={{
+                                marginTop: 4,
+                                color: "#4b5563",
+                                fontSize: 12,
+                                fontWeight: 700,
+                              }}
+                            >
+                              최소주문 {fmt(minOrder)}원 · 예상 할인{" "}
+                              {fmt(expectedDiscount)}원 · {expiresText}
+                            </div>
+                            {reason ? (
+                              <div
+                                style={{
+                                  marginTop: 4,
+                                  color: "#b45309",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {reason}
+                              </div>
                             ) : null}
-                            <span style={{ color: "#374151", fontSize: 12 }}>
-                              {label}
-                            </span>
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 4,
-                            color: "#4b5563",
-                            fontSize: 12,
-                            fontWeight: 700,
-                          }}
-                        >
-                          최소주문 {fmt(minOrder)}원 · 예상 할인{" "}
-                          {fmt(expectedDiscount)}원 · {expiresText}
-                        </div>
-                        {reason ? (
-                          <div
-                            style={{
-                              marginTop: 4,
-                              color: "#b45309",
-                              fontSize: 12,
-                              fontWeight: 800,
-                            }}
-                          >
-                            {reason}
-                          </div>
-                        ) : null}
-                      </button>
-                    );
-                  })}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#6b7280",
+                        fontWeight: 700,
+                        fontSize: 13,
+                      }}
+                    >
+                      할인 적용: <b>{fmt(effectiveDiscount)}원</b> · 예상
+                      결제금액: <b>{fmt(payableAmount)}원</b>
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ margin: 0, fontWeight: 700 }}>
+                    비회원 주문 중입니다.
+                  </p>
+                  <p
+                    style={{
+                      margin: "6px 0 0",
+                      color: "#6b7280",
+                      fontWeight: 700,
+                      fontSize: 13,
+                    }}
+                  >
+                    회원가입 후 주문하면 매장별 포인트를 적립받을 수 있어요.
+                  </p>
+                </>
+              )}
+            </section>
+
+            <section className="checkoutSection requestSection">
+              <div className="sectionHeading">
+                <div>
+                  <span className="sectionEyebrow">ORDER NOTE</span>
+                  <h2>요청사항</h2>
                 </div>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#6b7280",
-                    fontWeight: 700,
-                    fontSize: 13,
-                  }}
-                >
-                  할인 적용: <b>{fmt(effectiveDiscount)}원</b> · 예상 결제금액:{" "}
-                  <b>{fmt(payableAmount)}원</b>
-                </p>
               </div>
-            </>
-          ) : (
-            <>
-              <p style={{ margin: 0, fontWeight: 900 }}>
-                비회원 주문 중입니다.
+              <textarea
+                value={requestNote}
+                onChange={(e) => setRequestNote(e.target.value)}
+                className="requestInput"
+                maxLength={200}
+                placeholder="매장에 전달할 요청사항을 입력해 주세요."
+              />
+              <p className="fieldHint">
+                요청사항은 매장 상황에 따라 반영이 어려울 수 있어요.
               </p>
-              <p
-                style={{
-                  margin: "6px 0 0",
-                  color: "#6b7280",
-                  fontWeight: 700,
-                  fontSize: 13,
-                }}
-              >
-                회원가입 후 주문하면 매장별 포인트를 적립받을 수 있어요.
-              </p>
-            </>
-          )}
-        </div>
+            </section>
 
-        <div style={{ marginTop: 18 }}>
-          <h2 style={{ margin: 0, fontWeight: 950 }}>
-            요청사항 (주문 전체 1개)
-          </h2>
-          <textarea
-            value={requestNote}
-            onChange={(e) => setRequestNote(e.target.value)}
-            placeholder=""
-            style={{
-              width: "100%",
-              minHeight: 90,
-              padding: 12,
-              borderRadius: 12,
-              border: "1px solid #ddd",
-              marginTop: 10,
-            }}
-          />
-          <p style={{ marginTop: 8, color: "#666", fontWeight: 800 }}>
-            * 요청사항은 참고용입니다.
-          </p>
-        </div>
-
-        <div style={{ marginTop: 18 }}>
-          <h2 style={{ margin: 0, fontWeight: 950 }}>이용 방식 선택</h2>
-
-          <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-            <button
-              onClick={() => {
-                if (isTableQr) return;
-                setMode("dine-in");
-              }}
-              disabled={isTableQr}
-              style={modeBtnStyle(effectiveMode === "dine-in", dineInDisabled)}
-            >
-              매장 이용
-            </button>
-
-            <button
-              onClick={() => {
-                if (isTableQr) return;
-                setMode("takeout");
-              }}
-              disabled={isTableQr}
-              style={modeBtnStyle(effectiveMode === "takeout", takeoutDisabled)}
-            >
-              포장
-            </button>
-          </div>
-
-          {effectiveMode === "dine-in" && (
-            <div style={{ marginTop: 12 }}>
-              <label
-                style={{ display: "block", color: "#444", fontWeight: 900 }}
-              >
-                테이블 번호 {isTableQr ? "(고정)" : "(선택)"}
-                <input
-                  value={isTableQr ? tableFromMenu : tableInput}
-                  onChange={(e) => setTableInput(e.target.value)}
-                  placeholder="예: 3"
-                  disabled={isTableQr}
-                  readOnly={isTableQr}
-                  style={{
-                    display: "block",
-                    marginTop: 8,
-                    padding: 10,
-                    width: 200,
-                    borderRadius: 12,
-                    border: "1px solid #ddd",
-                    background: isTableQr ? "#f3f4f6" : "white",
-                    color: "#111",
-                    fontWeight: 900,
-                    opacity: isTableQr ? 0.9 : 1,
-                    cursor: isTableQr ? "not-allowed" : "text",
+            <section className="checkoutSection modeSection">
+              <div className="sectionHeading">
+                <div>
+                  <span className="sectionEyebrow">ORDER TYPE</span>
+                  <h2>이용 방식</h2>
+                </div>
+              </div>
+              <div className="modeButtons">
+                <button
+                  onClick={() => {
+                    if (isTableQr) return;
+                    setMode("dine-in");
                   }}
-                />
-              </label>
-            </div>
-          )}
-        </div>
+                  disabled={isTableQr}
+                  className={`modeButton ${effectiveMode === "dine-in" ? "active" : ""}`}
+                >
+                  매장 이용
+                </button>
 
-        {submitError ? (
-          <div
-            role="alert"
-            style={{
-              marginTop: 14,
-              border: "1px solid #fecaca",
-              borderRadius: 12,
-              background: "#fef2f2",
-              color: "#991b1b",
-              padding: 12,
-              fontWeight: 900,
-            }}
-          >
-            {submitError}
+                <button
+                  onClick={() => {
+                    if (isTableQr) return;
+                    setMode("takeout");
+                  }}
+                  disabled={isTableQr}
+                  className={`modeButton ${effectiveMode === "takeout" ? "active" : ""}`}
+                >
+                  포장
+                </button>
+              </div>
+
+              {effectiveMode === "dine-in" && (
+                <div className="tableField">
+                  <label className="fieldLabel">
+                    테이블 번호 {isTableQr ? "(고정)" : "(선택)"}
+                    <input
+                      value={isTableQr ? tableFromMenu : tableInput}
+                      onChange={(e) => setTableInput(e.target.value)}
+                      placeholder="예: 3"
+                      disabled={isTableQr}
+                      readOnly={isTableQr}
+                      className="tableInput"
+                    />
+                  </label>
+                </div>
+              )}
+            </section>
           </div>
-        ) : null}
+          <aside className="checkoutAside">
+            <section className="summaryCard">
+              <span className="sectionEyebrow">ORDER SUMMARY</span>
+              <h2>결제 요약</h2>
+              <dl className="summaryList">
+                <div>
+                  <dt>주문 금액</dt>
+                  <dd>{fmt(totalPrice)}원</dd>
+                </div>
+                {effectiveDiscount > 0 ? (
+                  <div className="discount">
+                    <dt>할인 금액</dt>
+                    <dd>-{fmt(effectiveDiscount)}원</dd>
+                  </div>
+                ) : null}
+                <div className="summaryTotal">
+                  <dt>최종 결제 금액</dt>
+                  <dd>{fmt(payableAmount)}원</dd>
+                </div>
+              </dl>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            marginTop: 18,
-            position: "sticky",
-            bottom: 0,
-            background: "#f6f7f9",
-            paddingTop: 10,
-            paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
-            zIndex: 20,
-          }}
-        >
-          <button
-            onClick={goMenu}
-            style={{
-              padding: 12,
-              flex: 1,
-              fontWeight: 900,
-              color: "#111827",
-              WebkitTextFillColor: "currentColor",
-            }}
-          >
-            메뉴로 돌아가기
-          </button>
-          <button
-            onClick={onSubmit}
-            disabled={!canSubmit}
-            style={{
-              padding: 12,
-              flex: 1,
-              opacity: canSubmit ? 1 : 0.5,
-              fontWeight: 900,
-              color: "#111827",
-              WebkitTextFillColor: "currentColor",
-            }}
-          >
-            {submitting
-              ? "저장 중..."
-              : isPrepayStore
-                ? "결제하기"
-                : "주문 접수"}
-          </button>
+              {submitError ? (
+                <div role="alert" className="submitError">
+                  {submitError}
+                </div>
+              ) : null}
+
+              <div className="submitActions">
+                <button onClick={goMenu} className="backButton">
+                  메뉴로 돌아가기
+                </button>
+                <button
+                  onClick={onSubmit}
+                  disabled={!canSubmit}
+                  className="submitButton"
+                >
+                  {submitting
+                    ? "저장 중..."
+                    : isPrepayStore
+                      ? "결제하기"
+                      : "주문 접수"}
+                </button>
+              </div>
+              <p className="paymentNotice">
+                {prepayLoading
+                  ? "매장 결제 옵션 확인 중..."
+                  : isPrepayStore
+                    ? "결제 완료 후 주문이 접수됩니다."
+                    : "결제는 매장에서 진행됩니다."}
+              </p>
+            </section>
+          </aside>
         </div>
-        <div style={{ height: 10 }} />
-
-        <p
-          style={{
-            marginTop: 8,
-            color: "#6b7280",
-            fontWeight: 800,
-            fontSize: 13,
-          }}
-        >
-          {prepayLoading
-            ? "매장 결제 옵션 확인 중..."
-            : isPrepayStore
-              ? "결제 완료 후 주문이 접수됩니다."
-              : "결제는 매장에서 진행됩니다."}
-        </p>
         <CustomerTrustFooter />
       </main>
     </>
