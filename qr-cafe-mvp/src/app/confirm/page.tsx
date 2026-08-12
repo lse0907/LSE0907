@@ -10,6 +10,7 @@ import {
   StoreCustomerHeader,
 } from "@/app/_components/StoreCustomerBrand";
 import { CustomerOrderProgress } from "@/app/_components/CustomerOrderProgress";
+import { CustomerSheet } from "@/app/_components/CustomerSheet";
 import {
   getStoreIdFromSearchParams,
   lsLastOrderIdKey,
@@ -267,6 +268,7 @@ function ConfirmPageInner() {
   const [issuedCoupons, setIssuedCoupons] = useState<IssuedCoupon[]>([]);
   const [usedPointsInput, setUsedPointsInput] = useState("0");
   const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
+  const [benefitsOpen, setBenefitsOpen] = useState(false);
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -948,6 +950,129 @@ function ConfirmPageInner() {
           color: var(--customer-ink);
           font-weight: 650 !important;
         }
+        .benefitSummary {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-top: 16px;
+        }
+        .benefitSummary p {
+          display: grid;
+          gap: 3px;
+          margin: 0;
+          padding: 13px;
+          border-radius: 14px;
+          background: #f4f7fb;
+        }
+        .benefitSummary strong {
+          color: var(--rion-navy);
+          font-size: 18px;
+          font-weight: 800;
+        }
+        .benefitSummary span {
+          color: var(--customer-muted);
+          font-size: 12px;
+          font-weight: 500;
+        }
+        .appliedBenefit {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 12px;
+        }
+        .appliedBenefit > div {
+          display: grid;
+          gap: 3px;
+          min-width: 0;
+        }
+        .appliedBenefit strong {
+          color: var(--customer-ink);
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .appliedBenefit span {
+          color: var(--customer-muted);
+          font-size: 12px;
+          font-weight: 500;
+        }
+        .appliedBenefit button {
+          flex: 0 0 auto;
+          min-height: 42px;
+          padding: 0 14px;
+          border: 1px solid var(--rion-navy);
+          border-radius: 12px;
+          background: #fff;
+          color: var(--rion-navy);
+          font-size: 13px;
+          font-weight: 700;
+        }
+        .benefitSheetContent {
+          display: grid;
+          gap: 10px;
+          color: var(--customer-ink);
+        }
+        .applyBenefitButton {
+          position: sticky;
+          bottom: 0;
+          width: 100%;
+          min-height: 52px;
+          margin-top: 18px;
+          border: 1px solid var(--rion-navy);
+          border-radius: 14px;
+          background: var(--rion-navy);
+          color: #fff;
+          font-size: 15px;
+          font-weight: 700;
+          box-shadow: 0 10px 24px rgba(15, 31, 61, 0.2);
+        }
+        .guestBenefits {
+          margin-top: 15px;
+        }
+        .guestBenefits > strong {
+          color: var(--rion-navy);
+          font-size: 17px;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+        }
+        .guestBenefits > p {
+          margin: 7px 0 0;
+          color: var(--customer-muted);
+          font-size: 14px;
+          font-weight: 500;
+          line-height: 1.65;
+          word-break: keep-all;
+        }
+        .guestBenefitActions {
+          display: grid;
+          grid-template-columns: 1.5fr 1fr;
+          gap: 9px;
+          margin-top: 16px;
+        }
+        .guestBenefitActions button {
+          min-height: 48px;
+          border-radius: 13px;
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .guestSignupButton {
+          border: 1px solid var(--rion-navy);
+          background: var(--rion-navy);
+          color: #fff;
+        }
+        .guestLoginButton {
+          border: 1px solid var(--customer-line);
+          background: #fff;
+          color: var(--customer-ink);
+        }
+        .guestBenefits small {
+          display: block;
+          margin-top: 10px;
+          color: var(--customer-muted);
+          font-size: 12px;
+          font-weight: 500;
+          text-align: center;
+        }
         .requestInput {
           width: 100%;
           min-height: 112px;
@@ -1122,10 +1247,13 @@ function ConfirmPageInner() {
           line-height: 1.55;
           text-align: center;
         }
+        .mobileCheckoutBar {
+          display: none;
+        }
         @media (max-width: 860px) {
           .confirmPage {
             max-width: 760px;
-            padding: 18px 16px 0;
+            padding: 18px 16px calc(104px + env(safe-area-inset-bottom));
           }
           .checkoutGrid {
             grid-template-columns: 1fr;
@@ -1141,6 +1269,54 @@ function ConfirmPageInner() {
           }
           .submitButton {
             grid-row: auto;
+          }
+          .mobileCheckoutBar {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 80;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+            border-top: 1px solid var(--customer-line);
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 -12px 32px rgba(15, 31, 61, 0.1);
+            backdrop-filter: blur(14px);
+          }
+          .mobileCheckoutTotal {
+            display: grid;
+            gap: 1px;
+            min-width: 0;
+          }
+          .mobileCheckoutTotal span {
+            color: var(--customer-muted);
+            font-size: 11px;
+            font-weight: 500;
+          }
+          .mobileCheckoutTotal strong {
+            color: var(--rion-navy);
+            font-size: 20px;
+            font-weight: 850;
+            letter-spacing: -0.03em;
+            white-space: nowrap;
+          }
+          .mobileCheckoutBar button {
+            width: min(260px, 48vw);
+            min-height: 52px;
+            border: 1px solid var(--rion-navy);
+            border-radius: 14px;
+            background: var(--rion-navy);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 750;
+            box-shadow: 0 8px 20px rgba(15, 31, 61, 0.18);
+          }
+          .mobileCheckoutBar button:disabled {
+            opacity: 0.45;
+            box-shadow: none;
           }
         }
         @media (max-width: 520px) {
@@ -1177,6 +1353,21 @@ function ConfirmPageInner() {
           }
           .submitButton {
             grid-row: 1;
+          }
+          .requestInput {
+            min-height: 84px;
+          }
+          .guestBenefitActions {
+            grid-template-columns: 1fr;
+          }
+          .mobileCheckoutBar {
+            justify-content: space-between;
+            gap: 10px;
+            padding-right: 12px;
+            padding-left: 12px;
+          }
+          .mobileCheckoutBar button {
+            width: min(210px, 55vw);
           }
         }
       `}</style>
@@ -1342,329 +1533,410 @@ function ConfirmPageInner() {
               </div>
               {customerUserId ? (
                 <>
-                  <p style={{ margin: 0, fontWeight: 600 }}>
-                    내 등급: <b>{tierLabel(wallet?.tier)}</b> · 내 포인트:{" "}
-                    <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 내 쿠폰:{" "}
-                    <b>{issuedCouponCount}장</b>
-                  </p>
-                  <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-                    <label
-                      style={{
-                        display: "grid",
-                        gap: 6,
-                        fontWeight: 600,
-                        color: "#374151",
-                      }}
-                    >
-                      포인트 사용
-                      <span
-                        style={{
-                          color: "#6b7280",
-                          fontSize: 12,
-                          fontWeight: 700,
-                        }}
-                      >
-                        최대 {fmt(maxUsablePoints)}P · 최소{" "}
-                        {fmt(loyaltySettings.min_redeem_points)}P
-                      </span>
-                      <input
-                        value={usedPointsInput}
-                        onChange={(e) =>
-                          setUsedPointsInput(
-                            e.target.value.replace(/[^\d]/g, ""),
-                          )
-                        }
-                        disabled={!!selectedCouponIdForApply}
-                        inputMode="numeric"
-                        style={{
-                          padding: 10,
-                          borderRadius: 10,
-                          border: "1px solid #d1d5db",
-                          fontWeight: 600,
-                          background: selectedCouponIdForApply
-                            ? "#f3f4f6"
-                            : "white",
-                        }}
-                      />
-                    </label>
-                    {pointUsageNotice ? (
-                      <p
-                        style={{
-                          margin: 0,
-                          color: "#b45309",
-                          fontSize: 12,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {pointUsageNotice}
-                      </p>
-                    ) : null}
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCouponId(null);
-                          setUsedPointsInput(String(maxUsablePoints));
-                        }}
-                        style={{
-                          border: "1px solid #d1d5db",
-                          borderRadius: 999,
-                          padding: "6px 10px",
-                          background: "white",
-                          fontWeight: 600,
-                        }}
-                      >
-                        최대 사용
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCouponId(null);
-                          setUsedPointsInput("0");
-                        }}
-                        style={{
-                          border: "1px solid #d1d5db",
-                          borderRadius: 999,
-                          padding: "6px 10px",
-                          background: "white",
-                          fontWeight: 600,
-                        }}
-                      >
-                        초기화
-                      </button>
+                  <div className="benefitSummary">
+                    <p>
+                      <strong>
+                        {fmt(Number(wallet?.point_balance || 0))}P
+                      </strong>
+                      <span>보유 포인트</span>
+                    </p>
+                    <p>
+                      <strong>{issuedCouponCount}장</strong>
+                      <span>보유 쿠폰</span>
+                    </p>
+                  </div>
+                  <div className="appliedBenefit">
+                    <div>
+                      <strong>
+                        {effectiveDiscount > 0
+                          ? `${fmt(effectiveDiscount)}원 할인 적용`
+                          : "아직 적용한 할인 혜택이 없어요"}
+                      </strong>
+                      <span>예상 결제 금액 {fmt(payableAmount)}원</span>
                     </div>
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {issuedCoupons.map((c) => {
-                        const tpl = c.template;
-                        if (!tpl) {
-                          return (
-                            <button
-                              key={c.id}
-                              type="button"
-                              disabled
-                              style={{
-                                textAlign: "left",
-                                border: "1px solid #d1d5db",
-                                borderRadius: 12,
-                                padding: "10px 12px",
-                                background: "white",
-                                color: "#111827",
-                                fontWeight: 600,
-                                opacity: 0.6,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  gap: 8,
-                                }}
-                              >
-                                <span style={{ fontWeight: 700 }}>
-                                  사용 불가 쿠폰
-                                </span>
-                                <span
-                                  style={{ color: "#374151", fontSize: 12 }}
-                                >
-                                  템플릿 없음
-                                </span>
-                              </div>
-                              <div
-                                style={{
-                                  marginTop: 4,
-                                  color: "#b45309",
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                쿠폰 템플릿 정보를 찾을 수 없어 사용할 수
-                                없습니다. 관리자에게 문의해 주세요.
-                              </div>
-                            </button>
-                          );
-                        }
-                        const orderAmount = Math.max(0, Math.floor(totalPrice));
-                        const minOrder = Math.max(
-                          0,
-                          Number(tpl.min_order_amount || 0),
-                        );
-                        const disabledByMin = orderAmount < minOrder;
-                        const maxDiscount =
-                          tpl.max_discount_amount == null
-                            ? null
-                            : Math.max(
-                                0,
-                                Math.floor(
-                                  Number(tpl.max_discount_amount || 0),
-                                ),
-                              );
-                        const expectedDiscount =
-                          tpl.discount_type === "fixed_amount"
-                            ? Math.min(
-                                orderAmount,
-                                Math.max(
-                                  0,
-                                  Math.floor(Number(tpl.discount_value || 0)),
-                                ),
-                              )
-                            : Math.min(
-                                orderAmount,
-                                Math.min(
-                                  Math.floor(
-                                    (orderAmount *
-                                      Math.max(
-                                        0,
-                                        Number(tpl.discount_value || 0),
-                                      )) /
-                                      100,
-                                  ),
-                                  maxDiscount == null
-                                    ? Math.floor(
-                                        (orderAmount *
-                                          Math.max(
-                                            0,
-                                            Number(tpl.discount_value || 0),
-                                          )) /
-                                          100,
-                                      )
-                                    : maxDiscount,
-                                ),
-                              );
-                        const disabledByDiscount = expectedDiscount <= 0;
-                        const reason = disabledByMin
-                          ? `최소주문 ${fmt(minOrder)}원 이상 사용 가능`
-                          : disabledByDiscount
-                            ? "현재 주문에는 할인 적용이 어려워요"
-                            : null;
-                        const active = selectedCouponIdForApply === c.id;
-                        const expires = c.expires_at
-                          ? new Date(c.expires_at)
-                          : null;
-                        const expiresText =
-                          expires && Number.isFinite(expires.getTime())
-                            ? `만료 ${expires.toLocaleDateString()}`
-                            : "만료일 정보 없음";
-                        const label =
-                          tpl.discount_type === "fixed_amount"
-                            ? `정액 ${fmt(Number(tpl.discount_value || 0))}원`
-                            : `정률 ${Number(tpl.discount_value || 0)}%`;
-
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            disabled={!!reason}
-                            onClick={() => {
-                              setSelectedCouponId(c.id);
-                              setUsedPointsInput("0");
-                            }}
+                    <button type="button" onClick={() => setBenefitsOpen(true)}>
+                      {effectiveDiscount > 0 ? "혜택 변경" : "혜택 선택"}
+                    </button>
+                  </div>
+                  {benefitsOpen ? (
+                    <CustomerSheet
+                      title="할인 혜택 선택"
+                      onClose={() => setBenefitsOpen(false)}
+                    >
+                      <div className="benefitSheetContent">
+                        <p style={{ margin: 0, fontWeight: 600 }}>
+                          내 등급: <b>{tierLabel(wallet?.tier)}</b> · 내 포인트:{" "}
+                          <b>{fmt(Number(wallet?.point_balance || 0))}P</b> · 내
+                          쿠폰: <b>{issuedCouponCount}장</b>
+                        </p>
+                        <div
+                          style={{ marginTop: 10, display: "grid", gap: 10 }}
+                        >
+                          <label
                             style={{
-                              textAlign: "left",
-                              border: active
-                                ? "1px solid #111827"
-                                : "1px solid #d1d5db",
-                              borderRadius: 12,
-                              padding: "10px 12px",
-                              background: active ? "#f9fafb" : "white",
-                              color: "#111827",
+                              display: "grid",
+                              gap: 6,
                               fontWeight: 600,
-                              opacity: reason ? 0.6 : 1,
+                              color: "#374151",
                             }}
                           >
-                            <div
+                            포인트 사용
+                            <span
                               style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: 8,
-                              }}
-                            >
-                              <span style={{ fontWeight: 700 }}>
-                                {tpl.name}
-                              </span>
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 6,
-                                }}
-                              >
-                                {active ? (
-                                  <span
-                                    style={{
-                                      background: "#111827",
-                                      color: "white",
-                                      borderRadius: 999,
-                                      padding: "2px 8px",
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    선택됨
-                                  </span>
-                                ) : null}
-                                <span
-                                  style={{ color: "#374151", fontSize: 12 }}
-                                >
-                                  {label}
-                                </span>
-                              </span>
-                            </div>
-                            <div
-                              style={{
-                                marginTop: 4,
-                                color: "#4b5563",
+                                color: "#6b7280",
                                 fontSize: 12,
                                 fontWeight: 700,
                               }}
                             >
-                              최소주문 {fmt(minOrder)}원 · 예상 할인{" "}
-                              {fmt(expectedDiscount)}원 · {expiresText}
-                            </div>
-                            {reason ? (
-                              <div
-                                style={{
-                                  marginTop: 4,
-                                  color: "#b45309",
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {reason}
-                              </div>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#6b7280",
-                        fontWeight: 700,
-                        fontSize: 13,
-                      }}
-                    >
-                      할인 적용: <b>{fmt(effectiveDiscount)}원</b> · 예상
-                      결제금액: <b>{fmt(payableAmount)}원</b>
-                    </p>
-                  </div>
+                              최대 {fmt(maxUsablePoints)}P · 최소{" "}
+                              {fmt(loyaltySettings.min_redeem_points)}P
+                            </span>
+                            <input
+                              value={usedPointsInput}
+                              onChange={(e) =>
+                                setUsedPointsInput(
+                                  e.target.value.replace(/[^\d]/g, ""),
+                                )
+                              }
+                              disabled={!!selectedCouponIdForApply}
+                              inputMode="numeric"
+                              style={{
+                                padding: 10,
+                                borderRadius: 10,
+                                border: "1px solid #d1d5db",
+                                fontWeight: 600,
+                                background: selectedCouponIdForApply
+                                  ? "#f3f4f6"
+                                  : "white",
+                              }}
+                            />
+                          </label>
+                          {pointUsageNotice ? (
+                            <p
+                              style={{
+                                margin: 0,
+                                color: "#b45309",
+                                fontSize: 12,
+                                fontWeight: 600,
+                              }}
+                            >
+                              {pointUsageNotice}
+                            </p>
+                          ) : null}
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedCouponId(null);
+                                setUsedPointsInput(String(maxUsablePoints));
+                              }}
+                              style={{
+                                border: "1px solid #d1d5db",
+                                borderRadius: 999,
+                                padding: "6px 10px",
+                                background: "white",
+                                fontWeight: 600,
+                              }}
+                            >
+                              최대 사용
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedCouponId(null);
+                                setUsedPointsInput("0");
+                              }}
+                              style={{
+                                border: "1px solid #d1d5db",
+                                borderRadius: 999,
+                                padding: "6px 10px",
+                                background: "white",
+                                fontWeight: 600,
+                              }}
+                            >
+                              초기화
+                            </button>
+                          </div>
+                          <div style={{ display: "grid", gap: 8 }}>
+                            {issuedCoupons.map((c) => {
+                              const tpl = c.template;
+                              if (!tpl) {
+                                return (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    disabled
+                                    style={{
+                                      textAlign: "left",
+                                      border: "1px solid #d1d5db",
+                                      borderRadius: 12,
+                                      padding: "10px 12px",
+                                      background: "white",
+                                      color: "#111827",
+                                      fontWeight: 600,
+                                      opacity: 0.6,
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: 8,
+                                      }}
+                                    >
+                                      <span style={{ fontWeight: 700 }}>
+                                        사용 불가 쿠폰
+                                      </span>
+                                      <span
+                                        style={{
+                                          color: "#374151",
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        템플릿 없음
+                                      </span>
+                                    </div>
+                                    <div
+                                      style={{
+                                        marginTop: 4,
+                                        color: "#b45309",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      쿠폰 템플릿 정보를 찾을 수 없어 사용할 수
+                                      없습니다. 관리자에게 문의해 주세요.
+                                    </div>
+                                  </button>
+                                );
+                              }
+                              const orderAmount = Math.max(
+                                0,
+                                Math.floor(totalPrice),
+                              );
+                              const minOrder = Math.max(
+                                0,
+                                Number(tpl.min_order_amount || 0),
+                              );
+                              const disabledByMin = orderAmount < minOrder;
+                              const maxDiscount =
+                                tpl.max_discount_amount == null
+                                  ? null
+                                  : Math.max(
+                                      0,
+                                      Math.floor(
+                                        Number(tpl.max_discount_amount || 0),
+                                      ),
+                                    );
+                              const expectedDiscount =
+                                tpl.discount_type === "fixed_amount"
+                                  ? Math.min(
+                                      orderAmount,
+                                      Math.max(
+                                        0,
+                                        Math.floor(
+                                          Number(tpl.discount_value || 0),
+                                        ),
+                                      ),
+                                    )
+                                  : Math.min(
+                                      orderAmount,
+                                      Math.min(
+                                        Math.floor(
+                                          (orderAmount *
+                                            Math.max(
+                                              0,
+                                              Number(tpl.discount_value || 0),
+                                            )) /
+                                            100,
+                                        ),
+                                        maxDiscount == null
+                                          ? Math.floor(
+                                              (orderAmount *
+                                                Math.max(
+                                                  0,
+                                                  Number(
+                                                    tpl.discount_value || 0,
+                                                  ),
+                                                )) /
+                                                100,
+                                            )
+                                          : maxDiscount,
+                                      ),
+                                    );
+                              const disabledByDiscount = expectedDiscount <= 0;
+                              const reason = disabledByMin
+                                ? `최소주문 ${fmt(minOrder)}원 이상 사용 가능`
+                                : disabledByDiscount
+                                  ? "현재 주문에는 할인 적용이 어려워요"
+                                  : null;
+                              const active = selectedCouponIdForApply === c.id;
+                              const expires = c.expires_at
+                                ? new Date(c.expires_at)
+                                : null;
+                              const expiresText =
+                                expires && Number.isFinite(expires.getTime())
+                                  ? `만료 ${expires.toLocaleDateString()}`
+                                  : "만료일 정보 없음";
+                              const label =
+                                tpl.discount_type === "fixed_amount"
+                                  ? `정액 ${fmt(Number(tpl.discount_value || 0))}원`
+                                  : `정률 ${Number(tpl.discount_value || 0)}%`;
+
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  disabled={!!reason}
+                                  onClick={() => {
+                                    setSelectedCouponId(c.id);
+                                    setUsedPointsInput("0");
+                                  }}
+                                  style={{
+                                    textAlign: "left",
+                                    border: active
+                                      ? "1px solid #111827"
+                                      : "1px solid #d1d5db",
+                                    borderRadius: 12,
+                                    padding: "10px 12px",
+                                    background: active ? "#f9fafb" : "white",
+                                    color: "#111827",
+                                    fontWeight: 600,
+                                    opacity: reason ? 0.6 : 1,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      gap: 8,
+                                    }}
+                                  >
+                                    <span style={{ fontWeight: 700 }}>
+                                      {tpl.name}
+                                    </span>
+                                    <span
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 6,
+                                      }}
+                                    >
+                                      {active ? (
+                                        <span
+                                          style={{
+                                            background: "#111827",
+                                            color: "white",
+                                            borderRadius: 999,
+                                            padding: "2px 8px",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                          }}
+                                        >
+                                          선택됨
+                                        </span>
+                                      ) : null}
+                                      <span
+                                        style={{
+                                          color: "#374151",
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        {label}
+                                      </span>
+                                    </span>
+                                  </div>
+                                  <div
+                                    style={{
+                                      marginTop: 4,
+                                      color: "#4b5563",
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    최소주문 {fmt(minOrder)}원 · 예상 할인{" "}
+                                    {fmt(expectedDiscount)}원 · {expiresText}
+                                  </div>
+                                  {reason ? (
+                                    <div
+                                      style={{
+                                        marginTop: 4,
+                                        color: "#b45309",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {reason}
+                                    </div>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p
+                            style={{
+                              margin: 0,
+                              color: "#6b7280",
+                              fontWeight: 700,
+                              fontSize: 13,
+                            }}
+                          >
+                            할인 적용: <b>{fmt(effectiveDiscount)}원</b> · 예상
+                            결제금액: <b>{fmt(payableAmount)}원</b>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="applyBenefitButton"
+                        onClick={() => setBenefitsOpen(false)}
+                      >
+                        {effectiveDiscount > 0
+                          ? `${fmt(effectiveDiscount)}원 할인 적용하기`
+                          : "선택 없이 돌아가기"}
+                      </button>
+                    </CustomerSheet>
+                  ) : null}
                 </>
               ) : (
-                <>
-                  <p style={{ margin: 0, fontWeight: 700 }}>
-                    비회원 주문 중입니다.
+                <div className="guestBenefits">
+                  <strong>회원 혜택을 놓치지 마세요</strong>
+                  <p>
+                    회원으로 주문하면 매장별 포인트가 쌓이고, 쿠폰과 다양한 할인
+                    혜택을 받을 수 있어요.
                   </p>
-                  <p
-                    style={{
-                      margin: "6px 0 0",
-                      color: "#6b7280",
-                      fontWeight: 700,
-                      fontSize: 13,
-                    }}
-                  >
-                    회원가입 후 주문하면 매장별 포인트를 적립받을 수 있어요.
-                  </p>
-                </>
+                  <div className="guestBenefitActions">
+                    <button
+                      type="button"
+                      className="guestSignupButton"
+                      onClick={() =>
+                        router.push(
+                          `/signup?next=${encodeURIComponent(nextUrl)}`,
+                        )
+                      }
+                    >
+                      회원가입하고 혜택 받기
+                    </button>
+                    <button
+                      type="button"
+                      className="guestLoginButton"
+                      onClick={() =>
+                        router.push(
+                          `/login?next=${encodeURIComponent(nextUrl)}`,
+                        )
+                      }
+                    >
+                      로그인
+                    </button>
+                  </div>
+                  <small>회원가입 없이도 지금 주문할 수 있어요.</small>
+                </div>
               )}
             </section>
 
@@ -1787,6 +2059,19 @@ function ConfirmPageInner() {
               </p>
             </section>
           </aside>
+        </div>
+        <div className="mobileCheckoutBar" role="region" aria-label="주문 결제">
+          <div className="mobileCheckoutTotal">
+            <span>{isPrepayStore ? "최종 결제 금액" : "최종 주문 금액"}</span>
+            <strong>{fmt(payableAmount)}원</strong>
+          </div>
+          <button onClick={onSubmit} disabled={!canSubmit}>
+            {submitting
+              ? "처리 중이에요"
+              : isPrepayStore
+                ? "결제하기"
+                : "주문 접수하기"}
+          </button>
         </div>
         <CustomerTrustFooter />
       </main>
