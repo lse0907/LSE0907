@@ -13,7 +13,8 @@ export type CustomerIconName =
   | "check"
   | "clock"
   | "refresh"
-  | "warning";
+  | "warning"
+  | "image";
 
 export function CustomerIcon({
   name,
@@ -89,6 +90,13 @@ export function CustomerIcon({
       <>
         <path d="M12 3 2.8 20h18.4z" />
         <path d="M12 9v4M12 17h.01" />
+      </>
+    ),
+    image: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <circle cx="8.5" cy="9" r="1.5" />
+        <path d="m4 17 4.5-4 3.5 3 2.5-2 5.5 5" />
       </>
     ),
   };
