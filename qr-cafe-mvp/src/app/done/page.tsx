@@ -9,6 +9,9 @@ import {
   CustomerTrustFooter,
   StoreIdentity,
 } from "@/app/_components/StoreCustomerBrand";
+import { CustomerIcon } from "@/app/_components/CustomerIcon";
+import { CustomerOrderProgress } from "@/app/_components/CustomerOrderProgress";
+import { CustomerLoadingState } from "@/app/_components/CustomerLoadingState";
 import {
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
@@ -117,6 +120,46 @@ function toOrderView(row: DbOrderRow): OrderView {
   };
 }
 
+function DoneStyles() {
+  return <style jsx global>{`
+    .donePage { min-height:100dvh; padding:24px 16px 0; color:var(--customer-ink); }
+    .doneShell { width:100%; max-width:620px; margin:0 auto; }
+    .heroCopy { margin-top:30px; text-align:center; }
+    .statusIcon { width:64px; height:64px; margin:0 auto; display:grid; place-items:center; border-radius:20px; background:#eaf2ff; color:var(--rion-navy); box-shadow:0 12px 28px rgba(15,31,61,.12); }
+    .statusIcon.warning,.dialogIcon { background:#fff1f2; color:var(--customer-error); }
+    .eyebrow { margin:20px 0 0; color:#315fba; font-size:11px; font-weight:800; letter-spacing:.13em; }
+    h1 { margin:8px 0 0; color:var(--rion-navy); font-size:clamp(28px,7vw,36px); font-weight:850; line-height:1.15; letter-spacing:-.04em; }
+    .description { margin:10px auto 0; max-width:440px; color:var(--customer-muted); font-size:15px; font-weight:500; line-height:1.65; word-break:keep-all; }
+    .modeBadge { display:inline-flex; margin-top:16px; min-height:30px; align-items:center; padding:5px 11px; border-radius:999px; background:#e9eef6; color:#30415f; font-size:12px; font-weight:700; }
+    .orderCard { margin-top:24px; padding:24px; border:1px solid var(--customer-line); border-radius:22px; background:#fff; box-shadow:var(--customer-shadow); }
+    .orderCard.cancelled { border-color:#fecdd3; }
+    .orderLabel { margin:0; color:var(--customer-muted); font-size:13px; font-weight:600; }
+    .orderNumber { display:block; margin-top:5px; color:var(--rion-navy); font-size:clamp(48px,14vw,64px); font-weight:900; line-height:1; letter-spacing:-.04em; }
+    .orderFacts { display:grid; grid-template-columns:1fr 1fr; margin:22px 0 0; padding:16px 0; border-top:1px solid var(--customer-line); border-bottom:1px solid var(--customer-line); }
+    .orderFacts div { display:grid; gap:5px; padding:0 14px; }
+    .orderFacts div:first-child { padding-left:0; border-right:1px solid var(--customer-line); }
+    dt { color:var(--customer-muted); font-size:13px; font-weight:500; } dd { margin:0; color:var(--customer-ink); font-size:17px; font-weight:750; }
+    .nextGuide { margin:20px 0 0; padding:13px 14px; border-radius:14px; background:#f4f7fb; color:#526071; font-size:14px; font-weight:500; line-height:1.6; }
+    .actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+    .primaryAction,.secondaryAction { min-height:52px; display:flex; align-items:center; justify-content:center; padding:0 16px; border-radius:14px; font-size:15px; font-weight:750; text-align:center; }
+    .primaryAction { border:1px solid var(--rion-navy); background:var(--rion-navy); color:#fff; box-shadow:0 10px 24px rgba(15,31,61,.2); }
+    .secondaryAction { border:1px solid var(--customer-line); background:#fff; color:var(--customer-ink); }
+    .cancelAction { width:100%; min-height:46px; margin-top:10px; border:0; background:transparent; color:#9f1239; font-size:14px; font-weight:650; }
+    .cancelHint { margin:12px 0 0; color:var(--customer-muted); font-size:13px; font-weight:500; line-height:1.55; text-align:center; }
+    .errorMessage { margin:12px 0 0; padding:12px 14px; border-radius:13px; background:#fff1f2; color:#9f1239; font-size:13px; font-weight:600; line-height:1.55; }
+    .emptyState { padding-top:4px; } .emptyState .statusIcon { margin-top:40px; } .emptyState .secondaryAction { margin-top:24px; }
+    .dialogBackdrop { position:fixed; inset:0; z-index:100; display:grid; place-items:center; padding:16px; background:rgba(15,31,61,.52); }
+    .dialog { width:min(420px,100%); padding:24px; border:1px solid var(--customer-line); border-radius:22px; background:#fff; box-shadow:var(--customer-shadow-strong); }
+    .dialogIcon { width:48px; height:48px; display:grid; place-items:center; border-radius:15px; }
+    .dialog h2 { margin:18px 0 0; color:var(--rion-navy); font-size:21px; font-weight:800; letter-spacing:-.025em; }
+    .dialog p { margin:9px 0 0; color:var(--customer-muted); font-size:14px; font-weight:500; line-height:1.6; }
+    .dialogActions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:22px; }
+    .dialogActions button { min-height:48px; border:1px solid var(--customer-line); border-radius:13px; background:#fff; color:var(--customer-ink); font-weight:750; }
+    .dialogActions .dangerAction { border-color:#be123c; background:#be123c; color:#fff; }
+    @media(max-width:420px) { .donePage{padding-top:16px}.orderCard{padding:19px}.actions{grid-template-columns:1fr}.primaryAction{order:-1} }
+  `}</style>;
+}
+
 function DonePageInner() {
   const sp = useSearchParams();
 
@@ -162,18 +205,6 @@ function DonePageInner() {
     if (!storeIdForLinks) return "/";
     return `/?store=${encodeURIComponent(storeIdForLinks)}`;
   }, [storeIdForLinks]);
-
-  const globalPageStyle = (
-    <style jsx global>{`
-      :root {
-        color-scheme: light;
-      }
-      body {
-        background: #f6f7f9;
-        color: #111827;
-      }
-    `}</style>
-  );
 
   useEffect(() => {
     const run = async () => {
@@ -264,310 +295,112 @@ function DonePageInner() {
 
   if (loading) {
     return (
-      <>
-        {globalPageStyle}
-        <main
-          style={{
-            padding: 24,
-            maxWidth: 520,
-            margin: "0 auto",
-            color: "#111827",
-          }}
-        >
-          <StoreIdentity storeId={storeIdForLinks} compact />
-          <h1 style={{ fontSize: 22, fontWeight: 900, marginTop: 24 }}>
-            주문 접수 완료
-          </h1>
-          <p style={{ marginTop: 10, color: "#6b7280", fontWeight: 800 }}>
-            주문 정보를 불러오는 중...
-          </p>
-          <CustomerTrustFooter />
-        </main>
-      </>
+      <CustomerLoadingState
+        title="주문 정보를 확인하고 있어요"
+        description="접수된 주문을 안전하게 불러오고 있어요."
+      />
     );
   }
 
   if (!order) {
     return (
-      <>
-        {globalPageStyle}
-        <main
-          style={{
-            padding: 24,
-            maxWidth: 520,
-            margin: "0 auto",
-            color: "#111827",
-          }}
-        >
+      <main className="donePage customer-page">
+        <section className="doneShell emptyState">
           <StoreIdentity storeId={storeIdForLinks} compact />
-          <h1 style={{ fontSize: 22, fontWeight: 900, marginTop: 24 }}>
-            주문 접수 완료
-          </h1>
-
-          <p style={{ marginTop: 10, fontWeight: 850 }}>
-            주문 정보를 찾을 수 없어요. {errMsg ? `(오류: ${errMsg})` : ""}
+          <span className="statusIcon warning" aria-hidden="true">
+            <CustomerIcon name="warning" size={28} />
+          </span>
+          <p className="eyebrow">ORDER NOT FOUND</p>
+          <h1>주문 정보를 찾을 수 없어요</h1>
+          <p className="description">
+            주문 링크를 다시 확인하거나 매장 홈에서 주문 상태를 확인해 주세요.
           </p>
-
-          <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
-            <Link
-              href="/"
-              style={{
-                flex: 1,
-                textAlign: "center",
-                padding: 12,
-                borderRadius: 10,
-                border: "1px solid #ccc",
-                textDecoration: "none",
-                fontWeight: 900,
-                color: "#111827",
-                WebkitTextFillColor: "currentColor",
-              }}
-            >
-              홈으로
-            </Link>
-          </div>
+          {errMsg ? <p className="errorMessage">{errMsg}</p> : null}
+          <Link className="secondaryAction" href={homeHref}>매장 홈으로</Link>
           <CustomerTrustFooter />
-        </main>
-      </>
+        </section>
+        <DoneStyles />
+      </main>
     );
   }
 
+  const isCancelled = order.status === "cancelled";
+  const progress = order.status === "new" ? 0 : order.status === "checked" ? 1 : order.status === "making" ? 2 : 3;
+
   return (
-    <>
-      {globalPageStyle}
-      <main
-        style={{
-          padding: 24,
-          maxWidth: 520,
-          margin: "0 auto",
-          color: "#111827",
-        }}
-      >
+    <main className="donePage customer-page">
+      <section className="doneShell">
         <StoreIdentity storeId={storeIdForLinks} compact />
-        <h1
-          style={{
-            fontSize: 28,
-            fontWeight: 900,
-            margin: "24px 0 0",
-            color: "#0f1f3d",
-          }}
-        >
-          {DONE_STATUS_COPY[order.status].title}
-        </h1>
-        <p style={{ margin: "8px 0 0", color: "#4b5563", fontWeight: 850 }}>
-          {DONE_STATUS_COPY[order.status].desc}
-        </p>
-
-        <div style={{ marginTop: 10, color: "#444" }}>
-          {order.mode === "dine-in" ? (
-            <p style={{ margin: 0, fontWeight: 850 }}>
-              매장 이용
-              {order.table ? (
-                <>
-                  {" · "}테이블 <b>{order.table}</b>
-                </>
-              ) : null}
-            </p>
-          ) : (
-            <p style={{ margin: 0, fontWeight: 850 }}>포장 주문</p>
-          )}
-
-          {order.status === "cancelled" ? (
-            <p style={{ marginTop: 8, color: "#b45309", fontWeight: 950 }}>
-              * 이 주문은 취소되었습니다.
-            </p>
-          ) : null}
+        <div className="heroCopy">
+          <span className={`statusIcon ${isCancelled ? "warning" : ""}`} aria-hidden="true">
+            <CustomerIcon name={isCancelled ? "warning" : "check"} size={30} />
+          </span>
+          <p className="eyebrow">{isCancelled ? "ORDER CANCELLED" : "ORDER COMPLETE"}</p>
+          <h1>{DONE_STATUS_COPY[order.status].title}</h1>
+          <p className="description">{DONE_STATUS_COPY[order.status].desc}</p>
+          <span className="modeBadge">
+            {order.mode === "dine-in"
+              ? order.table ? `매장 이용 · 테이블 ${order.table}` : "매장 이용"
+              : "포장 주문"}
+          </span>
         </div>
 
-        <div
-          style={{
-            marginTop: 16,
-            padding: 16,
-            border: "1px solid #ddd",
-            borderRadius: 12,
-            background: "white",
-            display: "grid",
-            gap: 10,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, opacity: 0.7, fontWeight: 800 }}>
-              주문번호
-            </div>
-            <div style={{ fontSize: 48, fontWeight: 950, marginTop: 6 }}>
-              {order.displayNo}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gap: 6,
-              fontWeight: 850,
-              color: "#111827",
-            }}
-          >
-            <div>
-              총 수량: <b>{order.totalCount}</b>
-            </div>
-            <div>
-              총 금액: <b>{fmt(order.totalPrice)}원</b>
-            </div>
-          </div>
-
-          <div
-            style={{
-              marginTop: 6,
-              lineHeight: 1.5,
-              fontWeight: 850,
-              color: "#374151",
-            }}
-          >
+        <article className={`orderCard ${isCancelled ? "cancelled" : ""}`}>
+          <p className="orderLabel">주문번호</p>
+          <strong className="orderNumber">{order.displayNo}</strong>
+          <dl className="orderFacts">
+            <div><dt>총 수량</dt><dd>{order.totalCount}개</dd></div>
+            <div><dt>총 금액</dt><dd>{fmt(order.totalPrice)}원</dd></div>
+          </dl>
+          {!isCancelled ? <CustomerOrderProgress activeIndex={progress} /> : null}
+          <p className="nextGuide">
             {order.status === "completed"
-              ? "수령 처리가 완료되었습니다."
-              : order.status === "cancelled"
-                ? "취소된 주문입니다."
-                : "상태 화면에서 준비 완료 알림을 확인할 수 있어요."}
-          </div>
+              ? "수령 처리가 완료되었어요. 이용해 주셔서 감사합니다."
+              : isCancelled
+                ? "취소된 주문이에요. 필요한 메뉴는 다시 주문해 주세요."
+                : "주문 상태 화면에서 준비 과정을 실시간으로 확인할 수 있어요."}
+          </p>
+        </article>
+
+        <div className="actions">
+          {!isCancelled ? (
+            <Link className="primaryAction" href={`/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(order.id)}&accessToken=${encodeURIComponent(accessTokenForLinks)}`}>
+              주문 상태 보기
+            </Link>
+          ) : null}
+          <Link className="secondaryAction" href={homeHref}>매장 홈으로</Link>
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <Link
-            href={`/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(
-              order.id,
-            )}&accessToken=${encodeURIComponent(accessTokenForLinks)}`}
-            style={{
-              flex: 1,
-              textAlign: "center",
-              padding: 12,
-              borderRadius: 10,
-              background: "#0f1f3d",
-              color: "white",
-              textDecoration: "none",
-              fontWeight: 900,
-            }}
-          >
-            주문 상태 보기
-          </Link>
-
-          <Link
-            href={homeHref}
-            style={{
-              flex: 1,
-              textAlign: "center",
-              padding: 12,
-              borderRadius: 10,
-              border: "1px solid #ccc",
-              textDecoration: "none",
-              fontWeight: 900,
-              color: "#111827",
-              WebkitTextFillColor: "currentColor",
-            }}
-          >
-            홈으로
-          </Link>
-        </div>
         {order.status === "new" ? (
-          <button
-            onClick={() => setShowCancelConfirm(true)}
-            disabled={cancelling}
-            style={{
-              marginTop: 10,
-              width: "100%",
-              padding: 12,
-              borderRadius: 10,
-              border: "1px solid #d1d5db",
-              background: "#fff",
-              fontWeight: 900,
-            }}
-          >
-            {cancelling ? "취소 처리 중..." : "주문 취소"}
+          <button className="cancelAction" onClick={() => setShowCancelConfirm(true)} disabled={cancelling}>
+            {cancelling ? "취소 처리 중이에요" : "주문 취소하기"}
           </button>
-        ) : (
-          <p style={{ marginTop: 10, color: "#6b7280", fontWeight: 800 }}>
-            매장 확인 후에는 앱에서 직접 취소할 수 없어요.
-          </p>
-        )}
-
-        {errMsg ? (
-          <p style={{ marginTop: 10, color: "#b91c1c", fontWeight: 900 }}>
-            {errMsg}
-          </p>
+        ) : !isCancelled ? (
+          <p className="cancelHint">매장이 확인한 주문은 화면에서 직접 취소할 수 없어요.</p>
         ) : null}
+        {errMsg ? <p className="errorMessage">{errMsg}</p> : null}
 
         {showCancelConfirm ? (
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,.45)",
-              display: "grid",
-              placeItems: "center",
-              padding: 16,
-              zIndex: 50,
-            }}
-          >
-            <div
-              style={{
-                width: "100%",
-                maxWidth: 420,
-                background: "#fff",
-                borderRadius: 18,
-                padding: 16,
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>
-                주문을 취소할까요?
-              </h2>
-              <p
-                style={{
-                  margin: "10px 0 0",
-                  color: "#374151",
-                  fontWeight: 800,
-                }}
-              >
-                매장 확인 전까지만 취소할 수 있어요.
-              </p>
-              <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
-                <button
-                  onClick={() => setShowCancelConfirm(false)}
-                  disabled={cancelling}
-                  style={{
-                    flex: 1,
-                    padding: 12,
-                    borderRadius: 12,
-                    border: "1px solid #d1d5db",
-                    background: "#fff",
-                    fontWeight: 950,
-                  }}
-                >
-                  닫기
-                </button>
-                <button
-                  onClick={cancelOrder}
-                  disabled={cancelling}
-                  style={{
-                    flex: 1,
-                    padding: 12,
-                    borderRadius: 12,
-                    border: "1px solid #111827",
-                    background: "#111827",
-                    color: "#fff",
-                    fontWeight: 950,
-                  }}
-                >
-                  {cancelling ? "처리 중..." : "취소하기"}
+          <div className="dialogBackdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowCancelConfirm(false)}>
+            <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="cancel-title">
+              <span className="dialogIcon" aria-hidden="true"><CustomerIcon name="warning" size={24} /></span>
+              <h2 id="cancel-title">주문을 취소할까요?</h2>
+              <p>매장에서 확인하기 전까지만 주문을 취소할 수 있어요.</p>
+              <div className="dialogActions">
+                <button onClick={() => setShowCancelConfirm(false)} disabled={cancelling}>돌아가기</button>
+                <button className="dangerAction" onClick={cancelOrder} disabled={cancelling}>
+                  {cancelling ? "처리 중이에요" : "취소하기"}
                 </button>
               </div>
-            </div>
+            </section>
           </div>
         ) : null}
         <CustomerTrustFooter />
-      </main>
-    </>
+      </section>
+      <DoneStyles />
+    </main>
   );
+
 }
 export default function DonePagePage() {
   return (
