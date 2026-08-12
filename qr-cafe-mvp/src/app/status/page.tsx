@@ -9,6 +9,8 @@ import {
   CustomerTrustFooter,
   StoreCustomerHeader,
 } from "@/app/_components/StoreCustomerBrand";
+import { CustomerIcon } from "@/app/_components/CustomerIcon";
+import { CustomerOrderProgress } from "@/app/_components/CustomerOrderProgress";
 import {
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
@@ -335,13 +337,13 @@ function StatusPageInner() {
       <style jsx global>{`
         :root {
           color-scheme: light;
-          --bg: #f6f7f9;
+          --bg: #f3f5f8;
           --card: #ffffff;
-          --text: #111827;
-          --muted: #6b7280;
-          --line: #e5e7eb;
-          --brand: #111827;
-          --radius: 16px;
+          --text: #14213a;
+          --muted: #667085;
+          --line: #dfe4eb;
+          --brand: #0f1f3d;
+          --radius: 22px;
         }
         body {
           background: var(--bg);
@@ -351,8 +353,9 @@ function StatusPageInner() {
 
       <style jsx>{`
         .wrap {
-          padding: 24px;
-          max-width: 520px;
+          min-height: 100dvh;
+          padding: 24px 16px 0;
+          max-width: 680px;
           margin: 0 auto;
         }
         .h1 {
@@ -368,11 +371,13 @@ function StatusPageInner() {
           align-items: center;
         }
         .btn {
-          padding: 10px 12px;
+          min-height: 44px;
+          padding: 10px 14px;
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
-          font-weight: 900;
+          font-weight: 700;
+          gap: 7px;
           cursor: pointer;
           text-decoration: none;
           color: var(--text);
@@ -383,89 +388,64 @@ function StatusPageInner() {
         }
         .card {
           margin-top: 16px;
-          padding: 16px;
+          padding: 22px;
           border: 1px solid var(--line);
           border-radius: var(--radius);
           background: #fff;
-          box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+          box-shadow: var(--customer-shadow);
         }
         .label {
           font-size: 14px;
           color: var(--muted);
-          font-weight: 800;
+          font-weight: 600;
         }
         .bigNo {
-          font-size: 48px;
+          font-size: clamp(48px, 13vw, 64px);
           font-weight: 900;
-          margin-top: 6px;
+          margin-top: 8px;
           line-height: 1;
+          letter-spacing: -0.035em;
         }
         .meta {
           margin-top: 10px;
-          color: #444;
-          font-weight: 800;
+          color: #526071;
+          font-weight: 600;
         }
         .statusRow {
           margin-top: 8px;
-          font-weight: 850;
+          font-weight: 600;
         }
         .stateTitle {
           margin-top: 14px;
-          font-size: 18px;
-          font-weight: 950;
-          letter-spacing: -0.02em;
+          font-size: clamp(24px, 6vw, 28px);
+          font-weight: 850;
+          letter-spacing: -0.035em;
         }
         .stateDesc {
           margin-top: 4px;
           color: #4b5563;
           font-size: 14px;
-          font-weight: 800;
-          line-height: 1.45;
-        }
-        .steps {
-          margin-top: 14px;
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 8px;
-        }
-        .step {
-          border: 1px solid var(--line);
-          border-radius: 14px;
-          padding: 10px 6px;
-          background: #f9fafb;
-          color: #6b7280;
-          text-align: center;
-          font-size: 12px;
-          font-weight: 950;
-        }
-        .stepDone {
-          background: #ecfdf5;
-          border-color: #bbf7d0;
-          color: #047857;
-        }
-        .stepNow {
-          background: #111827;
-          border-color: #111827;
-          color: #fff;
+          font-weight: 500;
+          line-height: 1.65;
         }
         .hint {
           margin-top: 12px;
           color: var(--muted);
           font-size: 13px;
           line-height: 1.45;
-          font-weight: 800;
+          font-weight: 500;
           word-break: keep-all;
         }
         .err {
           margin-top: 10px;
           color: #b91c1c;
-          font-weight: 900;
+          font-weight: 650;
           font-size: 13px;
         }
         .dim {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.45);
+          background: rgba(15, 31, 61, 0.52);
           display: grid;
           place-items: center;
           padding: 16px;
@@ -476,21 +456,21 @@ function StatusPageInner() {
           max-width: 420px;
           background: #fff;
           border: 1px solid var(--line);
-          border-radius: 18px;
-          padding: 16px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+          border-radius: 22px;
+          padding: 22px;
+          box-shadow: var(--customer-shadow-strong);
         }
         .popupTitle {
           margin: 0;
           font-size: 18px;
-          font-weight: 950;
+          font-weight: 800;
           letter-spacing: -0.02em;
         }
         .popupDesc {
           margin: 10px 0 0 0;
           color: #374151;
-          font-weight: 800;
-          line-height: 1.5;
+          font-weight: 500;
+          line-height: 1.6;
         }
         .popupBtnRow {
           margin-top: 14px;
@@ -503,7 +483,7 @@ function StatusPageInner() {
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
-          font-weight: 950;
+          font-weight: 750;
           cursor: pointer;
           text-decoration: none;
           color: var(--text);
@@ -516,6 +496,13 @@ function StatusPageInner() {
           background: var(--brand);
           border-color: var(--brand);
           color: #fff;
+        }
+        .autoUpdate { display:flex; align-items:center; gap:7px; margin-top:18px; color:var(--muted); font-size:13px; font-weight:500; }
+        .statusActions { margin-top:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        @media (max-width: 520px) {
+          .wrap { padding-top: 16px; }
+          .card { padding: 18px; }
+          .topRow .btn { flex: 1; }
         }
       `}</style>
 
@@ -536,7 +523,7 @@ function StatusPageInner() {
           onClick={onRefresh}
           disabled={!orderId || loading}
         >
-          새로고침
+          <CustomerIcon name="refresh" size={17} /> 새로고침
         </button>
 
         {visibleOrder?.status === "new" ? (
@@ -605,46 +592,21 @@ function StatusPageInner() {
             {visibleOrder.status === "cancelled" ? (
               <div className="hint">취소된 주문입니다.</div>
             ) : (
-              <div className="steps" aria-label="주문 진행 단계">
-                {ORDER_STEPS.map((step, idx) => {
-                  const className =
-                    idx < activeStepIndex
-                      ? "step stepDone"
-                      : idx === activeStepIndex
-                        ? "step stepNow"
-                        : "step";
-                  return (
-                    <div key={step.status} className={className}>
-                      {idx < activeStepIndex
-                        ? "✓ "
-                        : idx === activeStepIndex
-                          ? "● "
-                          : "○ "}
-                      {step.label}
-                    </div>
-                  );
-                })}
-              </div>
+              <CustomerOrderProgress activeIndex={activeStepIndex} />
             )}
 
-            <div className="hint">* 상태는 자동으로 갱신됩니다.</div>
+            <div className="autoUpdate">
+              <CustomerIcon name="clock" size={16} /> 상태를 자동으로 확인하고 있어요.
+            </div>
             <div className="hint" style={{ marginTop: 6 }}>
-              * 준비 완료 시 알림이 표시됩니다.
+              준비가 완료되면 화면에 알림을 표시해 드려요.
             </div>
             {visibleOrder.buzzerNo ? (
               <div className="hint" style={{ marginTop: 6 }}>
-                * 진동벨은 직원이 지급한 경우에만 표시됩니다.
+                진동벨은 직원이 지급한 경우에만 표시됩니다.
               </div>
             ) : null}
-            <div
-              style={{
-                marginTop: 12,
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
+            <div className="statusActions">
               {visibleOrder.status === "new" ? (
                 <button
                   className="btn"
@@ -707,7 +669,7 @@ function StatusPageInner() {
         >
           <div className="popup">
             <h2 className="popupTitle">준비 완료</h2>
-            <p className="popupDesc">픽업/수령해 주세요.</p>
+            <p className="popupDesc">준비된 상품을 수령해 주세요.</p>
 
             <div className="popupBtnRow">
               <button className="popupBtn popupBtnPrimary" onClick={closePopup}>
