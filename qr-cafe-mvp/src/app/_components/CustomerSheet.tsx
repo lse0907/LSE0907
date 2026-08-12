@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { CustomerIcon } from "./CustomerIcon";
 
 export function CustomerSheet({
@@ -54,7 +55,7 @@ export function CustomerSheet({
       trigger?.focus();
     };
   }, []);
-  return (
+  const sheet = (
     <div
       className="backdrop"
       role="presentation"
@@ -89,6 +90,7 @@ export function CustomerSheet({
           background: rgba(15, 23, 42, 0.55);
           display: grid;
           align-items: end;
+          padding-top: env(safe-area-inset-top);
         }
         .sheet {
           width: 100%;
@@ -112,6 +114,7 @@ export function CustomerSheet({
           justify-content: space-between;
           padding: 12px 16px;
           border-bottom: 1px solid #e5e7eb;
+          background: #fff;
         }
         h2 {
           margin: 0;
@@ -168,4 +171,6 @@ export function CustomerSheet({
       `}</style>
     </div>
   );
+
+  return createPortal(sheet, document.body);
 }

@@ -64,7 +64,7 @@ export function CustomerQrScannerSheet({
         .customerQrVideoFrame {
           position: relative;
           width: min(100%, 430px);
-          max-height: 64dvh;
+          max-height: min(64dvh, 620px);
           margin: 2px auto 0;
           overflow: hidden;
           border-radius: 18px;
@@ -115,6 +115,12 @@ export function CustomerQrScannerSheet({
         @media (max-width: 380px) {
           .customerQrVideoFrame {
             max-height: 58dvh;
+          }
+        }
+        @media (max-height: 720px) {
+          .customerQrVideoFrame {
+            max-height: 48dvh;
+            aspect-ratio: 4/3;
           }
         }
       `}</style>

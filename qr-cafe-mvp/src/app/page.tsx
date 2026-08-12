@@ -270,39 +270,110 @@ function HomeStartInner() {
       <main className="wrap">
         <style jsx>{`
           .wrap {
+            position: relative;
             min-height: 100vh;
             display: grid;
             place-items: center;
-            background: radial-gradient(
-              circle at 20% 10%,
-              #1d4b8f 0%,
-              #132d59 42%,
-              #0c1b35 100%
-            );
+            overflow: hidden;
+            isolation: isolate;
+            background:
+              radial-gradient(
+                circle at 20% 12%,
+                rgba(62, 125, 224, 0.54),
+                transparent 35%
+              ),
+              radial-gradient(
+                circle at 82% 78%,
+                rgba(40, 104, 207, 0.26),
+                transparent 32%
+              ),
+              linear-gradient(145deg, #102b58 0%, #0c1b35 54%, #071326 100%);
             color: #fff;
-            padding: 20px;
+            padding: max(24px, env(safe-area-inset-top)) 20px
+              max(24px, env(safe-area-inset-bottom));
+          }
+          .wrap::before {
+            position: absolute;
+            z-index: -2;
+            top: -9vw;
+            right: -8vw;
+            width: clamp(300px, 57vw, 720px);
+            aspect-ratio: 1;
+            background: url("/rion-symbol-white.svg") center / contain no-repeat;
+            content: "";
+            opacity: 0.055;
+            transform: rotate(8deg);
+          }
+          .wrap::after {
+            position: absolute;
+            z-index: -1;
+            inset: 0;
+            background-image:
+              linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+              linear-gradient(
+                90deg,
+                rgba(255, 255, 255, 0.025) 1px,
+                transparent 1px
+              );
+            background-size: 48px 48px;
+            mask-image: linear-gradient(
+              to bottom,
+              rgba(0, 0, 0, 0.8),
+              transparent 78%
+            );
+            content: "";
           }
           .card {
+            position: relative;
             width: min(560px, 100%);
-            border-radius: 26px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            background: rgba(255, 255, 255, 0.09);
-            backdrop-filter: blur(14px);
-            padding: 32px 24px;
+            overflow: hidden;
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: linear-gradient(
+              145deg,
+              rgba(255, 255, 255, 0.14),
+              rgba(255, 255, 255, 0.065)
+            );
+            box-shadow: 0 30px 80px rgba(2, 9, 22, 0.38);
+            backdrop-filter: blur(18px);
+            padding: clamp(28px, 6vw, 42px);
             display: grid;
-            gap: 14px;
+            gap: 12px;
+          }
+          .card::after {
+            position: absolute;
+            right: -80px;
+            bottom: -110px;
+            width: 260px;
+            height: 260px;
+            border: 1px solid rgba(124, 176, 255, 0.2);
+            border-radius: 50%;
+            box-shadow:
+              0 0 0 28px rgba(124, 176, 255, 0.035),
+              0 0 0 58px rgba(124, 176, 255, 0.025);
+            content: "";
+            pointer-events: none;
+          }
+          .eyebrow {
+            margin: 26px 0 -4px;
+            color: #9dc2ff;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
           }
           .title {
-            margin: 12px 0 0;
+            margin: 0;
             font-size: clamp(30px, 8vw, 44px);
             font-weight: 850;
             line-height: 1.12;
             letter-spacing: -0.045em;
           }
           .sub {
-            color: rgba(255, 255, 255, 0.9);
-            line-height: 1.6;
-            font-weight: 500;
+            margin: 0 0 14px;
+            color: rgba(255, 255, 255, 0.78);
+            font-size: 15px;
+            line-height: 1.5;
+            font-weight: 600;
           }
           .btnPrimary {
             border: 0;
@@ -312,11 +383,13 @@ function HomeStartInner() {
             background: #fff;
             color: #0f1f3d;
             font-weight: 750;
+            font-size: 16px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 9px;
+            box-shadow: 0 14px 34px rgba(2, 9, 22, 0.26);
           }
           .btnGhost {
             border: 1px solid rgba(255, 255, 255, 0.4);
@@ -326,6 +399,25 @@ function HomeStartInner() {
             color: #fff;
             font-weight: 650;
             cursor: pointer;
+            font-size: 14px;
+          }
+          .btnPrimary,
+          .btnGhost {
+            position: relative;
+            z-index: 1;
+          }
+          @media (max-width: 480px) {
+            .wrap {
+              place-items: center;
+              padding-inline: 16px;
+            }
+            .card {
+              border-radius: 24px;
+              padding: 28px 22px;
+            }
+            .eyebrow {
+              margin-top: 22px;
+            }
           }
           .err {
             padding: 12px 14px;
@@ -339,13 +431,11 @@ function HomeStartInner() {
         `}</style>
         <section className="card">
           <CustomerBrand inverse />
-          <h1 className="title">QR로 주문을 시작하세요</h1>
-          <p className="sub">
-            테이블이나 카운터의 QR을 스캔하면 해당 매장의 주문 화면으로
-            연결됩니다.
-          </p>
+          <p className="eyebrow">REALIZE INNOVATION ON</p>
+          <h1 className="title">주문을 켜다.</h1>
+          <p className="sub">QR로 바로 시작하세요.</p>
           <button className="btnPrimary" onClick={startQrScanner}>
-            <CustomerIcon name="qr" size={21} /> QR 스캔하고 주문하기
+            <CustomerIcon name="qr" size={21} /> QR 스캔하기
           </button>
           {scannerOpen ? (
             <CustomerQrScannerSheet
@@ -369,7 +459,7 @@ function HomeStartInner() {
                 className="btnGhost"
                 onClick={() => router.push("/login?next=%2Fme")}
               >
-                로그인
+                로그인 · 내 주문 확인
               </button>
             )
           ) : (
