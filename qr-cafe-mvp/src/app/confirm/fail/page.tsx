@@ -6,6 +6,7 @@ import {
   CustomerTrustFooter,
   StoreIdentity,
 } from "@/app/_components/StoreCustomerBrand";
+import { CustomerIcon } from "@/app/_components/CustomerIcon";
 
 function ConfirmFailPageInner() {
   const router = useRouter();
@@ -20,13 +21,13 @@ function ConfirmFailPageInner() {
       <section className="failCard">
         <StoreIdentity storeId={storeId} compact />
         <div className="failIcon" aria-hidden="true">
-          !
+          <CustomerIcon name="warning" size={28} />
         </div>
-        <span className="eyebrow">결제 미완료</span>
-        <h1>결제가 완료되지 않았어요</h1>
+        <span className="eyebrow">PAYMENT NOT COMPLETED</span>
+        <h1>결제를 완료하지 못했어요</h1>
         <p className="description">
-          주문은 아직 접수되지 않았습니다. 결제 정보를 확인한 뒤 다시 시도해
-          주세요.
+          주문 내용은 그대로 유지되어 있어요. 결제 정보를 확인한 뒤 다시
+          시도해 주세요.
         </p>
 
         <button
@@ -66,7 +67,7 @@ function ConfirmFailPageInner() {
           max-width: 520px;
           padding: 24px;
           border: 1px solid var(--customer-line);
-          border-radius: 24px;
+          border-radius: 22px;
           background: #fff;
           box-shadow: var(--customer-shadow);
         }
@@ -80,33 +81,35 @@ function ConfirmFailPageInner() {
           background: #fff1f2;
           color: #be123c;
           font-size: 28px;
-          font-weight: 900;
+          font-weight: 800;
         }
         .eyebrow {
           display: block;
           margin-top: 22px;
           color: #be123c;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 800;
+          letter-spacing: 0.12em;
         }
         h1 {
           margin: 8px 0 0;
           color: var(--rion-navy);
-          font-size: 30px;
+          font-size: clamp(28px, 7vw, 34px);
+          font-weight: 850;
           line-height: 1.2;
           letter-spacing: -0.045em;
         }
         .description {
           margin: 12px 0 26px;
           color: var(--customer-muted);
-          font-weight: 600;
+          font-weight: 500;
           line-height: 1.65;
         }
         button {
           width: 100%;
           min-height: 52px;
           border-radius: 14px;
-          font-weight: 800;
+          font-weight: 750;
           cursor: pointer;
         }
         .primary {
@@ -132,7 +135,7 @@ function ConfirmFailPageInner() {
         summary {
           cursor: pointer;
           color: #475467;
-          font-weight: 750;
+          font-weight: 650;
         }
         details p {
           margin: 8px 0 0;

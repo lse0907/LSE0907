@@ -9,7 +9,11 @@ export type CustomerIconName =
   | "coupon"
   | "star"
   | "close"
-  | "back";
+  | "back"
+  | "check"
+  | "clock"
+  | "refresh"
+  | "warning";
 
 export function CustomerIcon({
   name,
@@ -66,6 +70,25 @@ export function CustomerIcon({
     back: (
       <>
         <path d="m15 18-6-6 6-6" />
+      </>
+    ),
+    check: <path d="m5 12 4 4L19 6" />,
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    refresh: (
+      <>
+        <path d="M20 7v5h-5" />
+        <path d="M19 12a7 7 0 1 0-2 5" />
+      </>
+    ),
+    warning: (
+      <>
+        <path d="M12 3 2.8 20h18.4z" />
+        <path d="M12 9v4M12 17h.01" />
       </>
     ),
   };
