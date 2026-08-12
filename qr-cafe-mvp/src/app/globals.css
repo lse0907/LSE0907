@@ -11,6 +11,11 @@
   --customer-line: #dfe4eb;
   --customer-radius: 18px;
   --customer-shadow: 0 16px 40px rgba(15, 31, 61, 0.08);
+  --customer-shadow-strong: 0 22px 58px rgba(15, 31, 61, 0.14);
+  --customer-accent: #2563eb;
+  --customer-success: #047857;
+  --customer-warning: #b45309;
+  --customer-error: #be123c;
 }
 
 html,
@@ -85,6 +90,15 @@ select:focus-visible {
   color: #fff;
   font-weight: 800;
   box-shadow: 0 10px 24px rgba(15, 31, 61, 0.2);
+}
+
+.customer-secondary-action {
+  min-height: 52px;
+  border: 1px solid var(--customer-line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--customer-ink);
+  font-weight: 750;
 }
 
 @media (prefers-reduced-motion: reduce) {
