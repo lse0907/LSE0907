@@ -16,6 +16,8 @@ import {
   CustomerLoadingState,
   StoreAccessError,
 } from "./_components/CustomerLoadingState";
+import { CustomerIcon } from "./_components/CustomerIcon";
+import { CustomerQrScannerSheet } from "./_components/CustomerQrScannerSheet";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 type BarcodeScanResult = { rawValue?: string };
@@ -25,6 +27,13 @@ type BarcodeDetectorLike = {
 type BarcodeDetectorCtor = new (opts: {
   formats: string[];
 }) => BarcodeDetectorLike;
+
+const FALLBACK_OVERLAY = `linear-gradient(
+  to bottom,
+  rgba(8,22,45,0.30) 0%,
+  rgba(8,22,45,0.52) 55%,
+  rgba(8,22,45,0.78) 100%
+)`;
 
 function HomeStartInner() {
   const router = useRouter();
@@ -54,6 +63,8 @@ function HomeStartInner() {
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
+    // Hydration is complete here; the remaining state mirrors browser storage.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     try {
       const lastOrderKey = lsLastOrderIdKey(storeId);
@@ -107,16 +118,9 @@ function HomeStartInner() {
   const HERO_IMAGE = profile.mainImage;
 
   // ✅ 서버/첫 렌더에서는 고정값(항상 동일) 사용
-  const fallbackOverlay = `linear-gradient(
-    to bottom,
-    rgba(0,0,0,0.30) 0%,
-    rgba(0,0,0,0.48) 55%,
-    rgba(0,0,0,0.70) 100%
-  )`;
-
   // ✅ 마운트 후에만 profile 기반 오버레이 계산
   const overlayBg = useMemo(() => {
-    if (!mounted) return fallbackOverlay;
+    if (!mounted) return FALLBACK_OVERLAY;
 
     const strength = Math.max(
       0,
@@ -128,9 +132,9 @@ function HomeStartInner() {
 
     return `linear-gradient(
       to bottom,
-      rgba(0,0,0,${aTop}) 0%,
-      rgba(0,0,0,${aMid}) 55%,
-      rgba(0,0,0,${aBot}) 100%
+      rgba(8,22,45,${aTop}) 0%,
+      rgba(8,22,45,${aMid}) 55%,
+      rgba(8,22,45,${aBot}) 100%
     )`;
   }, [mounted, profile.mainImageOverlayStrength]);
 
@@ -266,37 +270,110 @@ function HomeStartInner() {
       <main className="wrap">
         <style jsx>{`
           .wrap {
+            position: relative;
             min-height: 100vh;
             display: grid;
             place-items: center;
-            background: radial-gradient(
-              circle at 20% 10%,
-              #2d3748 0%,
-              #111827 45%,
-              #0b1220 100%
-            );
+            overflow: hidden;
+            isolation: isolate;
+            background:
+              radial-gradient(
+                circle at 20% 12%,
+                rgba(62, 125, 224, 0.54),
+                transparent 35%
+              ),
+              radial-gradient(
+                circle at 82% 78%,
+                rgba(40, 104, 207, 0.26),
+                transparent 32%
+              ),
+              linear-gradient(145deg, #102b58 0%, #0c1b35 54%, #071326 100%);
             color: #fff;
-            padding: 20px;
+            padding: max(24px, env(safe-area-inset-top)) 20px
+              max(24px, env(safe-area-inset-bottom));
+          }
+          .wrap::before {
+            position: absolute;
+            z-index: -2;
+            top: -9vw;
+            right: -8vw;
+            width: clamp(300px, 57vw, 720px);
+            aspect-ratio: 1;
+            background: url("/rion-symbol-white.svg") center / contain no-repeat;
+            content: "";
+            opacity: 0.055;
+            transform: rotate(8deg);
+          }
+          .wrap::after {
+            position: absolute;
+            z-index: -1;
+            inset: 0;
+            background-image:
+              linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+              linear-gradient(
+                90deg,
+                rgba(255, 255, 255, 0.025) 1px,
+                transparent 1px
+              );
+            background-size: 48px 48px;
+            mask-image: linear-gradient(
+              to bottom,
+              rgba(0, 0, 0, 0.8),
+              transparent 78%
+            );
+            content: "";
           }
           .card {
+            position: relative;
             width: min(560px, 100%);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            background: rgba(255, 255, 255, 0.09);
-            backdrop-filter: blur(14px);
-            padding: 28px 22px;
+            overflow: hidden;
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: linear-gradient(
+              145deg,
+              rgba(255, 255, 255, 0.14),
+              rgba(255, 255, 255, 0.065)
+            );
+            box-shadow: 0 30px 80px rgba(2, 9, 22, 0.38);
+            backdrop-filter: blur(18px);
+            padding: clamp(28px, 6vw, 42px);
             display: grid;
-            gap: 14px;
+            gap: 12px;
+          }
+          .card::after {
+            position: absolute;
+            right: -80px;
+            bottom: -110px;
+            width: 260px;
+            height: 260px;
+            border: 1px solid rgba(124, 176, 255, 0.2);
+            border-radius: 50%;
+            box-shadow:
+              0 0 0 28px rgba(124, 176, 255, 0.035),
+              0 0 0 58px rgba(124, 176, 255, 0.025);
+            content: "";
+            pointer-events: none;
+          }
+          .eyebrow {
+            margin: 26px 0 -4px;
+            color: #9dc2ff;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
           }
           .title {
-            margin: 12px 0 0;
+            margin: 0;
             font-size: clamp(30px, 8vw, 44px);
-            font-weight: 900;
+            font-weight: 850;
+            line-height: 1.12;
+            letter-spacing: -0.045em;
           }
           .sub {
-            color: rgba(255, 255, 255, 0.9);
-            line-height: 1.6;
-            font-weight: 700;
+            margin: 0 0 14px;
+            color: rgba(255, 255, 255, 0.78);
+            font-size: 15px;
+            line-height: 1.5;
+            font-weight: 600;
           }
           .btnPrimary {
             border: 0;
@@ -304,9 +381,15 @@ function HomeStartInner() {
             min-height: 56px;
             padding: 14px;
             background: #fff;
-            color: #111827;
-            font-weight: 900;
+            color: #0f1f3d;
+            font-weight: 750;
+            font-size: 16px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            box-shadow: 0 14px 34px rgba(2, 9, 22, 0.26);
           }
           .btnGhost {
             border: 1px solid rgba(255, 255, 255, 0.4);
@@ -314,75 +397,69 @@ function HomeStartInner() {
             padding: 12px;
             background: transparent;
             color: #fff;
-            font-weight: 800;
+            font-weight: 650;
             cursor: pointer;
+            font-size: 14px;
           }
-          .scanPane {
-            position: fixed;
-            inset: 0;
-            z-index: 100;
-            background: #0b1220;
-            padding: calc(18px + env(safe-area-inset-top)) 16px
-              calc(18px + env(safe-area-inset-bottom));
-            display: grid;
-            gap: 8px;
-            align-content: center;
+          .btnPrimary,
+          .btnGhost {
+            position: relative;
+            z-index: 1;
           }
-          .video {
-            width: 100%;
-            border-radius: 10px;
-            background: #000;
-            aspect-ratio: 3 / 4;
-            object-fit: cover;
-            max-height: 72dvh;
-            max-width: 480px;
-            margin: 0 auto;
+          @media (max-width: 480px) {
+            .wrap {
+              place-items: center;
+              padding-inline: 16px;
+            }
+            .card {
+              border-radius: 24px;
+              padding: 28px 22px;
+            }
+            .eyebrow {
+              margin-top: 22px;
+            }
           }
           .err {
-            color: #fecaca;
-            font-weight: 800;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(190, 18, 60, 0.18);
+            color: #ffe4e6;
+            font-weight: 600;
             font-size: 13px;
             white-space: pre-line;
-          }
-          @media (min-width: 640px) {
-            .scanPane {
-              background: rgba(11, 18, 32, 0.94);
-            }
-            .video {
-              border: 1px solid rgba(255, 255, 255, 0.25);
-            }
           }
         `}</style>
         <section className="card">
           <CustomerBrand inverse />
-          <h1 className="title">QR로 주문을 시작하세요</h1>
-          <p className="sub">
-            테이블이나 카운터의 QR을 스캔하면 해당 매장의 주문 화면으로
-            연결됩니다.
-          </p>
+          <p className="eyebrow">REALIZE INNOVATION ON</p>
+          <h1 className="title">주문을 켜다.</h1>
+          <p className="sub">QR로 바로 시작하세요.</p>
           <button className="btnPrimary" onClick={startQrScanner}>
-            QR 스캔하고 주문하기
+            <CustomerIcon name="qr" size={21} /> QR 스캔하기
           </button>
           {scannerOpen ? (
-            <div className="scanPane">
-              <video ref={videoRef} className="video" muted playsInline />
-              <button className="btnGhost" onClick={stopScanner}>
-                {scanning ? "스캔 닫기" : "닫기"}
-              </button>
-            </div>
+            <CustomerQrScannerSheet
+              videoRef={videoRef}
+              scanning={scanning}
+              error={scanError}
+              onRetry={() => {
+                stopScanner();
+                void startQrScanner();
+              }}
+              onClose={stopScanner}
+            />
           ) : null}
-          {scanError ? <p className="err">{scanError}</p> : null}
           {!authLoading ? (
             authUserId ? (
               <button className="btnGhost" onClick={() => router.push("/me")}>
-                내 주문·혜택
+                내 주문과 혜택
               </button>
             ) : (
               <button
                 className="btnGhost"
                 onClick={() => router.push("/login?next=%2Fme")}
               >
-                로그인
+                로그인 · 내 주문 확인
               </button>
             )
           ) : (
@@ -407,13 +484,13 @@ function HomeStartInner() {
     <main className="wrap">
       <style jsx global>{`
         :root {
-          --bg: #f6f7f9;
+          --bg: #f3f5f8;
           --card: #ffffff;
-          --text: #111827;
-          --muted: #6b7280;
-          --line: #e5e7eb;
-          --brand: #111827;
-          --radius: 16px;
+          --text: #14213a;
+          --muted: #667085;
+          --line: #dfe4eb;
+          --brand: #0f1f3d;
+          --radius: 22px;
         }
         body {
           background: var(--bg);
@@ -434,7 +511,12 @@ function HomeStartInner() {
           min-height: 330px;
           max-height: 520px;
           overflow: hidden;
-          background: linear-gradient(135deg, #111827 0%, #374151 100%);
+          background: linear-gradient(
+            125deg,
+            #0c1b35 0%,
+            #132d59 60%,
+            #1d4b8f 100%
+          );
         }
 
         .heroImg {
@@ -457,7 +539,7 @@ function HomeStartInner() {
           align-content: end;
           gap: 10px;
           padding: 18px;
-          max-width: 560px;
+          max-width: 680px;
           margin: 0 auto;
         }
         .topActions {
@@ -472,7 +554,7 @@ function HomeStartInner() {
           border: 1px solid rgba(255, 255, 255, 0.35);
           background: rgba(17, 24, 39, 0.5);
           color: #fff;
-          font-weight: 900;
+          font-weight: 650;
           border-radius: 999px;
           padding: 6px 10px;
           font-size: 12px;
@@ -506,9 +588,9 @@ function HomeStartInner() {
         .storeName {
           margin: 0;
           color: #fff;
-          font-weight: 950;
-          font-size: 26px;
-          letter-spacing: -0.02em;
+          font-weight: 850;
+          font-size: clamp(28px, 7vw, 40px);
+          letter-spacing: -0.045em;
           line-height: 1.15;
         }
 
@@ -518,7 +600,7 @@ function HomeStartInner() {
           gap: 8px;
           margin-top: 2px;
           color: rgba(255, 255, 255, 0.85);
-          font-weight: 850;
+          font-weight: 650;
           font-size: 13px;
         }
 
@@ -531,21 +613,21 @@ function HomeStartInner() {
         }
 
         .content {
-          padding: 16px;
+          padding: 16px 16px 4px;
           display: grid;
           align-content: start;
         }
 
         .card {
-          max-width: 560px;
+          max-width: 680px;
           margin: 0 auto;
           width: 100%;
           background: var(--card);
           border: 1px solid var(--line);
           border-radius: var(--radius);
-          padding: 14px;
-          box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
-          transform: translateY(-14px);
+          padding: 22px;
+          box-shadow: var(--customer-shadow);
+          transform: translateY(-22px);
         }
 
         .desc {
@@ -554,11 +636,12 @@ function HomeStartInner() {
           color: var(--text);
           font-size: 15px;
           line-height: 1.55;
-          font-weight: 750;
+          font-weight: 500;
+          line-height: 1.65;
         }
 
         .ctaRow {
-          margin-top: 14px;
+          margin-top: 0;
           display: grid;
           gap: 10px;
         }
@@ -567,12 +650,18 @@ function HomeStartInner() {
           width: 100%;
           border: 0;
           border-radius: 14px;
-          padding: 16px 14px;
+          min-height: 56px;
+          padding: 14px;
           background: var(--brand);
           color: #fff;
-          font-weight: 950;
+          font-weight: 750;
           font-size: 16px;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          box-shadow: 0 10px 24px rgba(15, 31, 61, 0.2);
         }
         .btnPrimary:active {
           transform: translateY(1px);
@@ -585,7 +674,8 @@ function HomeStartInner() {
           border-radius: 14px;
           padding: 12px 14px;
           background: #fff;
-          font-weight: 900;
+          min-height: 50px;
+          font-weight: 700;
           cursor: pointer;
           color: var(--text);
         }
@@ -593,12 +683,19 @@ function HomeStartInner() {
           transform: translateY(1px);
         }
         .descDetails {
-          border: 1px dashed var(--line);
-          border-radius: 12px;
-          padding: 10px 12px;
-          background: #fafafa;
+          border: 0;
+          border-radius: 14px;
+          padding: 14px;
+          background: #f4f7fb;
           display: grid;
           gap: 6px;
+        }
+        .statusIntro {
+          margin: 4px 0 -2px;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 500;
+          text-align: center;
         }
         @media (max-width: 480px) {
           .hero {
@@ -639,7 +736,7 @@ function HomeStartInner() {
                     )
                   }
                 >
-                  내정보
+                  내 정보
                 </button>
                 <button
                   className="topBtn"
@@ -677,7 +774,7 @@ function HomeStartInner() {
               <h1 className="storeName">{STORE_NAME}</h1>
               <div className="tag">
                 <span className="tagDot" />
-                {table ? `테이블 ${table} 주문` : "카운터 주문"}
+                {table ? `매장 이용 · 테이블 ${table}` : "매장 주문"}
               </div>
             </div>
           </div>
@@ -688,7 +785,7 @@ function HomeStartInner() {
         <div className="card">
           <div className="ctaRow">
             <button className="btnPrimary" onClick={onStart}>
-              주문하기
+              <CustomerIcon name="orders" size={21} /> 주문 시작하기
             </button>
 
             <div className="descDetails">
@@ -697,9 +794,14 @@ function HomeStartInner() {
 
             {/* ✅ “주문 상태 확인” 버튼은 조건부로만 표시(ready 이후 숨김 포함) */}
             {showStatusButton ? (
-              <button className="btnGhost" onClick={onStatus}>
-                주문 상태 확인
-              </button>
+              <>
+                <p className="statusIntro">
+                  최근 주문의 준비 상태를 확인할 수 있어요.
+                </p>
+                <button className="btnGhost" onClick={onStatus}>
+                  주문 상태 확인하기
+                </button>
+              </>
             ) : null}
           </div>
         </div>
@@ -711,7 +813,14 @@ function HomeStartInner() {
 
 export default function HomeStartPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 16 }}>로딩중…</div>}>
+    <Suspense
+      fallback={
+        <CustomerLoadingState
+          title="주문 화면을 준비하고 있어요"
+          description="매장 정보를 안전하게 불러오고 있어요."
+        />
+      }
+    >
       <HomeStartInner />
     </Suspense>
   );
