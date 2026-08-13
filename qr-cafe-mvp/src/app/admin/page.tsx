@@ -718,10 +718,10 @@ function AdminPageInner() {
             ) : null}
           </div>
           <div className="setupBannerActions">
-            <button className="btn btnSetup btnSmall" onClick={goSetup}>
+            <button className="btn btnSetup btnSmall setupBannerPrimary" onClick={goSetup}>
               초기 설정 계속하기
             </button>
-            <button className="btn btnSmall" onClick={dismissSetupBanner}>
+            <button className="btn btnSmall setupBannerSecondary" onClick={dismissSetupBanner}>
               나중에 하기
             </button>
           </div>
@@ -868,7 +868,7 @@ function AdminPageInner() {
                         {on ? <div className="pill pillOn">선택</div> : null}
                         {on && selectedStoreShouldShowSetup ? (
                           <button
-                            className="btn btnSetup btnSmall"
+                            className="btn btnSetup btnSmall storeActionButton"
                             onClick={goSetup}
                           >
                             초기설정
@@ -876,7 +876,7 @@ function AdminPageInner() {
                         ) : null}
                         {on && !selectedStoreShouldShowSetup ? (
                           <button
-                            className="btn btnBilling btnSmall"
+                            className="btn btnBilling btnSmall storeActionButton"
                             onClick={() =>
                               router.push(
                                 `/admin/billing/pay?store=${encodeURIComponent(s.store_id)}`,
@@ -1370,6 +1370,21 @@ body {
   gap:8px;
   flex-wrap:wrap;
 }
+.setupBannerPrimary{
+  min-height:36px;
+  padding:7px 11px;
+  font-size:12px;
+  border-radius:9px;
+}
+.setupBannerSecondary{
+  min-height:34px;
+  padding:6px 9px;
+  border-color:transparent;
+  background:transparent;
+  color:#7c6547;
+  font-size:12px;
+  border-radius:9px;
+}
 .emptyBox{
   margin-top:12px;
   display:grid;
@@ -1560,6 +1575,15 @@ body {
   justify-content:flex-end;
   gap:6px;
   flex-wrap:wrap;
+}
+.storeActionButton{
+  min-height:34px;
+  padding:6px 9px;
+  border-radius:9px;
+  font-size:12px;
+  line-height:1;
+  box-shadow:none;
+  white-space:nowrap;
 }
 .pillOn{
   background:#dbeafe;
@@ -1818,7 +1842,7 @@ body {
     width:100%;
   }
   .setupBannerActions .btn{
-    flex:1 1 140px;
+    flex:0 1 auto;
   }
   .storeRow{
     display:flex;
@@ -1849,6 +1873,7 @@ body {
     font-size:11px;
   }
   .storeActions .btnSmall{
+    min-height:36px;
     padding:7px 9px;
     font-size:11px;
   }

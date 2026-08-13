@@ -1629,12 +1629,9 @@ function AdminstorePageInner() {
               </div>
             ) : null}
           </section>
-        </div>
-      </section>
 
-      <section className="advancedGrid" aria-label="매장 세부 설정">
-        <section className="card">
-          <h2 className="cardTitle">매장 추가 정보</h2>
+        <section className="card" aria-labelledby="store-business-info-title">
+          <h2 className="cardTitle" id="store-business-info-title">사업·운영 정보</h2>
 
           <div className="extraInfoGrid">
             <div className="field">
@@ -1827,6 +1824,7 @@ function AdminstorePageInner() {
             </div>
           </div>
         </section>
+        </div>
       </section>
 
       {isDirty ? (
