@@ -1812,6 +1812,12 @@ export default function OpsPage() {
           gap: 16px;
           align-items: start;
         }
+        .dashboardColumn {
+          min-width: 0;
+          display: grid;
+          gap: 16px;
+          align-content: start;
+        }
         .todoList {
           display: grid;
           gap: 10px;
@@ -2080,302 +2086,305 @@ export default function OpsPage() {
 
       {!loading && activeTab === "overview" ? (
         <section className="dashboardGrid">
-          <article className="card">
-            <div className="panelHeader">
-              <div>
-                <div className="sectionTitle">오늘 확인할 일</div>
-                <p>
-                  사업 운영에 바로 영향을 줄 수 있는 항목만 우선순위로
-                  정리했습니다.
-                </p>
-              </div>
-              <span className="pill warn">운영 체크</span>
-            </div>
-            <div className="todoList">
-              <div
-                className={`todoCard ${kpi.urgentTickets > 0 ? "danger" : kpi.openTickets > 0 ? "warn" : "ok"}`}
-              >
-                <div>
-                  <h3>문의/장애 대응</h3>
-                  <p>
-                    미처리 문의와 긴급 문의를 먼저 확인해 고객 불편을 줄입니다.
-                  </p>
-                </div>
-                <div className="row">
-                  <strong className="todoCount">
-                    {kpi.openTickets.toLocaleString()}건
-                  </strong>
-                  <button
-                    className="btn primary"
-                    onClick={() => setActiveTab("tickets")}
-                  >
-                    문의 확인
-                  </button>
-                </div>
-              </div>
-              <div
-                className={`todoCard ${paidNoOrderStores.length > 0 ? "warn" : "ok"}`}
-              >
-                <div>
-                  <h3>유료인데 주문 없는 매장</h3>
-                  <p>
-                    구독료를 내고 있지만 사용이 적은 매장입니다. 해지 위험을
-                    먼저 점검합니다.
-                  </p>
-                </div>
-                <div className="row">
-                  <strong className="todoCount">
-                    {paidNoOrderStores.length.toLocaleString()}개
-                  </strong>
-                  <button
-                    className="btn"
-                    onClick={() => setActiveTab("stores")}
-                  >
-                    매장 보기
-                  </button>
-                </div>
-              </div>
-              <div
-                className={`todoCard ${nonPaidActiveStores.length > 0 ? "ok" : ""}`}
-              >
-                <div>
-                  <h3>무료 사용 중 주문 발생</h3>
-                  <p>
-                    실제 주문이 있어 유료 전환 안내를 검토할 수 있는 후보입니다.
-                  </p>
-                </div>
-                <div className="row">
-                  <strong className="todoCount">
-                    {nonPaidActiveStores.length.toLocaleString()}개
-                  </strong>
-                  <button
-                    className="btn"
-                    onClick={() => setActiveTab("stores")}
-                  >
-                    전환 후보
-                  </button>
-                </div>
-              </div>
-              <div
-                className={`todoCard ${noPaymentPaidStores.length > 0 || kpi.expiringSoonStores > 0 ? "warn" : "ok"}`}
-              >
-                <div>
-                  <h3>구독/결제 점검</h3>
-                  <p>
-                    결제 없는 유료 매장과 만료 임박 매장을 확인해 매출 누락을
-                    방지합니다.
-                  </p>
-                </div>
-                <div className="row">
-                  <strong className="todoCount">
-                    {(
-                      noPaymentPaidStores.length + kpi.expiringSoonStores
-                    ).toLocaleString()}
-                    개
-                  </strong>
-                  <button
-                    className="btn"
-                    onClick={() => setActiveTab("stores")}
-                  >
-                    결제 확인
-                  </button>
-                </div>
-              </div>
-            </div>
-          </article>
+          <div className="dashboardColumn">
+            <article className="card">
+                        <div className="panelHeader">
+                          <div>
+                            <div className="sectionTitle">오늘 확인할 일</div>
+                            <p>
+                              사업 운영에 바로 영향을 줄 수 있는 항목만 우선순위로
+                              정리했습니다.
+                            </p>
+                          </div>
+                          <span className="pill warn">운영 체크</span>
+                        </div>
+                        <div className="todoList">
+                          <div
+                            className={`todoCard ${kpi.urgentTickets > 0 ? "danger" : kpi.openTickets > 0 ? "warn" : "ok"}`}
+                          >
+                            <div>
+                              <h3>문의/장애 대응</h3>
+                              <p>
+                                미처리 문의와 긴급 문의를 먼저 확인해 고객 불편을 줄입니다.
+                              </p>
+                            </div>
+                            <div className="row">
+                              <strong className="todoCount">
+                                {kpi.openTickets.toLocaleString()}건
+                              </strong>
+                              <button
+                                className="btn primary"
+                                onClick={() => setActiveTab("tickets")}
+                              >
+                                문의 확인
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            className={`todoCard ${paidNoOrderStores.length > 0 ? "warn" : "ok"}`}
+                          >
+                            <div>
+                              <h3>유료인데 주문 없는 매장</h3>
+                              <p>
+                                구독료를 내고 있지만 사용이 적은 매장입니다. 해지 위험을
+                                먼저 점검합니다.
+                              </p>
+                            </div>
+                            <div className="row">
+                              <strong className="todoCount">
+                                {paidNoOrderStores.length.toLocaleString()}개
+                              </strong>
+                              <button
+                                className="btn"
+                                onClick={() => setActiveTab("stores")}
+                              >
+                                매장 보기
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            className={`todoCard ${nonPaidActiveStores.length > 0 ? "ok" : ""}`}
+                          >
+                            <div>
+                              <h3>무료 사용 중 주문 발생</h3>
+                              <p>
+                                실제 주문이 있어 유료 전환 안내를 검토할 수 있는 후보입니다.
+                              </p>
+                            </div>
+                            <div className="row">
+                              <strong className="todoCount">
+                                {nonPaidActiveStores.length.toLocaleString()}개
+                              </strong>
+                              <button
+                                className="btn"
+                                onClick={() => setActiveTab("stores")}
+                              >
+                                전환 후보
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            className={`todoCard ${noPaymentPaidStores.length > 0 || kpi.expiringSoonStores > 0 ? "warn" : "ok"}`}
+                          >
+                            <div>
+                              <h3>구독/결제 점검</h3>
+                              <p>
+                                결제 없는 유료 매장과 만료 임박 매장을 확인해 매출 누락을
+                                방지합니다.
+                              </p>
+                            </div>
+                            <div className="row">
+                              <strong className="todoCount">
+                                {(
+                                  noPaymentPaidStores.length + kpi.expiringSoonStores
+                                ).toLocaleString()}
+                                개
+                              </strong>
+                              <button
+                                className="btn"
+                                onClick={() => setActiveTab("stores")}
+                              >
+                                결제 확인
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
 
-          <article className="card">
-            <div className="panelHeader">
-              <div>
-                <div className="sectionTitle">구독 사업 현황</div>
-                <p>
-                  매장 주문액이 아니라, 플랫폼 구독 사업을 판단하는 핵심
-                  지표입니다.
-                </p>
-              </div>
-            </div>
-            <div className="businessGrid">
-              <div className="businessMetric">
-                <span>가입 매장</span>
-                <strong>{kpi.totalStores.toLocaleString()}개</strong>
-              </div>
-              <div className="businessMetric">
-                <span>무료/비활성</span>
-                <strong>{freeOrInactiveStores.toLocaleString()}개</strong>
-              </div>
-              <div className="businessMetric">
-                <span>이번 달 주문</span>
-                <strong>{kpi.monthlyOrders.toLocaleString()}건</strong>
-              </div>
-              <div className="businessMetric">
-                <span>주문 발생 매장</span>
-                <strong>{kpi.orderActiveStores.toLocaleString()}개</strong>
-              </div>
-            </div>
-            <div className="noticeList" style={{ marginTop: 12 }}>
-              <div className="notice">
-                <span>오늘 주문</span>
-                <strong>{todayOrders.toLocaleString()}건</strong>
-              </div>
-              <div className="notice">
-                <span>이번 달 구독 매출</span>
-                <strong>{fmtMoney(kpi.monthlyRevenue)}</strong>
-              </div>
-              <div className="notice">
-                <span>매장당 평균 구독 매출</span>
-                <strong>{fmtMoney(arpu)}</strong>
-              </div>
-            </div>
-          </article>
+            <article className="card">
+                        <div className="sectionTitle">이탈 위험 매장</div>
+                        <div className="storeMiniList">
+                          {paidNoOrderStores.slice(0, 5).map((r) => (
+                            <div
+                              key={r.store_id}
+                              className="storeMini"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                setSelectedStoreId(r.store_id);
+                                setActiveTab("stores");
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  setSelectedStoreId(r.store_id);
+                                  setActiveTab("stores");
+                                }
+                              }}
+                            >
+                              <div className="row">
+                                <span className="pill warn">주문없음</span>
+                                <strong>{r.store_name || r.store_id}</strong>
+                              </div>
+                              <p className="muted">
+                                유료 구독 중이지만 이번 달 주문이 없어 사용 현황 확인이
+                                필요합니다.
+                              </p>
+                            </div>
+                          ))}
+                          {paidNoOrderStores.length === 0 ? (
+                            <p className="muted">
+                              현재 유료 구독 중 주문 없는 매장이 없습니다.
+                            </p>
+                          ) : null}
+                        </div>
+                      </article>
 
-          <article className="card">
-            <div className="sectionTitle">이탈 위험 매장</div>
-            <div className="storeMiniList">
-              {paidNoOrderStores.slice(0, 5).map((r) => (
-                <div
-                  key={r.store_id}
-                  className="storeMini"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setSelectedStoreId(r.store_id);
-                    setActiveTab("stores");
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setSelectedStoreId(r.store_id);
-                      setActiveTab("stores");
-                    }
-                  }}
-                >
-                  <div className="row">
-                    <span className="pill warn">주문없음</span>
-                    <strong>{r.store_name || r.store_id}</strong>
-                  </div>
-                  <p className="muted">
-                    유료 구독 중이지만 이번 달 주문이 없어 사용 현황 확인이
-                    필요합니다.
-                  </p>
-                </div>
-              ))}
-              {paidNoOrderStores.length === 0 ? (
-                <p className="muted">
-                  현재 유료 구독 중 주문 없는 매장이 없습니다.
-                </p>
-              ) : null}
-            </div>
-          </article>
+            <article className="card">
+                        <div className="sectionTitle">우선 점검 신호</div>
+                        <div className="storeMiniList">
+                          {riskStores.length === 0 ? (
+                            <p className="muted">현재 우선 점검할 위험 신호가 없습니다.</p>
+                          ) : null}
+                          {riskStores.map((r) => (
+                            <div
+                              key={r.store_id}
+                              className="storeMini"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                setSelectedStoreId(r.store_id);
+                                setActiveTab("stores");
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  setSelectedStoreId(r.store_id);
+                                  setActiveTab("stores");
+                                }
+                              }}
+                            >
+                              <div className="row">
+                                <span className="pill warn">{storeRiskLabel(r)}</span>
+                                <strong>{r.store_name || r.store_id}</strong>
+                              </div>
+                              <p className="muted">{storeInsight(r)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+          </div>
+          <div className="dashboardColumn">
+            <article className="card">
+                        <div className="panelHeader">
+                          <div>
+                            <div className="sectionTitle">구독 사업 현황</div>
+                            <p>
+                              매장 주문액이 아니라, 플랫폼 구독 사업을 판단하는 핵심
+                              지표입니다.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="businessGrid">
+                          <div className="businessMetric">
+                            <span>가입 매장</span>
+                            <strong>{kpi.totalStores.toLocaleString()}개</strong>
+                          </div>
+                          <div className="businessMetric">
+                            <span>무료/비활성</span>
+                            <strong>{freeOrInactiveStores.toLocaleString()}개</strong>
+                          </div>
+                          <div className="businessMetric">
+                            <span>이번 달 주문</span>
+                            <strong>{kpi.monthlyOrders.toLocaleString()}건</strong>
+                          </div>
+                          <div className="businessMetric">
+                            <span>주문 발생 매장</span>
+                            <strong>{kpi.orderActiveStores.toLocaleString()}개</strong>
+                          </div>
+                        </div>
+                        <div className="noticeList" style={{ marginTop: 12 }}>
+                          <div className="notice">
+                            <span>오늘 주문</span>
+                            <strong>{todayOrders.toLocaleString()}건</strong>
+                          </div>
+                          <div className="notice">
+                            <span>이번 달 구독 매출</span>
+                            <strong>{fmtMoney(kpi.monthlyRevenue)}</strong>
+                          </div>
+                          <div className="notice">
+                            <span>매장당 평균 구독 매출</span>
+                            <strong>{fmtMoney(arpu)}</strong>
+                          </div>
+                        </div>
+                      </article>
 
-          <article className="card">
-            <div className="sectionTitle">유료 전환 후보</div>
-            <div className="storeMiniList">
-              {nonPaidActiveStores.slice(0, 5).map((r) => (
-                <div
-                  key={r.store_id}
-                  className="storeMini"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setSelectedStoreId(r.store_id);
-                    setActiveTab("stores");
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setSelectedStoreId(r.store_id);
-                      setActiveTab("stores");
-                    }
-                  }}
-                >
-                  <div className="row">
-                    <span className="pill ok">전환 후보</span>
-                    <strong>{r.store_name || r.store_id}</strong>
-                  </div>
-                  <p className="muted">
-                    무료/비활성 상태에서 이번 달 주문{" "}
-                    {r.monthly_order_count.toLocaleString()}건이 발생했습니다.
-                  </p>
-                </div>
-              ))}
-              {nonPaidActiveStores.length === 0 ? (
-                <p className="muted">
-                  현재 주문이 발생한 무료/비활성 매장이 없습니다.
-                </p>
-              ) : null}
-            </div>
-          </article>
+            <article className="card">
+                        <div className="sectionTitle">유료 전환 후보</div>
+                        <div className="storeMiniList">
+                          {nonPaidActiveStores.slice(0, 5).map((r) => (
+                            <div
+                              key={r.store_id}
+                              className="storeMini"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                setSelectedStoreId(r.store_id);
+                                setActiveTab("stores");
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  setSelectedStoreId(r.store_id);
+                                  setActiveTab("stores");
+                                }
+                              }}
+                            >
+                              <div className="row">
+                                <span className="pill ok">전환 후보</span>
+                                <strong>{r.store_name || r.store_id}</strong>
+                              </div>
+                              <p className="muted">
+                                무료/비활성 상태에서 이번 달 주문{" "}
+                                {r.monthly_order_count.toLocaleString()}건이 발생했습니다.
+                              </p>
+                            </div>
+                          ))}
+                          {nonPaidActiveStores.length === 0 ? (
+                            <p className="muted">
+                              현재 주문이 발생한 무료/비활성 매장이 없습니다.
+                            </p>
+                          ) : null}
+                        </div>
+                      </article>
 
-          <article className="card">
-            <div className="sectionTitle">우선 점검 신호</div>
-            <div className="storeMiniList">
-              {riskStores.length === 0 ? (
-                <p className="muted">현재 우선 점검할 위험 신호가 없습니다.</p>
-              ) : null}
-              {riskStores.map((r) => (
-                <div
-                  key={r.store_id}
-                  className="storeMini"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setSelectedStoreId(r.store_id);
-                    setActiveTab("stores");
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setSelectedStoreId(r.store_id);
-                      setActiveTab("stores");
-                    }
-                  }}
-                >
-                  <div className="row">
-                    <span className="pill warn">{storeRiskLabel(r)}</span>
-                    <strong>{r.store_name || r.store_id}</strong>
-                  </div>
-                  <p className="muted">{storeInsight(r)}</p>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article className="card">
-            <div className="sectionTitle">최근 문의</div>
-            <div className="storeMiniList">
-              {recentTickets.map((t) => (
-                <div
-                  key={t.id}
-                  className="storeMini"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setSelectedTicketId(t.id);
-                    setActiveTab("tickets");
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setSelectedTicketId(t.id);
-                      setActiveTab("tickets");
-                    }
-                  }}
-                >
-                  <div className="row">
-                    <span
-                      className={`pill ${t.priority === "urgent" ? "danger" : ACTIVE_TICKET_STATUSES.has(t.status) ? "warn" : "ok"}`}
-                    >
-                      {ticketStatusLabel(t.status)}
-                    </span>
-                    <strong>{t.title}</strong>
-                  </div>
-                  <p className="muted">
-                    {t.store_id} · {ticketCategoryLabel(t.category)} ·{" "}
-                    {fmtDateTime(t.created_at)}
-                  </p>
-                </div>
-              ))}
-              {recentTickets.length === 0 ? (
-                <p className="muted">최근 문의가 없습니다.</p>
-              ) : null}
-            </div>
-          </article>
+            <article className="card">
+                        <div className="sectionTitle">최근 문의</div>
+                        <div className="storeMiniList">
+                          {recentTickets.map((t) => (
+                            <div
+                              key={t.id}
+                              className="storeMini"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                setSelectedTicketId(t.id);
+                                setActiveTab("tickets");
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  setSelectedTicketId(t.id);
+                                  setActiveTab("tickets");
+                                }
+                              }}
+                            >
+                              <div className="row">
+                                <span
+                                  className={`pill ${t.priority === "urgent" ? "danger" : ACTIVE_TICKET_STATUSES.has(t.status) ? "warn" : "ok"}`}
+                                >
+                                  {ticketStatusLabel(t.status)}
+                                </span>
+                                <strong>{t.title}</strong>
+                              </div>
+                              <p className="muted">
+                                {t.store_id} · {ticketCategoryLabel(t.category)} ·{" "}
+                                {fmtDateTime(t.created_at)}
+                              </p>
+                            </div>
+                          ))}
+                          {recentTickets.length === 0 ? (
+                            <p className="muted">최근 문의가 없습니다.</p>
+                          ) : null}
+                        </div>
+                      </article>
+          </div>
         </section>
       ) : null}
 

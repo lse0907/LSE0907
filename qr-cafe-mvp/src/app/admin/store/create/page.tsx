@@ -313,7 +313,7 @@ export default function AdminStoreCreatePage() {
 
         .grid {
           display: grid;
-          grid-template-columns: 1.1fr 1fr;
+          grid-template-columns: minmax(300px, 0.85fr) minmax(430px, 1.15fr);
           gap: 12px;
           align-items: start;
         }
@@ -487,11 +487,19 @@ export default function AdminStoreCreatePage() {
           justify-content: space-between;
           gap: 12px;
           flex-wrap: wrap;
+          padding: 9px 12px;
+          border-radius: 14px;
+          box-shadow: none;
         }
 
         .createActionText {
           display: grid;
           gap: 4px;
+        }
+
+        .createActionCard .btn {
+          min-height: 36px;
+          padding: 7px 13px;
         }
 
         .range {
@@ -620,7 +628,7 @@ export default function AdminStoreCreatePage() {
           gap: 10px;
         }
 
-        @media (max-width: 860px) {
+        @media (max-width: 1040px) {
           .grid {
             grid-template-columns: 1fr;
           }
@@ -928,12 +936,9 @@ export default function AdminStoreCreatePage() {
               />
             </div>
           </section>
-        </div>
-      </section>
 
-      <section className="advancedGrid" aria-label="매장 세부 정보">
-        <section className="card">
-          <h2 className="cardTitle">매장 추가 정보</h2>
+          <section className="card" aria-labelledby="store-create-business-title">
+          <h2 className="cardTitle" id="store-create-business-title">사업·운영 정보</h2>
 
           <div className="extraInfoGrid">
             <div className="field">
@@ -985,14 +990,13 @@ export default function AdminStoreCreatePage() {
             </div>
           </div>
         </section>
+        </div>
+      </section>
 
+      <section className="advancedGrid" aria-label="매장 생성">
         <section className="card createActionCard">
           <div className="createActionText">
-            <h2 className="cardTitle">매장 생성</h2>
-            <p className="hint">
-              필수 정보를 확인한 뒤 매장을 생성하면 초기 설정 화면으로
-              이동합니다.
-            </p>
+            <p className="hint">필수 정보를 확인한 후 매장을 생성하세요.</p>
           </div>
           <button
             className="btn btnPrimary"
