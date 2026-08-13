@@ -313,7 +313,7 @@ export default function AdminStoreCreatePage() {
 
         .grid {
           display: grid;
-          grid-template-columns: 1.1fr 1fr;
+          grid-template-columns: minmax(300px, 0.85fr) minmax(430px, 1.15fr);
           gap: 12px;
           align-items: start;
         }
@@ -620,7 +620,7 @@ export default function AdminStoreCreatePage() {
           gap: 10px;
         }
 
-        @media (max-width: 860px) {
+        @media (max-width: 1040px) {
           .grid {
             grid-template-columns: 1fr;
           }
