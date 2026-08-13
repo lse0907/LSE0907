@@ -487,11 +487,19 @@ export default function AdminStoreCreatePage() {
           justify-content: space-between;
           gap: 12px;
           flex-wrap: wrap;
+          padding: 9px 12px;
+          border-radius: 14px;
+          box-shadow: none;
         }
 
         .createActionText {
           display: grid;
           gap: 4px;
+        }
+
+        .createActionCard .btn {
+          min-height: 36px;
+          padding: 7px 13px;
         }
 
         .range {
@@ -988,11 +996,7 @@ export default function AdminStoreCreatePage() {
       <section className="advancedGrid" aria-label="매장 생성">
         <section className="card createActionCard">
           <div className="createActionText">
-            <h2 className="cardTitle">매장 생성</h2>
-            <p className="hint">
-              필수 정보를 확인한 뒤 매장을 생성하면 초기 설정 화면으로
-              이동합니다.
-            </p>
+            <p className="hint">필수 정보를 확인한 후 매장을 생성하세요.</p>
           </div>
           <button
             className="btn btnPrimary"

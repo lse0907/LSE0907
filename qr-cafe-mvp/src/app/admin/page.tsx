@@ -1363,10 +1363,13 @@ body {
   padding:16px 18px;
   display:flex;
   justify-content:space-between;
+  align-items:center;
   gap:12px;
 }
 .setupBannerActions{
   display:flex;
+  align-items:center;
+  align-self:center;
   gap:8px;
   flex-wrap:wrap;
 }
@@ -1520,9 +1523,9 @@ body {
 .setupBannerActions .setupBannerSecondary{
   min-height:30px;
   padding:4px 7px;
-  border-color:transparent;
-  background:transparent;
-  color:#7c6547;
+  border-color:var(--line);
+  background:#fff;
+  color:var(--text);
   border-radius:8px;
   font-size:11px;
   line-height:1;
@@ -1857,6 +1860,8 @@ body {
   }
   .setupBannerActions{
     width:100%;
+    align-self:stretch;
+    justify-content:flex-start;
   }
   .setupBannerActions .btn{
     flex:0 1 auto;
