@@ -927,6 +927,12 @@ function StaffPageInner() {
 
   const selected = useMemo(() => orders.find((o) => o.id === selectedId) || null, [orders, selectedId]);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; displayNo: string; status: OrderStatus } | null>(null);
+  const [stationDetailOrderId, setStationDetailOrderId] = useState<string | null>(null);
+  const [cancelReturnOrderId, setCancelReturnOrderId] = useState<string | null>(null);
+  const stationDetailOrder = useMemo(
+    () => orders.find((order) => order.id === stationDetailOrderId) || null,
+    [orders, stationDetailOrderId]
+  );
 
   const moveToOrderCheckTab = () => {
     if (staffViewMode === "station") setStationTab("order");
@@ -1061,12 +1067,23 @@ function StaffPageInner() {
     setMobileView("detail");
   };
 
+  const openStationOrderDetail = (id: string) => {
+    setSelectedId(id);
+    setStationDetailOrderId(id);
+  };
+
+  const closeStationOrderDetail = () => {
+    setStationDetailOrderId(null);
+  };
+
   const cancelRequiresManagerPin = (order: OrderRecord) =>
     loginRole === "staff" && !(order.status === "new" || order.status === "checked");
 
   const openCancelModal = (order: OrderRecord) => {
     if (!requireWorkerPin()) return;
     const needsManagerPin = cancelRequiresManagerPin(order);
+    setCancelReturnOrderId(stationDetailOrderId === order.id ? order.id : null);
+    setStationDetailOrderId(null);
     setCancelTarget({ id: order.id, displayNo: order.displayNo, status: order.status });
     setCancelNeedsManagerPin(needsManagerPin);
     setCancelMsg("");
@@ -1074,6 +1091,8 @@ function StaffPageInner() {
 
   const closeCancelModal = () => {
     setCancelTarget(null);
+    setStationDetailOrderId(cancelReturnOrderId);
+    setCancelReturnOrderId(null);
     setCancelReason("고객 요청");
     setManagerPinForCancel("");
     setCancelNeedsManagerPin(false);
@@ -1124,7 +1143,13 @@ function StaffPageInner() {
       setOrders((prev) =>
         prev.map((o) => (o.id === id ? { ...o, status: "cancelled" } : o))
       );
-      closeCancelModal();
+      setCancelTarget(null);
+      setCancelReturnOrderId(null);
+      setStationDetailOrderId(null);
+      setCancelReason("고객 요청");
+      setManagerPinForCancel("");
+      setCancelNeedsManagerPin(false);
+      setCancelMsg("");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setCancelMsg(`취소 실패: ${msg}`);
@@ -1166,7 +1191,7 @@ function StaffPageInner() {
       optionSig: string;
       qty: number;
       itemIds: string[];
-      orderNos: string[];
+      orders: Array<{ id: string; displayNo: string }>;
       optionLabel: string;
       categoryName: string;
       categoryOrder: number;
@@ -1202,7 +1227,7 @@ function StaffPageInner() {
           optionSig: optSig,
           qty: 0,
           itemIds: [],
-          orderNos: [],
+          orders: [],
           optionLabel,
           categoryName: it.categoryName || "미분류",
           categoryOrder: Number.isFinite(Number(it.categoryOrder)) ? Number(it.categoryOrder) : 9999,
@@ -1212,7 +1237,9 @@ function StaffPageInner() {
       const g = grouped.get(key)!;
       g.qty += Number(it.qty || 0);
       g.itemIds.push(it.id);
-      if (it.displayNo && !g.orderNos.includes(it.displayNo)) g.orderNos.push(it.displayNo);
+      if (it.displayNo && !g.orders.some((order) => order.id === it.orderId)) {
+        g.orders.push({ id: it.orderId, displayNo: it.displayNo });
+      }
     }
 
     return [...grouped.values()].sort((a, b) => {
@@ -2327,6 +2354,69 @@ function StaffPageInner() {
           box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
           display: grid;
           gap: 12px;
+        }
+
+        .stationOrderLinks {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .stationOrderButtons,
+        .readyHeaderActions {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+
+        .stationOrderButton {
+          min-height: 36px;
+          padding: 7px 11px;
+          border: 1px solid var(--action-line);
+          border-radius: 10px;
+          background: var(--action-soft);
+          color: var(--action-active);
+          font: inherit;
+          font-size: 13px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .stationDetailModal {
+          width: min(900px, 100%);
+          max-height: min(88vh, 900px);
+          padding: 0;
+          overflow: hidden;
+          gap: 0;
+        }
+
+        .stationDetailHeader,
+        .stationDetailFooter {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 18px 22px;
+          background: #fff;
+        }
+
+        .stationDetailHeader { border-bottom: 1px solid var(--line); }
+        .stationDetailFooter { border-top: 1px solid var(--line); justify-content: flex-end; }
+        .stationDetailBody { padding: 20px 22px; overflow-y: auto; display: grid; gap: 14px; }
+        .stationDetailSummary { display: flex; gap: 8px; flex-wrap: wrap; }
+        .stationDetailItems { display: grid; gap: 8px; }
+        .stationDetailItem { padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+        .stationDetailClose { min-width: 44px; min-height: 44px; }
+
+        @media (max-width: 640px) {
+          .stationDetailBackdrop { padding: 0; }
+          .stationDetailModal { width: 100%; height: 100%; max-height: none; border: 0; border-radius: 0; }
+          .stationDetailHeader, .stationDetailFooter { padding: 14px 16px; }
+          .stationDetailBody { padding: 16px; }
+          .stationDetailFooter .actionBtn { min-height: 50px; }
+          .readyHeaderActions { justify-content: flex-end; }
         }
 
         .modalTitle {
@@ -3530,8 +3620,22 @@ function StaffPageInner() {
                               <span className="muted" style={{ fontWeight: 800 }}>대기</span>
                             )}
                           </div>
-                          <div className="muted">
-                            {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
+                          <div className="stationOrderLinks">
+                            {g.batch > 0 ? <span className="muted">제조 순번 #{g.batch}</span> : null}
+                            <span className="muted">포함 주문</span>
+                            <div className="stationOrderButtons">
+                              {g.orders.map((order) => (
+                                <button
+                                  key={`${g.key}_${order.id}`}
+                                  type="button"
+                                  className="stationOrderButton"
+                                  onClick={() => openStationOrderDetail(order.id)}
+                                  aria-label={`주문번호 ${order.displayNo} 상세 보기`}
+                                >
+                                  {order.displayNo}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                           {g.optionLabel ? <div className="muted">옵션: {g.optionLabel}</div> : null}
                         </div>
@@ -3569,10 +3673,19 @@ function StaffPageInner() {
                   const canCompleteOrder = allItemsDone && allDoneChecked;
 
                   return (
-                    <div key={`ready_${o.id}`} className="itemBtn" style={{ cursor: "default" }}>
-                      <div className="rowBetween">
-                        <div className="bigNo">주문번호 {o.displayNo}</div>
-                        <span className="badge">준비 확인 {checkedCount}/{doneItems.length}</span>
+                      <div key={`ready_${o.id}`} className="itemBtn" style={{ cursor: "default" }}>
+                        <div className="rowBetween">
+                          <div className="bigNo">주문번호 {o.displayNo}</div>
+                          <div className="readyHeaderActions">
+                            <span className="badge">준비 확인 {checkedCount}/{doneItems.length}</span>
+                            <button
+                              type="button"
+                              className="stationOrderButton"
+                              onClick={() => openStationOrderDetail(o.id)}
+                            >
+                              주문 상세
+                            </button>
+                          </div>
                       </div>
 
                       <div className="muted" style={{ marginTop: 8 }}>
@@ -3618,7 +3731,7 @@ function StaffPageInner() {
                                     style={checked ? { minWidth: 60, borderColor: "var(--danger-line)", color: "var(--danger)" } : { minWidth: 60 }}
                                     onClick={() => togglePackingChecks(o, !checked, it.id)}
                                   >
-                                    {checked ? "취소" : "확인"}
+                                    {checked ? "확인 해제" : "확인"}
                                   </button>
                                 ) : (
                                   <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
@@ -3779,7 +3892,7 @@ function StaffPageInner() {
                         </span>
                       </div>
                       <div className="muted" style={{ marginTop: 6 }}>
-                        {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orderNos.join(", ")}
+                        {g.batch > 0 ? `제조 순번 #${g.batch} · ` : ""}주문번호 {g.orders.map((order) => order.displayNo).join(", ")}
                       </div>
                     </div>
                   ))}
@@ -4083,6 +4196,86 @@ function StaffPageInner() {
           >
             주문 취소
           </button>
+        </div>
+      ) : null}
+
+      {stationDetailOrder ? (
+        <div
+          className="modalBackdrop stationDetailBackdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeStationOrderDetail();
+          }}
+        >
+          <section
+            className="modalCard stationDetailModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="station-detail-title"
+          >
+            <header className="stationDetailHeader">
+              <div>
+                <p className="pageEyebrow">ORDER DETAIL</p>
+                <h3 id="station-detail-title" className="modalTitle">주문번호 {stationDetailOrder.displayNo}</h3>
+              </div>
+              <button type="button" className="btn stationDetailClose" onClick={closeStationOrderDetail} aria-label="주문 상세 닫기">닫기</button>
+            </header>
+
+            <div className="stationDetailBody">
+              <div className="stationDetailSummary">
+                <span className={`badge ${badgeClassByStatus(stationDetailOrder.status)}`}>{STATUS_LABEL[stationDetailOrder.status]}</span>
+                <span className="badge">{stationDetailOrder.mode === "dine-in" ? `매장 · 테이블 ${stationDetailOrder.table ?? "-"}` : "포장 주문"}</span>
+                <span className="badge">결제 {PAYMENT_LABEL[stationDetailOrder.paymentStatus]}</span>
+                <span className="badge">주문 {formatTime(stationDetailOrder.createdAt)}</span>
+              </div>
+
+              <div className="detailBox">
+                <div className="rowBetween"><span>총 수량</span><b>{stationDetailOrder.totalCount}개</b></div>
+                <div className="rowBetween" style={{ marginTop: 8 }}><span>총 금액</span><b>{fmt(stationDetailOrder.totalPrice)}원</b></div>
+              </div>
+
+              <div className="section" style={{ marginTop: 0 }}>
+                <h4 className="sectionTitleSm">요청사항</h4>
+                <div className="detailBox" style={{ color: stationDetailOrder.requestNote ? "var(--text)" : "var(--muted)" }}>
+                  {stationDetailOrder.requestNote || "요청사항 없음"}
+                </div>
+              </div>
+
+              <div className="section" style={{ marginTop: 0 }}>
+                <h4 className="sectionTitle">주문 내역</h4>
+                <div className="stationDetailItems">
+                  {stationDetailOrder.items.map((item, index) => {
+                    const optionText = buildOptionText(item);
+                    const unitPrice = Number(item.price || 0) + Number(item.optionTotal || 0);
+                    const linePrice = Number.isFinite(Number(item.lineTotal)) && item.lineTotal !== undefined
+                      ? Number(item.lineTotal)
+                      : unitPrice * Number(item.qty || 0);
+                    return (
+                      <div key={`station_detail_${item.id}_${index}`} className="stationDetailItem">
+                        <div className="rowBetween">
+                          <b>{item.name} × {item.qty}</b>
+                          <b>{fmt(linePrice)}원</b>
+                        </div>
+                        {optionText ? <div className="muted" style={{ marginTop: 6 }}>옵션: {optionText}</div> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <footer className="stationDetailFooter">
+              <button type="button" className="btn" onClick={closeStationOrderDetail}>닫기</button>
+              <button
+                type="button"
+                className="actionBtn actionCancel"
+                onClick={() => openCancelModal(stationDetailOrder)}
+                disabled={stationDetailOrder.status === "completed" || stationDetailOrder.status === "cancelled"}
+              >
+                주문 취소
+              </button>
+            </footer>
+          </section>
         </div>
       ) : null}
 
