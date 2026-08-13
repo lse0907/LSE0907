@@ -2384,6 +2384,15 @@ function StaffPageInner() {
           cursor: pointer;
         }
 
+        .stationCancelGuide {
+          margin: 4px 0 12px;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 500;
+          line-height: 1.5;
+          word-break: keep-all;
+        }
+
         .stationDetailModal {
           width: min(900px, 100%);
           max-height: min(88vh, 900px);
@@ -3569,6 +3578,14 @@ function StaffPageInner() {
               ) : null}
             </div>
           </div>
+
+          {staffViewMode === "station" && (stationTab === "make" || stationTab === "ready") ? (
+            <p className="stationCancelGuide">
+              {stationTab === "make"
+                ? "취소 요청은 포함 주문번호를 눌러 주문 상세에서 처리할 수 있습니다."
+                : "취소 요청은 해당 주문의 주문 상세에서 처리할 수 있습니다."}
+            </p>
+          ) : null}
 
           {!storeId ? (
             <p className="muted">매장이 선택되지 않았습니다. 관리자에서 매장을 선택하고 다시 들어와 주세요.</p>
