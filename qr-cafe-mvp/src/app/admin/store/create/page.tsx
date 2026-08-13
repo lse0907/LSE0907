@@ -928,12 +928,9 @@ export default function AdminStoreCreatePage() {
               />
             </div>
           </section>
-        </div>
-      </section>
 
-      <section className="advancedGrid" aria-label="매장 세부 정보">
-        <section className="card">
-          <h2 className="cardTitle">매장 추가 정보</h2>
+          <section className="card" aria-labelledby="store-create-business-title">
+          <h2 className="cardTitle" id="store-create-business-title">사업·운영 정보</h2>
 
           <div className="extraInfoGrid">
             <div className="field">
@@ -985,7 +982,10 @@ export default function AdminStoreCreatePage() {
             </div>
           </div>
         </section>
+        </div>
+      </section>
 
+      <section className="advancedGrid" aria-label="매장 생성">
         <section className="card createActionCard">
           <div className="createActionText">
             <h2 className="cardTitle">매장 생성</h2>
