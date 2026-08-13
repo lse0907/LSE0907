@@ -481,15 +481,15 @@ export default function AdminStoreCreatePage() {
           white-space: nowrap;
         }
 
-        .createActionCard {
+        .createInlineAction {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
           flex-wrap: wrap;
-          padding: 9px 12px;
-          border-radius: 14px;
-          box-shadow: none;
+          margin-top: 14px;
+          padding-top: 12px;
+          border-top: 1px solid var(--line);
         }
 
         .createActionText {
@@ -497,7 +497,7 @@ export default function AdminStoreCreatePage() {
           gap: 4px;
         }
 
-        .createActionCard .btn {
+        .createInlineAction .btn {
           min-height: 36px;
           padding: 7px 13px;
         }
@@ -667,10 +667,10 @@ export default function AdminStoreCreatePage() {
             align-items: stretch;
           }
           .addressSearchBtn,
-          .createActionCard .btn {
+          .createInlineAction .btn {
             width: 100%;
           }
-          .createActionCard {
+          .createInlineAction {
             align-items: stretch;
           }
           .hero {
@@ -757,7 +757,7 @@ export default function AdminStoreCreatePage() {
                   대표 이미지 업로드
                   <span className="pill">선택</span>
                 </div>
-                <input
+            <input
                   className="input"
                   type="file"
                   accept="image/*"
@@ -985,27 +985,24 @@ export default function AdminStoreCreatePage() {
                 className="input"
                 value={sns}
                 onChange={(e) => setSns(e.target.value)}
-                placeholder="예: instagram.com/..."
-              />
+              placeholder="예: instagram.com/..."
+            />
+          </div>
+          </div>
+          <div className="createInlineAction" aria-label="매장 생성">
+            <div className="createActionText">
+              <p className="hint">필수 정보를 확인해 주세요.</p>
             </div>
+            <button
+              className="btn btnPrimary"
+              onClick={onCreate}
+              disabled={creating}
+            >
+              {creating ? "생성 중..." : "매장 생성"}
+            </button>
           </div>
         </section>
         </div>
-      </section>
-
-      <section className="advancedGrid" aria-label="매장 생성">
-        <section className="card createActionCard">
-          <div className="createActionText">
-            <p className="hint">필수 정보를 확인한 후 매장을 생성하세요.</p>
-          </div>
-          <button
-            className="btn btnPrimary"
-            onClick={onCreate}
-            disabled={creating}
-          >
-            {creating ? "생성 중..." : "매장 생성"}
-          </button>
-        </section>
       </section>
 
       {showAddr ? (

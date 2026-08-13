@@ -680,11 +680,7 @@ function AdminstorePageInner() {
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          margin-top: 10px;
-          padding: 10px 12px;
-          border: 1px solid #dbeafe;
-          border-radius: 14px;
-          background: #f8fbff;
+          margin-top: 12px;
         }
         .operationText {
           display: grid;
@@ -731,11 +727,24 @@ function AdminstorePageInner() {
           -webkit-text-fill-color: #fff;
         }
         .deleteBlock {
-          margin-top: 12px;
-          padding-top: 12px;
+          margin-top: 10px;
+          padding-top: 10px;
           border-top: 1px dashed var(--line);
           display: grid;
           gap: 8px;
+        }
+        .statusActionRow {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 12px;
+        }
+        .deleteSummaryRow {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
         }
         .deleteHead {
           display: flex;
@@ -1716,19 +1725,19 @@ function AdminstorePageInner() {
 
         <section className="card" aria-labelledby="store-status-management-title">
           <h2 className="cardTitle" id="store-status-management-title">매장 상태 관리</h2>
-          <div className="operationText" style={{ marginTop: 12 }}>
-            <span className="operationTitle">
-              {storeStatus === "inactive" ? "운영 중단" : storeStatus === "deleted" ? "삭제됨" : "운영 중"}
-            </span>
-            <span className="operationDesc">
-              {storeStatus === "inactive"
-                ? "현재 주문을 받고 있지 않습니다."
-                : storeStatus === "deleted"
-                  ? "이 매장은 더 이상 운영할 수 없습니다."
-                  : "주문 접수를 잠시 중단할 수 있습니다."}
-            </span>
-          </div>
-          <div className="operationStrip">
+          <div className="statusActionRow">
+            <div className="operationText">
+              <span className="operationTitle">
+                {storeStatus === "inactive" ? "운영 중단" : storeStatus === "deleted" ? "삭제됨" : "운영 중"}
+              </span>
+              <span className="operationDesc">
+                {storeStatus === "inactive"
+                  ? "현재 주문을 받고 있지 않습니다."
+                  : storeStatus === "deleted"
+                    ? "더 이상 운영할 수 없는 매장입니다."
+                    : "현재 주문을 받고 있습니다."}
+              </span>
+            </div>
             {storeStatus === "deleted" ? (
               <button className="btn btnMuted btnCompact" type="button" disabled>삭제됨</button>
             ) : storeStatus === "inactive" ? (
@@ -1738,9 +1747,25 @@ function AdminstorePageInner() {
             )}
           </div>
           <div className="deleteBlock">
-            <div className="deleteHead">
-              <span className="deleteTitle">매장 삭제</span>
-              <span className="warningBadge">주의</span>
+            <div className="deleteSummaryRow">
+              <div>
+                <div className="deleteHead">
+                  <span className="deleteTitle">매장 삭제</span>
+                  <span className="warningBadge">주의</span>
+                </div>
+                {deleteEligibilityLoading ? (
+                  <div className="deleteState">삭제 가능 여부 확인 중…</div>
+                ) : deleteEligibilityError ? (
+                  <div className="deleteState deleteStateWarn">삭제 가능 여부를 확인하지 못했습니다.</div>
+                ) : deleteEligibility?.canDelete ? (
+                  <div className="deleteState deleteStateOk">이용 내역이 없습니다.</div>
+                ) : (
+                  <div className="deleteState">이용 내역이 있어 삭제할 수 없습니다.</div>
+                )}
+              </div>
+              {deleteEligibility?.canDelete ? (
+                <button className="btn btnDanger btnCompact" type="button" onClick={openDeleteModal} disabled={deleteSaving || storeStatus === "deleted"}>매장 삭제</button>
+              ) : null}
             </div>
             <div className="deleteMessage">이용 내역이 없는 매장만 삭제할 수 있습니다.</div>
             {deleteEligibilityLoading ? (
