@@ -603,7 +603,7 @@ function AdminstorePageInner() {
 
         .grid {
           display: grid;
-          grid-template-columns: minmax(320px, 0.95fr) minmax(400px, 1.05fr);
+          grid-template-columns: minmax(320px, 0.9fr) minmax(440px, 1.1fr);
           gap: 12px;
           align-items: start;
         }
@@ -1089,17 +1089,6 @@ function AdminstorePageInner() {
           gap: 10px;
         }
 
-        @media (min-width: 981px) {
-          .grid {
-            align-items: stretch;
-          }
-
-          .formStack,
-          .formStack > .card {
-            height: 100%;
-          }
-        }
-
         @media (max-width: 980px) {
           .grid,
           .advancedGrid {
@@ -1510,202 +1499,7 @@ function AdminstorePageInner() {
               </div>
             </div>
           </section>
-        </div>
 
-        <div
-          className="formStack"
-          role="group"
-          aria-label="매장 기본 및 추가 정보"
-        >
-          <section className="card" aria-labelledby="store-basic-info-title">
-            <div className="basicHead">
-              <div>
-                <h2 className="cardTitle">기본 정보</h2>
-              </div>
-              <span
-                className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}
-              >
-                {getStatusLabel(storeStatus)}
-              </span>
-            </div>
-
-            <div className="inlineGrid">
-              <div className="field">
-                <div className="label">매장명</div>
-                <input
-                  className="input"
-                  value={(draft as any).storeName}
-                  onChange={(e) =>
-                    setDraft((p: any) => ({ ...p, storeName: e.target.value }))
-                  }
-                  placeholder="예: XIMEN 순천점"
-                />
-              </div>
-              <div className="field">
-                <div className="label">
-                  매장 ID <span className="pill">수정 불가</span>
-                </div>
-                <input
-                  className="input"
-                  value={storeId}
-                  disabled
-                  placeholder="예: ximen"
-                />
-              </div>
-            </div>
-
-            <div className="field">
-              <div className="label">매장 설명</div>
-              <textarea
-                className="textarea"
-                value={(draft as any).storeDesc}
-                onChange={(e) =>
-                  setDraft((p: any) => ({ ...p, storeDesc: e.target.value }))
-                }
-                placeholder="예) QR로 간편하게 주문하고 기다리세요..."
-              />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                매장 전화번호 <span className="pill">필수</span>
-              </div>
-              <input
-                className="input"
-                value={(draft as any)?.extra?.phone || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), phone: e.target.value },
-                  }))
-                }
-                placeholder="예: 010-0000-0000"
-              />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                매장 주소 <span className="pill">필수</span>
-              </div>
-              <div className="addressRow">
-                <input
-                  className="input"
-                  value={(draft as any)?.extra?.address || ""}
-                  readOnly
-                  placeholder="주소 검색으로 입력"
-                />
-                <button
-                  type="button"
-                  className="btn addressSearchBtn"
-                  onClick={openAddressSearch}
-                >
-                  주소 검색
-                </button>
-              </div>
-              <div className="label" style={{ marginTop: 8 }}>
-                상세 주소 <span className="pill">선택</span>
-              </div>
-              <input
-                id="storeAddressDetailInput"
-                className="input"
-                value={(draft as any)?.extra?.addressDetail || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: {
-                      ...(p?.extra || {}),
-                      addressDetail: e.target.value,
-                    },
-                  }))
-                }
-                placeholder="예: 101동 1203호"
-                style={{ marginTop: 8 }}
-              />
-            </div>
-
-            {lastSavedAt ? (
-              <div className="hint">
-                마지막 저장: {new Date(lastSavedAt).toLocaleString()}
-              </div>
-            ) : null}
-          </section>
-        </div>
-      </section>
-
-      <section className="advancedGrid" aria-label="매장 세부 설정">
-        <section className="card">
-          <h2 className="cardTitle">매장 추가 정보</h2>
-
-          <div className="extraInfoGrid">
-            <div className="field">
-              <div className="label">
-                사업자등록번호 <span className="pill">필수</span>
-              </div>
-              <input
-                className="input"
-                value={(draft as any)?.extra?.bizNo || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), bizNo: e.target.value },
-                  }))
-                }
-                placeholder="예: 000-00-00000"
-              />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                업종 <span className="pill">필수</span>
-              </div>
-              <input
-                className="input"
-                value={(draft as any)?.extra?.industry || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), industry: e.target.value },
-                  }))
-                }
-                placeholder="예: 카페, 음식점"
-              />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                영업시간 <span className="pill">필수</span>
-              </div>
-              <input
-                className="input"
-                value={(draft as any)?.extra?.hours || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), hours: e.target.value },
-                  }))
-                }
-                placeholder="예: 10:00 ~ 22:00"
-              />
-            </div>
-
-            <div className="field">
-              <div className="label">
-                SNS 링크 <span className="pill">선택</span>
-              </div>
-              <input
-                className="input"
-                value={(draft as any)?.extra?.sns || ""}
-                onChange={(e) =>
-                  setDraft((p: any) => ({
-                    ...p,
-                    extra: { ...(p?.extra || {}), sns: e.target.value },
-                  }))
-                }
-                placeholder="예: instagram.com/..."
-              />
-            </div>
-          </div>
-        </section>
         <section className="card">
           <h2 className="cardTitle">운영 관리</h2>
 
@@ -1827,6 +1621,201 @@ function AdminstorePageInner() {
             </div>
           </div>
         </section>
+        </div>
+
+        <div
+          className="formStack"
+          role="group"
+          aria-label="매장 기본 및 추가 정보"
+        >
+          <section className="card" aria-labelledby="store-basic-info-title">
+            <div className="basicHead">
+              <div>
+                <h2 className="cardTitle">기본 정보</h2>
+              </div>
+              <span
+                className={`statusBadge ${storeStatus !== "active" ? "statusBadgeInactive" : ""}`.trim()}
+              >
+                {getStatusLabel(storeStatus)}
+              </span>
+            </div>
+
+            <div className="inlineGrid">
+              <div className="field">
+                <div className="label">매장명</div>
+                <input
+                  className="input"
+                  value={(draft as any).storeName}
+                  onChange={(e) =>
+                    setDraft((p: any) => ({ ...p, storeName: e.target.value }))
+                  }
+                  placeholder="예: XIMEN 순천점"
+                />
+              </div>
+              <div className="field">
+                <div className="label">
+                  매장 ID <span className="pill">수정 불가</span>
+                </div>
+                <input
+                  className="input"
+                  value={storeId}
+                  disabled
+                  placeholder="예: ximen"
+                />
+              </div>
+            </div>
+
+            <div className="field">
+              <div className="label">매장 설명</div>
+              <textarea
+                className="textarea"
+                value={(draft as any).storeDesc}
+                onChange={(e) =>
+                  setDraft((p: any) => ({ ...p, storeDesc: e.target.value }))
+                }
+                placeholder="예) QR로 간편하게 주문하고 기다리세요..."
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                매장 전화번호 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.phone || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), phone: e.target.value },
+                  }))
+                }
+                placeholder="예: 010-0000-0000"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                매장 주소 <span className="pill">필수</span>
+              </div>
+              <div className="addressRow">
+                <input
+                  className="input"
+                  value={(draft as any)?.extra?.address || ""}
+                  readOnly
+                  placeholder="주소 검색으로 입력"
+                />
+                <button
+                  type="button"
+                  className="btn addressSearchBtn"
+                  onClick={openAddressSearch}
+                >
+                  주소 검색
+                </button>
+              </div>
+              <div className="label" style={{ marginTop: 8 }}>
+                상세 주소 <span className="pill">선택</span>
+              </div>
+              <input
+                id="storeAddressDetailInput"
+                className="input"
+                value={(draft as any)?.extra?.addressDetail || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: {
+                      ...(p?.extra || {}),
+                      addressDetail: e.target.value,
+                    },
+                  }))
+                }
+                placeholder="예: 101동 1203호"
+                style={{ marginTop: 8 }}
+              />
+            </div>
+
+            {lastSavedAt ? (
+              <div className="hint">
+                마지막 저장: {new Date(lastSavedAt).toLocaleString()}
+              </div>
+            ) : null}
+          </section>
+
+        <section className="card" aria-labelledby="store-business-info-title">
+          <h2 className="cardTitle" id="store-business-info-title">사업·운영 정보</h2>
+
+          <div className="extraInfoGrid">
+            <div className="field">
+              <div className="label">
+                사업자등록번호 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.bizNo || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), bizNo: e.target.value },
+                  }))
+                }
+                placeholder="예: 000-00-00000"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                업종 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.industry || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), industry: e.target.value },
+                  }))
+                }
+                placeholder="예: 카페, 음식점"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                영업시간 <span className="pill">필수</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.hours || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), hours: e.target.value },
+                  }))
+                }
+                placeholder="예: 10:00 ~ 22:00"
+              />
+            </div>
+
+            <div className="field">
+              <div className="label">
+                SNS 링크 <span className="pill">선택</span>
+              </div>
+              <input
+                className="input"
+                value={(draft as any)?.extra?.sns || ""}
+                onChange={(e) =>
+                  setDraft((p: any) => ({
+                    ...p,
+                    extra: { ...(p?.extra || {}), sns: e.target.value },
+                  }))
+                }
+                placeholder="예: instagram.com/..."
+              />
+            </div>
+          </div>
+        </section>
+
+        </div>
       </section>
 
       {isDirty ? (
