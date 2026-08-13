@@ -1510,6 +1510,23 @@ body {
   font-size:13px;
   border-radius:10px;
 }
+.setupBannerActions .setupBannerPrimary{
+  min-height:32px;
+  padding:5px 9px;
+  border-radius:8px;
+  font-size:11px;
+  line-height:1;
+}
+.setupBannerActions .setupBannerSecondary{
+  min-height:30px;
+  padding:4px 7px;
+  border-color:transparent;
+  background:transparent;
+  color:#7c6547;
+  border-radius:8px;
+  font-size:11px;
+  line-height:1;
+}
 .btn:disabled, .btnPrimary:disabled{
   opacity:.5;
   cursor:not-allowed;
@@ -1843,6 +1860,11 @@ body {
   }
   .setupBannerActions .btn{
     flex:0 1 auto;
+  }
+  .setupBannerActions .setupBannerPrimary,
+  .setupBannerActions .setupBannerSecondary{
+    min-height:34px;
+    font-size:11px;
   }
   .storeRow{
     display:flex;
