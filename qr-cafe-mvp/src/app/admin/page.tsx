@@ -62,7 +62,8 @@ type AdminIconName =
   | "daily"
   | "weekly"
   | "monthly"
-  | "subscription";
+  | "subscription"
+  | "logout";
 
 function AdminIcon({ name, size = 18 }: { name: AdminIconName; size?: number }) {
   const paths: Record<AdminIconName, ReactNode> = {
@@ -82,6 +83,7 @@ function AdminIcon({ name, size = 18 }: { name: AdminIconName; size?: number }) 
     weekly: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M3 10h18" /><path d="m8 15 2 2 5-5" /></>,
     monthly: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M3 10h18" /><path d="M7 14h2" /><path d="M11 14h2" /><path d="M15 14h2" /><path d="M7 18h2" /><path d="M11 18h2" /></>,
     subscription: <><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7Z" /><path d="m9 12 2 2 4-4" /></>,
+    logout: <><path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5" /><path d="m15 8 4 4-4 4M9 12h10" /></>,
   };
 
   return (
@@ -658,8 +660,9 @@ function AdminPageInner() {
           >
             직원화면 보기
           </button>
-          <a className="btn" href="/logout">
-            로그아웃
+          <a className="btn" href="/logout" aria-label="로그아웃">
+            <AdminIcon name="logout" size={16} />
+            <span>로그아웃</span>
           </a>
         </div>
       </header>

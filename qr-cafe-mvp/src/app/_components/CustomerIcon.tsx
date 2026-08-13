@@ -14,7 +14,8 @@ export type CustomerIconName =
   | "clock"
   | "refresh"
   | "warning"
-  | "image";
+  | "image"
+  | "logout";
 
 export function CustomerIcon({
   name,
@@ -97,6 +98,12 @@ export function CustomerIcon({
         <rect x="3" y="4" width="18" height="16" rx="2" />
         <circle cx="8.5" cy="9" r="1.5" />
         <path d="m4 17 4.5-4 3.5 3 2.5-2 5.5 5" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5" />
+        <path d="m15 8 4 4-4 4M9 12h10" />
       </>
     ),
   };

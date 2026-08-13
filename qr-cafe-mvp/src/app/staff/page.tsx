@@ -1572,17 +1572,6 @@ function StaffPageInner() {
           font-size: 12px;
         }
 
-        .modalBackdrop {
-          position: fixed;
-          inset: 0;
-          z-index: 80;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 16px;
-          background: rgba(17, 24, 39, 0.48);
-        }
-
         .pinModal {
           width: min(420px, 100%);
           border-radius: 20px;
@@ -2325,7 +2314,7 @@ function StaffPageInner() {
           background: rgba(15, 23, 42, 0.45);
           display: grid;
           place-items: center;
-          z-index: 60;
+          z-index: 80;
           padding: 16px;
         }
 
@@ -2357,6 +2346,42 @@ function StaffPageInner() {
           display: flex;
           justify-content: flex-end;
           gap: 8px;
+        }
+
+        .cancelOrderNo {
+          display: inline-block;
+          margin-bottom: 5px;
+          color: var(--text);
+          font-size: 16px;
+          font-weight: 950;
+        }
+
+        .cancelNotice {
+          padding: 10px 12px;
+          border: 1px solid var(--danger-line);
+          border-radius: 12px;
+          background: var(--danger-soft);
+          color: var(--danger);
+          font-size: 13px;
+          font-weight: 850;
+          line-height: 1.45;
+        }
+
+        @media (min-width: 641px) {
+          .cancelModalCard {
+            width: min(560px, 100%);
+            padding: 30px;
+            gap: 16px;
+          }
+          .cancelModalCard .modalTitle { font-size: 24px; }
+          .cancelModalCard .modalDesc { font-size: 16px; }
+          .cancelModalCard .modalFieldLabel { font-size: 15px; }
+          .cancelModalCard .modalSelect,
+          .cancelModalCard .modalInput { min-height: 54px; font-size: 17px; }
+          .cancelModalCard .modalActions { margin-top: 4px; gap: 10px; }
+          .cancelModalCard .modalActions .btn { min-height: 50px; padding: 12px 20px; font-size: 15px; }
+          .cancelOrderNo { font-size: 18px; }
+          .cancelNotice { padding: 12px 14px; font-size: 14px; }
         }
 
 
@@ -4063,13 +4088,13 @@ function StaffPageInner() {
 
       {cancelTarget ? (
         <div className="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="cancel-modal-title">
-          <div className="modalCard">
+          <div className="modalCard cancelModalCard">
             <h3 id="cancel-modal-title" className="modalTitle">주문 취소</h3>
             <p className="modalDesc">
-              주문 {cancelTarget.displayNo}를 취소할까요?
-              <br />
-              취소 이력이 저장됩니다.
+              <strong className="cancelOrderNo">주문 {cancelTarget.displayNo}</strong>
+              <br />이 주문을 취소할까요?
             </p>
+            <div className="cancelNotice" role="note">취소 처리 후 이력이 저장되며, 선결제 주문은 결제 취소가 함께 진행됩니다.</div>
             <label className="modalFieldLabel">취소 사유</label>
             <select className="modalSelect" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)}>
               <option value="고객 요청">고객 요청</option>

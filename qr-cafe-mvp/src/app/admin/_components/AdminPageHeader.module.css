@@ -8,21 +8,22 @@
 .pageCopy h1{margin:0;color:#14213d;font-size:clamp(23px,2.5vw,31px);line-height:1.15;letter-spacing:-.04em}
 .pageCopy p{margin:0;color:#667085;font-size:13px;font-weight:650;line-height:1.45;word-break:keep-all}
 .storeChip{width:max-content;max-width:100%;overflow:hidden;padding:5px 9px;border-radius:999px;background:#edf4ff;color:#24589e;font-size:11px;font-weight:850;text-overflow:ellipsis;white-space:nowrap}
-.headerActions{flex:0 0 auto;gap:7px}
+.headerActions{flex:0 0 auto;gap:7px;flex-wrap:wrap;justify-content:flex-end}
 .headerButton,.headerActions>button{min-height:40px;padding:9px 13px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #dce4f0;border-radius:12px;background:#fff;color:#14213d;-webkit-text-fill-color:#14213d;font-family:inherit;font-size:12px;font-weight:850;line-height:1.2;text-decoration:none;white-space:nowrap;appearance:none}
 .headerButton{gap:6px;box-shadow:0 3px 10px rgba(30,55,90,.06)}
 .headerButton:hover,.headerActions>button:hover{border-color:#afc2dc;background:#f8fbff}
-.homeIcon{width:15px;height:15px;flex:0 0 auto}
+.homeIcon,.logoutIcon{width:15px;height:15px;flex:0 0 auto}
 
 @media(max-width:640px){
   .adminPageHeader{gap:8px;padding:12px 14px;border-radius:16px}
   .brandLine{display:none}
-  .pageLine{align-items:flex-start}
+  .pageLine{align-items:flex-start;flex-wrap:wrap}
   .pageCopy{gap:3px}
   .mobileEyebrow{display:block}
   .pageCopy h1{font-size:21px}
   .pageCopy p{display:none}
   .storeChip{margin-top:3px;padding:4px 7px;font-size:10px}
-  .headerActions{align-self:center}
+  .headerActions{width:100%;align-self:center;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .headerActions>:first-child:nth-last-child(3){grid-column:1/-1}
   .headerButton,.headerActions>button{min-height:40px;padding:8px 10px;font-size:11px}
 }
