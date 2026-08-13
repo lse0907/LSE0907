@@ -603,7 +603,7 @@ function AdminstorePageInner() {
 
         .grid {
           display: grid;
-          grid-template-columns: minmax(320px, 0.95fr) minmax(400px, 1.05fr);
+          grid-template-columns: minmax(320px, 0.9fr) minmax(440px, 1.1fr);
           gap: 12px;
           align-items: start;
         }
@@ -627,7 +627,7 @@ function AdminstorePageInner() {
         }
         .operationGrid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 10px;
           margin-top: 12px;
         }
@@ -680,11 +680,7 @@ function AdminstorePageInner() {
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          margin-top: 10px;
-          padding: 10px 12px;
-          border: 1px solid #dbeafe;
-          border-radius: 14px;
-          background: #f8fbff;
+          margin-top: 12px;
         }
         .operationText {
           display: grid;
@@ -731,11 +727,24 @@ function AdminstorePageInner() {
           -webkit-text-fill-color: #fff;
         }
         .deleteBlock {
-          margin-top: 12px;
-          padding-top: 12px;
+          margin-top: 10px;
+          padding-top: 10px;
           border-top: 1px dashed var(--line);
           display: grid;
           gap: 8px;
+        }
+        .statusActionRow {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 12px;
+        }
+        .deleteSummaryRow {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
         }
         .deleteHead {
           display: flex;
@@ -1087,17 +1096,6 @@ function AdminstorePageInner() {
           justify-content: space-between;
           align-items: center;
           gap: 10px;
-        }
-
-        @media (min-width: 981px) {
-          .grid {
-            align-items: stretch;
-          }
-
-          .formStack,
-          .formStack > .card {
-            height: 100%;
-          }
         }
 
         @media (max-width: 980px) {
@@ -1510,6 +1508,27 @@ function AdminstorePageInner() {
               </div>
             </div>
           </section>
+
+        <section className="card" aria-labelledby="staff-screen-settings-title">
+          <h2 className="cardTitle" id="staff-screen-settings-title">직원 화면 설정</h2>
+          <div className="field" style={{ marginTop: 12 }}>
+            <div className="label">운영 방식</div>
+            <select
+              className="input"
+              value={(draft as any).staffViewMode === "station" ? "station" : "simple"}
+              onChange={(e) =>
+                setDraft((p: any) => ({
+                  ...p,
+                  staffViewMode: e.target.value === "station" ? "station" : "simple",
+                }))
+              }
+            >
+              <option value="simple">기본 운영</option>
+              <option value="station">분업 운영</option>
+            </select>
+            <div className="hint">기본 운영은 주문 단위로, 분업 운영은 단계별로 처리합니다.</div>
+          </div>
+        </section>
         </div>
 
         <div
@@ -1629,12 +1648,9 @@ function AdminstorePageInner() {
               </div>
             ) : null}
           </section>
-        </div>
-      </section>
 
-      <section className="advancedGrid" aria-label="매장 세부 설정">
-        <section className="card">
-          <h2 className="cardTitle">매장 추가 정보</h2>
+        <section className="card" aria-labelledby="store-business-info-title">
+          <h2 className="cardTitle" id="store-business-info-title">사업·운영 정보</h2>
 
           <div className="extraInfoGrid">
             <div className="field">
@@ -1706,127 +1722,55 @@ function AdminstorePageInner() {
             </div>
           </div>
         </section>
-        <section className="card">
-          <h2 className="cardTitle">운영 관리</h2>
 
-          <div className="operationGrid">
-            <div className="miniPanel">
-              <div className="operationText">
-                <span className="operationTitle">직원 화면 모드</span>
-              </div>
-              <div className="field">
-                <select
-                  className="input"
-                  value={
-                    (draft as any).staffViewMode === "station"
-                      ? "station"
-                      : "simple"
-                  }
-                  onChange={(e) =>
-                    setDraft((p: any) => ({
-                      ...p,
-                      staffViewMode:
-                        e.target.value === "station" ? "station" : "simple",
-                    }))
-                  }
-                >
-                  <option value="simple">Simple Mode (통합형)</option>
-                  <option value="station">Station Mode (분리형)</option>
-                </select>
-                <div className="hint">
-                  Simple: 통합형 / Station: 역할 분리형
-                </div>
-              </div>
+        <section className="card" aria-labelledby="store-status-management-title">
+          <h2 className="cardTitle" id="store-status-management-title">매장 상태 관리</h2>
+          <div className="statusActionRow">
+            <div className="operationText">
+              <span className="operationTitle">
+                {storeStatus === "inactive" ? "운영 중단" : storeStatus === "deleted" ? "삭제됨" : "운영 중"}
+              </span>
+              <span className="operationDesc">
+                {storeStatus === "inactive"
+                  ? "현재 주문을 받고 있지 않습니다."
+                  : storeStatus === "deleted"
+                    ? "더 이상 운영할 수 없는 매장입니다."
+                    : "현재 주문을 받고 있습니다."}
+              </span>
             </div>
-
-            <div className="miniPanel">
-              <div className="operationText">
-                <span className="operationTitle">
-                  현재 상태: {getStatusLabel(storeStatus)}
-                </span>
-                <span className="operationDesc">
-                  {storeStatus === "inactive"
-                    ? "주문이 중지된 상태입니다."
-                    : storeStatus === "deleted"
-                      ? "삭제된 매장입니다."
-                      : "주문을 잠시 막습니다."}
-                </span>
-              </div>
-              <div className="operationStrip">
-                {storeStatus === "deleted" ? (
-                  <button
-                    className="btn btnMuted btnCompact"
-                    type="button"
-                    disabled
-                  >
-                    삭제된 매장
-                  </button>
-                ) : storeStatus === "inactive" ? (
-                  <button
-                    className="btn btnPrimary btnCompact"
-                    type="button"
-                    onClick={() => void updateStoreStatus("active")}
-                    disabled={statusSaving}
-                  >
-                    다시 활성화
-                  </button>
-                ) : (
-                  <button
-                    className="btn btnMuted btnCompact"
-                    type="button"
-                    onClick={() => void updateStoreStatus("inactive")}
-                    disabled={statusSaving}
-                  >
-                    매장 비활성화
-                  </button>
-                )}
-              </div>
-
-              <div className="deleteBlock">
+            {storeStatus === "deleted" ? (
+              <button className="btn btnMuted btnCompact" type="button" disabled>삭제됨</button>
+            ) : storeStatus === "inactive" ? (
+              <button className="btn btnPrimary btnCompact" type="button" onClick={() => void updateStoreStatus("active")} disabled={statusSaving}>운영 재개</button>
+            ) : (
+              <button className="btn btnMuted btnCompact" type="button" onClick={() => void updateStoreStatus("inactive")} disabled={statusSaving}>운영 중단</button>
+            )}
+          </div>
+          <div className="deleteBlock">
+            <div className="deleteSummaryRow">
+              <div>
                 <div className="deleteHead">
                   <span className="deleteTitle">매장 삭제</span>
                   <span className="warningBadge">주의</span>
                 </div>
-                <div className="deleteMessage">
-                  주문/결제/구독 이력이 없는 매장만 삭제할 수 있습니다.
-                </div>
                 {deleteEligibilityLoading ? (
-                  <div className="deleteState">
-                    삭제 가능 여부를 확인 중입니다.
-                  </div>
+                  <div className="deleteState">삭제 가능 여부 확인 중…</div>
                 ) : deleteEligibilityError ? (
-                  <div className="deleteState deleteStateWarn">
-                    {deleteEligibilityError}
-                    <br />
-                    잠시 후 다시 시도해 주세요.
-                  </div>
+                  <div className="deleteState deleteStateWarn">삭제 가능 여부를 확인하지 못했습니다.</div>
                 ) : deleteEligibility?.canDelete ? (
-                  <>
-                    <div className="deleteState deleteStateOk">
-                      {deleteEligibility.message ||
-                        "운영 이력이 없어 삭제할 수 있습니다."}
-                    </div>
-                    <button
-                      className="btn btnDanger btnCompact"
-                      type="button"
-                      onClick={openDeleteModal}
-                      disabled={deleteSaving || storeStatus === "deleted"}
-                    >
-                      매장 삭제
-                    </button>
-                  </>
+                  <div className="deleteState deleteStateOk">이용 내역이 없습니다.</div>
                 ) : (
-                  <div className="deleteState">
-                    {deleteEligibility?.message ||
-                      "운영 이력이 있어 삭제할 수 없습니다."}
-                    <br />
-                    운영 중단은 비활성화를 사용하세요.
-                  </div>
+                  <div className="deleteState">이용 내역이 있어 삭제할 수 없습니다.</div>
                 )}
               </div>
+              {deleteEligibility?.canDelete ? (
+                <button className="btn btnDanger btnCompact" type="button" onClick={openDeleteModal} disabled={deleteSaving || storeStatus === "deleted"}>매장 삭제</button>
+              ) : null}
             </div>
           </div>
         </section>
+
+        </div>
       </section>
 
       {isDirty ? (

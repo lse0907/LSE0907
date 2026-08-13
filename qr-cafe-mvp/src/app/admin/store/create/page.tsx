@@ -313,7 +313,7 @@ export default function AdminStoreCreatePage() {
 
         .grid {
           display: grid;
-          grid-template-columns: 1.1fr 1fr;
+          grid-template-columns: minmax(300px, 0.85fr) minmax(430px, 1.15fr);
           gap: 12px;
           align-items: start;
         }
@@ -481,17 +481,25 @@ export default function AdminStoreCreatePage() {
           white-space: nowrap;
         }
 
-        .createActionCard {
+        .createInlineAction {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
           flex-wrap: wrap;
+          margin-top: 14px;
+          padding-top: 12px;
+          border-top: 1px solid var(--line);
         }
 
         .createActionText {
           display: grid;
           gap: 4px;
+        }
+
+        .createInlineAction .btn {
+          min-height: 36px;
+          padding: 7px 13px;
         }
 
         .range {
@@ -620,7 +628,7 @@ export default function AdminStoreCreatePage() {
           gap: 10px;
         }
 
-        @media (max-width: 860px) {
+        @media (max-width: 1040px) {
           .grid {
             grid-template-columns: 1fr;
           }
@@ -659,10 +667,10 @@ export default function AdminStoreCreatePage() {
             align-items: stretch;
           }
           .addressSearchBtn,
-          .createActionCard .btn {
+          .createInlineAction .btn {
             width: 100%;
           }
-          .createActionCard {
+          .createInlineAction {
             align-items: stretch;
           }
           .hero {
@@ -749,7 +757,7 @@ export default function AdminStoreCreatePage() {
                   대표 이미지 업로드
                   <span className="pill">선택</span>
                 </div>
-                <input
+            <input
                   className="input"
                   type="file"
                   accept="image/*"
@@ -928,12 +936,9 @@ export default function AdminStoreCreatePage() {
               />
             </div>
           </section>
-        </div>
-      </section>
 
-      <section className="advancedGrid" aria-label="매장 세부 정보">
-        <section className="card">
-          <h2 className="cardTitle">매장 추가 정보</h2>
+          <section className="card" aria-labelledby="store-create-business-title">
+          <h2 className="cardTitle" id="store-create-business-title">사업·운영 정보</h2>
 
           <div className="extraInfoGrid">
             <div className="field">
@@ -980,28 +985,24 @@ export default function AdminStoreCreatePage() {
                 className="input"
                 value={sns}
                 onChange={(e) => setSns(e.target.value)}
-                placeholder="예: instagram.com/..."
-              />
+              placeholder="예: instagram.com/..."
+            />
+          </div>
+          </div>
+          <div className="createInlineAction" aria-label="매장 생성">
+            <div className="createActionText">
+              <p className="hint">필수 정보를 확인해 주세요.</p>
             </div>
+            <button
+              className="btn btnPrimary"
+              onClick={onCreate}
+              disabled={creating}
+            >
+              {creating ? "생성 중..." : "매장 생성"}
+            </button>
           </div>
         </section>
-
-        <section className="card createActionCard">
-          <div className="createActionText">
-            <h2 className="cardTitle">매장 생성</h2>
-            <p className="hint">
-              필수 정보를 확인한 뒤 매장을 생성하면 초기 설정 화면으로
-              이동합니다.
-            </p>
-          </div>
-          <button
-            className="btn btnPrimary"
-            onClick={onCreate}
-            disabled={creating}
-          >
-            {creating ? "생성 중..." : "매장 생성"}
-          </button>
-        </section>
+        </div>
       </section>
 
       {showAddr ? (
