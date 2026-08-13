@@ -1370,6 +1370,21 @@ body {
   gap:8px;
   flex-wrap:wrap;
 }
+.setupBannerPrimary{
+  min-height:36px;
+  padding:7px 11px;
+  font-size:12px;
+  border-radius:9px;
+}
+.setupBannerSecondary{
+  min-height:34px;
+  padding:6px 9px;
+  border-color:transparent;
+  background:transparent;
+  color:#7c6547;
+  font-size:12px;
+  border-radius:9px;
+}
 .emptyBox{
   margin-top:12px;
   display:grid;
