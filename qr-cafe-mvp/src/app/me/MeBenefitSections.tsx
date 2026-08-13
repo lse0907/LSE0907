@@ -47,7 +47,7 @@ export function MeBenefitSections({
             <strong title={storeNameMap[wallet.store_id] || "매장"}>
               {storeNameMap[wallet.store_id] || "매장"}
             </strong>
-            <span>{tierLabel(wallet.tier)}</span>
+            <span className="tierBadge">{tierLabel(wallet.tier)}</span>
           </div>
           <p>
             주문 {Number(wallet.lifetime_orders || 0)}회 · 매장 포인트{" "}

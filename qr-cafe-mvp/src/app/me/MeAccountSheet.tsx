@@ -1,5 +1,6 @@
 "use client";
 import { CustomerSheet } from "../_components/CustomerSheet";
+import { CustomerIcon } from "../_components/CustomerIcon";
 function maskEmail(value: string) {
   const [name, domain] = value.split("@");
   if (!domain) return value || "-";
@@ -136,7 +137,8 @@ export function MeAccountSheet({
             onClick={onSignOut}
             disabled={signingOut}
           >
-            {signingOut ? "로그아웃 중..." : "로그아웃"}
+            <CustomerIcon name="logout" size={18} />
+            <span>{signingOut ? "로그아웃 중..." : "로그아웃"}</span>
           </button>
         </div>
       )}

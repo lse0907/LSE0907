@@ -914,6 +914,18 @@ export function MeDashboard() {
           font-weight: 900;
           white-space: nowrap;
         }
+        .tierBadge {
+          flex: 0 0 auto;
+          padding: 5px 8px;
+          border: 1px solid #d6e2f3;
+          border-radius: 8px;
+          background: #eef4fc;
+          color: #284f82;
+          font-size: 11px;
+          font-weight: 900;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
         .expiryBadge.soon {
           background: #fff4df;
           color: #9a5b00;
@@ -1151,6 +1163,19 @@ export function MeDashboard() {
           background: #fff;
           color: #344054;
           font-weight: 900;
+        }
+        .logoutButton {
+          width: 100%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          background: #f8fafc;
+          color: #344054;
+        }
+        .logoutButton:disabled {
+          cursor: wait;
+          opacity: 0.6;
         }
         .accountError {
           margin: 0;
@@ -1481,7 +1506,7 @@ export function MeDashboard() {
                   <article className="sheetCard" key={sid}>
                     <div className="sheetCardHead">
                       <h3>{storeNameMap[sid] || "매장"}</h3>
-                      <span className="statusBadge">{tierLabel(w.tier)}</span>
+                      <span className="tierBadge">{tierLabel(w.tier)}</span>
                     </div>
                     <p>
                       <b>
