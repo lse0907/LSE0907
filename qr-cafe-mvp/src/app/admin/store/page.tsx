@@ -1568,7 +1568,7 @@ function AdminstorePageInner() {
                   className="input"
                   value={storeId}
                   disabled
-                  placeholder="예: ximen"
+                  placeholder="예: rion-gangnam"
                 />
               </div>
             </div>

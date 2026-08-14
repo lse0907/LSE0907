@@ -889,7 +889,7 @@ function MenuPageInner() {
   };
 
   const goConfirm = () => {
-    if (totals.totalCount === 0) return;
+    if (!storeId || totals.totalCount === 0) return;
     const cart = encodeURIComponent(JSON.stringify(cartLines));
 
     // ✅ 핵심: confirm으로 store 유지 + table 유지

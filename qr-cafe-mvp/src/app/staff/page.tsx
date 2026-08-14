@@ -146,8 +146,7 @@ function normalizeStaffViewMode(v: any): StaffViewMode {
  * ✅ 선택 매장 결정 우선순위
  * 1) URL ?store=
  * 2) localStorage(currentStoreId)
- * 3) env NEXT_PUBLIC_STORE_ID
- * 4) fallback "ximen"
+ * 매장을 확인할 수 없으면 빈 문자열을 반환해 데이터 접근을 중단합니다.
  */
 function getStaffViewModeOverride(storeId: string): StaffViewMode | null {
   try {
@@ -168,10 +167,7 @@ function resolveStoreIdFromClient(storeFromQuery?: string | null) {
   const saved = String(getCurrentStoreId() || "").trim();
   if (saved) return saved;
 
-  const env = String(process.env.NEXT_PUBLIC_STORE_ID || "").trim();
-  if (env) return env;
-
-  return "ximen";
+  return "";
 }
 
 function formatTime(ts: number) {
@@ -1420,6 +1416,19 @@ function StaffPageInner() {
     const exp = newOrderIds[orderId];
     return !!exp && exp > Date.now();
   };
+
+  if (!storeId) {
+    return (
+      <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24, background: "#f6f7f9", color: "#111827" }}>
+        <section style={{ width: "min(100%, 480px)", padding: 28, border: "1px solid #e5e7eb", borderRadius: 20, background: "#fff", boxShadow: "0 16px 40px rgba(15, 23, 42, 0.08)", textAlign: "center" }}>
+          <RionBrand product staff />
+          <h1 style={{ margin: "24px 0 10px", fontSize: 24 }}>매장 정보를 확인할 수 없습니다</h1>
+          <p style={{ margin: 0, color: "#64748b", fontWeight: 700, lineHeight: 1.6 }}>관리자에게 받은 직원용 링크로 다시 접속해 주세요.</p>
+          <a href="/admin" style={{ display: "inline-flex", marginTop: 22, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 12, background: "#0f1f3d", color: "#fff", padding: "0 18px", fontWeight: 900, textDecoration: "none" }}>관리자 홈으로</a>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="wrap">

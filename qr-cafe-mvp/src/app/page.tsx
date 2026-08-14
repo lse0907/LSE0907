@@ -66,6 +66,12 @@ function HomeStartInner() {
     // Hydration is complete here; the remaining state mirrors browser storage.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
+    if (!storeId) {
+      setLastOrderId("");
+      setLastOrderToken("");
+      setOrderHidden(false);
+      return;
+    }
     try {
       const lastOrderKey = lsLastOrderIdKey(storeId);
       const v = (localStorage.getItem(lastOrderKey) || "").trim();
@@ -139,6 +145,7 @@ function HomeStartInner() {
   }, [mounted, profile.mainImageOverlayStrength]);
 
   const onStart = () => {
+    if (!storeId) return;
     // ✅ 새 주문 시작이므로 “숨김” 해제 (다음 주문은 상태 버튼이 다시 뜨게)
     try {
       localStorage.removeItem(orderHiddenKey(storeId));
@@ -153,7 +160,7 @@ function HomeStartInner() {
   };
 
   const onStatus = () => {
-    if (!lastOrderId) return;
+    if (!storeId || !lastOrderId || !lastOrderToken) return;
     router.push(
       `/status?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(
         lastOrderId,
