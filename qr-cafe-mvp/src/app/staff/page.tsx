@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import RionBrand from "@/app/components/RionBrand";
+import { PwaInstallGuide } from "@/app/_components/PwaInstallGuide";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
@@ -3433,6 +3434,11 @@ function StaffPageInner() {
           {errMsg ? <p className="err">오류: {errMsg}</p> : null}
         </div>
       </header>
+
+      <PwaInstallGuide
+        audience="staff"
+        eligible={Boolean(storeId && currentWorker && (deviceStatus === "approved" || deviceStatus === "owner_bypass"))}
+      />
 
       {deviceStatus !== "approved" && deviceStatus !== "owner_bypass" && deviceStatus !== "setup_required" ? (
         <div className="deviceNotice" role="status">{deviceNoticeText}</div>
