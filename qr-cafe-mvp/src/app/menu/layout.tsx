@@ -56,6 +56,12 @@ function MenuLayoutInner({ children }: { children: React.ReactNode }) {
   // ✅ 다른 탭/새로고침/이동 후에도 lastOrderId / lastStoreId 최신화
   useEffect(() => {
     const read = () => {
+      if (!currentStoreId) {
+        setLastOrderId("");
+        setLastStoreId("");
+        setLastOrderToken("");
+        return;
+      }
       try {
         setLastOrderId((localStorage.getItem(lsLastOrderIdKey(currentStoreId)) || "").trim());
       } catch {

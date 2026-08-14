@@ -1568,7 +1568,7 @@ function AdminstorePageInner() {
                   className="input"
                   value={storeId}
                   disabled
-                  placeholder="예: ximen"
+                  placeholder="예: rion-gangnam"
                 />
               </div>
             </div>
@@ -1732,10 +1732,10 @@ function AdminstorePageInner() {
               </span>
               <span className="operationDesc">
                 {storeStatus === "inactive"
-                  ? "현재 주문을 받고 있지 않습니다."
+                  ? "주문을 받지 않습니다."
                   : storeStatus === "deleted"
-                    ? "더 이상 운영할 수 없는 매장입니다."
-                    : "현재 주문을 받고 있습니다."}
+                    ? "이용할 수 없는 매장입니다."
+                    : "주문을 받고 있습니다."}
               </span>
             </div>
             {storeStatus === "deleted" ? (
@@ -1758,7 +1758,7 @@ function AdminstorePageInner() {
                 ) : deleteEligibilityError ? (
                   <div className="deleteState deleteStateWarn">삭제 가능 여부를 확인하지 못했습니다.</div>
                 ) : deleteEligibility?.canDelete ? (
-                  <div className="deleteState deleteStateOk">이용 내역이 없습니다.</div>
+                  <div className="deleteState deleteStateOk">이용 내역 없음 · 삭제 가능</div>
                 ) : (
                   <div className="deleteState">이용 내역이 있어 삭제할 수 없습니다.</div>
                 )}
@@ -1767,19 +1767,6 @@ function AdminstorePageInner() {
                 <button className="btn btnDanger btnCompact" type="button" onClick={openDeleteModal} disabled={deleteSaving || storeStatus === "deleted"}>매장 삭제</button>
               ) : null}
             </div>
-            <div className="deleteMessage">이용 내역이 없는 매장만 삭제할 수 있습니다.</div>
-            {deleteEligibilityLoading ? (
-              <div className="deleteState">삭제 가능 여부 확인 중…</div>
-            ) : deleteEligibilityError ? (
-              <div className="deleteState deleteStateWarn">확인하지 못했습니다. 잠시 후 다시 시도해 주세요.</div>
-            ) : deleteEligibility?.canDelete ? (
-              <>
-                <div className="deleteState deleteStateOk">이용 내역이 없어 삭제할 수 있습니다.</div>
-                <button className="btn btnDanger btnCompact" type="button" onClick={openDeleteModal} disabled={deleteSaving || storeStatus === "deleted"}>매장 삭제</button>
-              </>
-            ) : (
-              <div className="deleteState">이용 내역이 있어 삭제할 수 없습니다.</div>
-            )}
           </div>
         </section>
 

@@ -192,6 +192,7 @@ function DonePageInner() {
 
   const accessTokenForLinks = useMemo(() => {
     if (accessTokenFromQuery) return accessTokenFromQuery;
+    if (!storeIdForLinks) return "";
     try {
       return (
         localStorage.getItem(lsLastOrderTokenKey(storeIdForLinks)) || ""
@@ -211,11 +212,17 @@ function DonePageInner() {
       setLoading(true);
       setErrMsg("");
 
-      // 1) storeId 결정: URL 우선 -> lastStoreId -> env
+      // 1) storeId 결정: URL 우선 -> 마지막 주문 매장
       const fallbackStoreId = (
         localStorage.getItem(LS_LAST_STORE_ID_KEY) || ""
       ).trim();
       const storeId = resolveStoreId(storeFromQuery || fallbackStoreId);
+
+      if (!storeId) {
+        setOrder(null);
+        setLoading(false);
+        return;
+      }
 
       // 2) orderId 결정
       const fallbackOrderId = (
@@ -313,10 +320,10 @@ function DonePageInner() {
           <p className="eyebrow">ORDER NOT FOUND</p>
           <h1>주문 정보를 찾을 수 없어요</h1>
           <p className="description">
-            주문 링크를 다시 확인하거나 매장 홈에서 주문 상태를 확인해 주세요.
+            주문을 진행한 기기에서 주문 링크를 다시 확인해 주세요.
           </p>
           {errMsg ? <p className="errorMessage">{errMsg}</p> : null}
-          <Link className="secondaryAction" href={homeHref}>매장 홈으로</Link>
+          <Link className="secondaryAction" href={homeHref}>{storeIdForLinks ? "매장 홈으로" : "QR 스캔하기"}</Link>
           <CustomerTrustFooter />
         </section>
         <DoneStyles />

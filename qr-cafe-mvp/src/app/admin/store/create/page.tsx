@@ -875,7 +875,7 @@ export default function AdminStoreCreatePage() {
                   className="input"
                   value={storeId}
                   onChange={(e) => setStoreId(e.target.value)}
-                  placeholder="예: ximen"
+                  placeholder="예: rion-gangnam"
                 />
               </div>
             </div>

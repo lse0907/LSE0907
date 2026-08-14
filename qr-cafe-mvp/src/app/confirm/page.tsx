@@ -11,6 +11,7 @@ import {
 } from "@/app/_components/StoreCustomerBrand";
 import { CustomerOrderProgress } from "@/app/_components/CustomerOrderProgress";
 import { CustomerSheet } from "@/app/_components/CustomerSheet";
+import { StoreAccessError } from "@/app/_components/CustomerLoadingState";
 import {
   getStoreIdFromSearchParams,
   lsLastOrderIdKey,
@@ -190,7 +191,7 @@ function ConfirmPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  // ✅ 멀티매장 핵심: URL(store) > env fallback
+  // 고객 주문은 URL에 명시된 매장만 사용합니다.
   const storeId = useMemo(() => getStoreIdFromSearchParams(sp), [sp]);
   const nextUrl = useMemo(() => {
     const q = sp.toString();
@@ -201,16 +202,21 @@ function ConfirmPageInner() {
   const isTableQr = !!tableFromMenu;
   const initialCartLines = useMemo(() => parseCart(sp.get("cart")), [sp]);
   const cartStorageKey = useMemo(
-    () => `qrCafeCart:${storeId}:${isTableQr ? tableFromMenu : "counter"}`,
+    () =>
+      storeId
+        ? `qrCafeCart:${storeId}:${isTableQr ? tableFromMenu : "counter"}`
+        : "",
     [storeId, isTableQr, tableFromMenu],
   );
   const [cartLines, setCartLines] = useState<CartLine[]>(initialCartLines);
 
   useEffect(() => {
+    if (!cartStorageKey) return;
     setCartLines(initialCartLines);
-  }, [initialCartLines]);
+  }, [cartStorageKey, initialCartLines]);
 
   useEffect(() => {
+    if (!cartStorageKey) return;
     try {
       const raw = sessionStorage.getItem(cartStorageKey);
       if (!raw) return;
@@ -223,6 +229,7 @@ function ConfirmPageInner() {
   }, [cartStorageKey]);
 
   useEffect(() => {
+    if (!cartStorageKey) return;
     try {
       if (!cartLines.length) sessionStorage.removeItem(cartStorageKey);
       else sessionStorage.setItem(cartStorageKey, JSON.stringify(cartLines));
@@ -281,9 +288,10 @@ function ConfirmPageInner() {
           : ""
       : "";
 
-  const canSubmit = totalCount > 0 && !submitting && !prepayLoading;
+  const canSubmit = !!storeId && totalCount > 0 && !submitting && !prepayLoading;
 
   const fetchPrepayAddonActive = async (): Promise<boolean> => {
+    if (!storeId) return false;
     try {
       const { data, error } = await supabase.rpc("get_store_checkout_mode", {
         p_store_id: storeId,
@@ -297,6 +305,11 @@ function ConfirmPageInner() {
   };
 
   useEffect(() => {
+    if (!storeId) {
+      setIsPrepayStore(false);
+      setPrepayLoading(false);
+      return;
+    }
     let mounted = true;
     (async () => {
       const active = await fetchPrepayAddonActive();
@@ -312,6 +325,7 @@ function ConfirmPageInner() {
   }, [storeId]);
 
   useEffect(() => {
+    if (!storeId) return;
     let mounted = true;
     (async () => {
       const { data: authData } = await supabase.auth.getUser();
@@ -440,6 +454,7 @@ function ConfirmPageInner() {
   }, [storeId]);
 
   useEffect(() => {
+    if (!storeId) return;
     let mounted = true;
     (async () => {
       try {
@@ -570,7 +585,7 @@ function ConfirmPageInner() {
   };
 
   const onSubmit = async () => {
-    if (!canSubmit) return;
+    if (!storeId || !canSubmit) return;
 
     try {
       setSubmitting(true);
@@ -697,6 +712,7 @@ function ConfirmPageInner() {
   };
 
   const goMenu = () => {
+    if (!storeId) return router.push("/");
     const base = `/menu?store=${encodeURIComponent(storeId)}`;
     if (isTableQr)
       router.push(`${base}&table=${encodeURIComponent(tableFromMenu)}`);
@@ -728,6 +744,15 @@ function ConfirmPageInner() {
   const removeLine = (lineId: string) => {
     setCartLines((prev) => prev.filter((ln) => ln.lineId !== lineId));
   };
+
+  if (!storeId) {
+    return (
+      <StoreAccessError
+        message="주문 매장을 확인할 수 없습니다. 매장 QR을 다시 스캔해 주세요."
+        onScan={() => router.push("/")}
+      />
+    );
+  }
 
   return (
     <>

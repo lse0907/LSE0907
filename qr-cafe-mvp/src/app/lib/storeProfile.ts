@@ -50,12 +50,9 @@ export const DEFAULT_STORE_PROFILE: StoreProfile = {
   },
 };
 
-function envStoreId() {
-  return (process.env.NEXT_PUBLIC_STORE_ID || "ximen").trim();
-}
-
 function keyOf(storeId?: string) {
-  const sid = (storeId || "").trim() || envStoreId();
+  const sid = (storeId || "").trim();
+  if (!sid) return "";
   // ✅ 매장별로 저장 분리!
   return `qrCafeStoreProfile:${sid}`;
 }
@@ -92,7 +89,7 @@ function rowToStoreProfile(data: any, fallback: StoreProfile = DEFAULT_STORE_PRO
 }
 
 export async function fetchStoreProfileFromDb(storeId?: string): Promise<StoreProfile | null> {
-  const sid = (storeId || "").trim() || envStoreId();
+  const sid = (storeId || "").trim();
   if (!sid) return null;
 
   let res: any = await supabase
@@ -116,8 +113,10 @@ export async function fetchStoreProfileFromDb(storeId?: string): Promise<StorePr
 }
 
 export function loadStoreProfile(storeId?: string): StoreProfile {
+  const key = keyOf(storeId);
+  if (!key) return DEFAULT_STORE_PROFILE;
   try {
-    const raw = localStorage.getItem(keyOf(storeId));
+    const raw = localStorage.getItem(key);
     if (!raw) return DEFAULT_STORE_PROFILE;
 
     const parsed = JSON.parse(raw) as Partial<StoreProfile>;
@@ -146,6 +145,9 @@ export function loadStoreProfile(storeId?: string): StoreProfile {
 }
 
 export function saveStoreProfile(storeId: string | undefined, next: StoreProfile) {
+  const sid = (storeId || "").trim();
+  const key = keyOf(sid);
+  if (!key) return;
   const sanitized: StoreProfile = {
     ...DEFAULT_STORE_PROFILE,
     staffViewMode: next.staffViewMode === "station" ? "station" : "simple",
@@ -165,11 +167,11 @@ export function saveStoreProfile(storeId: string | undefined, next: StoreProfile
     },
   };
 
-  localStorage.setItem(keyOf(storeId), JSON.stringify(sanitized));
+  localStorage.setItem(key, JSON.stringify(sanitized));
 
   // ✅ 저장 즉시 반영 이벤트 (detail로 storeId도 같이 전달)
   window.dispatchEvent(
-    new CustomEvent(STORE_PROFILE_UPDATED_EVENT, { detail: { storeId: (storeId || "").trim() || envStoreId() } })
+    new CustomEvent(STORE_PROFILE_UPDATED_EVENT, { detail: { storeId: sid } })
   );
 }
 
@@ -178,7 +180,7 @@ export function saveStoreProfile(storeId: string | undefined, next: StoreProfile
  * - menu/page.tsx에서는 useStoreProfile(storeId)로 호출해야 “매장별 프로필”이 분리됨
  */
 export function useStoreProfile(storeId?: string) {
-  const sid = useMemo(() => (storeId || "").trim() || envStoreId(), [storeId]);
+  const sid = useMemo(() => (storeId || "").trim(), [storeId]);
   const [profile, setProfile] = useState<StoreProfile>(DEFAULT_STORE_PROFILE);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -189,8 +191,15 @@ export function useStoreProfile(storeId?: string) {
     setLoading(true);
     setLoadError("");
 
+    if (!sid) {
+      setProfile(DEFAULT_STORE_PROFILE);
+      setLoading(false);
+      return () => {
+        alive = false;
+      };
+    }
+
     const loadFromDb = async () => {
-      if (!sid) return;
       try {
         const next = await fetchStoreProfileFromDb(sid);
         if (!alive) return;

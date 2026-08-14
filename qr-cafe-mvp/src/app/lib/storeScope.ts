@@ -1,12 +1,9 @@
 // src/app/lib/storeScope.ts
 "use client";
 
-export const DEFAULT_STORE_ID = (process.env.NEXT_PUBLIC_STORE_ID || "ximen").trim();
-
-/** URL에서 store를 받으면 최우선, 없으면 env fallback */
+/** 전달받은 매장 ID만 사용하며, 값이 없으면 빈 문자열을 반환합니다. */
 export function resolveStoreId(input?: string | null) {
-  const s = (input || "").trim();
-  return s || DEFAULT_STORE_ID;
+  return (input || "").trim();
 }
 
 /** searchParams-like 객체에서 store를 뽑음 (Next useSearchParams 호환) */

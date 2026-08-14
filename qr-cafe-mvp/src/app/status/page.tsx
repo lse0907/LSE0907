@@ -193,8 +193,10 @@ function StatusPageInner() {
 
   const clearStoredOrder = async () => {
     try {
-      localStorage.removeItem(lsLastOrderIdKey(storeId));
-      localStorage.removeItem(lsLastOrderTokenKey(storeId));
+      if (storeId) {
+        localStorage.removeItem(lsLastOrderIdKey(storeId));
+        localStorage.removeItem(lsLastOrderTokenKey(storeId));
+      }
       localStorage.removeItem(LS_LAST_STORE_ID_KEY);
     } catch {}
     setLastOrderId("");
@@ -207,6 +209,10 @@ function StatusPageInner() {
 
   const fetchOrder = async (id: string) => {
     setErrMsg("");
+    if (!storeId) {
+      setOrder(null);
+      return;
+    }
     if (!accessToken) {
       setErrMsg(
         "주문 확인용 토큰이 없습니다. 주문 완료 화면에서 다시 진입해주세요.",
@@ -241,7 +247,7 @@ function StatusPageInner() {
   useEffect(() => {
     const run = async () => {
       setLoading(true);
-      if (!orderId) {
+      if (!storeId || !orderId) {
         setOrder(null);
         setLoading(false);
         return;
@@ -259,7 +265,7 @@ function StatusPageInner() {
   }, [orderId, storeId, accessToken]);
 
   useEffect(() => {
-    if (!orderId || !accessToken) return;
+    if (!storeId || !orderId || !accessToken) return;
 
     const t = window.setInterval(() => {
       fetchOrder(orderId);

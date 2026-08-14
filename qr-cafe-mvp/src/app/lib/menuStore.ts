@@ -1,5 +1,6 @@
 // src/app/lib/menuStore.ts
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
@@ -75,15 +76,12 @@ function sanitizeItem(x: any): MenuItem | null {
   };
 }
 
-function envStoreId() {
-  return (process.env.NEXT_PUBLIC_STORE_ID || "ximen").trim();
-}
-
 /**
  * ✅ storeId를 인자로 받도록 변경 (멀티매장)
  */
 export async function fetchMenuItemsFromDb(storeId?: string): Promise<MenuItem[]> {
-  const sid = (storeId || "").trim() || envStoreId();
+  const sid = (storeId || "").trim();
+  if (!sid) return [];
 
   const { data, error } = await supabase
     .from("menu_items")
@@ -112,6 +110,11 @@ export function useMenuItems(storeId?: string) {
 
   const refresh = async () => {
     setLoading(true);
+    if (!(storeId || "").trim()) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     const dbItems = await fetchMenuItemsFromDb(storeId);
     setItems(dbItems.length ? dbItems : []);
     setLoading(false);
