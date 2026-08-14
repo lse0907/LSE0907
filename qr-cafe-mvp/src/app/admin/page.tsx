@@ -1240,11 +1240,12 @@ body {
   position:absolute;
   z-index:-1;
   width:330px;
-  height:330px;
-  right:-80px;
-  top:-190px;
-  border-radius:50%;
-  border:70px solid rgba(255,255,255,.055);
+  aspect-ratio:1;
+  right:-74px;
+  bottom:-125px;
+  background:url("/brand/rion-symbol-watermark-white.svg") center/contain no-repeat;
+  opacity:.04;
+  pointer-events:none;
 }
 .welcomeHero::after{
   content:"";
@@ -1849,7 +1850,7 @@ body {
   }
   .adminBadge{ display:none; }
   .welcomeHero{ min-height:0; padding:16px; display:grid; grid-template-columns:minmax(0,.9fr) minmax(158px,1.1fr); gap:12px; border-radius:19px; }
-  .welcomeHero::before{ width:240px; height:240px; right:-100px; top:-150px; border-width:50px; }
+  .welcomeHero::before{ width:240px; right:-86px; top:auto; bottom:-105px; }
   .welcomeCopy{ display:flex; align-items:center; }
   .welcomeCopy .eyebrow,.welcomeCopy .h1,.welcomeCopy .desc{ display:none; }
   .mobileWelcome{ display:block; color:#fff; font-size:clamp(16px,4.6vw,20px); line-height:1.4; letter-spacing:-.035em; word-break:keep-all; }

@@ -21,6 +21,22 @@ function dismissedUntilKey(audience: Audience) {
   return `rionOrderPwaInstallDismissedUntil:${audience}`;
 }
 
+function readDismissedUntil(audience: Audience) {
+  try {
+    return Number(window.localStorage.getItem(dismissedUntilKey(audience)) || 0);
+  } catch {
+    return 0;
+  }
+}
+
+function saveDismissedUntil(audience: Audience, value: number) {
+  try {
+    window.localStorage.setItem(dismissedUntilKey(audience), String(value));
+  } catch {
+    // Storage may be unavailable in privacy-restricted browsers. Hide for this session only.
+  }
+}
+
 function isIosSafari() {
   const agent = window.navigator.userAgent;
   const isIos = /iPad|iPhone|iPod/.test(agent) ||
@@ -40,7 +56,7 @@ export function PwaInstallGuide({ audience, eligible = true }: { audience: Audie
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
-    const dismissedUntil = Number(window.localStorage.getItem(dismissedUntilKey(audience)) || 0);
+    const dismissedUntil = readDismissedUntil(audience);
     const canShow = !isStandalone() && dismissedUntil <= Date.now();
     const stateTimer = window.setTimeout(() => {
       setDismissed(!canShow);
@@ -63,7 +79,7 @@ export function PwaInstallGuide({ audience, eligible = true }: { audience: Audie
     if (choice.outcome === "accepted") setDismissed(true);
   };
   const dismiss = () => {
-    window.localStorage.setItem(dismissedUntilKey(audience), String(Date.now() + HIDE_FOR_MS));
+    saveDismissedUntil(audience, Date.now() + HIDE_FOR_MS);
     setDismissed(true);
   };
 

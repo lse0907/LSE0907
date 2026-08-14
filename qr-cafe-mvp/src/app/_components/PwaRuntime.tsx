@@ -5,7 +5,10 @@ import { setInstallPrompt, type InstallPromptEvent } from "./pwaInstallPrompt";
 
 export function PwaRuntime() {
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState("");
   const updateRequestedRef = useRef(false);
+  const updateTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -15,7 +18,10 @@ export function PwaRuntime() {
     };
     const onInstalled = () => setInstallPrompt(null);
     const onControllerChange = () => {
-      if (updateRequestedRef.current) window.location.reload();
+      if (updateRequestedRef.current) {
+        if (updateTimerRef.current) window.clearTimeout(updateTimerRef.current);
+        window.location.reload();
+      }
     };
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
     window.addEventListener("beforeinstallprompt", onInstallPrompt);
@@ -35,22 +41,32 @@ export function PwaRuntime() {
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
       window.removeEventListener("beforeinstallprompt", onInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
+      if (updateTimerRef.current) window.clearTimeout(updateTimerRef.current);
     };
   }, []);
 
   if (!waitingWorker) return null;
   const activateUpdate = () => {
+    if (updating) return;
     updateRequestedRef.current = true;
+    setUpdating(true);
+    setUpdateMessage("");
     waitingWorker.postMessage({ type: "SKIP_WAITING" });
+    updateTimerRef.current = window.setTimeout(() => {
+      updateRequestedRef.current = false;
+      setUpdating(false);
+      setUpdateMessage("업데이트를 적용하지 못했습니다. 다시 시도해 주세요.");
+    }, 10000);
   };
 
   return (
     <aside className="pwaUpdateNotice" role="status" aria-live="polite">
-      <span>새 버전이 준비되었습니다.</span>
-      <button type="button" onClick={activateUpdate}>업데이트</button>
+      <span>{updateMessage || "새 버전이 준비되었습니다."}</span>
+      <button type="button" onClick={activateUpdate} disabled={updating}>{updating ? "업데이트 중…" : "업데이트"}</button>
       <style jsx>{`
         .pwaUpdateNotice { position: fixed; z-index: 10000; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid #dbe3ee; border-radius: 14px; background: #fff; color: #0f1f3d; box-shadow: 0 14px 36px rgba(15,31,61,.2); font-size: 14px; font-weight: 700; }
         button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 10px; background: #0f1f3d; color: #fff; font: inherit; cursor: pointer; }
+        button:disabled { opacity: .62; cursor: wait; }
       `}</style>
     </aside>
   );

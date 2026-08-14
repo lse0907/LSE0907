@@ -1,4 +1,5 @@
 const CACHE_NAME = "rion-order-static-v2";
+const CACHE_PREFIX = "rion-order-static-";
 const STATIC_ASSETS = [
   "/offline.html",
   "/icons/apple-touch-icon-180.png",
@@ -16,7 +17,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => activationRequested ? self.clients.claim() : undefined),
   );
 });
@@ -38,6 +39,6 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/offline.html")));
+    event.respondWith(fetch(new Request(request, { cache: "no-store" })).catch(() => caches.match("/offline.html")));
   }
 });
