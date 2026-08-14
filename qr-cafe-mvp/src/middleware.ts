@@ -70,19 +70,33 @@ export async function middleware(req: NextRequest) {
     }
 
     const uid = data?.user?.id || null;
-    let isStoreMember = false;
+    let roles: string[] = [];
+    let hasCustomerProfile = false;
 
     if (uid) {
-      const { data: memberRow } = await supabase
-        .from("store_members")
-        .select("id")
-        .eq("user_id", uid)
-        .limit(1)
-        .maybeSingle();
-      isStoreMember = !!memberRow;
+      const [memberResult, customerResult] = await Promise.all([
+        supabase.from("store_members").select("role").eq("user_id", uid).limit(20),
+        supabase.from("customer_profiles").select("user_id").eq("user_id", uid).maybeSingle(),
+      ]);
+      roles = (memberResult.data || []).map((row) => String(row.role || "").toLowerCase());
+      hasCustomerProfile = Boolean(customerResult.data);
     }
 
-    url.pathname = isStoreMember ? "/admin" : "/me";
+    const isShared = data.user?.user_metadata?.is_shared_store_account === true;
+    const canUseCustomer = hasCustomerProfile && !isShared;
+    const canUseAdmin = roles.includes("owner");
+    const canUseStaff = roles.some((role) => role === "owner" || role === "manager" || role === "staff");
+    const canUseOps = String(data.user?.app_metadata?.role || "") === "ops";
+    const destinationCount = [canUseCustomer, canUseAdmin, canUseStaff, canUseOps].filter(Boolean).length;
+    url.pathname = destinationCount > 1
+      ? "/"
+      : canUseOps
+        ? "/ops"
+        : canUseAdmin
+          ? "/admin"
+          : canUseStaff
+            ? "/staff"
+            : "/me";
     return NextResponse.redirect(url);
   }
 
