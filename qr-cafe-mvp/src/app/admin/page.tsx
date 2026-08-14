@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import RionBrand from "@/app/components/RionBrand";
+import { PwaInstallGuide } from "@/app/_components/PwaInstallGuide";
 import {
   getCurrentStoreId,
   setCurrentStoreId,
@@ -703,6 +704,7 @@ function AdminPageInner() {
         </div>
       </section>
 
+      <PwaInstallGuide audience="admin" />
       {msg ? <div className="alert">{msg}</div> : null}
       {showSetupBanner ? (
         <div className="setupBanner" role="status" aria-live="polite">

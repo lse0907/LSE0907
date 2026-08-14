@@ -12,6 +12,7 @@ import {
 import { CustomerIcon } from "@/app/_components/CustomerIcon";
 import { CustomerOrderProgress } from "@/app/_components/CustomerOrderProgress";
 import { CustomerLoadingState } from "@/app/_components/CustomerLoadingState";
+import { PwaInstallGuide } from "@/app/_components/PwaInstallGuide";
 import {
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
@@ -386,6 +387,7 @@ function DonePageInner() {
           <p className="cancelHint">매장이 확인한 주문은 화면에서 직접 취소할 수 없어요.</p>
         ) : null}
         {errMsg ? <p className="errorMessage">{errMsg}</p> : null}
+        {!isCancelled ? <PwaInstallGuide audience="customer" /> : null}
 
         {showCancelConfirm ? (
           <div className="dialogBackdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowCancelConfirm(false)}>
