@@ -8,6 +8,8 @@ export type CustomerIconName =
   | "points"
   | "coupon"
   | "star"
+  | "platform"
+  | "chevronRight"
   | "close"
   | "back"
   | "check"
@@ -64,6 +66,16 @@ export function CustomerIcon({
     star: (
       <path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" />
     ),
+    platform: (
+      <>
+        <path d="m12 2.8 7.8 4.5v9L12 20.8l-7.8-4.5v-9z" />
+        <rect x="8" y="7.8" width="3" height="3" rx=".5" />
+        <rect x="13" y="7.8" width="3" height="3" rx=".5" />
+        <rect x="8" y="12.8" width="3" height="3" rx=".5" />
+        <rect x="13" y="12.8" width="3" height="3" rx=".5" />
+      </>
+    ),
+    chevronRight: <path d="m10 8 4 4-4 4" />,
     close: (
       <>
         <path d="m6 6 12 12M18 6 6 18" />

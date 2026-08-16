@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 import { getCurrentStoreId } from "../lib/currentStore";
 import AuthShell from "@/app/_components/AuthShell";
+import { defaultViewerDestination, resolveViewerAccess } from "@/app/lib/viewerAccess";
 
 function LoginPageInner() {
   const router = useRouter();
@@ -74,23 +75,13 @@ function LoginPageInner() {
     }
 
     const { data: userData } = await supabase.auth.getUser();
-    const uid = userData?.user?.id;
+    const user = userData?.user;
+    const uid = user?.id;
 
-    if (!uid) {
+    if (!user || !uid) {
       router.push("/login");
       return;
     }
-
-    const { data: memberRows } = await supabase
-      .from("store_members")
-      .select("role")
-      .eq("user_id", uid)
-      .limit(10);
-
-    const roles = (memberRows || []).map((row) => String(row.role || "").trim().toLowerCase());
-    const hasOwnerRole = roles.includes("owner");
-    const hasManagerRole = roles.includes("manager");
-    const hasStaffRole = roles.includes("staff");
 
     const safeNext = resolveSafeNext(next);
     if (safeNext) {
@@ -98,9 +89,8 @@ function LoginPageInner() {
       return;
     }
 
-    if (hasOwnerRole) router.push("/admin");
-    else if (hasManagerRole || hasStaffRole) router.push("/staff");
-    else router.push("/me");
+    const access = await resolveViewerAccess(user);
+    router.push(defaultViewerDestination(access));
   };
 
   return (

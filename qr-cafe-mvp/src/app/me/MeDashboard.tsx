@@ -9,6 +9,7 @@ import { MeBenefitSections } from "./MeBenefitSections";
 import { MePlatformHeader } from "./MePlatformHeader";
 import { MeQrScannerSheet } from "./MeQrScannerSheet";
 import { MeQuickMenu } from "./MeQuickMenu";
+import { PwaInstallGuide } from "../_components/PwaInstallGuide";
 import {
   OrderDetailSheet,
   OrderHistorySheet,
@@ -1372,6 +1373,8 @@ export function MeDashboard() {
           </section>
         ) : null}
       </MePlatformHeader>
+
+      <PwaInstallGuide audience="customer" />
 
       <MeQuickMenu
         hasActiveOrder={Boolean(activeOrder)}

@@ -11,13 +11,18 @@ import {
 } from "./lib/storeScope";
 import { supabase } from "./lib/supabaseClient";
 import { CustomerTrustFooter } from "./_components/StoreCustomerBrand";
-import { CustomerBrand } from "./_components/CustomerBrand";
 import {
   CustomerLoadingState,
   StoreAccessError,
 } from "./_components/CustomerLoadingState";
 import { CustomerIcon } from "./_components/CustomerIcon";
 import { CustomerQrScannerSheet } from "./_components/CustomerQrScannerSheet";
+import { NeutralPwaHome } from "./_components/NeutralPwaHome";
+import {
+  EMPTY_VIEWER_ACCESS,
+  resolveViewerAccess,
+  type ViewerAccess,
+} from "./lib/viewerAccess";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 type BarcodeScanResult = { rawValue?: string };
@@ -54,6 +59,7 @@ function HomeStartInner() {
   const [lastOrderToken, setLastOrderToken] = useState<string>("");
   const [orderHidden, setOrderHidden] = useState<boolean>(false);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [viewerAccess, setViewerAccess] = useState<ViewerAccess | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [scanError, setScanError] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -93,17 +99,29 @@ function HomeStartInner() {
 
   useEffect(() => {
     let alive = true;
-    (async () => {
-      const { data } = await supabase.auth.getUser();
+    const applyUser = async (user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"]) => {
+      if (!user) {
+        if (alive) {
+          setAuthUserId(null);
+          setViewerAccess(null);
+          setAuthLoading(false);
+        }
+        return;
+      }
+      const access = await resolveViewerAccess(user).catch(() => EMPTY_VIEWER_ACCESS);
       if (alive) {
-        setAuthUserId(data?.user?.id || null);
+        setAuthUserId(user.id);
+        setViewerAccess(access);
         setAuthLoading(false);
       }
+    };
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      await applyUser(data.user);
     })();
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setAuthUserId(session?.user?.id || null);
-        setAuthLoading(false);
+        window.setTimeout(() => void applyUser(session?.user || null), 0);
       },
     );
     return () => {
@@ -274,206 +292,25 @@ function HomeStartInner() {
 
   if (!isStoreScoped) {
     return (
-      <main className="wrap">
-        <style jsx>{`
-          .wrap {
-            position: relative;
-            min-height: 100vh;
-            display: grid;
-            place-items: center;
-            overflow: hidden;
-            isolation: isolate;
-            background:
-              radial-gradient(
-                circle at 20% 12%,
-                rgba(62, 125, 224, 0.54),
-                transparent 35%
-              ),
-              radial-gradient(
-                circle at 82% 78%,
-                rgba(40, 104, 207, 0.26),
-                transparent 32%
-              ),
-              linear-gradient(145deg, #102b58 0%, #0c1b35 54%, #071326 100%);
-            color: #fff;
-            padding: max(24px, env(safe-area-inset-top)) 20px
-              max(24px, env(safe-area-inset-bottom));
-          }
-          .wrap::before {
-            position: absolute;
-            z-index: -2;
-            top: -9vw;
-            right: -8vw;
-            width: clamp(300px, 57vw, 720px);
-            aspect-ratio: 1;
-            background: url("/rion-symbol-white.svg") center / contain no-repeat;
-            content: "";
-            opacity: 0.055;
-            transform: rotate(8deg);
-          }
-          .wrap::after {
-            position: absolute;
-            z-index: -1;
-            inset: 0;
-            background-image:
-              linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-              linear-gradient(
-                90deg,
-                rgba(255, 255, 255, 0.025) 1px,
-                transparent 1px
-              );
-            background-size: 48px 48px;
-            mask-image: linear-gradient(
-              to bottom,
-              rgba(0, 0, 0, 0.8),
-              transparent 78%
-            );
-            content: "";
-          }
-          .card {
-            position: relative;
-            width: min(560px, 100%);
-            overflow: hidden;
-            border-radius: 28px;
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            background: linear-gradient(
-              145deg,
-              rgba(255, 255, 255, 0.14),
-              rgba(255, 255, 255, 0.065)
-            );
-            box-shadow: 0 30px 80px rgba(2, 9, 22, 0.38);
-            backdrop-filter: blur(18px);
-            padding: clamp(28px, 6vw, 42px);
-            display: grid;
-            gap: 12px;
-          }
-          .card::after {
-            position: absolute;
-            right: -80px;
-            bottom: -110px;
-            width: 260px;
-            height: 260px;
-            border: 1px solid rgba(124, 176, 255, 0.2);
-            border-radius: 50%;
-            box-shadow:
-              0 0 0 28px rgba(124, 176, 255, 0.035),
-              0 0 0 58px rgba(124, 176, 255, 0.025);
-            content: "";
-            pointer-events: none;
-          }
-          .eyebrow {
-            margin: 26px 0 -4px;
-            color: #9dc2ff;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.18em;
-          }
-          .title {
-            margin: 0;
-            font-size: clamp(30px, 8vw, 44px);
-            font-weight: 850;
-            line-height: 1.12;
-            letter-spacing: -0.045em;
-          }
-          .sub {
-            margin: 0 0 14px;
-            color: rgba(255, 255, 255, 0.78);
-            font-size: 15px;
-            line-height: 1.5;
-            font-weight: 600;
-          }
-          .btnPrimary {
-            border: 0;
-            border-radius: 14px;
-            min-height: 56px;
-            padding: 14px;
-            background: #fff;
-            color: #0f1f3d;
-            font-weight: 750;
-            font-size: 16px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 9px;
-            box-shadow: 0 14px 34px rgba(2, 9, 22, 0.26);
-          }
-          .btnGhost {
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            border-radius: 14px;
-            padding: 12px;
-            background: transparent;
-            color: #fff;
-            font-weight: 650;
-            cursor: pointer;
-            font-size: 14px;
-          }
-          .btnPrimary,
-          .btnGhost {
-            position: relative;
-            z-index: 1;
-          }
-          @media (max-width: 480px) {
-            .wrap {
-              place-items: center;
-              padding-inline: 16px;
-            }
-            .card {
-              border-radius: 24px;
-              padding: 28px 22px;
-            }
-            .eyebrow {
-              margin-top: 22px;
-            }
-          }
-          .err {
-            padding: 12px 14px;
-            border-radius: 14px;
-            background: rgba(190, 18, 60, 0.18);
-            color: #ffe4e6;
-            font-weight: 600;
-            font-size: 13px;
-            white-space: pre-line;
-          }
-        `}</style>
-        <section className="card">
-          <CustomerBrand inverse />
-          <p className="eyebrow">REALIZE INNOVATION ON</p>
-          <h1 className="title">주문을 켜다.</h1>
-          <p className="sub">QR로 바로 시작하세요.</p>
-          <button className="btnPrimary" onClick={startQrScanner}>
-            <CustomerIcon name="qr" size={21} /> QR 스캔하기
-          </button>
-          {scannerOpen ? (
-            <CustomerQrScannerSheet
-              videoRef={videoRef}
-              scanning={scanning}
-              error={scanError}
-              onRetry={() => {
-                stopScanner();
-                void startQrScanner();
-              }}
-              onClose={stopScanner}
-            />
-          ) : null}
-          {!authLoading ? (
-            authUserId ? (
-              <button className="btnGhost" onClick={() => router.push("/me")}>
-                내 주문과 혜택
-              </button>
-            ) : (
-              <button
-                className="btnGhost"
-                onClick={() => router.push("/login?next=%2Fme")}
-              >
-                로그인 · 내 주문 확인
-              </button>
-            )
-          ) : (
-            <div style={{ minHeight: 44 }} aria-hidden />
-          )}
-        </section>
-      </main>
+      <NeutralPwaHome
+        access={viewerAccess}
+        authLoading={authLoading}
+        onScan={() => void startQrScanner()}
+        onNavigate={(href) => router.push(href)}
+        onLogout={() => void supabase.auth.signOut().then(() => router.replace("/"))}
+        scanner={scannerOpen ? (
+          <CustomerQrScannerSheet
+            videoRef={videoRef}
+            scanning={scanning}
+            error={scanError}
+            onRetry={() => {
+              stopScanner();
+              void startQrScanner();
+            }}
+            onClose={stopScanner}
+          />
+        ) : null}
+      />
     );
   }
 
