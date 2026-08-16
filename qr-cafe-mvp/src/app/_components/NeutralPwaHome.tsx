@@ -31,10 +31,10 @@ export function NeutralPwaHome({
   onLogout: () => void;
 }) {
   const workspaces: Workspace[] = access ? [
-    access.canUseCustomer ? { key: "customer", label: "내 주문·혜택", description: "주문 내역 · 포인트 · 쿠폰", badge: "MY RION", href: "/me", icon: "user", tone: "customer" } : null,
-    access.canUseAdmin ? { key: "admin", label: "매장 관리", description: "매장 · 메뉴 · 매출 관리", badge: "ADMIN", href: "/admin", icon: "store", tone: "admin" } : null,
-    access.canUseStaff ? { key: "staff", label: "주문 운영", description: "실시간 주문 확인과 처리", badge: "STAFF", href: "/staff", icon: "orders", tone: "staff" } : null,
-    access.canUseOps ? { key: "ops", label: "플랫폼 관리", description: "서비스 운영과 매장 지원", badge: access.isOpsMaster ? "OPS MASTER" : "OPS", href: "/ops", icon: "star", tone: "ops" } : null,
+    access.canUseCustomer ? { key: "customer", label: "내 주문·혜택", description: "주문 · 포인트 · 쿠폰", badge: "MY RION", href: "/me", icon: "user", tone: "customer" } : null,
+    access.canUseAdmin ? { key: "admin", label: "매장 관리", description: "매장 · 메뉴 · 매출", badge: "ADMIN", href: "/admin", icon: "store", tone: "admin" } : null,
+    access.canUseStaff ? { key: "staff", label: "주문 운영", description: "주문 확인 · 처리", badge: "STAFF", href: "/staff", icon: "orders", tone: "staff" } : null,
+    access.canUseOps ? { key: "ops", label: "플랫폼 관리", description: "서비스 · 매장 지원", badge: access.isOpsMaster ? "OPS MASTER" : "OPS", href: "/ops", icon: "platform", tone: "ops" } : null,
   ].filter((item): item is Workspace => item !== null) : [];
 
   return (
@@ -46,15 +46,15 @@ export function NeutralPwaHome({
             <CustomerBrand inverse />
             <p className="powerEyebrow"><PowerIcon /> ORDER ON</p>
             <h1>주문을 켜다.</h1>
-            <p className="heroDescription">QR로 매장 주문을 시작하세요.</p>
+            <p className="heroDescription">QR로 바로 주문하세요.</p>
           </div>
         </div>
 
         <div className="launcherContent">
           <button className="qrAction" type="button" onClick={onScan}>
             <span className="qrIcon"><CustomerIcon name="qr" size={24} /></span>
-            <span className="qrCopy"><strong>QR로 주문 시작</strong><small>매장 QR을 스캔해 메뉴를 확인하세요.</small></span>
-            <span className="arrow" aria-hidden="true">→</span>
+            <span className="qrCopy"><strong>QR 주문 시작</strong><small>매장 QR을 스캔하세요.</small></span>
+            <span className="arrow" aria-hidden="true"><CustomerIcon name="chevronRight" size={18} /></span>
           </button>
           {scanner}
 
@@ -63,8 +63,8 @@ export function NeutralPwaHome({
           ) : access ? (
             <section className="workspaceSection" aria-labelledby="workspace-title">
               <div className="workspaceHeading">
-                <div><p>MY WORKSPACE</p><h2 id="workspace-title">필요한 화면을 바로 여세요.</h2></div>
-                <span className="accountIdentity">{access.displayName || access.email || "Rion 사용자"}</span>
+                <div><p>MY WORKSPACE</p><h2 id="workspace-title">이용할 화면을 선택하세요.</h2></div>
+                <span className="accountIdentity">{getViewerLabel(access)}</span>
               </div>
               {workspaces.length ? (
                 <div className={`workspaceGrid count${workspaces.length}`}>
@@ -72,7 +72,7 @@ export function NeutralPwaHome({
                     <button key={workspace.key} type="button" className={`workspaceCard ${workspace.tone}`} onClick={() => onNavigate(workspace.href)}>
                       <span className="workspaceIcon"><CustomerIcon name={workspace.icon} size={21} /></span>
                       <span className="workspaceText"><small>{workspace.badge}</small><strong>{workspace.label}</strong><em>{workspace.description}</em></span>
-                      <span className="cardArrow" aria-hidden="true">→</span>
+                      <span className="cardArrow" aria-hidden="true"><CustomerIcon name="chevronRight" size={16} /></span>
                     </button>
                   ))}
                 </div>
@@ -81,7 +81,7 @@ export function NeutralPwaHome({
             </section>
           ) : (
             <section className="accountPrompt" aria-label="Rion 계정">
-              <div><strong>Rion 계정으로 더 편리하게 이용하세요.</strong><p>주문 내역과 매장 운영 화면을 이어서 사용할 수 있어요.</p></div>
+              <div><strong>Rion 계정으로 계속 이용하세요.</strong><p>로그인하고 이용 내역을 이어가세요.</p></div>
               <div><button type="button" onClick={() => onNavigate("/login")}>로그인</button><button type="button" className="secondary" onClick={() => onNavigate("/signup")}>회원가입</button></div>
             </section>
           )}
@@ -89,7 +89,7 @@ export function NeutralPwaHome({
       </section>
       <style jsx>{`
         .neutralHome { min-height: 100dvh; display: grid; place-items: center; padding: max(22px, env(safe-area-inset-top)) 18px max(22px, env(safe-area-inset-bottom)); color: #172033; background: radial-gradient(circle at 8% 0%, rgba(70,125,210,.1), transparent 32%), radial-gradient(circle at 94% 86%, rgba(15,31,61,.07), transparent 30%), #f4f7fb; }
-        .launcher { width: min(1040px, 100%); display: grid; grid-template-columns: minmax(300px,.86fr) minmax(420px,1.14fr); overflow: hidden; border: 1px solid #dce3ed; border-radius: 30px; background: #fff; box-shadow: 0 28px 80px rgba(15,31,61,.14); }
+        .launcher { width: min(1040px, 100%); display: grid; grid-template-columns: minmax(300px,.9fr) minmax(420px,1.1fr); overflow: hidden; border: 1px solid #dce3ed; border-radius: 30px; background: #fff; box-shadow: 0 28px 80px rgba(15,31,61,.14); }
         .brandHero { position: relative; min-height: 570px; overflow: hidden; display: flex; padding: clamp(32px,5vw,58px); color: #fff; background: radial-gradient(circle at 15% 10%, rgba(72,132,225,.48), transparent 34%), linear-gradient(150deg,#102b58,#0c1b35 57%,#071326); isolation: isolate; }
         .officialWatermark { position: absolute; z-index: -1; width: min(560px,130%); aspect-ratio: 1; right: -38%; bottom: -11%; background: url('/brand/rion-symbol-watermark-white.svg') center/contain no-repeat; opacity: .05; pointer-events: none; }
         .brandContent { align-self: center; position: relative; z-index: 1; }
@@ -104,7 +104,10 @@ export function NeutralPwaHome({
         .qrCopy { min-width: 0; display: grid; gap: 5px; }
         .qrCopy strong { font-size: 17px; }
         .qrCopy small { color: #627089; font-size: 12px; font-weight: 650; }
-        .arrow,.cardArrow { font-size: 19px; }
+        .arrow,.cardArrow { display: grid; place-items: center; transition: color .18s ease, transform .18s ease; }
+        .arrow { color: #0f1f3d; }
+        .cardArrow { color: rgba(71,85,105,.78); }
+        .qrAction:hover .arrow,.workspaceCard:hover .cardArrow { transform: translateX(2px); }
         .workspaceSection { display: grid; gap: 15px; }
         .workspaceHeading { display: flex; align-items: end; justify-content: space-between; gap: 14px; }
         .workspaceHeading p { margin: 0 0 5px; color: #54729c; font-size: 10px; font-weight: 900; letter-spacing: .14em; }
@@ -120,26 +123,37 @@ export function NeutralPwaHome({
         .workspaceCard.staff .workspaceIcon { background: #eef2f6; color: #42546e; }
         .workspaceCard.ops .workspaceIcon { background: #e8ebf0; color: #18263d; }
         .workspaceText { min-width: 0; display: grid; gap: 3px; font-style: normal; }
-        .workspaceText small { color: #6b7b93; font-size: 8px; font-weight: 900; letter-spacing: .1em; }
-        .workspaceText strong { font-size: 14px; }
-        .workspaceText em { overflow: hidden; color: #6b7280; font-size: 10px; font-style: normal; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+        .workspaceText small { color: #6b7b93; font-size: 9px; font-weight: 900; letter-spacing: .1em; }
+        .workspaceText strong { font-size: 15px; }
+        .workspaceText em { overflow: hidden; color: #6b7280; font-size: 11px; font-style: normal; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
         .workspaceEmpty { margin: 0; padding: 14px; border-radius: 14px; background: #f7f9fc; color: #667085; font-size: 12px; line-height: 1.6; }
-        .logoutAction { justify-self: end; display: flex; align-items: center; gap: 6px; padding: 7px 0; border: 0; background: transparent; color: #6b7280; font-size: 11px; font-weight: 750; cursor: pointer; }
+        .logoutAction { min-height: 44px; justify-self: end; display: flex; align-items: center; gap: 6px; padding: 7px 0 7px 12px; border: 0; background: transparent; color: #6b7280; font-size: 11px; font-weight: 750; cursor: pointer; }
         .accountPrompt { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 20px; border-top: 1px solid #e4e8ef; }
         .accountPrompt strong { font-size: 14px; }
         .accountPrompt p { margin: 5px 0 0; color: #6b7280; font-size: 11px; line-height: 1.5; }
         .accountPrompt > div:last-child { display: flex; gap: 7px; flex-shrink: 0; }
-        .accountPrompt button { min-height: 38px; padding: 0 13px; border: 1px solid #0f1f3d; border-radius: 10px; background: #0f1f3d; color: #fff; font-weight: 800; cursor: pointer; }
+        .accountPrompt button { min-height: 44px; padding: 0 13px; border: 1px solid #0f1f3d; border-radius: 10px; background: #0f1f3d; color: #fff; font-weight: 800; cursor: pointer; }
         .accountPrompt button.secondary { border-color: #d2dae6; background: #fff; color: #334155; }
         .workspaceSkeleton { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .workspaceSkeleton span { min-height: 100px; border-radius: 17px; background: linear-gradient(90deg,#f2f5f9,#e9eef5,#f2f5f9); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
         @keyframes shimmer { to { background-position: -200% 0; } }
-        @media(max-width:800px) { .neutralHome{place-items:start center}.launcher{grid-template-columns:1fr}.brandHero{min-height:290px;padding:34px 30px}.brandContent{align-self:center}.powerEyebrow{margin-top:35px}.officialWatermark{width:430px;right:-150px;bottom:-160px}.launcherContent{padding:28px}.accountPrompt{align-items:flex-start;flex-direction:column}.accountPrompt>div:last-child{width:100%}.accountPrompt button{flex:1} }
-        @media(max-width:480px) { .neutralHome{padding:0;background:#fff}.launcher{border:0;border-radius:0;box-shadow:none}.brandHero{min-height:255px;padding:max(28px,env(safe-area-inset-top)) 22px 28px}.powerEyebrow{margin-top:30px}h1{font-size:38px}.launcherContent{padding:22px 16px max(22px,env(safe-area-inset-bottom));gap:21px}.qrAction{min-height:80px;padding:13px}.workspaceHeading{align-items:start;flex-direction:column;gap:5px}.workspaceGrid{grid-template-columns:1fr}.workspaceGrid.count3 .workspaceCard:last-child{grid-column:auto}.workspaceCard{min-height:91px}.workspaceText em{white-space:normal}.accountIdentity{max-width:100%} }
-        @media(prefers-reduced-motion:reduce) { .qrAction,.workspaceCard{transition:none}.workspaceSkeleton span{animation:none} }
+        @media(max-width:900px) { .neutralHome{place-items:start center}.launcher{grid-template-columns:1fr}.brandHero{min-height:290px;padding:34px 30px}.brandContent{align-self:center}.powerEyebrow{margin-top:35px}.officialWatermark{width:390px;right:-110px;bottom:-95px}.launcherContent{padding:28px}.accountPrompt{align-items:flex-start;flex-direction:column}.accountPrompt>div:last-child{width:100%}.accountPrompt button{flex:1} }
+        @media(max-width:480px) { .neutralHome{padding:0;background:#fff}.launcher{border:0;border-radius:0;box-shadow:none}.brandHero{min-height:255px;padding:max(28px,env(safe-area-inset-top)) 22px 28px}.powerEyebrow{margin-top:30px}h1{font-size:38px}.officialWatermark{width:370px;right:-115px;bottom:-90px}.launcherContent{padding:22px 16px max(22px,env(safe-area-inset-bottom));gap:21px}.qrAction{min-height:80px;padding:13px}.workspaceHeading{align-items:start;flex-direction:column;gap:5px}.workspaceGrid{grid-template-columns:1fr}.workspaceGrid.count3 .workspaceCard:last-child{grid-column:auto}.workspaceCard{min-height:91px}.workspaceText em{white-space:normal}.accountIdentity{max-width:100%} }
+        @media(prefers-reduced-motion:reduce) { .qrAction,.workspaceCard,.arrow,.cardArrow{transition:none}.workspaceSkeleton span{animation:none} }
       `}</style>
     </main>
   );
+}
+
+function getViewerLabel(access: ViewerAccess) {
+  if (access.displayName) return access.displayName;
+  if (access.isSharedStoreAccount) {
+    if (access.storeRoles.includes("manager")) return "매니저 공용 계정";
+    return "직원 공용 계정";
+  }
+  if (access.canUseOps) return access.isOpsMaster ? "플랫폼 마스터" : "플랫폼 운영자";
+  if (access.canUseAdmin) return "매장 관리자";
+  return "Rion 사용자";
 }
 
 function PowerIcon() {
