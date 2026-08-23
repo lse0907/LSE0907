@@ -182,7 +182,7 @@ function HomeStartInner() {
     router.push(
       `/status?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(
         lastOrderId,
-      )}&accessToken=${encodeURIComponent(lastOrderToken)}`,
+      )}`,
     );
   };
 
