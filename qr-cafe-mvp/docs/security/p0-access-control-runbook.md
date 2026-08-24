@@ -1,6 +1,6 @@
 # P0 접근통제 적용·검증 Runbook
 
-대상 마이그레이션: `supabase/migrations/20260823145351_p0_access_control.sql`
+대상 마이그레이션: `supabase/migrations/20260824142631_p0_access_control.sql`
 
 이 문서는 로컬 구현 검토용입니다. 별도 승인 전에는 운영 Supabase에 적용하지 않습니다.
 
