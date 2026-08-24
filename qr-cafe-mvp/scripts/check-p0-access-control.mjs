@@ -27,6 +27,21 @@ const migration = read(
   "supabase/migrations/20260823145351_p0_access_control.sql",
 );
 
+function assertServerOnlyFunction(functionName) {
+  const revokePattern = new RegExp(
+    `revoke all privileges on function public\\.${functionName}\\([\\s\\S]*?\\)\\s+from public, anon, authenticated;`,
+    "i",
+  );
+  const grantPattern = new RegExp(
+    `grant execute on function public\\.${functionName}\\([\\s\\S]*?\\)\\s+to service_role;`,
+    "i",
+  );
+  assert(
+    revokePattern.test(migration) && grantPattern.test(migration),
+    `${functionName}은 service_role 전용이어야 합니다.`,
+  );
+}
+
 assert(
   donePage.includes("fetchCustomerOrder") && !donePage.includes('.from("orders")'),
   "done 화면이 orders 테이블을 직접 조회하지 않아야 합니다.",
@@ -75,16 +90,54 @@ for (const functionName of [
   "finalize_order_rewards",
   "rollback_order_rewards",
   "apply_store_billing_payment",
+  "staff_update_order_items_status",
+  "issue_customer_coupon",
+  "recalculate_customer_tier",
+  "initialize_store_billing_account",
+]) {
+  assertServerOnlyFunction(functionName);
+}
+
+assert(
+  migration.includes("drop policy if exists order_item_packing_checks_insert") &&
+    migration.includes("drop policy if exists order_item_packing_checks_update") &&
+    migration.includes("order_item_packing_checks_select_store_member_or_ops") &&
+    migration.includes(
+      "revoke all privileges on table public.order_item_packing_checks from anon, authenticated;",
+    ),
+  "패킹 체크의 공개 쓰기 정책·권한을 제거해야 합니다.",
+);
+
+for (const functionName of [
+  "admin_cancel_customer_coupon",
+  "admin_check_store_delete_eligibility",
+  "admin_copy_categories_v1",
+  "admin_copy_menus_v1",
+  "admin_copy_options_v1",
+  "admin_issue_coupon_to_selected_customers",
+  "admin_search_coupon_targets",
+  "admin_soft_delete_store_if_unused",
+  "current_ops_role",
+  "get_store_names",
 ]) {
   const revokePattern = new RegExp(
-    `revoke all privileges on function public\\.${functionName}\\([\\s\\S]*?\\) from public, anon, authenticated;`,
+    `revoke all privileges on function public\\.${functionName}\\([\\s\\S]*?\\)\\s+from public, anon;`,
     "i",
   );
   assert(
     revokePattern.test(migration),
-    `${functionName}의 공개 실행권 회수 구문이 필요합니다.`,
+    `${functionName}의 익명 실행권을 제거해야 합니다.`,
   );
 }
+
+assert(
+  migration.includes("alter view public.admin_option_groups_overview") &&
+    migration.includes("set (security_invoker = true);") &&
+    migration.includes(
+      "revoke all privileges on table public.admin_option_groups_overview",
+    ),
+  "공개 관리 뷰는 security_invoker로 RLS를 따라야 합니다.",
+);
 
 const leakedTokenUrls = sourceFiles(join(root, "src")).filter((file) =>
   readFileSync(file, "utf8").includes("accessToken="),

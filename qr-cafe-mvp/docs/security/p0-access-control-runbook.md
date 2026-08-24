@@ -10,7 +10,8 @@
 2. 운영 DB 백업 또는 PITR 사용 가능 여부를 확인한다.
 3. 고객 주문 조회 API와 `done`·`status` 화면 변경을 먼저 배포한다.
 4. 새 코드에서 주문 접근 토큰이 URL에 포함되지 않는지 확인한다.
-5. 테스트 매장에서 후불 주문 1건과 선결제 주문 1건을 준비한다.
+5. 직원 주문 상태·품목 상태·패킹 변경이 서버 API를 통하는지 확인한다.
+6. 테스트 매장에서 후불 주문 1건과 선결제 주문 1건을 준비한다.
 
 ## 적용 순서
 
@@ -31,7 +32,13 @@ DB를 먼저 잠그면 기존 Production 고객 화면의 직접 조회가 실�
 select tablename, policyname, roles, cmd, qual, with_check
 from pg_policies
 where schemaname = 'public'
-  and tablename in ('orders', 'order_items', 'order_item_options', 'menu_categories')
+  and tablename in (
+    'orders',
+    'order_items',
+    'order_item_options',
+    'order_item_packing_checks',
+    'menu_categories'
+  )
 order by tablename, policyname;
 ```
 
@@ -39,6 +46,7 @@ order by tablename, policyname;
 
 - `public_select_*`, `public_insert_*`, `member_update_orders_status` 정책이 없다.
 - 주문 3개 테이블에는 `authenticated` 대상 매장 구성원·OPS 조회 정책만 있다.
+- `order_item_packing_checks`에는 매장 구성원·OPS 조회 정책만 있고 공개 쓰기 정책이 없다.
 - `menu_categories`에는 활성 공개 조회와 대표자·OPS 관리 정책만 있다.
 
 ```sql
@@ -46,11 +54,17 @@ select c.relname, c.relrowsecurity
 from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
 where n.nspname = 'public'
-  and c.relname in ('orders', 'order_items', 'order_item_options', 'menu_categories')
+  and c.relname in (
+    'orders',
+    'order_items',
+    'order_item_options',
+    'order_item_packing_checks',
+    'menu_categories'
+  )
 order by c.relname;
 ```
 
-기대 결과: 네 테이블 모두 `relrowsecurity = true`.
+기대 결과: 다섯 테이블 모두 `relrowsecurity = true`.
 
 ```sql
 select routine_name, grantee, privilege_type
@@ -60,12 +74,26 @@ where specific_schema = 'public'
     'apply_loyalty_on_paid_order',
     'finalize_order_rewards',
     'rollback_order_rewards',
-    'apply_store_billing_payment'
+    'apply_store_billing_payment',
+    'staff_update_order_items_status',
+    'issue_customer_coupon',
+    'recalculate_customer_tier',
+    'initialize_store_billing_account'
   )
 order by routine_name, grantee;
 ```
 
-기대 결과: 네 고위험 함수에 `PUBLIC`, `anon`, `authenticated` 실행권이 없다.
+기대 결과: 위 고위험·내부 함수에 `PUBLIC`, `anon`, `authenticated` 실행권이 없다.
+
+```sql
+select c.relname, c.reloptions
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname = 'admin_option_groups_overview';
+```
+
+기대 결과: `reloptions`에 `security_invoker=true`가 있다.
 
 ## 기능·보안 검증
 
@@ -75,11 +103,17 @@ order by routine_name, grantee;
 - 대표자는 자기 매장의 활성·비활성 카테고리를 조회하고 관리할 수 있다.
 - 직원·타 매장 대표자는 대상 매장의 카테고리를 수정할 수 없다.
 - 비로그인 사용자의 주문 테이블 직접 `SELECT`·`INSERT`가 거부된다.
+- 비로그인 사용자의 패킹 체크 직접 조회·등록·수정이 거부된다.
+- 비로그인 및 일반 로그인 사용자의 레거시 `staff_update_order_items_status` RPC 호출이 거부된다.
+- 비로그인 및 일반 로그인 사용자의 내부 쿠폰 발급·등급 재계산 RPC 호출이 거부된다.
 - 고객의 올바른 주문 ID·매장 ID·접근 토큰 조합은 주문 조회 API에서 성공한다.
 - 잘못된 토큰 또는 타 매장 조합은 동일한 `404 ORDER_NOT_FOUND` 응답을 받는다.
 - 고객 응답에 `access_token`, `payment_key`, `toss_order_id`, `customer_user_id`, `loyalty_snapshot`이 없다.
 - 매장 구성원은 자기 매장 주문만 조회할 수 있고 다른 매장 주문은 0건이다.
 - 직원 화면의 주문·품목·옵션 조회와 상태 변경 API가 정상 동작한다.
+- 직원 화면의 패킹 조회와 패킹 변경 API가 정상 동작한다.
+- 로그인한 매장 관리자의 복사·쿠폰·매장 삭제 보조 RPC는 정상 동작하고 비로그인 호출은 거부된다.
+- 비로그인 결제 화면에서 공개 결제 클라이언트 설정과 선결제 모드 조회는 정상 동작한다.
 - 고객 취소 API는 올바른 토큰의 `new` 주문만 허용한다.
 - 브라우저 주소·이동 링크에 `accessToken` 쿼리 문자열이 남지 않는다.
 
