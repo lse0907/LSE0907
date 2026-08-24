@@ -24,7 +24,7 @@ const statusPage = read("src/app/status/page.tsx");
 const customerViewRoute = read("src/app/api/orders/customer-view/route.ts");
 const nextConfig = read("next.config.ts");
 const migration = read(
-  "supabase/migrations/20260823145351_p0_access_control.sql",
+  "supabase/migrations/20260824142631_p0_access_control.sql",
 );
 
 function assertServerOnlyFunction(functionName) {
