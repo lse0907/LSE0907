@@ -22,6 +22,35 @@ export function lsLastOrderTokenKey(storeId: string) {
   return `qrCafeLastOrderToken:${resolveStoreId(storeId)}`;
 }
 
+/** 고객 주문 접근정보를 현재 기기에만 저장합니다. URL에는 토큰을 남기지 않습니다. */
+export function persistLastOrderAccess(params: {
+  storeId: string;
+  orderId: string;
+  accessToken: string;
+}) {
+  const storeId = resolveStoreId(params.storeId);
+  const orderId = String(params.orderId || "").trim();
+  const accessToken = String(params.accessToken || "").trim();
+  if (!storeId || !orderId || !accessToken || typeof window === "undefined") return;
+
+  localStorage.setItem(lsLastOrderIdKey(storeId), orderId);
+  localStorage.setItem(lsLastOrderTokenKey(storeId), accessToken);
+  localStorage.setItem("qrCafeLastStoreId", storeId);
+}
+
+/** 예전 링크의 접근 토큰을 저장한 뒤 주소창·브라우저 기록에서 제거합니다. */
+export function removeAccessTokenFromCurrentUrl() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("accessToken")) return;
+  url.searchParams.delete("accessToken");
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+}
+
 /** (선택) 매장별 스토어프로필 키 */
 export function lsStoreProfileKey(storeId: string) {
   return `qrCafeStoreProfile:${resolveStoreId(storeId)}`;

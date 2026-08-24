@@ -702,7 +702,7 @@ function ConfirmPageInner() {
       router.push(
         `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(
           orderId,
-        )}&accessToken=${encodeURIComponent(accessToken)}`,
+        )}`,
       );
     } catch (e: any) {
       console.error(e);

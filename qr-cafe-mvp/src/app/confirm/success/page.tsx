@@ -120,10 +120,11 @@ function ConfirmSuccessPageInner() {
       }
 
       if (pending.createdOrderId && pending.createdAccessToken) {
+        localStorage.setItem(lsLastOrderIdKey(storeId), pending.createdOrderId);
+        localStorage.setItem(lsLastOrderTokenKey(storeId), pending.createdAccessToken);
+        localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
         router.replace(
-          `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(pending.createdOrderId)}&accessToken=${encodeURIComponent(
-            pending.createdAccessToken,
-          )}`,
+          `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(pending.createdOrderId)}`,
         );
         return;
       }
@@ -224,7 +225,7 @@ function ConfirmSuccessPageInner() {
         }
 
         router.replace(
-          `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(newOrderId)}&accessToken=${encodeURIComponent(accessToken)}`,
+          `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(newOrderId)}`,
         );
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);

@@ -108,7 +108,11 @@ function MenuLayoutInner({ children }: { children: React.ReactNode }) {
   const storeMatch = !!lastStoreId && lastStoreId === currentStoreId;
 
   // ✅ "ready/done/canceled"이면 배너 숨김 + store mismatch면 숨김
-  const showBanner = !!lastOrder && storeMatch && isActiveStatus(lastOrder.status);
+  const showBanner =
+    !!lastOrder &&
+    !!lastOrderToken &&
+    storeMatch &&
+    isActiveStatus(lastOrder.status);
 
   return (
     <div>
@@ -140,7 +144,7 @@ function MenuLayoutInner({ children }: { children: React.ReactNode }) {
           <Link
             href={`/status?store=${encodeURIComponent(currentStoreId)}&orderId=${encodeURIComponent(
               lastOrder.id
-            )}&accessToken=${encodeURIComponent(lastOrderToken)}`}
+            )}`}
             style={{
               padding: "8px 10px",
               background: "white",

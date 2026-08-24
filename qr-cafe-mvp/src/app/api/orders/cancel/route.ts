@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
 import { verifyPinHash } from "../../admin/members/_lib";
@@ -13,6 +14,15 @@ type CancelBody = {
   actorPinId?: string | null;
   managerPin?: string | null;
 };
+
+function secureTokenMatches(expected: unknown, received: string) {
+  const expectedBuffer = Buffer.from(String(expected || "").trim(), "utf8");
+  const receivedBuffer = Buffer.from(received, "utf8");
+  if (!expectedBuffer.length || expectedBuffer.length !== receivedBuffer.length) {
+    return false;
+  }
+  return timingSafeEqual(expectedBuffer, receivedBuffer);
+}
 
 async function cancelTossPaymentByOrder(
   secretKey: string,
@@ -144,7 +154,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (actor === "customer") {
-      if (!accessToken || accessToken !== String(order.access_token || "").trim()) {
+      if (!accessToken || !secureTokenMatches(order.access_token, accessToken)) {
         return NextResponse.json({ ok: false, code: "CANCEL_FORBIDDEN", message: "취소 권한이 없습니다." }, { status: 403 });
       }
       if (String(order.status || "") !== "new") {

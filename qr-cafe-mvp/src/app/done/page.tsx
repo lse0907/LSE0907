@@ -4,7 +4,10 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { supabase } from "@/app/lib/supabaseClient";
+import {
+  fetchCustomerOrder,
+  type CustomerOrderRow,
+} from "@/app/lib/customerOrder";
 import {
   CustomerTrustFooter,
   StoreIdentity,
@@ -16,6 +19,8 @@ import { PwaInstallGuide } from "@/app/_components/PwaInstallGuide";
 import {
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
+  persistLastOrderAccess,
+  removeAccessTokenFromCurrentUrl,
   resolveStoreId,
 } from "@/app/lib/storeScope";
 
@@ -28,20 +33,7 @@ type OrderStatus =
   | "completed"
   | "cancelled";
 
-type DbOrderRow = {
-  id: string;
-  created_at?: string | null;
-  order_date?: string | null;
-  display_no?: string | null;
-  mode?: string | null;
-  table_no?: string | null;
-  buzzer_no?: string | null;
-  request_note?: string | null;
-  total_count?: number | null;
-  total_price?: number | null;
-  status?: string | null;
-  store_id?: string | null;
-};
+type DbOrderRow = CustomerOrderRow;
 
 type OrderView = {
   id: string;
@@ -241,33 +233,23 @@ function DonePageInner() {
         return;
       }
 
-      // 3) DB 조회 (store 검증)
-      const { data, error } = await supabase
-        .from("orders")
-        .select(
-          "id,created_at,order_date,display_no,mode,table_no,buzzer_no,request_note,total_count,total_price,status,store_id",
-        )
-        .eq("id", orderId)
-        .eq("store_id", storeId)
-        .eq("access_token", accessToken)
-        .maybeSingle();
-
-      if (error) {
-        console.error("[done] fetch order error:", error.message);
-        setErrMsg(error.message);
-        setOrder(null);
-        setLoading(false);
-        return;
+      if (accessTokenFromQuery) {
+        persistLastOrderAccess({ storeId, orderId, accessToken });
+        removeAccessTokenFromCurrentUrl();
       }
 
-      if (!data) {
+      // 3) 서버에서 store/order/token을 검증하고 고객 공개 필드만 조회
+      try {
+        const data = await fetchCustomerOrder({ storeId, orderId, accessToken });
+        setOrder(toOrderView(data));
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "주문 정보를 불러오지 못했습니다.";
+        console.error("[done] fetch order error:", message);
+        setErrMsg(message);
         setOrder(null);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      setOrder(toOrderView(data as DbOrderRow));
-      setLoading(false);
     };
 
     run();
@@ -292,7 +274,7 @@ function DonePageInner() {
       const json = await res.json();
       if (!res.ok || !json?.ok)
         throw new Error(String(json?.message || "주문 취소 실패"));
-      window.location.href = `/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(order.id)}&accessToken=${encodeURIComponent(accessTokenForLinks)}`;
+      window.location.href = `/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(order.id)}`;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setErrMsg(msg || "취소에 실패했습니다.");
@@ -372,7 +354,7 @@ function DonePageInner() {
 
         <div className="actions">
           {!isCancelled ? (
-            <Link className="primaryAction" href={`/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(order.id)}&accessToken=${encodeURIComponent(accessTokenForLinks)}`}>
+            <Link className="primaryAction" href={`/status?store=${encodeURIComponent(storeIdForLinks)}&orderId=${encodeURIComponent(order.id)}`}>
               주문 상태 보기
             </Link>
           ) : null}

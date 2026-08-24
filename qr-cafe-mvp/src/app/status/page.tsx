@@ -6,6 +6,10 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
+  fetchCustomerOrder,
+  type CustomerOrderRow,
+} from "@/app/lib/customerOrder";
+import {
   CustomerTrustFooter,
   StoreCustomerHeader,
 } from "@/app/_components/StoreCustomerBrand";
@@ -14,6 +18,8 @@ import { CustomerOrderProgress } from "@/app/_components/CustomerOrderProgress";
 import {
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
+  persistLastOrderAccess,
+  removeAccessTokenFromCurrentUrl,
   resolveStoreId,
 } from "@/app/lib/storeScope";
 
@@ -26,15 +32,7 @@ type OrderStatus =
   | "completed"
   | "cancelled";
 
-type DbOrderRow = {
-  id: string;
-  display_no?: string | null;
-  mode?: string | null;
-  table_no?: string | null;
-  buzzer_no?: string | null;
-  status?: string | null;
-  store_id?: string | null;
-};
+type DbOrderRow = CustomerOrderRow;
 
 type OrderView = {
   id: string;
@@ -157,6 +155,7 @@ function StatusPageInner() {
 
   const readyShownRef = useRef<Record<string, boolean>>({});
   const lastStatusRef = useRef<Record<string, OrderStatus | undefined>>({});
+  const orderFetchInFlightRef = useRef(false);
 
   useEffect(() => {
     setLastStoreId((localStorage.getItem(LS_LAST_STORE_ID_KEY) || "").trim());
@@ -191,6 +190,16 @@ function StatusPageInner() {
     return accessTokenFromQuery || lastOrderToken || "";
   }, [accessTokenFromQuery, lastOrderToken]);
 
+  useEffect(() => {
+    if (!storeId || !orderId || !accessTokenFromQuery) return;
+    persistLastOrderAccess({
+      storeId,
+      orderId,
+      accessToken: accessTokenFromQuery,
+    });
+    removeAccessTokenFromCurrentUrl();
+  }, [accessTokenFromQuery, orderId, storeId]);
+
   const clearStoredOrder = async () => {
     try {
       if (storeId) {
@@ -220,28 +229,24 @@ function StatusPageInner() {
       setOrder(null);
       return;
     }
+    if (orderFetchInFlightRef.current) return;
 
-    const { data, error } = await supabase
-      .from("orders")
-      .select("id,display_no,mode,table_no,buzzer_no,status,store_id")
-      .eq("id", id)
-      .eq("store_id", storeId)
-      .eq("access_token", accessToken)
-      .maybeSingle();
-
-    if (error) {
-      console.error("[status] fetch order error:", error.message);
-      setErrMsg(error.message);
+    orderFetchInFlightRef.current = true;
+    try {
+      const data = await fetchCustomerOrder({
+        storeId,
+        orderId: id,
+        accessToken,
+      });
+      setOrder(toOrderView(data));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "주문 정보를 불러오지 못했습니다.";
+      console.error("[status] fetch order error:", message);
+      setErrMsg(message);
       setOrder(null);
-      return;
+    } finally {
+      orderFetchInFlightRef.current = false;
     }
-
-    if (!data) {
-      setOrder(null);
-      return;
-    }
-
-    setOrder(toOrderView(data as DbOrderRow));
   };
 
   useEffect(() => {
@@ -266,14 +271,23 @@ function StatusPageInner() {
 
   useEffect(() => {
     if (!storeId || !orderId || !accessToken) return;
+    if (order?.status === "completed" || order?.status === "cancelled") return;
 
     const t = window.setInterval(() => {
-      fetchOrder(orderId);
-    }, 1200);
+      if (document.visibilityState === "visible") void fetchOrder(orderId);
+    }, 3000);
 
-    return () => window.clearInterval(t);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void fetchOrder(orderId);
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, storeId, accessToken]);
+  }, [orderId, storeId, accessToken, order?.status]);
 
   useEffect(() => {
     if (!order) return;
