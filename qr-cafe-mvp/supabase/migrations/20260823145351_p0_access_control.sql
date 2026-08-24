@@ -1,4 +1,5 @@
--- P0 access-control hardening for customer orders and menu categories.
+-- P0 access-control hardening for customer orders, staff packing checks,
+-- menu categories, privileged functions, and exposed views.
 --
 -- Deployment order:
 --   1. Deploy the customer order-view API and clients first.
@@ -86,7 +87,33 @@ grant select on table public.order_items to authenticated;
 grant select on table public.order_item_options to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 2. Menu categories: public active reads, owner/OPS management only.
+-- 2. Packing checks: authenticated store members/OPS read, server-only write.
+-- ---------------------------------------------------------------------------
+
+alter table public.order_item_packing_checks enable row level security;
+
+drop policy if exists order_item_packing_checks_select on public.order_item_packing_checks;
+drop policy if exists order_item_packing_checks_insert on public.order_item_packing_checks;
+drop policy if exists order_item_packing_checks_update on public.order_item_packing_checks;
+
+drop policy if exists order_item_packing_checks_select_store_member_or_ops
+on public.order_item_packing_checks;
+create policy order_item_packing_checks_select_store_member_or_ops
+on public.order_item_packing_checks
+for select
+to authenticated
+using (
+  public.is_store_member(store_id)
+  or public.is_ops_user()
+);
+
+revoke all privileges on table public.order_item_packing_checks from anon, authenticated;
+grant select (order_item_id, checked)
+on table public.order_item_packing_checks
+to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 3. Menu categories: public active reads, owner/OPS management only.
 -- ---------------------------------------------------------------------------
 
 alter table public.menu_categories enable row level security;
@@ -147,7 +174,7 @@ grant select on table public.menu_categories to anon, authenticated;
 grant insert, update, delete on table public.menu_categories to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 3. Privileged functions: server-only execution.
+-- 4. Privileged mutation functions: server-only execution.
 -- ---------------------------------------------------------------------------
 
 revoke all privileges on function public.apply_loyalty_on_paid_order(
@@ -178,6 +205,107 @@ grant execute on function public.apply_store_billing_payment(
   text, integer, boolean, boolean, text, text, integer, text
 ) to service_role;
 
+-- Legacy staff RPC and loyalty helpers are no longer called directly by the
+-- browser. Their SECURITY DEFINER privileges must not remain public APIs.
+revoke all privileges on function public.staff_update_order_items_status(
+  text, uuid[], text, integer
+) from public, anon, authenticated;
+grant execute on function public.staff_update_order_items_status(
+  text, uuid[], text, integer
+) to service_role;
+
+revoke all privileges on function public.issue_customer_coupon(
+  text, uuid, uuid
+) from public, anon, authenticated;
+grant execute on function public.issue_customer_coupon(
+  text, uuid, uuid
+) to service_role;
+
+revoke all privileges on function public.recalculate_customer_tier(
+  text, uuid
+) from public, anon, authenticated;
+grant execute on function public.recalculate_customer_tier(
+  text, uuid
+) to service_role;
+
+-- Trigger functions do not need to be directly callable through the Data API.
+revoke all privileges on function public.initialize_store_billing_account()
+from public, anon, authenticated;
+grant execute on function public.initialize_store_billing_account()
+to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 5. Authenticated admin helpers: remove unnecessary anonymous execution.
+-- ---------------------------------------------------------------------------
+
+revoke all privileges on function public.admin_cancel_customer_coupon(
+  text, uuid
+) from public, anon;
+grant execute on function public.admin_cancel_customer_coupon(
+  text, uuid
+) to authenticated, service_role;
+
+revoke all privileges on function public.admin_check_store_delete_eligibility(
+  text
+) from public, anon;
+grant execute on function public.admin_check_store_delete_eligibility(
+  text
+) to authenticated, service_role;
+
+revoke all privileges on function public.admin_copy_categories_v1(
+  text, text
+) from public, anon;
+grant execute on function public.admin_copy_categories_v1(
+  text, text
+) to authenticated, service_role;
+
+revoke all privileges on function public.admin_copy_menus_v1(
+  text, text
+) from public, anon;
+grant execute on function public.admin_copy_menus_v1(
+  text, text
+) to authenticated, service_role;
+
+revoke all privileges on function public.admin_copy_options_v1(
+  text, text
+) from public, anon;
+grant execute on function public.admin_copy_options_v1(
+  text, text
+) to authenticated, service_role;
+
+revoke all privileges on function public.admin_issue_coupon_to_selected_customers(
+  text, uuid, uuid[], boolean
+) from public, anon;
+grant execute on function public.admin_issue_coupon_to_selected_customers(
+  text, uuid, uuid[], boolean
+) to authenticated, service_role;
+
+revoke all privileges on function public.admin_search_coupon_targets(
+  text, text, text, integer, integer, integer, integer, integer, integer,
+  uuid, boolean, integer
+) from public, anon;
+grant execute on function public.admin_search_coupon_targets(
+  text, text, text, integer, integer, integer, integer, integer, integer,
+  uuid, boolean, integer
+) to authenticated, service_role;
+
+revoke all privileges on function public.admin_soft_delete_store_if_unused(
+  text
+) from public, anon;
+grant execute on function public.admin_soft_delete_store_if_unused(
+  text
+) to authenticated, service_role;
+
+revoke all privileges on function public.current_ops_role()
+from public, anon;
+grant execute on function public.current_ops_role()
+to authenticated, service_role;
+
+revoke all privileges on function public.get_store_names(text[])
+from public, anon;
+grant execute on function public.get_store_names(text[])
+to authenticated, service_role;
+
 -- RLS helper functions remain available only to signed-in users and the server.
 -- They return authorization booleans and are intentionally used by the policies
 -- above; anonymous callers do not need direct execution rights.
@@ -189,5 +317,32 @@ grant execute on function public.is_store_owner(text) to authenticated, service_
 
 revoke execute on function public.is_ops_user() from public, anon;
 grant execute on function public.is_ops_user() to authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 6. Intentional public projections and RLS-respecting view.
+-- ---------------------------------------------------------------------------
+
+-- Checkout clients need these two safe projections before authentication.
+-- They return only the public PG client key/MID or a checkout-mode boolean;
+-- the store secret key is never returned.
+revoke all privileges on function public.get_store_checkout_client_config(text)
+from public, anon, authenticated;
+grant execute on function public.get_store_checkout_client_config(text)
+to anon, authenticated, service_role;
+
+revoke all privileges on function public.get_store_checkout_mode(text)
+from public, anon, authenticated;
+grant execute on function public.get_store_checkout_mode(text)
+to anon, authenticated, service_role;
+
+-- Postgres 17 supports security_invoker views. Preserve the existing public
+-- projection while making the underlying option/menu RLS policies effective.
+alter view public.admin_option_groups_overview
+set (security_invoker = true);
+
+revoke all privileges on table public.admin_option_groups_overview
+from public, anon, authenticated;
+grant select on table public.admin_option_groups_overview
+to anon, authenticated;
 
 commit;
