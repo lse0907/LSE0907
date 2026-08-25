@@ -35,14 +35,14 @@ export function createSupabaseAdminClient() {
   });
 }
 
-async function getRequestUserId(req: NextRequest) {
+export function createRequestSupabaseClient(req: NextRequest) {
   const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
   const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
   if (!supabaseUrl || !anonKey) {
     throw new ApiError(500, "서버 환경변수(SUPABASE ANON)가 필요합니다.", "MISSING_SUPABASE_ANON_ENV");
   }
 
-  const supabase = createServerClient(supabaseUrl, anonKey, {
+  return createServerClient(supabaseUrl, anonKey, {
     cookies: {
       get(name: string) {
         return req.cookies.get(name)?.value;
@@ -51,7 +51,10 @@ async function getRequestUserId(req: NextRequest) {
       remove() {},
     },
   });
+}
 
+async function getRequestUserId(req: NextRequest) {
+  const supabase = createRequestSupabaseClient(req);
   const { data, error } = await supabase.auth.getUser();
   if (error || !data?.user?.id) {
     throw new ApiError(401, "로그인이 필요합니다.", "LOGIN_REQUIRED");
