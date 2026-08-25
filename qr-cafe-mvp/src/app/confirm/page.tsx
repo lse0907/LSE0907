@@ -106,6 +106,7 @@ type RawIssuedCoupon = {
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
 const PREPAY_PENDING_KEY = "qrCafePrepayPending";
+const CHECKOUT_REQUEST_KEY = "qrCafeCheckoutRequest";
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString();
@@ -172,12 +173,21 @@ function parseCart(cartParam: string | null): CartLine[] {
   }
 }
 
-function paymentOrderId() {
-  const raw = (
-    globalThis.crypto?.randomUUID?.() ||
-    `${Date.now()}_${Math.random().toString(16).slice(2)}`
-  ).replace(/[^a-zA-Z0-9_-]/g, "");
-  return `pay_${raw}`.slice(0, 64);
+function getOrCreateClientRequestId(storeId: string, payload: unknown) {
+  const key = `${CHECKOUT_REQUEST_KEY}:${storeId}`;
+  const fingerprint = JSON.stringify(payload);
+  try {
+    const raw = sessionStorage.getItem(key);
+    const saved = raw ? JSON.parse(raw) : null;
+    if (saved?.fingerprint === fingerprint && typeof saved?.id === "string") return saved.id;
+  } catch {
+    // Ignore stale browser storage and issue a new request id.
+  }
+
+  const id = globalThis.crypto?.randomUUID?.();
+  if (!id) throw new Error("안전한 주문 요청번호를 생성할 수 없습니다.");
+  sessionStorage.setItem(key, JSON.stringify({ id, fingerprint }));
+  return id;
 }
 
 function tierLabel(raw: string | null | undefined) {
@@ -609,6 +619,8 @@ function ConfirmPageInner() {
         usedPoints: selectedCouponIdForApply ? 0 : usedPoints,
         usedCouponId: selectedCouponIdForApply,
       };
+      const clientRequestId = getOrCreateClientRequestId(storeId, commonPayload);
+      const requestPayload = { ...commonPayload, clientRequestId };
 
       if (paymentStatus === "paid") {
         if (!pgConfig.clientKey) {
@@ -620,7 +632,7 @@ function ConfirmPageInner() {
         const quoteRes = await fetch("/api/orders/quote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(commonPayload),
+          body: JSON.stringify(requestPayload),
         });
         const quoteJson = await quoteRes.json();
         if (!quoteRes.ok || !quoteJson?.ok) {
@@ -630,10 +642,20 @@ function ConfirmPageInner() {
         }
 
         const serverQuote = quoteJson.quote;
-        const payOrderId = paymentOrderId();
+        const checkout = quoteJson.checkout;
+        const payOrderId = String(checkout?.tossOrderId || "");
+        const checkoutAttemptId = String(checkout?.attemptId || "");
+        const recoveryToken = String(checkout?.recoveryToken || "");
+        if (!payOrderId || !checkoutAttemptId || !recoveryToken) {
+          throw new Error("서버 결제 요청정보가 누락되었습니다.");
+        }
         const pending = {
           createdAt: Date.now(),
           storeId,
+          clientRequestId,
+          checkoutAttemptId,
+          recoveryToken,
+          tossOrderId: payOrderId,
           customerUserId: currentCustomerUserId,
           cartLines,
           mode: effectiveMode,
@@ -658,7 +680,7 @@ function ConfirmPageInner() {
             ? `${cartLines[0]?.name || "주문"} 외 ${cartLines.length - 1}건`
             : cartLines[0]?.name || "주문";
         const base = window.location.origin;
-        const successUrl = `${base}/confirm/success?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}`;
+        const successUrl = `${base}/confirm/success?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}&attempt=${encodeURIComponent(checkoutAttemptId)}`;
         const failUrl = `${base}/confirm/fail?store=${encodeURIComponent(storeId)}&poid=${encodeURIComponent(payOrderId)}`;
 
         await tossPayments.requestPayment("카드", {
@@ -676,7 +698,7 @@ function ConfirmPageInner() {
       const createRes = await fetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...commonPayload, paymentStatus }),
+        body: JSON.stringify({ ...requestPayload, paymentStatus }),
       });
       const createJson = await createRes.json();
       if (!createRes.ok || !createJson?.ok || !createJson?.order) {
@@ -698,6 +720,7 @@ function ConfirmPageInner() {
       localStorage.setItem(lsLastOrderTokenKey(storeId), accessToken);
       localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
       sessionStorage.removeItem(cartStorageKey);
+      sessionStorage.removeItem(`${CHECKOUT_REQUEST_KEY}:${storeId}`);
 
       router.push(
         `/done?store=${encodeURIComponent(storeId)}&orderId=${encodeURIComponent(

@@ -176,6 +176,7 @@ function AdminLoyaltyInner() {
   const storeId = useMemo(() => (sp.get("store") || getCurrentStoreId() || "").trim(), [sp]);
 
   const [loading, setLoading] = useState(true);
+  const [canManageLoyalty, setCanManageLoyalty] = useState(false);
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<"info" | "error" | "success">("info");
   const [savingSettings, setSavingSettings] = useState(false);
@@ -262,6 +263,12 @@ function AdminLoyaltyInner() {
   const showMsg = (text: string, tone: "info" | "error" | "success" = "info") => {
     setMsg(text);
     setMsgTone(tone);
+  };
+
+  const requireOwner = () => {
+    if (canManageLoyalty) return true;
+    showMsg("포인트·쿠폰 정책 변경과 발급·취소는 매장 Owner만 가능합니다.", "error");
+    return false;
   };
 
   const loadProfiles = async (ids: string[]) => {
@@ -390,7 +397,7 @@ function AdminLoyaltyInner() {
 
     const { data: member } = await supabase
       .from("store_members")
-      .select("id")
+      .select("id,role")
       .eq("user_id", uid)
       .eq("store_id", storeId)
       .maybeSingle();
@@ -400,6 +407,7 @@ function AdminLoyaltyInner() {
       setLoading(false);
       return;
     }
+    setCanManageLoyalty(String(member.role || "").toLowerCase() === "owner");
 
     const [settingsRes, tierRes] = await Promise.all([
       supabase
@@ -478,6 +486,7 @@ function AdminLoyaltyInner() {
 
   const saveSettings = async () => {
     if (!storeId) return;
+    if (!requireOwner()) return;
     const validation = validateSettings();
     if (validation) return showMsg(validation, "error");
     setSavingSettings(true);
@@ -491,6 +500,7 @@ function AdminLoyaltyInner() {
 
   const saveTierRules = async () => {
     if (!storeId) return;
+    if (!requireOwner()) return;
     setSavingTier(true);
     setMsg("");
     const payload: TierRulesRow = { ...tierRules, store_id: storeId };
@@ -502,6 +512,7 @@ function AdminLoyaltyInner() {
 
   const createTemplate = async () => {
     if (!storeId) return;
+    if (!requireOwner()) return;
     if (!newTemplate.name.trim()) return showMsg("쿠폰 이름을 입력해 주세요.", "error");
     const discountValue = Math.max(1, Math.floor(toNumber(newTemplate.discount_value, 1000)));
     if (newTemplate.discount_type === "percent" && discountValue > 100) return showMsg("정률 할인은 100% 이하로 입력해 주세요.", "error");
@@ -580,6 +591,7 @@ function AdminLoyaltyInner() {
 
   const issueCouponToSelectedTargets = async () => {
     if (!storeId) return;
+    if (!requireOwner()) return;
     if (!issueTemplateId) return showMsg("발급할 쿠폰을 선택해 주세요.", "error");
     if (!selectedTargetIds.length) return showMsg("발급할 고객을 선택해 주세요.", "error");
     if (!bulkConfirmChecked) return showMsg("선택 고객 발급 확인을 체크해 주세요.", "error");
@@ -588,16 +600,21 @@ function AdminLoyaltyInner() {
 
     setBulkIssuing(true);
     setMsg("");
-    const { data, error } = await supabase.rpc("admin_issue_coupon_to_selected_customers", {
-      p_store_id: storeId,
-      p_template_id: issueTemplateId,
-      p_customer_user_ids: selectedTargetIds,
-      p_exclude_existing: targetExcludeExisting,
+    const issueRes = await fetch("/api/admin/loyalty/coupons/issue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        storeId,
+        templateId: issueTemplateId,
+        customerUserIds: selectedTargetIds,
+        excludeExisting: targetExcludeExisting,
+      }),
     });
+    const issueJson = await issueRes.json();
 
-    if (error) showMsg(`선택 고객 발급 실패: ${error.message}`, "error");
+    if (!issueRes.ok || !issueJson?.ok) showMsg(`선택 고객 발급 실패: ${issueJson?.message || "요청 실패"}`, "error");
     else {
-      const result = (data || {}) as BulkIssueResult;
+      const result = (issueJson.result || {}) as BulkIssueResult;
       const issuedTargetIds = [...selectedTargetIds];
       setBulkIssueResult(result);
       showMsg(`선택 ${result.requested_count || selectedTargetIds.length}명 중 ${result.issued_count || 0}명에게 발급했습니다.`, "success");
@@ -636,15 +653,18 @@ function AdminLoyaltyInner() {
 
   const cancelIssuedCoupon = async (row: IssuedCouponRow) => {
     if (!storeId || row.status !== "issued") return;
+    if (!requireOwner()) return;
     if (!window.confirm("사용 전 쿠폰만 취소됩니다. 취소할까요?")) return;
 
     setCancellingCouponId(row.id);
     setMsg("");
-    const { error } = await supabase.rpc("admin_cancel_customer_coupon", {
-      p_store_id: storeId,
-      p_coupon_id: row.id,
+    const cancelRes = await fetch("/api/admin/loyalty/coupons/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeId, couponId: row.id }),
     });
-    if (error) showMsg(`쿠폰 취소 실패: ${error.message}`, "error");
+    const cancelJson = await cancelRes.json();
+    if (!cancelRes.ok || !cancelJson?.ok) showMsg(`쿠폰 취소 실패: ${cancelJson?.message || "요청 실패"}`, "error");
     else {
       showMsg("쿠폰을 취소했습니다.", "success");
       await loadIssuedCoupons("reset");
@@ -672,6 +692,7 @@ function AdminLoyaltyInner() {
 
   const saveTemplateEdit = async (row: CouponTemplateRow) => {
     if (!storeId || editingTemplateId !== row.id) return;
+    if (!requireOwner()) return;
     const name = editTemplate.name.trim();
     if (!name) return showMsg("쿠폰 이름을 입력해 주세요.", "error");
     const discountValue = Math.max(1, Math.floor(toNumber(editTemplate.discount_value, row.discount_value)));
@@ -706,6 +727,7 @@ function AdminLoyaltyInner() {
   };
 
   const toggleTemplate = async (row: CouponTemplateRow) => {
+    if (!requireOwner()) return;
     const { error } = await supabase.from("store_coupon_templates").update({ is_active: !row.is_active }).eq("id", row.id);
     if (error) showMsg(`쿠폰 상태 변경 실패: ${error.message}`, "error");
     else await loadTemplates();
@@ -716,6 +738,10 @@ function AdminLoyaltyInner() {
   return (
     <main className="loyaltyPage">
       <AdminPageHeader title="포인트/쿠폰 설정" description="재방문 고객을 위한 적립 정책과 쿠폰을 관리합니다." storeId={storeId} eyebrow="LOYALTY" />
+
+      {!canManageLoyalty ? (
+        <div className="notice notice-info" role="status">조회 전용입니다. 정책 변경과 쿠폰 발급·취소는 매장 Owner만 가능합니다.</div>
+      ) : null}
 
       {msg ? <div className={`notice notice-${msgTone}`} role="status">{msg}</div> : null}
 

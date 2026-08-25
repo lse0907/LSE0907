@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/app/lib/supabaseClient";
 import {
   CustomerTrustFooter,
   StoreIdentity,
@@ -39,6 +38,10 @@ type CartLine = {
 type PendingPrepay = {
   createdAt: number;
   storeId: string;
+  clientRequestId?: string;
+  checkoutAttemptId?: string;
+  recoveryToken?: string;
+  tossOrderId?: string;
   customerUserId?: string | null;
   cartLines: CartLine[];
   mode: "dine-in" | "takeout";
@@ -49,7 +52,6 @@ type PendingPrepay = {
   usedPoints?: number;
   usedCouponId?: string | null;
   payableAmount?: number;
-  paymentConfirmed?: boolean;
   createdOrderId?: string;
   createdAccessToken?: string;
 };
@@ -63,6 +65,7 @@ function ConfirmSuccessPageInner() {
 
   const storeId = useMemo(() => String(sp.get("store") || "").trim(), [sp]);
   const poid = useMemo(() => String(sp.get("poid") || "").trim(), [sp]);
+  const attemptId = useMemo(() => String(sp.get("attempt") || "").trim(), [sp]);
   const paymentKey = useMemo(
     () => String(sp.get("paymentKey") || "").trim(),
     [sp],
@@ -93,33 +96,22 @@ function ConfirmSuccessPageInner() {
       }
 
       const raw = localStorage.getItem(`${PREPAY_PENDING_KEY}:${poid}`);
-      if (!raw) {
+      let pending: PendingPrepay | null = null;
+      if (raw) {
+        try {
+          pending = JSON.parse(raw) as PendingPrepay;
+        } catch {
+          pending = null;
+        }
+      }
+
+      if (pending && (pending.storeId !== storeId || pending.tossOrderId !== orderId)) {
         setStatus("error");
-        setMessage("주문 정보가 없습니다. 다시 주문해주세요.");
+        setMessage("저장된 주문 정보와 결제 결과가 일치하지 않습니다.");
         return;
       }
 
-      let pending: PendingPrepay;
-      try {
-        pending = JSON.parse(raw) as PendingPrepay;
-      } catch {
-        setStatus("error");
-        setMessage("주문 정보를 읽지 못했습니다.");
-        return;
-      }
-
-      if (
-        !pending ||
-        pending.storeId !== storeId ||
-        !Array.isArray(pending.cartLines) ||
-        !pending.cartLines.length
-      ) {
-        setStatus("error");
-        setMessage("주문 정보가 올바르지 않습니다.");
-        return;
-      }
-
-      if (pending.createdOrderId && pending.createdAccessToken) {
+      if (pending?.createdOrderId && pending.createdAccessToken) {
         localStorage.setItem(lsLastOrderIdKey(storeId), pending.createdOrderId);
         localStorage.setItem(lsLastOrderTokenKey(storeId), pending.createdAccessToken);
         localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
@@ -132,89 +124,58 @@ function ConfirmSuccessPageInner() {
       try {
         if (mounted) {
           setStatus("working");
-          setMessage(
-            pending.paymentConfirmed ? "주문 접수 중..." : "결제 확인 중...",
-          );
+          setMessage("결제 확인 및 주문 접수 중...");
         }
 
-        if (!pending.paymentConfirmed) {
-          const confirmRes = await fetch("/api/payments/toss/confirm", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentKey, orderId, amount, storeId }),
-          });
-
-          const confirmJson = await confirmRes.json();
-          if (!confirmRes.ok || !confirmJson?.ok) {
-            throw new Error(
-              String(confirmJson?.message || "결제 확인에 실패했습니다."),
-            );
-          }
-
-          pending = { ...pending, paymentConfirmed: true };
-          localStorage.setItem(
-            `${PREPAY_PENDING_KEY}:${poid}`,
-            JSON.stringify(pending),
-          );
-        }
-
-        let loyaltyCustomerUserId = pending.customerUserId || null;
-        if (!loyaltyCustomerUserId) {
-          const { data: authData } = await supabase.auth.getUser();
-          loyaltyCustomerUserId = authData?.user?.id || null;
-        }
-
-        const createRes = await fetch("/api/orders/create", {
+        const confirmRes = await fetch("/api/payments/toss/confirm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            checkoutAttemptId: pending?.checkoutAttemptId || attemptId || undefined,
             storeId,
-            cartLines: pending.cartLines,
-            mode: pending.mode,
-            table: pending.mode === "dine-in" ? pending.table || "" : "",
-            requestNote: pending.requestNote || "",
-            customerUserId: loyaltyCustomerUserId,
-            usedPoints: Math.max(0, Number(pending.usedPoints || 0)),
-            usedCouponId: pending.usedCouponId || null,
-            paymentStatus: "paid",
             paymentKey,
-            tossOrderId: orderId,
-            paidAmount: amount,
+            orderId,
+            amount,
           }),
         });
 
-        const createJson = await createRes.json();
-        if (!createRes.ok || !createJson?.ok || !createJson?.order) {
+        const confirmJson = await confirmRes.json();
+        if (!confirmRes.ok || !confirmJson?.ok || !confirmJson?.order) {
           throw new Error(
             String(
-              createJson?.message ||
-                "결제 완료. 주문 접수 재시도가 필요합니다.",
+              confirmJson?.message ||
+                "결제 확인 후 주문 접수를 복구하고 있습니다. 다시 확인해주세요.",
             ),
           );
         }
 
-        const created = createJson.order;
+        const created = confirmJson.order;
         const newOrderId = String(created.orderId || "");
         const accessToken = String(created.accessToken || "");
         if (!newOrderId || !accessToken) {
           throw new Error("주문 확인 정보가 누락되었습니다.");
         }
 
-        localStorage.setItem(
-          `${PREPAY_PENDING_KEY}:${poid}`,
-          JSON.stringify({
-            ...pending,
-            createdOrderId: newOrderId,
-            createdAccessToken: accessToken,
-          }),
-        );
+        if (pending) {
+          localStorage.setItem(
+            `${PREPAY_PENDING_KEY}:${poid}`,
+            JSON.stringify({
+              ...pending,
+              createdOrderId: newOrderId,
+              createdAccessToken: accessToken,
+            }),
+          );
+        }
         localStorage.setItem(lsLastOrderIdKey(storeId), newOrderId);
         localStorage.setItem(lsLastOrderTokenKey(storeId), accessToken);
         localStorage.setItem(LS_LAST_STORE_ID_KEY, storeId);
         localStorage.removeItem(`${PREPAY_PENDING_KEY}:${poid}`);
         try {
-          const cartKey = `qrCafeCart:${storeId}:${pending.mode === "dine-in" && pending.table ? pending.table : "counter"}`;
-          sessionStorage.removeItem(cartKey);
+          if (pending) {
+            const cartKey = `qrCafeCart:${storeId}:${pending.mode === "dine-in" && pending.table ? pending.table : "counter"}`;
+            sessionStorage.removeItem(cartKey);
+          }
+          sessionStorage.removeItem(`qrCafeCheckoutRequest:${storeId}`);
         } catch {
           // ignore storage cleanup errors
         }
@@ -239,7 +200,7 @@ function ConfirmSuccessPageInner() {
     return () => {
       mounted = false;
     };
-  }, [amount, orderId, paymentKey, poid, retryCount, router, storeId]);
+  }, [amount, attemptId, orderId, paymentKey, poid, retryCount, router, storeId]);
 
   return (
     <main className="paymentPage customer-page">
