@@ -10,6 +10,7 @@ export type CustomerOrderRow = {
   total_count?: number | null;
   total_price?: number | null;
   status?: string | null;
+  payment_status?: string | null;
   store_id?: string | null;
 };
 

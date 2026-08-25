@@ -97,6 +97,21 @@ type RefundCaseRow = {
   support_ticket_id: number | null; reason: string; status: string; toss_status: string | null;
   toss_checked_at: string | null; local_payment_status: string | null; requested_at: string; completed_at: string | null;
 };
+type OrderCancelCaseRow = {
+  id: string;
+  order_id: string;
+  store_id: string;
+  status: string;
+  attempt_count: number;
+  pg_status: string | null;
+  failure_code: string | null;
+  failure_detail: string | null;
+  requested_at: string;
+  last_attempt_at: string | null;
+  next_retry_at: string | null;
+  completed_at: string | null;
+  updated_at: string;
+};
 type OrderBaseRow = {
   store_id: string | null;
   order_date: string | null;
@@ -275,6 +290,8 @@ function ticketCategoryLabel(category: string) {
 function refundStatusLabel(status: string) {
   if (status === "requested") return "요청됨";
   if (status === "processing") return "처리 중";
+  if (status === "retryable") return "재시도 대기";
+  if (status === "pg_cancelled") return "PG 취소 확인";
   if (status === "completed") return "취소 완료";
   if (status === "failed") return "취소 실패";
   if (status === "reconcile_required") return "확인 필요";
@@ -402,6 +419,10 @@ export default function OpsPage() {
   const [refundSyncTarget, setRefundSyncTarget] = useState<RefundCaseRow | null>(null);
   const [refundSyncReason, setRefundSyncReason] = useState("");
   const [refundActionId, setRefundActionId] = useState<number | null>(null);
+  const [orderCancelCases, setOrderCancelCases] = useState<OrderCancelCaseRow[]>([]);
+  const [orderCancelLoading, setOrderCancelLoading] = useState(false);
+  const [orderCancelActionId, setOrderCancelActionId] = useState<string | null>(null);
+  const [orderCancelReasons, setOrderCancelReasons] = useState<Record<string, string>>({});
   const [subscriptionActivityOpen, setSubscriptionActivityOpen] = useState(false);
   const isOpsMaster = opsIdentity.role === "master";
   const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
@@ -665,11 +686,43 @@ export default function OpsPage() {
     setRefundActionId(null);
   };
 
+  const loadOrderCancelCases = useCallback(async () => {
+    if (isOps !== true || !canManageBilling) return;
+    setOrderCancelLoading(true);
+    const response = await fetch("/api/ops/order-cancel-reconcile", { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result?.ok) setOrderCancelCases((result.cases || []) as OrderCancelCaseRow[]);
+    else setMsg(String(result?.message || "주문 결제취소 예외건을 불러오지 못했습니다."));
+    setOrderCancelLoading(false);
+  }, [canManageBilling, isOps]);
+
+  const reconcileOrderCancel = async (attemptId: string, action: "inspect" | "retry") => {
+    const reason = String(orderCancelReasons[attemptId] || "").trim();
+    if (reason.length < 2) {
+      setMsg("주문 결제취소 확인·재시도 사유를 2자 이상 입력해 주세요.");
+      return;
+    }
+    setOrderCancelActionId(attemptId);
+    const response = await fetch("/api/ops/order-cancel-reconcile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attemptId, action, reason }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result?.ok) {
+      setMsg(result.state === "refunded" ? "주문 결제취소 상태를 환불 완료로 동기화했습니다." : "PG 상태를 확인했으며 아직 결제취소 처리 중입니다.");
+      await loadOrderCancelCases();
+    } else {
+      setMsg(String(result?.message || "주문 결제취소 확인에 실패했습니다."));
+    }
+    setOrderCancelActionId(null);
+  };
+
   useEffect(() => {
     if (activeTab !== "payments") return;
-    const timer = window.setTimeout(() => void loadRefundHistory(), 0);
+    const timer = window.setTimeout(() => void Promise.all([loadRefundHistory(), loadOrderCancelCases()]), 0);
     return () => window.clearTimeout(timer);
-  }, [activeTab, loadRefundHistory]);
+  }, [activeTab, loadOrderCancelCases, loadRefundHistory]);
 
   const selectedStore = useMemo(
     () => rows.find((r) => r.store_id === selectedStoreId) || rows[0] || null,
@@ -2505,8 +2558,44 @@ export default function OpsPage() {
           <div className="refundSummary" aria-label="환불 처리 현황">
             <div className="notice"><span>처리 필요</span><strong>{refundCases.filter((item) => ["requested", "reviewing", "approved", "processing"].includes(item.status)).length}건</strong></div>
             <div className="notice"><span>확인 필요</span><strong>{refundCases.filter((item) => item.status === "reconcile_required").length}건</strong></div>
+            <div className="notice"><span>주문 결제취소 확인</span><strong>{orderCancelCases.length}건</strong></div>
             <div className="notice"><span>완료된 수동 환불</span><strong>{refundCases.filter((item) => item.status === "completed").length}건</strong></div>
           </div>
+          <article className="card">
+            <div className="panelHeader">
+              <div><div className="sectionTitle">고객 주문 결제취소 예외</div><p>주문은 취소됐지만 PG 취소 완료가 확인되지 않은 건을 조회하고 동일 멱등키로 재시도합니다.</p></div>
+              <button className="btn" disabled={orderCancelLoading} onClick={() => void loadOrderCancelCases()}>{orderCancelLoading ? "불러오는 중" : "새로고침"}</button>
+            </div>
+            <div className="tableWrap">
+              <table className="opsTable">
+                <thead><tr><th>요청일시</th><th>매장·주문</th><th>내부 상태</th><th>PG 상태</th><th>시도</th><th>오류</th><th>확인·재시도</th></tr></thead>
+                <tbody>
+                  {orderCancelCases.map((item) => {
+                    const isWorking = orderCancelActionId === item.id;
+                    const reason = orderCancelReasons[item.id] || "";
+                    return (
+                      <tr key={item.id}>
+                        <td>{fmtDateTime(item.requested_at)}</td>
+                        <td><div className="cellMain"><strong>{item.store_id}</strong><small>주문 {shortId(item.order_id)}</small></div></td>
+                        <td><span className={`pill ${item.status === "reconcile_required" ? "danger" : "warn"}`}>{refundStatusLabel(item.status)}</span></td>
+                        <td><span className={`pill ${item.pg_status === "CANCELED" ? "ok" : item.pg_status ? "warn" : ""}`}>{tossStatusLabel(item.pg_status)}</span></td>
+                        <td><div className="cellMain"><strong>{item.attempt_count}회</strong><small>{fmtDateTime(item.last_attempt_at)}</small></div></td>
+                        <td><div className="cellMain"><strong>{item.failure_code || "확인 대기"}</strong><small title={item.failure_detail || ""}>{item.failure_detail || "-"}</small></div></td>
+                        <td>
+                          <div className="refundActions">
+                            <input className="input" value={reason} maxLength={240} placeholder="처리 사유" onChange={(event) => setOrderCancelReasons((prev) => ({ ...prev, [item.id]: event.target.value }))} />
+                            <button className="btn" disabled={isWorking || reason.trim().length < 2} onClick={() => void reconcileOrderCancel(item.id, "inspect")}>PG 상태 확인</button>
+                            <button className="btn primary" disabled={isWorking || reason.trim().length < 2} onClick={() => void reconcileOrderCancel(item.id, "retry")}>{isWorking ? "처리 중" : "동일 키로 재시도"}</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!orderCancelLoading && orderCancelCases.length === 0 ? <p className="muted">확인이 필요한 고객 주문 결제취소 건이 없습니다.</p> : null}
+          </article>
           {refundActionNotice ? (
             <div className={`refundActionNotice ${refundActionNotice.kind}`} role="status" aria-live="polite">
               <div>

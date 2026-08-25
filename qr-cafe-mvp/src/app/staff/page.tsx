@@ -10,7 +10,7 @@ import { PwaInstallGuide } from "@/app/_components/PwaInstallGuide";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
-type PaymentStatus = "not_required" | "pending" | "paid";
+type PaymentStatus = "not_required" | "pending" | "paid" | "cancel_pending" | "refunded" | "failed";
 type StaffViewMode = "simple" | "station";
 type ItemStatus = "waiting" | "making" | "done";
 type StaffIconName = "home" | "logout" | "arrow-left" | "check" | "play" | "package-check" | "bell" | "order";
@@ -201,6 +201,9 @@ const PAYMENT_LABEL: Record<PaymentStatus, string> = {
   not_required: "후불(결제 불필요)",
   pending: "결제대기",
   paid: "결제완료",
+  cancel_pending: "결제취소 처리중",
+  refunded: "결제취소 완료",
+  failed: "결제 확인필요",
 };
 
 function isActive(status: OrderStatus) {
@@ -230,7 +233,7 @@ function normalizeItemStatus(v: any): ItemStatus {
 
 function normalizePaymentStatus(v: any): PaymentStatus {
   const s = String(v || "").trim();
-  if (s === "pending" || s === "paid") return s;
+  if (s === "pending" || s === "paid" || s === "cancel_pending" || s === "refunded" || s === "failed") return s;
   return "not_required";
 }
 
@@ -1138,7 +1141,11 @@ function StaffPageInner() {
         throw new Error(String(friendlyCancelMessage[String(json?.code || "")] || json?.message || "주문 취소 처리 실패"));
       }
       setOrders((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, status: "cancelled" } : o))
+        prev.map((o) =>
+          o.id === id
+            ? { ...o, status: "cancelled", paymentStatus: normalizePaymentStatus(json?.paymentStatus ?? o.paymentStatus) }
+            : o,
+        )
       );
       setCancelTarget(null);
       setCancelReturnOrderId(null);
@@ -1334,9 +1341,6 @@ function StaffPageInner() {
     (staffViewMode !== "station" ||
       (stationTab === "order" && selected.status === "new") ||
       (stationTab === "history" && isCompleted(selected.status)));
-  const showDetailPaymentAction =
-    !!selected && staffViewMode !== "station" && prepayAddonActive && selected.paymentStatus === "pending";
-
   const updateOrderInDb = async (id: string, patch: Partial<OrderRecord>) => {
     const sid = storeIdRef.current || storeId;
     if (!sid) return false;
@@ -1346,7 +1350,6 @@ function StaffPageInner() {
     if (actorPinIdForEvent) payload.actorPinId = actorPinIdForEvent;
     if (typeof patch.buzzerNo !== "undefined") payload.buzzerNo = patch.buzzerNo || null;
     if (typeof patch.status !== "undefined") payload.status = patch.status;
-    if (typeof patch.paymentStatus !== "undefined") payload.paymentStatus = patch.paymentStatus;
 
     if (Object.keys(payload).length <= 2) return false;
 
@@ -4160,15 +4163,6 @@ function StaffPageInner() {
                       {statusButtonLabelForView(selected.status)}
                     </button>
 
-                    {showDetailPaymentAction ? (
-                      <button
-                        className="actionBtn"
-                        style={{ borderColor: "var(--action-line)", color: "var(--action-blue)" }}
-                        onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
-                      >
-                        결제완료 처리
-                      </button>
-                    ) : null}
                   </>
                 ) : null}
 
@@ -4195,7 +4189,7 @@ function StaffPageInner() {
       </div>
 
       {selected && mobileView === "detail" ? (
-        <div className={`actionDock ${showDetailPaymentAction ? "actionDockTriple" : ""}`}>
+        <div className="actionDock">
           {showDetailAdvanceAction ? (
             <>
               <button
@@ -4208,15 +4202,6 @@ function StaffPageInner() {
                 {statusButtonLabelForView(selected.status)}
               </button>
 
-              {showDetailPaymentAction ? (
-                <button
-                  className="actionBtn"
-                  style={{ borderColor: "var(--action-line)", color: "var(--action-blue)" }}
-                  onClick={() => updateOrderInDb(selected.id, { paymentStatus: "paid" })}
-                >
-                  결제완료 처리
-                </button>
-              ) : null}
             </>
           ) : null}
 

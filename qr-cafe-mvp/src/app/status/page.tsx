@@ -31,6 +31,7 @@ type OrderStatus =
   | "ready_for_packing"
   | "completed"
   | "cancelled";
+type PaymentStatus = "not_required" | "pending" | "paid" | "cancel_pending" | "refunded" | "failed";
 
 type DbOrderRow = CustomerOrderRow;
 
@@ -41,6 +42,7 @@ type OrderView = {
   table?: string;
   buzzerNo?: string;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
 };
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
@@ -67,6 +69,15 @@ const STATUS_COPY: Record<OrderStatus, { title: string; desc: string }> = {
     title: "주문이 취소됐어요",
     desc: "필요하면 다시 주문해 주세요.",
   },
+};
+
+const PAYMENT_LABEL: Record<PaymentStatus, string> = {
+  not_required: "현장결제",
+  pending: "결제 확인 중",
+  paid: "결제 완료",
+  cancel_pending: "결제 취소 처리 중",
+  refunded: "결제 취소 완료",
+  failed: "결제 확인 필요",
 };
 
 const ORDER_STEPS: Array<{ status: OrderStatus; label: string }> = [
@@ -103,6 +114,12 @@ function normalizeStatus(v: unknown): OrderStatus {
   return "new";
 }
 
+function normalizePaymentStatus(v: unknown): PaymentStatus {
+  const status = String(v || "").trim();
+  if (status === "pending" || status === "paid" || status === "cancel_pending" || status === "refunded" || status === "failed") return status;
+  return "not_required";
+}
+
 function toOrderView(row: DbOrderRow): OrderView {
   return {
     id: String(row.id),
@@ -111,6 +128,7 @@ function toOrderView(row: DbOrderRow): OrderView {
     table: row.table_no ? String(row.table_no) : undefined,
     buzzerNo: row.buzzer_no ? String(row.buzzer_no) : undefined,
     status: normalizeStatus(row.status),
+    paymentStatus: normalizePaymentStatus(row.payment_status),
   };
 }
 
@@ -271,7 +289,7 @@ function StatusPageInner() {
 
   useEffect(() => {
     if (!storeId || !orderId || !accessToken) return;
-    if (order?.status === "completed" || order?.status === "cancelled") return;
+    if (order?.status === "completed" || (order?.status === "cancelled" && order.paymentStatus !== "cancel_pending")) return;
 
     const t = window.setInterval(() => {
       if (document.visibilityState === "visible") void fetchOrder(orderId);
@@ -602,6 +620,10 @@ function StatusPageInner() {
               ) : null}
             </div>
 
+            <div className="statusRow">
+              결제: <b>{PAYMENT_LABEL[visibleOrder.paymentStatus]}</b>
+            </div>
+
             {statusCopy ? (
               <>
                 <div className="stateTitle">{statusCopy.title}</div>
@@ -610,7 +632,15 @@ function StatusPageInner() {
             ) : null}
 
             {visibleOrder.status === "cancelled" ? (
-              <div className="hint">취소된 주문입니다.</div>
+              <div className="hint">
+                {visibleOrder.paymentStatus === "cancel_pending"
+                  ? "주문은 취소되었고 결제 취소를 확인하고 있습니다."
+                  : visibleOrder.paymentStatus === "refunded"
+                    ? "주문과 결제 취소가 완료되었습니다."
+                    : visibleOrder.paymentStatus === "failed"
+                      ? "주문은 취소되었으며 결제상태 확인이 필요합니다."
+                      : "취소된 주문입니다."}
+              </div>
             ) : (
               <CustomerOrderProgress activeIndex={activeStepIndex} />
             )}
