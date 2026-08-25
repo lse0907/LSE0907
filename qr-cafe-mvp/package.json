@@ -10,6 +10,7 @@
     "test:p0-access-control": "node scripts/check-p0-access-control.mjs",
     "test:p0-order-integrity": "node scripts/check-p0-order-integrity.mjs",
     "test:p0-order-cancel": "node scripts/check-p0-order-cancel-consistency.mjs",
+    "test:p0-checkout-mode": "node scripts/check-p0-checkout-mode-security.mjs",
     "test:p0-privacy": "node scripts/check-p0-privacy.mjs"
   },
   "dependencies": {
