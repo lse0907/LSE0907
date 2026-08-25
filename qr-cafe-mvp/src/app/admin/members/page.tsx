@@ -5,6 +5,11 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
 import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
+import {
+  getPasswordPolicyError,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_POLICY_MESSAGE,
+} from "@/app/lib/passwordPolicy";
 
 type TabKey = "accounts" | "pins" | "devices" | "logs";
 type ApiSection = { rows: any[]; error?: string };
@@ -119,8 +124,13 @@ function MembersPageInner() {
 
   const submitAccount = () => {
     if (!accountModal) return;
-    if (!accountModal.loginId.trim() || accountModal.password.length < 8) {
-      setMsg("로그인 ID와 8자 이상 비밀번호를 입력해주세요.");
+    if (!accountModal.loginId.trim()) {
+      setMsg("로그인 ID를 입력해주세요.");
+      return;
+    }
+    const passwordError = getPasswordPolicyError(accountModal.password);
+    if (passwordError) {
+      setMsg(passwordError);
       return;
     }
     mutate("/api/admin/members/accounts", { storeId, ...accountModal });
@@ -216,7 +226,7 @@ function MembersPageInner() {
         ) : null}
       </section>
 
-      {accountModal ? <Modal title={`${roleLabel(accountModal.role)} 공용 계정 만들기`} onClose={() => setAccountModal(null)} onSubmit={submitAccount} submitText="계정 만들기"><label>로그인 ID<input value={accountModal.loginId} onChange={(e) => setAccountModal({ ...accountModal, loginId: e.target.value })} /></label><label>표시 이름<input value={accountModal.displayName} onChange={(e) => setAccountModal({ ...accountModal, displayName: e.target.value })} /></label><label>비밀번호<input type="password" value={accountModal.password} onChange={(e) => setAccountModal({ ...accountModal, password: e.target.value })} placeholder="8자 이상" /></label><p className="hint">실제 Supabase Auth에는 내부 이메일이 자동 생성되고, 화면에는 로그인 ID 중심으로 안내됩니다.</p></Modal> : null}
+      {accountModal ? <Modal title={`${roleLabel(accountModal.role)} 공용 계정 만들기`} onClose={() => setAccountModal(null)} onSubmit={submitAccount} submitText="계정 만들기"><label>로그인 ID<input value={accountModal.loginId} onChange={(e) => setAccountModal({ ...accountModal, loginId: e.target.value })} /></label><label>표시 이름<input value={accountModal.displayName} onChange={(e) => setAccountModal({ ...accountModal, displayName: e.target.value })} /></label><label>비밀번호<input type="password" value={accountModal.password} onChange={(e) => setAccountModal({ ...accountModal, password: e.target.value })} minLength={PASSWORD_MIN_LENGTH} placeholder="10자 이상 · 소문자/숫자/특수문자" /></label><p className="hint">{PASSWORD_POLICY_MESSAGE}</p><p className="hint">실제 Supabase Auth에는 내부 이메일이 자동 생성되고, 화면에는 로그인 ID 중심으로 안내됩니다.</p></Modal> : null}
       {pinModal ? <Modal title={pinModal.action === "reset" ? "PIN 재설정" : "PIN 직접 추가"} onClose={() => setPinModal(null)} onSubmit={submitPinModal} submitText={pinModal.action === "reset" ? "재설정" : "추가"}><label>이름<input value={pinModal.displayName} disabled={pinModal.action === "reset"} onChange={(e) => setPinModal({ ...pinModal, displayName: e.target.value })} /></label><label>권한<select value={pinModal.pinRole} onChange={(e) => setPinModal({ ...pinModal, pinRole: e.target.value === "manager" ? "manager" : "staff" })}><option value="staff">직원</option><option value="manager">매니저</option></select></label><label>새 PIN<input type="password" inputMode="numeric" value={pinModal.pin} onChange={(e) => setPinModal({ ...pinModal, pin: e.target.value })} placeholder="4~8자리 숫자" /></label><label>PIN 확인<input type="password" inputMode="numeric" value={pinModal.pinConfirm} onChange={(e) => setPinModal({ ...pinModal, pinConfirm: e.target.value })} /></label></Modal> : null}
       {deviceNameModal ? <Modal title="기기 이름 변경" onClose={() => setDeviceNameModal(null)} onSubmit={submitDeviceName} submitText="저장"><label>기기 이름<input value={deviceNameModal.deviceName} onChange={(e) => setDeviceNameModal({ ...deviceNameModal, deviceName: e.target.value })} placeholder="예: 카운터 PC" /></label><p className="hint">매장에서 구분하기 쉬운 이름을 입력하세요.</p></Modal> : null}
     </main>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../../_lib/storeAuth";
 import { recordSecurityEvent } from "../_lib";
+import { formatPasswordAuthError, getPasswordPolicyError } from "@/app/lib/passwordPolicy";
 
 type Body = { storeId?: string; loginId?: string; email?: string; password?: string; role?: "manager" | "staff"; displayName?: string };
 
@@ -24,8 +25,13 @@ export async function POST(req: NextRequest) {
     const password = String(body.password || "");
     const displayName = String(body.displayName || (role === "manager" ? "매니저 공용 계정" : "직원 공용 계정")).trim();
 
-    if (!storeId || !email || password.length < 8) {
-      return NextResponse.json({ ok: false, message: "매장, 로그인 ID, 8자 이상 비밀번호가 필요합니다." }, { status: 400 });
+    if (!storeId || !email) {
+      return NextResponse.json({ ok: false, message: "매장과 로그인 ID가 필요합니다." }, { status: 400 });
+    }
+
+    const passwordError = getPasswordPolicyError(password);
+    if (passwordError) {
+      return NextResponse.json({ ok: false, message: passwordError }, { status: 400 });
     }
 
     const supabaseAdmin = createSupabaseAdminClient();
@@ -38,7 +44,10 @@ export async function POST(req: NextRequest) {
       user_metadata: { display_name: displayName, store_role: role, shared_store_id: storeId, login_id: loginId, is_shared_store_account: true },
     });
     if (created.error || !created.data.user) {
-      return NextResponse.json({ ok: false, message: created.error?.message || "계정 생성 실패" }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, message: formatPasswordAuthError(created.error, "계정 생성 실패") },
+        { status: 500 },
+      );
     }
 
     const userId = created.data.user.id;

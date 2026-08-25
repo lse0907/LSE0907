@@ -5,6 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 import Link from "next/link";
 import AuthShell from "@/app/_components/AuthShell";
+import {
+  formatPasswordAuthError,
+  getPasswordPolicyError,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_POLICY_MESSAGE,
+} from "@/app/lib/passwordPolicy";
 
 function SignupCustomerPageInner() {
   const router = useRouter();
@@ -20,6 +26,8 @@ function SignupCustomerPageInner() {
 
   const validate = () => {
     if (!email.trim() || !password) return "이메일과 비밀번호를 입력해주세요.";
+    const passwordError = getPasswordPolicyError(password);
+    if (passwordError) return passwordError;
     if (!name.trim()) return "이름을 입력해주세요.";
     if (!phone.trim()) return "전화번호를 입력해주세요.";
     return "";
@@ -44,7 +52,7 @@ function SignupCustomerPageInner() {
 
     if (signUpErr) {
       setLoading(false);
-      setMsg(signUpErr.message);
+      setMsg(formatPasswordAuthError(signUpErr, "회원가입에 실패했습니다."));
       return;
     }
 
@@ -93,7 +101,7 @@ function SignupCustomerPageInner() {
       <form onSubmit={onSubmit}>
         <p className="authSectionTitle">계정 정보</p>
         <label className="authField">이메일<input className="authInput" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" required placeholder="example@email.com" /></label>
-        <label className="authField">비밀번호<input className="authInput" value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="new-password" required placeholder="안전한 비밀번호를 입력해 주세요" /></label>
+        <label className="authField">비밀번호<input className="authInput" value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="new-password" required minLength={PASSWORD_MIN_LENGTH} aria-describedby="customer-password-policy" placeholder="10자 이상 · 소문자/숫자/특수문자" /><span id="customer-password-policy" className="authHint">{PASSWORD_POLICY_MESSAGE}</span></label>
         <div className="authDivider" />
         <p className="authSectionTitle">기본 정보</p>
         <label className="authField">이름<input className="authInput" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required placeholder="이름을 입력해 주세요" /></label>

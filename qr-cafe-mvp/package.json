@@ -12,6 +12,7 @@
     "test:p0-order-cancel": "node scripts/check-p0-order-cancel-consistency.mjs",
     "test:p0-checkout-mode": "node scripts/check-p0-checkout-mode-security.mjs",
     "test:p0-function-search-path": "node scripts/check-p0-function-search-path-hardening.mjs",
+    "test:p0-password-policy": "node scripts/check-p0-password-policy.mjs",
     "test:p0-privacy": "node scripts/check-p0-privacy.mjs"
   },
   "dependencies": {
