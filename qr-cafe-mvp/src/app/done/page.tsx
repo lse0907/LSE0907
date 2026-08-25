@@ -32,6 +32,7 @@ type OrderStatus =
   | "ready_for_packing"
   | "completed"
   | "cancelled";
+type PaymentStatus = "not_required" | "pending" | "paid" | "cancel_pending" | "refunded" | "failed";
 
 type DbOrderRow = CustomerOrderRow;
 
@@ -47,6 +48,7 @@ type OrderView = {
   totalCount: number;
   totalPrice: number;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
 };
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
@@ -96,6 +98,12 @@ function normalizeStatus(v: unknown): OrderStatus {
   return "new";
 }
 
+function normalizePaymentStatus(v: unknown): PaymentStatus {
+  const status = String(v || "").trim();
+  if (status === "pending" || status === "paid" || status === "cancel_pending" || status === "refunded" || status === "failed") return status;
+  return "not_required";
+}
+
 function toOrderView(row: DbOrderRow): OrderView {
   const createdAtMs = row.created_at ? Date.parse(row.created_at) : Date.now();
   return {
@@ -110,6 +118,7 @@ function toOrderView(row: DbOrderRow): OrderView {
     totalCount: Math.max(0, Number(row.total_count ?? 0) || 0),
     totalPrice: Math.max(0, Number(row.total_price ?? 0) || 0),
     status: normalizeStatus(row.status),
+    paymentStatus: normalizePaymentStatus(row.payment_status),
   };
 }
 
@@ -347,7 +356,13 @@ function DonePageInner() {
             {order.status === "completed"
               ? "수령 처리가 완료되었어요. 이용해 주셔서 감사합니다."
               : isCancelled
-                ? "취소된 주문이에요. 필요한 메뉴는 다시 주문해 주세요."
+                ? order.paymentStatus === "cancel_pending"
+                  ? "주문은 취소되었고 결제 취소를 확인하고 있어요. 결제 취소 완료 전까지 처리 중으로 표시됩니다."
+                  : order.paymentStatus === "refunded"
+                    ? "주문과 결제 취소가 완료되었어요."
+                    : order.paymentStatus === "failed"
+                      ? "주문은 취소되었으며 결제상태 확인이 필요해요. 매장에 문의해 주세요."
+                      : "취소된 주문이에요. 필요한 메뉴는 다시 주문해 주세요."
                 : "주문 상태 화면에서 준비 과정을 실시간으로 확인할 수 있어요."}
           </p>
         </article>

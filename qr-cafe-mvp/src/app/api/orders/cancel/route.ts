@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
 import { verifyPinHash } from "../../admin/members/_lib";
+import { cancelTossOrderPayment } from "../_lib/tossCancellation";
 
 type CancelBody = {
   storeId?: string;
@@ -15,98 +16,52 @@ type CancelBody = {
   managerPin?: string | null;
 };
 
+type JsonRecord = Record<string, any>;
+
+function asRecord(value: unknown): JsonRecord {
+  return value && typeof value === "object" ? (value as JsonRecord) : {};
+}
+
 function secureTokenMatches(expected: unknown, received: string) {
   const expectedBuffer = Buffer.from(String(expected || "").trim(), "utf8");
   const receivedBuffer = Buffer.from(received, "utf8");
-  if (!expectedBuffer.length || expectedBuffer.length !== receivedBuffer.length) {
-    return false;
-  }
+  if (!expectedBuffer.length || expectedBuffer.length !== receivedBuffer.length) return false;
   return timingSafeEqual(expectedBuffer, receivedBuffer);
 }
 
-async function cancelTossPaymentByOrder(
-  secretKey: string,
-  tossOrderId: string,
-  paymentKey: string | null,
-  cancelReason: string
-) {
-  const basicToken = Buffer.from(`${secretKey}:`).toString("base64");
-  let resolvedPaymentKey = String(paymentKey || "").trim();
-
-  if (!resolvedPaymentKey) {
-    const lookupRes = await fetch(`https://api.tosspayments.com/v1/payments/orders/${encodeURIComponent(tossOrderId)}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Basic ${basicToken}`,
-      },
-      cache: "no-store",
-    });
-
-    const lookupRaw = await lookupRes.text();
-    let lookupJson: any = null;
-    try {
-      lookupJson = JSON.parse(lookupRaw);
-    } catch {
-      lookupJson = { raw: lookupRaw };
-    }
-
-    if (!lookupRes.ok) {
-      return {
-        ok: false,
-        status: lookupRes.status,
-        message: "토스 결제 조회 실패",
-        toss: lookupJson,
-      };
-    }
-
-    resolvedPaymentKey = String(lookupJson?.paymentKey || "").trim();
+function cancellationClaimError(message: string) {
+  const normalized = message.toUpperCase();
+  if (normalized.includes("ORDER_NOT_FOUND")) {
+    return { code: "ORDER_NOT_FOUND", message: "주문을 찾을 수 없습니다.", status: 404 };
   }
-
-  if (!resolvedPaymentKey) {
+  if (normalized.includes("ORDER_LOCKED")) {
+    return { code: "ORDER_LOCKED", message: "이미 완료된 주문은 주문 취소로 되돌릴 수 없습니다.", status: 409 };
+  }
+  if (normalized.includes("ORDER_STATUS_CHANGED")) {
+    return { code: "ORDER_STATUS_CHANGED", message: "주문 상태가 변경되었습니다. 새로고침 후 다시 확인해 주세요.", status: 409 };
+  }
+  if (normalized.includes("LEGACY_CANCEL_REQUIRES_RECONCILIATION")) {
     return {
-      ok: false,
-      status: 400,
-      message: "결제 취소를 위한 paymentKey를 찾지 못했습니다.",
-      toss: null,
+      code: "LEGACY_CANCEL_REQUIRES_RECONCILIATION",
+      message: "기존 취소 주문의 결제상태 확인이 필요합니다. OPS에서 PG 상태를 확인해 주세요.",
+      status: 409,
     };
   }
+  return { code: "ORDER_CANCEL_CLAIM_FAILED", message: "주문 취소 상태를 저장하지 못했습니다.", status: 500 };
+}
 
-  const cancelRes = await fetch(`https://api.tosspayments.com/v1/payments/${encodeURIComponent(resolvedPaymentKey)}/cancel`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basicToken}`,
-      "Content-Type": "application/json",
+function pendingResponse(message: string) {
+  return NextResponse.json(
+    {
+      ok: true,
+      state: "cancel_pending",
+      orderStatus: "cancelled",
+      paymentStatus: "cancel_pending",
+      code: "PAYMENT_CANCEL_PENDING",
+      message,
     },
-    body: JSON.stringify({
-      cancelReason: cancelReason || "고객 요청 주문취소",
-    }),
-    cache: "no-store",
-  });
-
-  const cancelRaw = await cancelRes.text();
-  let cancelJson: any = null;
-  try {
-    cancelJson = JSON.parse(cancelRaw);
-  } catch {
-    cancelJson = { raw: cancelRaw };
-  }
-
-  if (!cancelRes.ok) {
-    return {
-      ok: false,
-      status: cancelRes.status,
-      message: "토스 결제 취소 실패",
-      toss: cancelJson,
-    };
-  }
-
-  return {
-    ok: true,
-    status: 200,
-    message: "ok",
-    toss: cancelJson,
-    paymentKey: resolvedPaymentKey,
-  };
+    { status: 202 },
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -124,157 +79,174 @@ export async function POST(req: NextRequest) {
     }
 
     const supabaseAdmin = createSupabaseAdminClient();
-
-    let orderQuery = await supabaseAdmin
+    const orderQuery = await supabaseAdmin
       .from("orders")
-      .select("id,store_id,status,payment_status,access_token,payment_key,toss_order_id")
+      .select("id,store_id,status,payment_status,access_token,payment_key,toss_order_id,customer_user_id")
       .eq("id", orderId)
       .eq("store_id", storeId)
       .maybeSingle();
     if (orderQuery.error) {
-      const low = String(orderQuery.error.message || "").toLowerCase();
-      const missingPaymentKeyColumn = low.includes("payment_key") && (low.includes("column") || low.includes("schema cache"));
-      const missingTossOrderIdColumn = low.includes("toss_order_id") && (low.includes("column") || low.includes("schema cache"));
-      if (missingPaymentKeyColumn || missingTossOrderIdColumn) {
-        orderQuery = await supabaseAdmin
-          .from("orders")
-          .select("id,store_id,status,payment_status,access_token")
-          .eq("id", orderId)
-          .eq("store_id", storeId)
-          .maybeSingle();
-      }
+      return NextResponse.json({ ok: false, code: "ORDER_LOOKUP_FAILED", message: `주문 조회 실패: ${orderQuery.error.message}` }, { status: 500 });
     }
-    const { data: order, error: orderErr } = orderQuery;
-
-    if (orderErr) {
-      return NextResponse.json({ ok: false, code: "ORDER_LOOKUP_FAILED", message: `주문 조회 실패: ${orderErr.message}` }, { status: 500 });
-    }
-    if (!order) {
+    if (!orderQuery.data) {
       return NextResponse.json({ ok: false, code: "ORDER_NOT_FOUND", message: "주문을 찾을 수 없습니다." }, { status: 404 });
     }
+
+    const order = orderQuery.data as JsonRecord;
+    const currentStatus = String(order.status || "");
+    const currentPaymentStatus = String(order.payment_status || "not_required");
+    let actorUserId: string | null = null;
+    let approvedByPinId: string | null = null;
 
     if (actor === "customer") {
       if (!accessToken || !secureTokenMatches(order.access_token, accessToken)) {
         return NextResponse.json({ ok: false, code: "CANCEL_FORBIDDEN", message: "취소 권한이 없습니다." }, { status: 403 });
       }
-      if (String(order.status || "") !== "new") {
+      if (currentStatus !== "new" && currentStatus !== "cancelled") {
         return NextResponse.json(
           { ok: false, code: "ORDER_ALREADY_CONFIRMED", message: "매장에서 주문 확인 후에는 앱에서 직접 취소할 수 없습니다." },
-          { status: 409 }
+          { status: 409 },
         );
       }
+      actorUserId = String(order.customer_user_id || "").trim() || null;
     } else {
       const auth = await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner", "manager", "staff"] });
-      const status = String(order.status || "");
-      if (status === "completed" || status === "cancelled") {
-        return NextResponse.json({ ok: false, code: "ORDER_LOCKED", message: "이미 끝난 주문입니다." }, { status: 409 });
+      actorUserId = auth.userId;
+      if (currentStatus === "completed") {
+        return NextResponse.json({ ok: false, code: "ORDER_LOCKED", message: "이미 완료된 주문입니다." }, { status: 409 });
       }
-      const staffCanCancelDirectly = auth.role === "staff" && (status === "new" || status === "checked");
-      if (auth.role === "staff" && !staffCanCancelDirectly) {
+      const staffCanCancelDirectly = auth.role === "staff" && (currentStatus === "new" || currentStatus === "checked");
+      if (auth.role === "staff" && currentStatus !== "cancelled" && !staffCanCancelDirectly) {
         const managerPin = String(body.managerPin || "").trim();
         if (!managerPin) {
           return NextResponse.json({ ok: false, code: "MANAGER_PIN_REQUIRED", message: "이 주문 취소는 매니저 PIN 승인이 필요합니다." }, { status: 403 });
         }
-        const { data: managerPins, error: pinErr } = await supabaseAdmin
+        const managerPins = await supabaseAdmin
           .from("store_staff_pins")
-          .select("id,pin_hash,is_active,pin_role")
+          .select("id,pin_hash")
           .eq("store_id", storeId)
           .eq("pin_role", "manager")
           .eq("is_active", true)
           .eq("approval_status", "approved");
-        if (pinErr) return NextResponse.json({ ok: false, code: "MANAGER_PIN_LOOKUP_FAILED", message: `PIN 조회 실패: ${pinErr.message}` }, { status: 500 });
-        const approvedPin = (managerPins || []).find((pinRow) => verifyPinHash(managerPin, String(pinRow.pin_hash || "")));
+        if (managerPins.error) {
+          return NextResponse.json({ ok: false, code: "MANAGER_PIN_LOOKUP_FAILED", message: `PIN 조회 실패: ${managerPins.error.message}` }, { status: 500 });
+        }
+        const approvedPin = (managerPins.data || []).find((row) => verifyPinHash(managerPin, String(row.pin_hash || "")));
         if (!approvedPin) {
           return NextResponse.json({ ok: false, code: "MANAGER_PIN_INVALID", message: "매니저 PIN이 올바르지 않습니다." }, { status: 403 });
         }
-        (order as any).__approvedByPinId = approvedPin.id;
-      }
-      (order as any).__actorUserId = auth.userId;
-    }
-
-    if (String(order.status || "") === "cancelled") {
-      return NextResponse.json({ ok: true, skipped: "already_cancelled" });
-    }
-
-    const paymentStatus = String(order.payment_status || "not_required");
-    if (paymentStatus === "paid") {
-      const { data: pgRow, error: pgErr } = await supabaseAdmin
-        .from("store_pg_config")
-        .select("secret_key")
-        .eq("store_id", storeId)
-        .maybeSingle();
-
-      if (pgErr) {
-        return NextResponse.json({ ok: false, code: "PG_LOOKUP_FAILED", message: `결제 설정 조회 실패: ${pgErr.message}` }, { status: 500 });
-      }
-
-      const secretKey = String(pgRow?.secret_key || "").trim();
-      if (!secretKey) {
-        return NextResponse.json({ ok: false, code: "PG_SECRET_MISSING", message: "결제 취소 설정이 없습니다." }, { status: 400 });
-      }
-
-      const tossOrderId = String((order as any)?.toss_order_id || "").trim();
-      const knownPaymentKey = String((order as any)?.payment_key || "").trim() || null;
-      if (!knownPaymentKey && !tossOrderId) {
-        return NextResponse.json(
-          {
-            ok: false,
-            code: "PAYMENT_IDENTIFIER_MISSING",
-            message: "결제 취소 정보가 없습니다.",
-          },
-          { status: 409 }
-        );
-      }
-
-      const cancelRes = await cancelTossPaymentByOrder(
-        secretKey,
-        tossOrderId,
-        knownPaymentKey,
-        reason
-      );
-      if (!cancelRes.ok) {
-        return NextResponse.json(
-          { ok: false, code: "PG_CANCEL_FAILED", message: cancelRes.message, toss: cancelRes.toss },
-          { status: cancelRes.status || 500 }
-        );
+        approvedByPinId = String(approvedPin.id);
       }
     }
 
-    const beforeStatus = String(order.status || "");
-    const { error: updateErr } = await supabaseAdmin
-      .from("orders")
-      .update({ status: "cancelled" })
-      .eq("id", orderId)
-      .eq("store_id", storeId);
-    if (updateErr) {
-      return NextResponse.json({ ok: false, code: "ORDER_CANCEL_UPDATE_FAILED", message: `취소 저장 실패: ${updateErr.message}` }, { status: 500 });
-    }
-
-    const eventRes = await supabaseAdmin.from("order_events").insert({
-      store_id: storeId,
-      order_id: orderId,
-      event_type: "order_cancelled",
-      before_status: beforeStatus,
-      after_status: "cancelled",
-      actor_user_id: (order as any).__actorUserId || null,
-      actor_pin_id: body.actorPinId || null,
-      approved_by_pin_id: (order as any).__approvedByPinId || null,
-      reason_code: reasonCode,
-      reason_text: reason,
-      metadata: { actor, paymentStatus },
-    });
-    if (eventRes.error) console.warn("[order_events] insert skipped:", eventRes.error.message);
-
-    const { error: rollbackErr } = await supabaseAdmin.rpc("rollback_order_rewards", {
+    const claimRes = await supabaseAdmin.rpc("claim_order_cancellation", {
       p_store_id: storeId,
       p_order_id: orderId,
+      p_expected_status: currentStatus === "cancelled" ? null : currentStatus,
+      p_cancel_reason: reason,
+      p_reason_code: reasonCode,
+      p_actor_type: actor,
+      p_actor_user_id: actorUserId,
+      p_actor_pin_id: body.actorPinId || null,
+      p_approved_by_pin_id: approvedByPinId,
     });
-    if (rollbackErr) {
-      return NextResponse.json({ ok: false, code: "REWARD_ROLLBACK_FAILED", message: `보상 롤백 실패: ${rollbackErr.message}` }, { status: 500 });
+    if (claimRes.error || !claimRes.data) {
+      const classified = cancellationClaimError(claimRes.error?.message || "claim returned no data");
+      return NextResponse.json({ ok: false, code: classified.code, message: classified.message }, { status: classified.status });
     }
 
-    return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
-    return apiErrorResponse(e);
+    const claim = asRecord(claimRes.data);
+    const paymentStatus = String(claim.payment_status || currentPaymentStatus);
+    if (paymentStatus === "refunded") {
+      return NextResponse.json({ ok: true, duplicate: true, state: "refunded", orderStatus: "cancelled", paymentStatus: "refunded", message: "주문과 결제 취소가 완료되었습니다." });
+    }
+    if (!claim.requires_pg) {
+      return NextResponse.json({
+        ok: true,
+        duplicate: Boolean(claim.duplicate),
+        state: paymentStatus,
+        orderStatus: "cancelled",
+        paymentStatus,
+        message: paymentStatus === "failed" ? "주문은 취소되었으며 결제상태 확인이 필요합니다." : "주문이 취소되었습니다.",
+      });
+    }
+
+    const attemptId = String(claim.attempt_id || "").trim();
+    const idempotencyKey = String(claim.idempotency_key || "").trim();
+    if (!attemptId || !idempotencyKey) {
+      return pendingResponse("주문은 취소되었으며 결제 취소 이력을 확인하고 있습니다.");
+    }
+
+    const markAttempt = async (patch: JsonRecord) => {
+      const result = await supabaseAdmin.from("order_payment_cancel_attempts").update(patch).eq("id", attemptId).neq("status", "completed");
+      if (result.error) console.error("[order-cancel] attempt update failed:", result.error.message);
+    };
+
+    const pgConfig = await supabaseAdmin.from("store_pg_config").select("secret_key").eq("store_id", storeId).maybeSingle();
+    const secretKey = String(pgConfig.data?.secret_key || "").trim();
+    if (pgConfig.error || !secretKey) {
+      await markAttempt({
+        status: "reconcile_required",
+        failure_code: pgConfig.error ? "PG_LOOKUP_FAILED" : "PG_SECRET_MISSING",
+        failure_detail: pgConfig.error?.message || "Store PG secret is missing.",
+      });
+      return pendingResponse("주문은 취소되었으며 결제 취소 설정을 확인하고 있습니다. 매장에 문의해 주세요.");
+    }
+
+    const beginRes = await supabaseAdmin.rpc("begin_order_payment_cancel_attempt", { p_attempt_id: attemptId });
+    if (beginRes.error) {
+      await markAttempt({ status: "reconcile_required", failure_code: "CANCEL_ATTEMPT_BEGIN_FAILED", failure_detail: beginRes.error.message.slice(0, 1000) });
+      return pendingResponse("주문은 취소되었으며 결제 취소 요청을 준비하고 있습니다.");
+    }
+
+    const tossResult = await cancelTossOrderPayment({
+      secretKey,
+      paymentKey: String(claim.payment_key || order.payment_key || "").trim() || null,
+      tossOrderId: String(claim.toss_order_id || order.toss_order_id || "").trim() || null,
+      idempotencyKey,
+      cancelReason: String(claim.cancel_reason || reason),
+    });
+
+    if (!tossResult.confirmed) {
+      await markAttempt({
+        status: "retryable",
+        pg_status: tossResult.pgStatus,
+        failure_code: tossResult.failureCode || "TOSS_CANCEL_RESULT_UNCONFIRMED",
+        failure_detail: tossResult.failureDetail || "Toss cancellation was not confirmed.",
+        next_retry_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+      });
+      return pendingResponse("주문은 취소되었으며 결제 취소를 확인하고 있습니다. 완료 전까지 결제 취소 완료로 표시되지 않습니다.");
+    }
+
+    await markAttempt({
+      status: "pg_cancelled",
+      payment_key: tossResult.paymentKey,
+      toss_order_id: tossResult.tossOrderId,
+      pg_status: tossResult.pgStatus,
+      pg_cancel_transaction_key: tossResult.transactionKey,
+      pg_response: tossResult.snapshot,
+      failure_code: null,
+      failure_detail: null,
+      next_retry_at: null,
+    });
+
+    const finalizeRes = await supabaseAdmin.rpc("finalize_order_payment_cancellation", {
+      p_attempt_id: attemptId,
+      p_pg_status: tossResult.pgStatus,
+      p_pg_cancel_transaction_key: tossResult.transactionKey,
+      p_pg_response: tossResult.snapshot,
+    });
+    if (finalizeRes.error || !finalizeRes.data) {
+      await markAttempt({
+        status: "reconcile_required",
+        failure_code: "CANCEL_FINALIZE_FAILED",
+        failure_detail: finalizeRes.error?.message || "Cancellation finalizer returned no data.",
+      });
+      return pendingResponse("결제사 취소는 확인됐으며 내부 결제상태를 반영하고 있습니다.");
+    }
+
+    return NextResponse.json({ ok: true, state: "refunded", orderStatus: "cancelled", paymentStatus: "refunded", message: "주문과 결제 취소가 완료되었습니다." });
+  } catch (error: unknown) {
+    return apiErrorResponse(error);
   }
 }

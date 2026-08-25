@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
 
 type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
-type PaymentStatus = "not_required" | "pending" | "paid";
-
 type StatusBody = {
   storeId?: string;
   orderId?: string;
   status?: OrderStatus;
   buzzerNo?: string | null;
-  paymentStatus?: PaymentStatus;
+  paymentStatus?: unknown;
   actorPinId?: string | null;
 };
 
@@ -34,12 +32,6 @@ function normalizeStatus(raw: unknown): OrderStatus | null {
   return null;
 }
 
-function normalizePaymentStatus(raw: unknown): PaymentStatus | null {
-  const status = String(raw || "").trim();
-  if (status === "not_required" || status === "pending" || status === "paid") return status;
-  return null;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as StatusBody;
@@ -47,6 +39,12 @@ export async function POST(req: NextRequest) {
     const orderId = String(body.orderId || "").trim();
     if (!storeId || !orderId) {
       return NextResponse.json({ ok: false, code: "MISSING_REQUIRED_FIELDS", message: "필수 정보가 없습니다." }, { status: 400 });
+    }
+    if (typeof body.paymentStatus !== "undefined") {
+      return NextResponse.json(
+        { ok: false, code: "PAYMENT_STATUS_SERVER_MANAGED", message: "온라인 결제상태는 결제 승인·취소 처리에서만 변경할 수 있습니다." },
+        { status: 400 },
+      );
     }
 
     const supabaseAdmin = createSupabaseAdminClient();
@@ -81,9 +79,6 @@ export async function POST(req: NextRequest) {
 
     if (typeof body.buzzerNo !== "undefined") payload.buzzer_no = String(body.buzzerNo || "").trim() || null;
 
-    const paymentStatus = normalizePaymentStatus(body.paymentStatus);
-    if (paymentStatus) payload.payment_status = paymentStatus;
-
     if (!Object.keys(payload).length) {
       return NextResponse.json({ ok: false, code: "NO_CHANGE", message: "변경할 내용이 없습니다." }, { status: 400 });
     }
@@ -91,7 +86,7 @@ export async function POST(req: NextRequest) {
     const updateRes = await supabaseAdmin.from("orders").update(payload).eq("id", orderId).eq("store_id", storeId);
     if (updateRes.error) return NextResponse.json({ ok: false, code: "ORDER_STATUS_UPDATE_FAILED", message: `저장 실패: ${updateRes.error.message}` }, { status: 500 });
 
-    if (payload.status || typeof body.buzzerNo !== "undefined" || paymentStatus) {
+    if (payload.status || typeof body.buzzerNo !== "undefined") {
       const eventRes = await supabaseAdmin.from("order_events").insert({
         store_id: storeId,
         order_id: orderId,
