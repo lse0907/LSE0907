@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:p0-access-control": "node scripts/check-p0-access-control.mjs"
+    "test:p0-access-control": "node scripts/check-p0-access-control.mjs",
+    "test:p0-order-integrity": "node scripts/check-p0-order-integrity.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

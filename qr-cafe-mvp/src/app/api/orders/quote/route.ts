@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
+import { createCheckoutAttempt, normalizeClientRequestId } from "../_lib/checkoutAttempts";
+import { OrderMode } from "../_lib/orderValidation";
 import { validateOrderPayload } from "../_lib/orderValidation";
 
 type QuoteBody = {
   storeId?: string;
   cartLines?: unknown;
+  clientRequestId?: string;
+  mode?: OrderMode;
+  table?: string | null;
+  requestNote?: string | null;
   customerUserId?: string | null;
   usedPoints?: number;
   usedCouponId?: string | null;
@@ -47,8 +53,11 @@ export async function POST(req: NextRequest) {
     if (!storeId) return NextResponse.json({ ok: false, code: "STORE_REQUIRED", message: "매장 정보가 없습니다." }, { status: 400 });
 
     const requestUserId = await getRequestUserId(req);
+    const clientRequestId = normalizeClientRequestId(body.clientRequestId);
+    const mode: OrderMode = body.mode === "takeout" ? "takeout" : "dine-in";
+    const supabaseAdmin = adminClient();
     const validated = await validateOrderPayload({
-      supabaseAdmin: adminClient(),
+      supabaseAdmin,
       storeId,
       cartLines: body.cartLines,
       customerUserId: requestUserId,
@@ -56,7 +65,30 @@ export async function POST(req: NextRequest) {
       usedCouponId: requestUserId ? body.usedCouponId || null : null,
     });
 
-    return NextResponse.json({ ok: true, quote: validated });
+    const checkout = await createCheckoutAttempt({
+      supabaseAdmin,
+      storeId,
+      clientRequestId,
+      checkoutType: "prepaid",
+      mode,
+      table: body.table || null,
+      requestNote: body.requestNote || "",
+      customerUserId: requestUserId,
+      validated,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      quote: validated,
+      checkout: {
+        attemptId: checkout.attempt.id,
+        clientRequestId: checkout.attempt.client_request_id,
+        tossOrderId: checkout.attempt.toss_order_id,
+        payableAmount: checkout.attempt.payable_amount,
+        recoveryToken: checkout.recoveryToken,
+        duplicate: checkout.duplicate,
+      },
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ ok: false, code: "ORDER_QUOTE_FAILED", message }, { status: 400 });

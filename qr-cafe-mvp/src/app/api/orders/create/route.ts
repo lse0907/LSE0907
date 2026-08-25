@@ -1,29 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
-import { createValidatedOrder } from "../_lib/orderInsert";
-import { OrderMode, PaymentStatus, validateOrderPayload } from "../_lib/orderValidation";
-
-type ExistingOrder = {
-  id: string;
-  access_token: string | null;
-  order_date: string | null;
-  display_no: number | null;
-  total_count: number | null;
-  total_price: number | null;
-  payment_status: string | null;
-};
+import {
+  createCheckoutAttempt,
+  finalizeCheckoutAttempt,
+  normalizeClientRequestId,
+  orderResponse,
+} from "../_lib/checkoutAttempts";
+import { OrderMode, validateOrderPayload } from "../_lib/orderValidation";
 
 type CreateBody = {
   storeId?: string;
   cartLines?: unknown;
+  clientRequestId?: string;
   mode?: OrderMode;
   table?: string | null;
   requestNote?: string | null;
   customerUserId?: string | null;
   usedPoints?: number;
   usedCouponId?: string | null;
-  paymentStatus?: PaymentStatus;
+  paymentStatus?: string;
   paymentKey?: string | null;
   tossOrderId?: string | null;
   paidAmount?: number;
@@ -41,51 +37,6 @@ function adminClient() {
 
 function normalizeMode(raw: unknown): OrderMode {
   return raw === "takeout" ? "takeout" : "dine-in";
-}
-
-function normalizePaymentStatus(raw: unknown): PaymentStatus {
-  return raw === "paid" || raw === "pending" ? raw : "not_required";
-}
-
-function orderResponse(row: ExistingOrder) {
-  return {
-    orderId: row.id,
-    accessToken: row.access_token || "",
-    orderDate: row.order_date || "",
-    displayNo: row.display_no || 0,
-    totalCount: row.total_count || 0,
-    totalPrice: row.total_price || 0,
-    payableAmount: row.total_price || 0,
-  };
-}
-
-async function findExistingPaidOrder(
-  supabaseAdmin: ReturnType<typeof adminClient>,
-  storeId: string,
-  paymentKey: string,
-  tossOrderId: string
-) {
-  const paymentColumns = [
-    { column: "payment_key", value: paymentKey },
-    { column: "toss_order_id", value: tossOrderId },
-  ].filter((x) => x.value);
-
-  for (const item of paymentColumns) {
-    const { data, error } = await supabaseAdmin
-      .from("orders")
-      .select("id, access_token, order_date, display_no, total_count, total_price, payment_status")
-      .eq("store_id", storeId)
-      .eq(item.column, item.value)
-      .maybeSingle();
-
-    if (!error && data) return data as ExistingOrder;
-
-    const message = String(error?.message || "").toLowerCase();
-    if (message.includes("column") || message.includes("schema cache")) continue;
-    if (error && error.code !== "PGRST116") throw error;
-  }
-
-  return null;
 }
 
 async function getRequestUserId(req: NextRequest) {
@@ -113,7 +64,18 @@ export async function POST(req: NextRequest) {
     const storeId = String(body?.storeId || "").trim();
     if (!storeId) return NextResponse.json({ ok: false, code: "STORE_REQUIRED", message: "매장 정보가 없습니다." }, { status: 400 });
 
-    const paymentStatus = normalizePaymentStatus(body.paymentStatus);
+    if (body.paymentStatus === "paid" || body.paymentStatus === "pending" || body.paymentKey || body.tossOrderId) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "PAID_ORDER_REQUIRES_APPROVED_ATTEMPT",
+          message: "선결제 주문은 서버에서 승인된 결제시도를 통해서만 접수할 수 있습니다.",
+        },
+        { status: 409 },
+      );
+    }
+
+    const clientRequestId = normalizeClientRequestId(body.clientRequestId);
     const requestUserId = await getRequestUserId(req);
     const supabaseAdmin = adminClient();
     const validated = await validateOrderPayload({
@@ -125,45 +87,30 @@ export async function POST(req: NextRequest) {
       usedCouponId: requestUserId ? body.usedCouponId || null : null,
     });
 
-    if (paymentStatus === "paid") {
-      const paidAmount = Number(body.paidAmount || 0);
-      if (!Number.isFinite(paidAmount) || Math.round(paidAmount) !== validated.payableAmount) {
-        return NextResponse.json(
-          { ok: false, code: "AMOUNT_MISMATCH", message: "결제 금액이 달라요. 다시 확인해주세요.", expectedAmount: validated.payableAmount, actualAmount: paidAmount },
-          { status: 409 }
-        );
-      }
-      if (!String(body.paymentKey || "").trim() || !String(body.tossOrderId || "").trim()) {
-        return NextResponse.json({ ok: false, code: "PAYMENT_IDENTIFIERS_MISSING", message: "결제 정보가 부족합니다." }, { status: 400 });
-      }
-    }
-
-    if (paymentStatus === "paid") {
-      const existing = await findExistingPaidOrder(
-        supabaseAdmin,
-        storeId,
-        String(body.paymentKey || "").trim(),
-        String(body.tossOrderId || "").trim()
-      );
-      if (existing) return NextResponse.json({ ok: true, order: orderResponse(existing), duplicate: true });
-    }
-
-    const created = await createValidatedOrder({
+    const checkout = await createCheckoutAttempt({
       supabaseAdmin,
       storeId,
+      clientRequestId,
+      checkoutType: "postpaid",
       mode: normalizeMode(body.mode),
       table: body.table || null,
       requestNote: body.requestNote || "",
-      paymentStatus,
-      paymentKey: body.paymentKey || null,
-      tossOrderId: body.tossOrderId || null,
       customerUserId: requestUserId,
       validated,
     });
+    const finalized = await finalizeCheckoutAttempt(supabaseAdmin, checkout.attempt.id);
 
-    return NextResponse.json({ ok: true, order: created });
+    return NextResponse.json({
+      ok: true,
+      order: orderResponse(finalized),
+      duplicate: checkout.duplicate,
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ ok: false, code: "ORDER_CREATE_FAILED", message }, { status: 400 });
+    const conflict = message.includes("CLIENT_REQUEST_ID_REUSED_WITH_DIFFERENT_ORDER");
+    return NextResponse.json(
+      { ok: false, code: conflict ? "CLIENT_REQUEST_CONFLICT" : "ORDER_CREATE_FAILED", message },
+      { status: conflict ? 409 : 400 },
+    );
   }
 }
