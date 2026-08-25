@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { createCheckoutAttempt, normalizeClientRequestId } from "../_lib/checkoutAttempts";
+import { CheckoutPolicyError, requireStoreCheckoutMode } from "../_lib/checkoutPolicy";
 import { OrderMode } from "../_lib/orderValidation";
 import { validateOrderPayload } from "../_lib/orderValidation";
 
@@ -56,6 +57,11 @@ export async function POST(req: NextRequest) {
     const clientRequestId = normalizeClientRequestId(body.clientRequestId);
     const mode: OrderMode = body.mode === "takeout" ? "takeout" : "dine-in";
     const supabaseAdmin = adminClient();
+    await requireStoreCheckoutMode({
+      supabaseAdmin,
+      storeId,
+      checkoutType: "prepaid",
+    });
     const validated = await validateOrderPayload({
       supabaseAdmin,
       storeId,
@@ -90,6 +96,12 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (e: unknown) {
+    if (e instanceof CheckoutPolicyError) {
+      return NextResponse.json(
+        { ok: false, code: e.code, message: e.message },
+        { status: e.status },
+      );
+    }
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ ok: false, code: "ORDER_QUOTE_FAILED", message }, { status: 400 });
   }

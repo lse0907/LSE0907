@@ -7,6 +7,7 @@ import {
   normalizeClientRequestId,
   orderResponse,
 } from "../_lib/checkoutAttempts";
+import { CheckoutPolicyError, requireStoreCheckoutMode } from "../_lib/checkoutPolicy";
 import { OrderMode, validateOrderPayload } from "../_lib/orderValidation";
 
 type CreateBody = {
@@ -78,6 +79,11 @@ export async function POST(req: NextRequest) {
     const clientRequestId = normalizeClientRequestId(body.clientRequestId);
     const requestUserId = await getRequestUserId(req);
     const supabaseAdmin = adminClient();
+    await requireStoreCheckoutMode({
+      supabaseAdmin,
+      storeId,
+      checkoutType: "postpaid",
+    });
     const validated = await validateOrderPayload({
       supabaseAdmin,
       storeId,
@@ -106,6 +112,12 @@ export async function POST(req: NextRequest) {
       duplicate: checkout.duplicate,
     });
   } catch (e: unknown) {
+    if (e instanceof CheckoutPolicyError) {
+      return NextResponse.json(
+        { ok: false, code: e.code, message: e.message },
+        { status: e.status },
+      );
+    }
     const message = e instanceof Error ? e.message : String(e);
     const conflict = message.includes("CLIENT_REQUEST_ID_REUSED_WITH_DIFFERENT_ORDER");
     return NextResponse.json(
