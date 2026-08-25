@@ -41,8 +41,8 @@ type CouponTemplateRow = {
 
 type TargetCustomerRow = {
   customer_user_id: string;
-  name: string | null;
-  phone: string | null;
+  nameMasked: string | null;
+  phoneMasked: string;
   point_balance: number;
   tier: "general" | "regular" | "vip";
   lifetime_spent: number;
@@ -543,6 +543,7 @@ function AdminLoyaltyInner() {
 
   const searchCouponTargets = async () => {
     if (!storeId) return;
+    if (!requireOwner()) return;
     if (!issueTemplateId) return showMsg("발급할 쿠폰을 먼저 선택해 주세요.", "error");
     const tpl = templates.find((row) => row.id === issueTemplateId);
     if (tpl && !tpl.is_active) return showMsg("비활성 쿠폰은 먼저 활성화해 주세요.", "error");
@@ -551,34 +552,45 @@ function AdminLoyaltyInner() {
     setBulkIssueResult(null);
     setBulkConfirmChecked(false);
     setMsg("");
-    const { data, error } = await supabase.rpc("admin_search_coupon_targets", {
-      p_store_id: storeId,
-      p_query: targetSearch.trim(),
-      p_tier: targetTier,
-      p_min_points: Math.max(0, Math.floor(toNumber(targetMinPoints, 0))),
-      p_min_orders: Math.max(0, Math.floor(toNumber(targetMinOrders, 0))),
-      p_min_spent: Math.max(0, Math.floor(toNumber(targetMinSpent, 0))),
-      p_recent_days: targetRecentDays === "all" ? null : Number(targetRecentDays),
-      p_inactive_days: targetInactiveDays === "all" ? null : Number(targetInactiveDays),
-      p_registered_min_days: targetRegisteredDays === "all" ? null : Number(targetRegisteredDays),
-      p_template_id: issueTemplateId,
-      p_exclude_existing: targetExcludeExisting,
-      p_limit: 200,
-    });
+    try {
+      const response = await fetch("/api/admin/loyalty/customers/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId,
+          query: targetSearch.trim(),
+          tier: targetTier,
+          minPoints: Math.max(0, Math.floor(toNumber(targetMinPoints, 0))),
+          minOrders: Math.max(0, Math.floor(toNumber(targetMinOrders, 0))),
+          minSpent: Math.max(0, Math.floor(toNumber(targetMinSpent, 0))),
+          recentDays: targetRecentDays === "all" ? null : Number(targetRecentDays),
+          inactiveDays: targetInactiveDays === "all" ? null : Number(targetInactiveDays),
+          registeredMinDays: targetRegisteredDays === "all" ? null : Number(targetRegisteredDays),
+          templateId: issueTemplateId,
+          excludeExisting: targetExcludeExisting,
+          limit: 200,
+        }),
+      });
+      const json = await response.json();
 
-    if (error) {
-      showMsg(`대상 고객 검색 실패: ${error.message}`, "error");
+      if (!response.ok || !json?.ok) {
+        showMsg(`대상 고객 검색 실패: ${json?.message || "요청 실패"}`, "error");
+        setTargetRows([]);
+        setSelectedTargetIds([]);
+      } else {
+        const rows = (Array.isArray(json.customers) ? json.customers : []) as TargetCustomerRow[];
+        setTargetRows(rows);
+        setSelectedTargetIds([]);
+        showMsg(`검색 결과 ${rows.length}명을 확인했습니다.`, rows.length ? "success" : "info");
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "요청 실패";
+      showMsg(`대상 고객 검색 실패: ${message}`, "error");
       setTargetRows([]);
       setSelectedTargetIds([]);
-    } else {
-      const rows = (Array.isArray(data) ? data : []) as TargetCustomerRow[];
-      setTargetRows(rows);
-      setSelectedTargetIds([]);
-      const profiles = Object.fromEntries(rows.map((row) => [row.customer_user_id, { user_id: row.customer_user_id, name: row.name, phone: row.phone }]));
-      setCustomerProfilesById((prev) => ({ ...prev, ...profiles }));
-      showMsg(`검색 결과 ${rows.length}명을 확인했습니다.`, rows.length ? "success" : "info");
+    } finally {
+      setTargetLoading(false);
     }
-    setTargetLoading(false);
   };
 
   const toggleTargetSelection = (customerId: string) => {
@@ -1082,11 +1094,11 @@ function AdminLoyaltyInner() {
                     <input type="checkbox" checked={checked} onChange={() => toggleTargetSelection(row.customer_user_id)} />
                     <div>
                       <div className="targetNameLine">
-                        <strong>{customerDisplayName({ user_id: row.customer_user_id, name: row.name, phone: row.phone }, row.customer_user_id)}</strong>
+                        <strong>{row.nameMasked || shortCustomerId(row.customer_user_id)}</strong>
                         <span className="badge badgePurple">{tierLabel(row.tier)}</span>
                         {row.already_has_coupon ? <span className="badge badgeGray">보유</span> : null}
                       </div>
-                      <p>{phoneText(row.phone)} · {money(row.point_balance)}P</p>
+                      <p>{row.phoneMasked} · {money(row.point_balance)}P</p>
                       <p className="targetMeta">주문 {money(row.lifetime_orders)}회 · 이용 {money(row.lifetime_spent)}원 · 최근 {dateText(row.last_order_at)} · 등록 {dateText(row.registered_at)}</p>
                     </div>
                   </label>

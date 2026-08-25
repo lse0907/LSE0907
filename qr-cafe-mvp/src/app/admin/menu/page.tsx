@@ -419,11 +419,17 @@ function AdminMenuPageInner() {
         try {
           setCopying(true);
           clearStatus();
-          const { error } = await supabase.rpc("admin_copy_menus_v1", {
-            p_source_store_id: copySourceStoreId,
-            p_target_store_id: storeId,
+          const response = await fetch("/api/admin/store/setup-copy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              kind: "menus",
+              sourceStoreId: copySourceStoreId,
+              targetStoreId: storeId,
+            }),
           });
-          if (error) throw error;
+          const json = await response.json();
+          if (!response.ok || !json?.ok) throw new Error(json?.message || "요청 실패");
           await refresh();
           setStatus("success", "메뉴 복사가 완료되었습니다.");
         } catch (e: unknown) {

@@ -200,13 +200,19 @@ function CategoriesPageInner() {
     setCopyConfirmOpen(false);
     setMsg("");
     setMsgTone("neutral");
-    const { error } = await supabase.rpc("admin_copy_categories_v1", {
-      p_source_store_id: copySourceStoreId,
-      p_target_store_id: storeId,
+    const response = await fetch("/api/admin/store/setup-copy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "categories",
+        sourceStoreId: copySourceStoreId,
+        targetStoreId: storeId,
+      }),
     });
-    if (error) {
+    const json = await response.json();
+    if (!response.ok || !json?.ok) {
       setMsgTone("error");
-      setMsg(`카테고리 복사 실패: ${error.message}`);
+      setMsg(`카테고리 복사 실패: ${json?.message || "요청 실패"}`);
       setCopying(false);
       return;
     }
