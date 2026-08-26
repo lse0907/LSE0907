@@ -26,7 +26,7 @@ assert(
   "지원 특수문자 포함 여부를 검사해야 합니다.",
 );
 assert(
-  policy.includes("=[]{};'\\\\:\\\"|<>?,./`~"),
+  policy.includes("=[]{};':\\\"|<>?,./`~"),
   "Supabase가 지원하는 특수문자 집합을 빠짐없이 사용해야 합니다.",
 );
 assert(!policy.includes("/[A-Z]/.test(password)"), "영문 대문자는 필수 조건이면 안 됩니다.");
