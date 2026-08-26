@@ -14,6 +14,8 @@ function assert(condition, message) {
 const policy = read("src/app/lib/passwordPolicy.ts");
 const ownerSignup = read("src/app/signup-owner/page.tsx");
 const customerSignup = read("src/app/signup-customer/page.tsx");
+const signupApi = read("src/app/api/auth/signup/route.ts");
+const signupClient = read("src/app/lib/signUpWithPasswordPolicy.ts");
 const accountApi = read("src/app/api/admin/members/accounts/route.ts");
 const membersPage = read("src/app/admin/members/page.tsx");
 
@@ -38,6 +40,7 @@ assert(
 for (const [name, source] of [
   ["점주 회원가입", ownerSignup],
   ["고객 회원가입", customerSignup],
+  ["회원가입 서버 API", signupApi],
   ["공용 계정 API", accountApi],
   ["공용 계정 화면", membersPage],
 ]) {
@@ -58,6 +61,31 @@ assert(
     customerSignup.includes("PASSWORD_POLICY_MESSAGE") &&
     membersPage.includes("PASSWORD_POLICY_MESSAGE"),
   "모든 비밀번호 생성 화면에 동일한 정책 문구를 표시해야 합니다.",
+);
+
+for (const [name, source] of [
+  ["점주 회원가입", ownerSignup],
+  ["고객 회원가입", customerSignup],
+]) {
+  assert(source.includes("signUpWithPasswordPolicy"), `${name}은 서버 가입 API를 사용해야 합니다.`);
+  assert(!source.includes("supabase.auth.signUp"), `${name}에서 Supabase Auth를 직접 호출하면 안 됩니다.`);
+}
+
+assert(
+  signupApi.includes("getPasswordPolicyError(password)"),
+  "회원가입 서버 API에서 공통 비밀번호 정책을 검증해야 합니다.",
+);
+assert(
+  signupApi.includes("NEXT_PUBLIC_SUPABASE_ANON_KEY") && !signupApi.includes("SERVICE_ROLE"),
+  "회원가입 서버 API는 서비스 역할 키 대신 익명 키를 사용해야 합니다.",
+);
+assert(
+  signupApi.includes('"Cache-Control": "no-store"'),
+  "회원가입 서버 API 응답은 캐시되면 안 됩니다.",
+);
+assert(
+  signupClient.includes("supabase.auth.setSession"),
+  "서버 가입 후 브라우저 Supabase 세션을 안전하게 설정해야 합니다.",
 );
 
 console.log("P0 비밀번호 정책 정적 검증 통과");
