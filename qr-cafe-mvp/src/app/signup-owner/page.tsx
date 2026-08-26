@@ -12,6 +12,7 @@ import {
   PASSWORD_MIN_LENGTH,
   PASSWORD_POLICY_MESSAGE,
 } from "@/app/lib/passwordPolicy";
+import { signUpWithPasswordPolicy } from "@/app/lib/signUpWithPasswordPolicy";
 
 function SignupOwnerPageInner() {
   const router = useRouter();
@@ -64,10 +65,10 @@ function SignupOwnerPageInner() {
 
     setLoading(true);
 
-    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-      email: email.trim(),
+    const { data: signUpData, error: signUpErr } = await signUpWithPasswordPolicy(
+      email.trim(),
       password,
-    });
+    );
 
     if (signUpErr) {
       setLoading(false);
@@ -75,16 +76,10 @@ function SignupOwnerPageInner() {
       return;
     }
 
-    if (!signUpData?.user) {
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-      if (signInErr) {
-        setLoading(false);
-        setMsg(`가입은 되었지만 자동 로그인에 실패했어요: ${signInErr.message}`);
-        return;
-      }
+    if (!signUpData?.sessionEstablished) {
+      setLoading(false);
+      setMsg("가입 확인 이메일을 확인한 뒤 로그인해주세요.");
+      return;
     }
 
     const { data: userData, error: userErr } = await supabase.auth.getUser();
