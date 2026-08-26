@@ -1,6 +1,6 @@
 export const PASSWORD_MIN_LENGTH = 10;
 export const PASSWORD_MAX_BYTES = 72;
-export const PASSWORD_SPECIAL_CHARACTERS = "!@#$%^&*()_+-=[]{};'\\:\"|<>?,./`~";
+export const PASSWORD_SPECIAL_CHARACTERS = "!@#$%^&*()_+-=[]{};':\"|<>?,./`~";
 
 export const PASSWORD_POLICY_MESSAGE =
   "비밀번호는 10자 이상이며 영문 소문자, 숫자, 특수문자를 각각 1개 이상 포함해야 합니다. 영문 대문자는 선택 사항입니다.";
