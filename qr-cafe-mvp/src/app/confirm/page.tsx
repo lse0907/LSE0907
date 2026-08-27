@@ -56,6 +56,8 @@ type CartLine = {
 type WalletSummary = {
   point_balance: number;
   tier: string;
+  nearest_expiry_at: string | null;
+  expiring_soon_points: number;
 };
 
 type CheckoutLoyaltySettings = {
@@ -357,8 +359,10 @@ function ConfirmPageInner() {
       const [walletRes, couponRes, profileRes, loyaltySettingsRes] =
         await Promise.all([
           supabase
-            .from("customer_store_wallets")
-            .select("point_balance,tier")
+            .from("customer_point_summaries")
+            .select(
+              "point_balance,tier,nearest_expiry_at,expiring_soon_points",
+            )
             .eq("customer_user_id", uid)
             .eq("store_id", storeId)
             .maybeSingle(),
@@ -370,7 +374,8 @@ function ConfirmPageInner() {
             )
             .eq("customer_user_id", uid)
             .eq("store_id", storeId)
-            .eq("status", "issued"),
+            .eq("status", "issued")
+            .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`),
           supabase
             .from("customer_profiles")
             .select("name,phone")

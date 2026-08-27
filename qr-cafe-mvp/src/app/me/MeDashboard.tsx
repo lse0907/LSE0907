@@ -150,9 +150,9 @@ export function MeDashboard() {
           .eq("user_id", uid)
           .maybeSingle(),
         supabase
-          .from("customer_store_wallets")
+          .from("customer_point_summaries")
           .select(
-            "store_id, point_balance, tier, lifetime_spent, lifetime_orders, updated_at",
+            "store_id, point_balance, tier, lifetime_spent, lifetime_orders, nearest_expiry_at, expiring_soon_points, updated_at",
           )
           .eq("customer_user_id", uid)
           .order("updated_at", { ascending: false }),

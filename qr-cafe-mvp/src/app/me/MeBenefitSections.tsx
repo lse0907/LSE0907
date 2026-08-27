@@ -7,6 +7,7 @@ import {
   type WalletRow,
   couponBenefitText,
   couponExpiry,
+  pointExpiryText,
   tierLabel,
 } from "./meUtils";
 
@@ -68,19 +69,23 @@ export function MeBenefitSections({
           <span>총 보유 포인트</span>
           <strong>{totalPoints.toLocaleString()}P</strong>
         </div>
-        {rows.map((wallet) => (
-          <article className="benefitRow" key={`points-${wallet.store_id}`}>
-            <div className="benefitRowHead">
-              <strong title={storeNameMap[wallet.store_id] || "매장"}>
-                {storeNameMap[wallet.store_id] || "매장"}
-              </strong>
-              <strong>
-                {Number(wallet.point_balance || 0).toLocaleString()}P
-              </strong>
-            </div>
-            <p>이 매장에서 사용할 수 있는 매장 포인트예요.</p>
-          </article>
-        ))}
+        {rows.map((wallet) => {
+          const expiryText = pointExpiryText(wallet);
+          return (
+            <article className="benefitRow" key={`points-${wallet.store_id}`}>
+              <div className="benefitRowHead">
+                <strong title={storeNameMap[wallet.store_id] || "매장"}>
+                  {storeNameMap[wallet.store_id] || "매장"}
+                </strong>
+                <strong>
+                  {Number(wallet.point_balance || 0).toLocaleString()}P
+                </strong>
+              </div>
+              <p>이 매장에서 사용할 수 있는 매장 포인트예요.</p>
+              {expiryText ? <p>{expiryText}</p> : null}
+            </article>
+          );
+        })}
       </>
     ) : (
       <div className="benefitRow">

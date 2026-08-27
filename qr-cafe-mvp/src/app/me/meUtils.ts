@@ -4,8 +4,18 @@ export type WalletRow = {
   tier: "general" | "regular" | "vip" | string;
   lifetime_spent: number;
   lifetime_orders: number;
+  nearest_expiry_at: string | null;
+  expiring_soon_points: number;
   updated_at?: string | null;
 };
+
+export function pointExpiryText(wallet: WalletRow) {
+  const points = Math.max(0, Number(wallet.expiring_soon_points || 0));
+  if (!points || !wallet.nearest_expiry_at) return null;
+  const expiry = new Date(wallet.nearest_expiry_at);
+  if (Number.isNaN(expiry.getTime())) return `${points.toLocaleString()}P 만료 예정`;
+  return `${expiry.toLocaleDateString("ko-KR")}까지 ${points.toLocaleString()}P 만료 예정`;
+}
 
 export type CustomerOrder = {
   id: string;
