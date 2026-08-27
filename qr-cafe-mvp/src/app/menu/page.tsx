@@ -84,6 +84,8 @@ type MenuSection = {
 type WalletSummary = {
   point_balance: number;
   tier: string;
+  nearest_expiry_at: string | null;
+  expiring_soon_points: number;
 };
 
 function uid(prefix = "line") {
@@ -322,8 +324,10 @@ function MenuPageInner() {
 
       const [walletRes, couponRes] = await Promise.all([
         supabase
-          .from("customer_store_wallets")
-          .select("point_balance,tier")
+          .from("customer_point_summaries")
+          .select(
+            "point_balance,tier,nearest_expiry_at,expiring_soon_points",
+          )
           .eq("customer_user_id", uid)
           .eq("store_id", storeId)
           .maybeSingle(),

@@ -348,7 +348,7 @@ export async function validateOrderPayload(params: {
     if (requestedPoints > 0) {
       const [walletRes, settingsRes] = await Promise.all([
         params.supabaseAdmin
-          .from("customer_store_wallets")
+          .from("customer_point_summaries")
           .select("point_balance")
           .eq("store_id", storeId)
           .eq("customer_user_id", customerUserId)
