@@ -11,6 +11,8 @@ export type CustomerOrderRow = {
   total_price?: number | null;
   status?: string | null;
   payment_status?: string | null;
+  earned_points?: number | null;
+  points_rate_snapshot?: number | null;
   store_id?: string | null;
 };
 

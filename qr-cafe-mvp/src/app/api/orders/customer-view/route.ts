@@ -27,6 +27,8 @@ type CustomerOrderDbRow = {
   total_price?: number | null;
   status?: string | null;
   payment_status?: string | null;
+  earned_points?: number | null;
+  points_rate_snapshot?: number | null;
   store_id?: string | null;
   access_token?: string | null;
 };
@@ -44,6 +46,8 @@ const CUSTOMER_ORDER_COLUMNS = [
   "total_price",
   "status",
   "payment_status",
+  "earned_points",
+  "points_rate_snapshot",
   "store_id",
   "access_token",
 ].join(",");

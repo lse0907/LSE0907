@@ -43,6 +43,8 @@ type OrderView = {
   buzzerNo?: string;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  earnedPoints: number;
+  pointsRate: number;
 };
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
@@ -129,6 +131,8 @@ function toOrderView(row: DbOrderRow): OrderView {
     buzzerNo: row.buzzer_no ? String(row.buzzer_no) : undefined,
     status: normalizeStatus(row.status),
     paymentStatus: normalizePaymentStatus(row.payment_status),
+    earnedPoints: Math.max(0, Number(row.earned_points ?? 0) || 0),
+    pointsRate: Math.max(0, Number(row.points_rate_snapshot ?? 0) || 0),
   };
 }
 
@@ -536,6 +540,8 @@ function StatusPageInner() {
           color: #fff;
         }
         .autoUpdate { display:flex; align-items:center; gap:7px; margin-top:18px; color:var(--muted); font-size:13px; font-weight:500; }
+        .earnedPoints { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; padding:12px 14px; border:1px solid #cfe0ff; border-radius:13px; background:#eef5ff; color:#174a9c; font-size:13px; font-weight:700; }
+        .earnedPoints strong { font-size:16px; }
         .statusActions { margin-top:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
         @media (max-width: 520px) {
           .wrap { padding-top: 16px; }
@@ -644,6 +650,13 @@ function StatusPageInner() {
             ) : (
               <CustomerOrderProgress activeIndex={activeStepIndex} />
             )}
+
+            {visibleOrder.status === "completed" && visibleOrder.earnedPoints > 0 ? (
+              <div className="earnedPoints">
+                <span>포인트 적립 완료{visibleOrder.pointsRate > 0 ? ` · ${visibleOrder.pointsRate}%` : ""}</span>
+                <strong>{visibleOrder.earnedPoints.toLocaleString()}P</strong>
+              </div>
+            ) : null}
 
             <div className="autoUpdate">
               <CustomerIcon name="clock" size={16} /> 상태를 자동으로 확인하고 있어요.

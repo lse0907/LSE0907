@@ -49,6 +49,8 @@ type OrderView = {
   totalPrice: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  earnedPoints: number;
+  pointsRate: number;
 };
 
 const LS_LAST_STORE_ID_KEY = "qrCafeLastStoreId";
@@ -119,6 +121,8 @@ function toOrderView(row: DbOrderRow): OrderView {
     totalPrice: Math.max(0, Number(row.total_price ?? 0) || 0),
     status: normalizeStatus(row.status),
     paymentStatus: normalizePaymentStatus(row.payment_status),
+    earnedPoints: Math.max(0, Number(row.earned_points ?? 0) || 0),
+    pointsRate: Math.max(0, Number(row.points_rate_snapshot ?? 0) || 0),
   };
 }
 
@@ -142,6 +146,8 @@ function DoneStyles() {
     .orderFacts div:first-child { padding-left:0; border-right:1px solid var(--customer-line); }
     dt { color:var(--customer-muted); font-size:13px; font-weight:500; } dd { margin:0; color:var(--customer-ink); font-size:17px; font-weight:750; }
     .nextGuide { margin:20px 0 0; padding:13px 14px; border-radius:14px; background:#f4f7fb; color:#526071; font-size:14px; font-weight:500; line-height:1.6; }
+    .earnedPoints { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 0; padding:13px 14px; border:1px solid #cfe0ff; border-radius:14px; background:#eef5ff; color:#174a9c; font-size:13px; font-weight:700; }
+    .earnedPoints strong { font-size:16px; }
     .actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
     .primaryAction,.secondaryAction { min-height:52px; display:flex; align-items:center; justify-content:center; padding:0 16px; border-radius:14px; font-size:15px; font-weight:750; text-align:center; }
     .primaryAction { border:1px solid var(--rion-navy); background:var(--rion-navy); color:#fff; box-shadow:0 10px 24px rgba(15,31,61,.2); }
@@ -365,6 +371,12 @@ function DonePageInner() {
                       : "취소된 주문이에요. 필요한 메뉴는 다시 주문해 주세요."
                 : "주문 상태 화면에서 준비 과정을 실시간으로 확인할 수 있어요."}
           </p>
+          {!isCancelled && order.earnedPoints > 0 ? (
+            <div className="earnedPoints">
+              <span>포인트 적립 완료{order.pointsRate > 0 ? ` · ${order.pointsRate}%` : ""}</span>
+              <strong>{fmt(order.earnedPoints)}P</strong>
+            </div>
+          ) : null}
         </article>
 
         <div className="actions">

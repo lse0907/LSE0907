@@ -8,6 +8,8 @@ import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 
 type LoyaltySettingsRow = {
   store_id: string;
+  points_enabled: boolean;
+  coupons_enabled: boolean;
   tier_general_rate_pct: number;
   tier_regular_rate_pct: number;
   tier_vip_rate_pct: number;
@@ -25,6 +27,29 @@ type TierRulesRow = {
   regular_min_orders: number;
   vip_min_spent: number;
   vip_min_orders: number;
+};
+
+const DEFAULT_LOYALTY_SETTINGS: LoyaltySettingsRow = {
+  store_id: "",
+  points_enabled: true,
+  coupons_enabled: true,
+  tier_general_rate_pct: 2,
+  tier_regular_rate_pct: 3,
+  tier_vip_rate_pct: 5,
+  thank_you_every_n_orders: 10,
+  max_redeem_pct: 30,
+  min_redeem_points: 100,
+  point_expiry_months: 12,
+  allow_point_or_coupon_only: true,
+};
+
+const DEFAULT_TIER_RULES: TierRulesRow = {
+  store_id: "",
+  lookback_months: 6,
+  regular_min_spent: 200000,
+  regular_min_orders: 10,
+  vip_min_spent: 500000,
+  vip_min_orders: 25,
 };
 
 type CouponTemplateRow = {
@@ -83,11 +108,11 @@ type IssuedCouponRow = {
 
 type LoyaltyTab = "policy" | "coupons" | "issue" | "history";
 
-const loyaltyTabs: Array<{ id: LoyaltyTab; label: string; desc: string }> = [
-  { id: "policy", label: "정책 설정", desc: "적립·등급" },
-  { id: "coupons", label: "쿠폰 관리", desc: "생성·수정" },
-  { id: "issue", label: "쿠폰 발급", desc: "고객 검색" },
-  { id: "history", label: "발급 내역", desc: "조회·취소" },
+const loyaltyTabs: Array<{ id: LoyaltyTab; label: string; mobileLabel: string; desc: string }> = [
+  { id: "policy", label: "정책 설정", mobileLabel: "정책", desc: "적립·등급" },
+  { id: "coupons", label: "쿠폰 관리", mobileLabel: "쿠폰", desc: "생성·수정" },
+  { id: "issue", label: "쿠폰 발급", mobileLabel: "발급", desc: "고객 검색" },
+  { id: "history", label: "발급 내역", mobileLabel: "내역", desc: "조회·취소" },
 ];
 
 const issuedStatusOptions: Array<[string, string]> = [["all", "전체"], ["issued", "사용 가능"], ["used", "사용 완료"], ["expired", "만료"], ["cancelled", "취소"]];
@@ -197,26 +222,15 @@ function AdminLoyaltyInner() {
   const [templateKindFilter, setTemplateKindFilter] = useState("all");
   const [templateVisibleCount, setTemplateVisibleCount] = useState(TEMPLATE_INITIAL_LIMIT);
 
-  const [settings, setSettings] = useState<LoyaltySettingsRow>({
-    store_id: "",
-    tier_general_rate_pct: 2,
-    tier_regular_rate_pct: 3,
-    tier_vip_rate_pct: 5,
-    thank_you_every_n_orders: 10,
-    max_redeem_pct: 30,
-    min_redeem_points: 100,
-    point_expiry_months: 12,
-    allow_point_or_coupon_only: true,
+  const [settings, setSettings] = useState<LoyaltySettingsRow>({ ...DEFAULT_LOYALTY_SETTINGS });
+  const [savedSettings, setSavedSettings] = useState<LoyaltySettingsRow | null>(null);
+  const [savedServiceStatus, setSavedServiceStatus] = useState({
+    pointsEnabled: true,
+    couponsEnabled: true,
   });
 
-  const [tierRules, setTierRules] = useState<TierRulesRow>({
-    store_id: "",
-    lookback_months: 6,
-    regular_min_spent: 200000,
-    regular_min_orders: 10,
-    vip_min_spent: 500000,
-    vip_min_orders: 25,
-  });
+  const [tierRules, setTierRules] = useState<TierRulesRow>({ ...DEFAULT_TIER_RULES });
+  const [savedTierRules, setSavedTierRules] = useState<TierRulesRow | null>(null);
 
   const [templates, setTemplates] = useState<CouponTemplateRow[]>([]);
   const [editingTemplateId, setEditingTemplateId] = useState("");
@@ -409,10 +423,10 @@ function AdminLoyaltyInner() {
     }
     setCanManageLoyalty(String(member.role || "").toLowerCase() === "owner");
 
-    const [settingsRes, tierRes] = await Promise.all([
+    const [settingsAttempt, tierRes] = await Promise.all([
       supabase
         .from("store_loyalty_settings")
-        .select("store_id,tier_general_rate_pct,tier_regular_rate_pct,tier_vip_rate_pct,thank_you_every_n_orders,max_redeem_pct,min_redeem_points,point_expiry_months,allow_point_or_coupon_only")
+        .select("store_id,points_enabled,coupons_enabled,tier_general_rate_pct,tier_regular_rate_pct,tier_vip_rate_pct,thank_you_every_n_orders,max_redeem_pct,min_redeem_points,point_expiry_months,allow_point_or_coupon_only")
         .eq("store_id", storeId)
         .maybeSingle(),
       supabase
@@ -422,20 +436,95 @@ function AdminLoyaltyInner() {
         .maybeSingle(),
     ]);
 
+    let settingsRes = settingsAttempt;
+    if (settingsAttempt.error && /points_enabled|coupons_enabled|column/i.test(settingsAttempt.error.message)) {
+      const legacySettingsRes = await supabase
+        .from("store_loyalty_settings")
+        .select("store_id,tier_general_rate_pct,tier_regular_rate_pct,tier_vip_rate_pct,thank_you_every_n_orders,max_redeem_pct,min_redeem_points,point_expiry_months,allow_point_or_coupon_only")
+        .eq("store_id", storeId)
+        .maybeSingle();
+      settingsRes = legacySettingsRes as typeof settingsAttempt;
+    }
+
     if (settingsRes.error) showMsg(`포인트 설정 조회 실패: ${settingsRes.error.message}`, "error");
     if (tierRes.error) showMsg(`등급 규칙 조회 실패: ${tierRes.error.message}`, "error");
 
-    setSettings(settingsRes.data ? (settingsRes.data as LoyaltySettingsRow) : (prev) => ({ ...prev, store_id: storeId }));
-    setTierRules(tierRes.data ? (tierRes.data as TierRulesRow) : (prev) => ({ ...prev, store_id: storeId }));
+    const loadedSettings = settingsRes.data as Partial<LoyaltySettingsRow> | null;
+    const nextSettings: LoyaltySettingsRow = {
+      ...DEFAULT_LOYALTY_SETTINGS,
+      ...loadedSettings,
+      store_id: loadedSettings?.store_id || storeId,
+      points_enabled: loadedSettings?.points_enabled ?? true,
+      coupons_enabled: loadedSettings?.coupons_enabled ?? true,
+    };
+    setSavedServiceStatus({
+      pointsEnabled: nextSettings.points_enabled,
+      couponsEnabled: nextSettings.coupons_enabled,
+    });
+    setSettings(nextSettings);
+    setSavedSettings(nextSettings);
+
+    const loadedTierRules = tierRes.data as Partial<TierRulesRow> | null;
+    const nextTierRules: TierRulesRow = {
+      ...DEFAULT_TIER_RULES,
+      ...loadedTierRules,
+      store_id: loadedTierRules?.store_id || storeId,
+    };
+    setTierRules(nextTierRules);
+    setSavedTierRules(nextTierRules);
 
     await Promise.all([loadTemplates(), loadIssuedCoupons()]);
     setLoading(false);
   };
 
+  const serviceDirty = Boolean(savedSettings && (
+    settings.points_enabled !== savedSettings.points_enabled
+    || settings.coupons_enabled !== savedSettings.coupons_enabled
+  ));
+  const policyDirty = Boolean(savedSettings && (
+    settings.tier_general_rate_pct !== savedSettings.tier_general_rate_pct
+    || settings.tier_regular_rate_pct !== savedSettings.tier_regular_rate_pct
+    || settings.tier_vip_rate_pct !== savedSettings.tier_vip_rate_pct
+    || settings.thank_you_every_n_orders !== savedSettings.thank_you_every_n_orders
+    || settings.max_redeem_pct !== savedSettings.max_redeem_pct
+    || settings.min_redeem_points !== savedSettings.min_redeem_points
+    || settings.point_expiry_months !== savedSettings.point_expiry_months
+    || settings.allow_point_or_coupon_only !== savedSettings.allow_point_or_coupon_only
+  ));
+  const tierDirty = Boolean(savedTierRules && (
+    tierRules.lookback_months !== savedTierRules.lookback_months
+    || tierRules.regular_min_spent !== savedTierRules.regular_min_spent
+    || tierRules.regular_min_orders !== savedTierRules.regular_min_orders
+    || tierRules.vip_min_spent !== savedTierRules.vip_min_spent
+    || tierRules.vip_min_orders !== savedTierRules.vip_min_orders
+  ));
+  const hasUnsavedChanges = serviceDirty || policyDirty || tierDirty;
+
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const confirmLinkNavigation = (event: MouseEvent) => {
+      const link = (event.target as Element | null)?.closest("a");
+      if (!link) return;
+      if (window.confirm("저장하지 않은 변경사항이 있습니다. 페이지를 이동할까요?")) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    document.addEventListener("click", confirmLinkNavigation, true);
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeUnload);
+      document.removeEventListener("click", confirmLinkNavigation, true);
+    };
+  }, [hasUnsavedChanges]);
 
   const activeTemplates = templates.filter((row) => row.is_active).length;
   const inactiveTemplates = templates.length - activeTemplates;
@@ -489,12 +578,25 @@ function AdminLoyaltyInner() {
     if (!requireOwner()) return;
     const validation = validateSettings();
     if (validation) return showMsg(validation, "error");
+    const isStoppingService =
+      (savedServiceStatus.pointsEnabled && !settings.points_enabled)
+      || (savedServiceStatus.couponsEnabled && !settings.coupons_enabled);
+    if (isStoppingService && !window.confirm(
+      "운영을 중지해도 기존 포인트와 쿠폰은 만료일까지 사용할 수 있습니다. 저장할까요?",
+    )) return;
     setSavingSettings(true);
     setMsg("");
     const payload: LoyaltySettingsRow = { ...settings, store_id: storeId };
     const { error } = await supabase.from("store_loyalty_settings").upsert(payload, { onConflict: "store_id" });
     if (error) showMsg(`포인트 정책 저장 실패: ${error.message}`, "error");
-    else showMsg("포인트 정책을 저장했습니다.", "success");
+    else {
+      setSavedServiceStatus({
+        pointsEnabled: settings.points_enabled,
+        couponsEnabled: settings.coupons_enabled,
+      });
+      setSavedSettings(payload);
+      showMsg("포인트 정책을 저장했습니다.", "success");
+    }
     setSavingSettings(false);
   };
 
@@ -506,7 +608,10 @@ function AdminLoyaltyInner() {
     const payload: TierRulesRow = { ...tierRules, store_id: storeId };
     const { error } = await supabase.from("store_tier_rules").upsert(payload, { onConflict: "store_id" });
     if (error) showMsg(`등급 규칙 저장 실패: ${error.message}`, "error");
-    else showMsg("등급 규칙을 저장했습니다.", "success");
+    else {
+      setSavedTierRules(payload);
+      showMsg("등급 규칙을 저장했습니다.", "success");
+    }
     setSavingTier(false);
   };
 
@@ -604,6 +709,7 @@ function AdminLoyaltyInner() {
   const issueCouponToSelectedTargets = async () => {
     if (!storeId) return;
     if (!requireOwner()) return;
+    if (!settings.coupons_enabled) return showMsg("쿠폰 운영이 중지되어 새 쿠폰을 발급할 수 없습니다.", "error");
     if (!issueTemplateId) return showMsg("발급할 쿠폰을 선택해 주세요.", "error");
     if (!selectedTargetIds.length) return showMsg("발급할 고객을 선택해 주세요.", "error");
     if (!bulkConfirmChecked) return showMsg("선택 고객 발급 확인을 체크해 주세요.", "error");
@@ -659,6 +765,10 @@ function AdminLoyaltyInner() {
   };
 
   const selectIssueTemplate = (templateId: string) => {
+    if (!settings.coupons_enabled) {
+      showMsg("쿠폰 운영을 켠 뒤 발급할 수 있습니다.", "info");
+      return;
+    }
     handleIssueTemplateChange(templateId);
     setActiveTab("issue");
   };
@@ -757,13 +867,65 @@ function AdminLoyaltyInner() {
 
       {msg ? <div className={`notice notice-${msgTone}`} role="status">{msg}</div> : null}
 
+      <section className="serviceStatusSection" aria-labelledby="service-status-title">
+        <div className="serviceStatusHead">
+          <div>
+            <span className="summaryEyebrow">SERVICE STATUS</span>
+            <h2 id="service-status-title">서비스 운영</h2>
+          </div>
+          <span className={serviceDirty ? "saveState saveStateDirty" : "saveState"}>
+            {serviceDirty ? "변경사항 있음" : "저장됨"}
+          </span>
+        </div>
+        <div className="serviceStatusGrid">
+          <article className={`serviceCard ${settings.points_enabled ? "serviceCardOn" : "serviceCardOff"}`}>
+            <div>
+              <span className="serviceLabel">포인트</span>
+              <strong>{settings.points_enabled ? "운영 중" : "적립 중지"}</strong>
+              <p>{settings.points_enabled ? "결제 후 포인트 적립" : "보유 포인트는 사용 가능"}</p>
+            </div>
+            <button
+              type="button"
+              className={`serviceSwitch ${settings.points_enabled ? "serviceSwitchOn" : ""}`}
+              role="switch"
+              aria-checked={settings.points_enabled}
+              aria-label="포인트 운영"
+              disabled={!canManageLoyalty}
+              onClick={() => setSettings((prev) => ({ ...prev, points_enabled: !prev.points_enabled }))}
+            ><span /></button>
+          </article>
+          <article className={`serviceCard ${settings.coupons_enabled ? "serviceCardOn" : "serviceCardOff"}`}>
+            <div>
+              <span className="serviceLabel">쿠폰</span>
+              <strong>{settings.coupons_enabled ? "운영 중" : "발급 중지"}</strong>
+              <p>{settings.coupons_enabled ? "자동·수동 쿠폰 발급" : "발급 쿠폰은 사용 가능"}</p>
+            </div>
+            <button
+              type="button"
+              className={`serviceSwitch ${settings.coupons_enabled ? "serviceSwitchOn" : ""}`}
+              role="switch"
+              aria-checked={settings.coupons_enabled}
+              aria-label="쿠폰 운영"
+              disabled={!canManageLoyalty}
+              onClick={() => setSettings((prev) => ({ ...prev, coupons_enabled: !prev.coupons_enabled }))}
+            ><span /></button>
+          </article>
+        </div>
+        <div className="serviceSaveRow">
+          <p>기존 혜택은 만료일까지 유지됩니다.</p>
+          <button className="btn btnDark" type="button" onClick={saveSettings} disabled={savingSettings || !canManageLoyalty || !serviceDirty}>
+            {savingSettings ? "저장 중" : "운영 설정 저장"}
+          </button>
+        </div>
+      </section>
+
       <section className="summarySection" aria-labelledby="loyalty-summary-title">
         <div className="summaryHeader">
           <div><span className="summaryEyebrow">OVERVIEW</span><h2 id="loyalty-summary-title">운영 현황</h2></div>
           <button className="summaryRefresh" type="button" onClick={loadData} aria-label="포인트 쿠폰 현황 새로고침">↻ 새로고침</button>
         </div>
         <div className="summaryStrip">
-          <article className="summaryMetric rateMetric"><span className="metricIcon" aria-hidden="true">%</span><div><b>적립률</b><strong>일반 {settings.tier_general_rate_pct}% · 단골 {settings.tier_regular_rate_pct}%</strong><small>VIP {settings.tier_vip_rate_pct}%</small></div></article>
+          <article className="summaryMetric rateMetric"><span className="metricIcon" aria-hidden="true">%</span><div><b>적립률</b><strong>{settings.points_enabled ? `일반 ${settings.tier_general_rate_pct}% · 단골 ${settings.tier_regular_rate_pct}%` : "신규 적립 중지"}</strong><small>{settings.points_enabled ? `VIP ${settings.tier_vip_rate_pct}%` : "보유 포인트 사용 가능"}</small></div></article>
           <article className="summaryMetric limitMetric"><span className="metricIcon" aria-hidden="true">P</span><div><b>사용 제한</b><strong>최소 {money(settings.min_redeem_points)}P</strong><small>최대 {settings.max_redeem_pct}% 사용</small></div></article>
           <article className="summaryMetric couponMetric"><span className="metricIcon" aria-hidden="true">C</span><div><b>쿠폰 현황</b><strong>활성 {activeTemplates}개</strong><small>비활성 {inactiveTemplates}개</small></div></article>
           <article className="summaryMetric issueMetric"><span className="metricIcon" aria-hidden="true">✓</span><div><b>최근 발급</b><strong>사용 가능 {issuedCoupons.filter((row) => row.status === "issued").length}장</strong><small>고객 발급 기준</small></div></article>
@@ -776,10 +938,18 @@ function AdminLoyaltyInner() {
             key={tab.id}
             type="button"
             className={`tabButton ${activeTab === tab.id ? "tabButtonOn" : ""}`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              if (tab.id === "issue" && !settings.coupons_enabled) {
+                showMsg("쿠폰 운영을 켠 뒤 발급할 수 있습니다.", "info");
+                return;
+              }
+              setActiveTab(tab.id);
+            }}
             aria-pressed={activeTab === tab.id}
+            aria-disabled={tab.id === "issue" && !settings.coupons_enabled}
+            aria-label={tab.label}
           >
-            <strong>{tab.label}</strong>
+            <strong data-mobile-label={tab.mobileLabel}>{tab.label}</strong>
             <span>{tab.desc}</span>
           </button>
         ))}
@@ -793,9 +963,13 @@ function AdminLoyaltyInner() {
                 <h2>포인트 정책</h2>
             <p>적립률과 사용 한도</p>
           </div>
-          <button className="btn btnDark" type="button" onClick={saveSettings} disabled={savingSettings}>{savingSettings ? "저장 중" : "저장"}</button>
+          <div className="sectionActions">
+            <span className={policyDirty ? "saveState saveStateDirty" : "saveState"}>{policyDirty ? "변경사항 있음" : "저장됨"}</span>
+            <button className="btn btnDark" type="button" onClick={saveSettings} disabled={savingSettings || !canManageLoyalty || !policyDirty}>{savingSettings ? "저장 중" : "포인트 설정 저장"}</button>
+          </div>
         </div>
-        <div className="formGrid denseGrid policyGrid">
+        {!settings.points_enabled ? <p className="settingModeNotice">적립 중지 중 · 설정은 미리 변경할 수 있습니다.</p> : null}
+        <div className={`formGrid denseGrid policyGrid ${settings.points_enabled ? "" : "settingsMuted"}`}>
           <LabelInput label="일반 적립률" suffix="%" value={String(settings.tier_general_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_general_rate_pct: clampNumber(toNumber(v, p.tier_general_rate_pct), 0, 100) }))} />
           <LabelInput label="단골 적립률" suffix="%" value={String(settings.tier_regular_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_regular_rate_pct: clampNumber(toNumber(v, p.tier_regular_rate_pct), 0, 100) }))} />
           <LabelInput label="VIP 적립률" suffix="%" value={String(settings.tier_vip_rate_pct)} onChange={(v) => setSettings((p) => ({ ...p, tier_vip_rate_pct: clampNumber(toNumber(v, p.tier_vip_rate_pct), 0, 100) }))} />
@@ -809,7 +983,9 @@ function AdminLoyaltyInner() {
           포인트와 쿠폰 동시 사용 금지
         </label>
         <div className="previewBox">
-          10,000원 주문 시 적립: 일반 {money((previewOrderAmount * settings.tier_general_rate_pct) / 100)}P · 단골 {money((previewOrderAmount * settings.tier_regular_rate_pct) / 100)}P · VIP {money((previewOrderAmount * settings.tier_vip_rate_pct) / 100)}P
+          {settings.points_enabled
+            ? `10,000원 주문 시 적립: 일반 ${money((previewOrderAmount * settings.tier_general_rate_pct) / 100)}P · 단골 ${money((previewOrderAmount * settings.tier_regular_rate_pct) / 100)}P · VIP ${money((previewOrderAmount * settings.tier_vip_rate_pct) / 100)}P`
+            : "신규 적립 중지 · 보유 포인트 사용 가능"}
         </div>
       </section>
 
@@ -819,7 +995,10 @@ function AdminLoyaltyInner() {
             <h2>등급 규칙</h2>
             <p>결제금액 또는 주문수 기준</p>
           </div>
-          <button className="btn btnDark" type="button" onClick={saveTierRules} disabled={savingTier}>{savingTier ? "저장 중" : "저장"}</button>
+          <div className="sectionActions">
+            <span className={tierDirty ? "saveState saveStateDirty" : "saveState"}>{tierDirty ? "변경사항 있음" : "저장됨"}</span>
+            <button className="btn btnDark" type="button" onClick={saveTierRules} disabled={savingTier || !tierDirty}>{savingTier ? "저장 중" : "등급 설정 저장"}</button>
+          </div>
         </div>
         <div className="formGrid denseGrid tierGrid">
           <LabelInput label="집계 기간" suffix="개월" value={String(tierRules.lookback_months)} onChange={(v) => setTierRules((p) => ({ ...p, lookback_months: Math.max(1, Math.floor(toNumber(v, p.lookback_months))) }))} />
@@ -1243,6 +1422,35 @@ function AdminLoyaltyInner() {
         html { color-scheme: light; overflow-y: scroll; scrollbar-gutter: stable both-edges; }
         body { background: #eef4fb; color: #0f172a; }
         .loyaltyPage { background: transparent; }
+        .loyaltyPage .serviceStatusSection { display:grid; gap:10px; padding:14px; border:1px solid #d0dbea; border-radius:18px; background:linear-gradient(145deg,#172b49,#213d63); color:#fff; box-shadow:0 10px 24px rgba(15,31,61,.09); }
+        .loyaltyPage .serviceStatusHead,.loyaltyPage .serviceSaveRow { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        .loyaltyPage .serviceStatusHead h2 { margin:2px 0 0; font-size:18px; letter-spacing:-.025em; }
+        .loyaltyPage .serviceStatusHead > span { color:#b7c6d9; font-size:11px; font-weight:650; }
+        .loyaltyPage .serviceStatusGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+        .loyaltyPage .serviceCard { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:78px; padding:11px 14px; border:1px solid rgba(255,255,255,.11); border-radius:14px; background:rgba(255,255,255,.055); }
+        .loyaltyPage .serviceCardOff { background:rgba(10,18,33,.25); }
+        .loyaltyPage .serviceCard div { display:grid; gap:2px; }
+        .loyaltyPage .serviceLabel { color:#aac3e6; font-size:9px; font-weight:800; letter-spacing:.08em; }
+        .loyaltyPage .serviceCard strong { font-size:17px; line-height:1.15; letter-spacing:-.025em; }
+        .loyaltyPage .serviceCard p,.loyaltyPage .serviceSaveRow p { margin:0; color:#c7d3e3; font-size:11px; line-height:1.35; font-weight:550; }
+        .loyaltyPage .serviceSwitch { position:relative; width:52px; height:44px; flex:0 0 auto; padding:0; border:0; border-radius:999px; background:transparent; cursor:pointer; }
+        .loyaltyPage .serviceSwitch::before { content:""; position:absolute; top:9px; left:3px; width:46px; height:26px; border:1px solid rgba(255,255,255,.28); border-radius:999px; background:#52637d; transition:.2s ease; }
+        .loyaltyPage .serviceSwitch span { position:absolute; z-index:1; top:13px; left:7px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 3px 8px rgba(0,0,0,.24); transition:.2s ease; }
+        .loyaltyPage .serviceSwitchOn::before { border-color:#4fd1a1; background:#159a68; }
+        .loyaltyPage .serviceSwitchOn span { transform:translateX(20px); }
+        .loyaltyPage .serviceSwitch:focus-visible { outline:2px solid #60a5fa; outline-offset:1px; }
+        .loyaltyPage .serviceSwitch:disabled { cursor:not-allowed; opacity:.58; }
+        .loyaltyPage .serviceSaveRow { padding-top:0; }
+        .loyaltyPage .serviceSaveRow .btn { min-height:44px; padding:0 12px; border-radius:10px; font-size:12px; }
+        .loyaltyPage .serviceSaveRow .btnDark { border-color:rgba(255,255,255,.72); background:rgba(255,255,255,.88); color:#172b49; box-shadow:none; }
+        .loyaltyPage .serviceSaveRow .btnDark:not(:disabled) { border-color:#3b82f6; background:#2563eb; color:#fff; box-shadow:0 8px 18px rgba(37,99,235,.24); }
+        .loyaltyPage .saveState { color:#64748b; font-size:11px; font-weight:800; white-space:nowrap; }
+        .loyaltyPage .serviceStatusHead .saveState { color:#b7c6d9; }
+        .loyaltyPage .saveStateDirty,.loyaltyPage .serviceStatusHead .saveStateDirty { color:#f6c453; }
+        .loyaltyPage .sectionActions { display:flex; align-items:center; justify-content:flex-end; gap:10px; }
+        .loyaltyPage .settingModeNotice { padding:9px 11px; border:1px solid #bfdbfe; border-radius:12px; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:800; }
+        .loyaltyPage .settingsMuted { opacity:.56; }
+        .loyaltyPage .tabButton[aria-disabled="true"] { opacity:.46; cursor:not-allowed; }
         .loyaltyPage .summarySection { display:grid; gap:10px; padding:14px; border:1px solid #dbe3ef; border-radius:18px; background:linear-gradient(145deg,#fff,#f7faff); box-shadow:0 10px 26px rgba(30,55,90,.055); }
         .loyaltyPage .summaryHeader { display:flex; align-items:end; justify-content:space-between; gap:12px; }
         .loyaltyPage .summaryHeader h2 { margin:3px 0 0; color:#14213d; font-size:17px; letter-spacing:-.03em; }
@@ -1287,7 +1495,7 @@ function AdminLoyaltyInner() {
         .loyaltyPage .heroCard { height: 112px; min-height: 112px; padding: 18px; display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); overflow: hidden; }
         .loyaltyPage .eyebrow { margin: 0 0 7px; color: #2563eb; font-weight: 900; font-size: 12px; }
         .loyaltyPage h1, .loyaltyPage h2, .loyaltyPage h3, .loyaltyPage p { margin: 0; }
-        .loyaltyPage h1 { font-size: 27px; font-weight: 950; letter-spacing: -0.04em; line-height: 1.15; }
+        .loyaltyPage h1 { font-size: clamp(24px, calc(22px + .45vw), 27px); font-weight: 950; letter-spacing: -0.04em; line-height: 1.15; }
         .loyaltyPage h2 { font-size: 19px; font-weight: 950; letter-spacing: -0.03em; line-height: 1.2; }
         .loyaltyPage .heroDesc, .loyaltyPage .storeLine, .loyaltyPage .sectionHead p, .loyaltyPage .itemCard p, .loyaltyPage .selectedBox p, .loyaltyPage .confirmBox p, .loyaltyPage .muted, .loyaltyPage .emptyText { color: #64748b; font-weight: 650; line-height: 1.45; }
         .loyaltyPage .heroDesc { margin-top: 6px; }
@@ -1316,6 +1524,7 @@ function AdminLoyaltyInner() {
         .loyaltyPage .tabButton span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #64748b; font-size: 11px; font-weight: 750; line-height: 1.1; }
         .loyaltyPage .tabButtonOn { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; box-shadow: inset 0 -3px 0 #2563eb; }
         .loyaltyPage .tabButtonOn span { color: #1d4ed8; }
+        .loyaltyPage .tabButton:focus-visible,.loyaltyPage .btn:focus-visible { position:relative; z-index:2; outline:3px solid #60a5fa; outline-offset:-3px; }
         .loyaltyPage .sectionCard { padding: 20px; display: grid; gap: 16px; }
         .loyaltyPage .sectionHead { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
         .loyaltyPage .compactSection { gap: 12px; }
@@ -1429,6 +1638,8 @@ function AdminLoyaltyInner() {
         }
         @media (max-width: 900px) {
           .loyaltyPage .summaryGrid, .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .targetFilterGrid, .loyaltyPage .issueSteps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .loyaltyPage .summaryStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .loyaltyPage .summaryMetric strong { white-space: normal; line-height: 1.25; }
           .loyaltyPage .templateToolbar { grid-template-columns: 1fr 1fr; }
           .loyaltyPage .templateToolbar .searchField { grid-column: 1 / -1; }
           .loyaltyPage .tabBar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1439,14 +1650,25 @@ function AdminLoyaltyInner() {
           .loyaltyPage .searchActions { grid-column: 1 / -1; }
         }
         @media (max-width: 640px) {
+          .loyaltyPage .serviceStatusSection { gap:8px; padding:12px; border-radius:16px; }
+          .loyaltyPage .serviceStatusGrid { grid-template-columns:1fr; gap:6px; }
+          .loyaltyPage .serviceStatusHead { align-items:center; gap:8px; }
+          .loyaltyPage .serviceStatusHead .summaryEyebrow { display:none; }
+          .loyaltyPage .serviceStatusHead h2 { margin:0; font-size:17px; }
+          .loyaltyPage .serviceStatusHead > span { font-size:10px; }
+          .loyaltyPage .serviceCard { min-height:70px; gap:10px; padding:9px 12px; border-radius:12px; }
+          .loyaltyPage .serviceCard strong { font-size:16px; }
+          .loyaltyPage .serviceSaveRow { align-items:flex-start; flex-direction:column; gap:6px; }
+          .loyaltyPage .serviceSaveRow .btn { width:100%; }
           .loyaltyPage { padding: 14px; gap: 12px; }
           .loyaltyPage .heroCard { height: auto; min-height: auto; display: grid; padding: 14px; border-radius: 16px; overflow: visible; }
           .loyaltyPage .heroActions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
           .loyaltyPage .sectionHead, .loyaltyPage .issueHeroHead, .loyaltyPage .targetCardHead { display: grid; }
           .loyaltyPage .sectionHead .btn, .loyaltyPage .actionRow .btn { width: 100%; }
-          .loyaltyPage .btn { width: 100%; text-align: center; }
+          .loyaltyPage .btn { min-height:44px; width: 100%; text-align: center; }
+          .loyaltyPage .sectionActions { display:grid; grid-template-columns:1fr; justify-items:stretch; width:100%; gap:6px; }
+          .loyaltyPage .sectionActions .saveState { text-align:right; }
           .loyaltyPage .tabButton span { display: none; }
-          .loyaltyPage h1 { font-size: 24px; }
           .loyaltyPage h2 { font-size: 18px; }
           .loyaltyPage .summaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
           .loyaltyPage .summaryCard { min-height: 88px; padding: 14px 14px 14px 18px; }
@@ -1454,12 +1676,14 @@ function AdminLoyaltyInner() {
           .loyaltyPage .summaryCard p { font-size: 12px; }
           .loyaltyPage .tabBar { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 42px; gap: 0; }
           .loyaltyPage .tab { padding: 7px 3px; font-size: 11px; }
-          .loyaltyPage .tabButton { height: 42px; padding: 0 10px; }
+          .loyaltyPage .tabButton { height: 42px; padding: 0 4px; }
+          .loyaltyPage .tabButton strong { overflow:visible; text-overflow:clip; font-size:0; }
+          .loyaltyPage .tabButton strong::after { content:attr(data-mobile-label); font-size:13px; }
           .loyaltyPage .formGrid, .loyaltyPage .issueGrid, .loyaltyPage .itemGrid, .loyaltyPage .searchPanel, .loyaltyPage .customerRow, .loyaltyPage .targetBasicGrid, .loyaltyPage .targetFilterGrid, .loyaltyPage .targetRow, .loyaltyPage .historySearchPanel, .loyaltyPage .issueSteps, .loyaltyPage .resultStats, .loyaltyPage .templateToolbar, .loyaltyPage .templateRow { grid-template-columns: 1fr; }
           .loyaltyPage .policyGrid, .loyaltyPage .tierGrid, .loyaltyPage .createTemplateGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .loyaltyPage .createTemplateGrid .field:first-child, .loyaltyPage .historySearchPanel .searchField { grid-column: 1 / -1; }
           .loyaltyPage .historySearchPanel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .loyaltyPage .issueSteps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .loyaltyPage .issueSteps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr); }
           .loyaltyPage .summarySection { gap:8px; padding:11px; border-radius:16px; }
           .loyaltyPage .summaryHeader h2 { font-size:15px; }
           .loyaltyPage .summaryRefresh { min-height:32px; padding:6px 8px; }
@@ -1471,7 +1695,11 @@ function AdminLoyaltyInner() {
           .loyaltyPage .panelHead { display: grid; }
           .loyaltyPage .rowActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
           .loyaltyPage .rowActions .btn { width: 100%; }
-          .loyaltyPage .issueStep { min-height: 42px; padding: 9px; gap: 7px; }
+          .loyaltyPage .issueStep { min-height:44px; justify-content:center; padding:7px 3px; gap:2px; border-radius:12px; }
+          .loyaltyPage .issueStep span { width:18px; height:18px; font-size:10px; }
+          .loyaltyPage .issueStep strong { font-size:10px; line-height:1.2; white-space:nowrap; word-break:keep-all; }
+          .loyaltyPage .denseGrid .fieldBox { min-height:44px; }
+          .loyaltyPage .denseGrid .field input,.loyaltyPage .denseGrid .field select { min-height:44px; }
           .loyaltyPage .targetSearchCard, .loyaltyPage .targetResultsCard, .loyaltyPage .issueResultCard { padding: 14px; border-radius: 16px; }
           .loyaltyPage .modeSwitch { grid-template-columns: 1fr; }
           .loyaltyPage .targetActions, .loyaltyPage .confirmBox, .loyaltyPage .confirmActions { display: grid; }
