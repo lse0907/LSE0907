@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/ssr";
+import { getOptionalRequestUserId } from "../../_lib/storeAuth";
 import {
   createCheckoutAttempt,
   finalizeCheckoutAttempt,
@@ -40,25 +40,6 @@ function normalizeMode(raw: unknown): OrderMode {
   return raw === "takeout" ? "takeout" : "dine-in";
 }
 
-async function getRequestUserId(req: NextRequest) {
-  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
-  const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
-  if (!supabaseUrl || !anonKey) return null;
-
-  const supabase = createServerClient(supabaseUrl, anonKey, {
-    cookies: {
-      get(name: string) {
-        return req.cookies.get(name)?.value;
-      },
-      set() {},
-      remove() {},
-    },
-  });
-
-  const { data } = await supabase.auth.getUser();
-  return data?.user?.id || null;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as CreateBody;
@@ -77,7 +58,7 @@ export async function POST(req: NextRequest) {
     }
 
     const clientRequestId = normalizeClientRequestId(body.clientRequestId);
-    const requestUserId = await getRequestUserId(req);
+    const requestUserId = await getOptionalRequestUserId(req);
     const supabaseAdmin = adminClient();
     await requireStoreCheckoutMode({
       supabaseAdmin,

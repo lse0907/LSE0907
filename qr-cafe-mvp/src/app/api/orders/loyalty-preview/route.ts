@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { createSupabaseAdminClient } from "../../_lib/storeAuth";
+import {
+  createSupabaseAdminClient,
+  getOptionalRequestUserId,
+} from "../../_lib/storeAuth";
 import { validateOrderPayload } from "../_lib/orderValidation";
 
 type PreviewBody = {
@@ -18,21 +20,6 @@ type SettingsRow = {
   tier_vip_rate_pct?: number;
 };
 
-async function requestUserId(req: NextRequest) {
-  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
-  const anon = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
-  if (!url || !anon) return null;
-  const auth = createServerClient(url, anon, {
-    cookies: {
-      get: (name) => req.cookies.get(name)?.value,
-      set() {},
-      remove() {},
-    },
-  });
-  const { data } = await auth.auth.getUser();
-  return data.user?.id || null;
-}
-
 function rateForTier(settings: SettingsRow | null, tier: string) {
   if (tier === "vip") return Math.max(0, Number(settings?.tier_vip_rate_pct ?? 5));
   if (tier === "regular") return Math.max(0, Number(settings?.tier_regular_rate_pct ?? 3));
@@ -47,7 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, code: "STORE_REQUIRED", message: "매장 정보가 없습니다." }, { status: 400 });
     }
 
-    const userId = await requestUserId(req);
+    const userId = await getOptionalRequestUserId(req);
     const admin = createSupabaseAdminClient();
     const validated = await validateOrderPayload({
       supabaseAdmin: admin,

@@ -28,6 +28,32 @@ const previewRoute = read("src/app/api/orders/loyalty-preview/route.ts");
 assert.ok(previewRoute.includes("validateOrderPayload"), "preview must use server-validated totals");
 assert.ok(previewRoute.includes("estimatedEarnedPoints"), "preview must return estimated points");
 
+const confirmPage = read("src/app/confirm/page.tsx");
+assert.ok(
+  confirmPage.includes("serverPayableAmount !== payableAmount"),
+  "checkout must ignore a preview response for an outdated payable amount",
+);
+assert.ok(
+  confirmPage.includes("(payableAmount * loyaltyPreview.ratePct) / 100"),
+  "checkout must update the visible point estimate from the current payable amount",
+);
+
+const storeAuth = read("src/app/api/_lib/storeAuth.ts");
+assert.ok(
+  storeAuth.includes("return req.cookies.getAll()"),
+  "server auth must read every chunk of the Supabase session cookie",
+);
+for (const routePath of [
+  "src/app/api/orders/loyalty-preview/route.ts",
+  "src/app/api/orders/create/route.ts",
+  "src/app/api/orders/quote/route.ts",
+]) {
+  assert.ok(
+    read(routePath).includes("getOptionalRequestUserId"),
+    `${routePath} must use the shared cookie-safe request auth helper`,
+  );
+}
+
 const customerView = read("src/app/api/orders/customer-view/route.ts");
 assert.ok(customerView.includes("earned_points"), "customer order view must expose earned points");
 

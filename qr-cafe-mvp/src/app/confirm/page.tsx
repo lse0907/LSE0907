@@ -71,7 +71,6 @@ type LoyaltyPreview = {
   couponsEnabled: boolean;
   eligible: boolean;
   ratePct: number;
-  estimatedEarnedPoints: number;
 };
 
 const DEFAULT_CHECKOUT_LOYALTY_SETTINGS: CheckoutLoyaltySettings = {
@@ -301,7 +300,6 @@ function ConfirmPageInner() {
     couponsEnabled: true,
     eligible: false,
     ratePct: 2,
-    estimatedEarnedPoints: 0,
   });
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
@@ -616,12 +614,16 @@ function ConfirmPageInner() {
         });
         const json = await response.json();
         if (!response.ok || !json?.ok || !json?.loyalty) return;
+        const serverPayableAmount = Math.max(
+          0,
+          Math.floor(Number(json.loyalty.payableAmount || 0)),
+        );
+        if (serverPayableAmount !== payableAmount) return;
         setLoyaltyPreview({
           pointsEnabled: json.loyalty.pointsEnabled !== false,
           couponsEnabled: json.loyalty.couponsEnabled !== false,
           eligible: Boolean(json.loyalty.eligible),
           ratePct: Math.max(0, Number(json.loyalty.ratePct || 0)),
-          estimatedEarnedPoints: Math.max(0, Math.floor(Number(json.loyalty.estimatedEarnedPoints || 0))),
         });
       } catch (error: unknown) {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -631,11 +633,19 @@ function ConfirmPageInner() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [cartLines, selectedCouponIdForApply, storeId, usedPoints, customerUserId]);
+  }, [cartLines, selectedCouponIdForApply, storeId, usedPoints, customerUserId, payableAmount]);
+
+  const estimatedEarnedPoints =
+    loyaltyPreview.pointsEnabled && loyaltyPreview.eligible
+      ? Math.max(
+          0,
+          Math.floor((payableAmount * loyaltyPreview.ratePct) / 100),
+        )
+      : 0;
 
   const loyaltyNotice = loyaltyPreview.pointsEnabled
     ? customerUserId
-      ? `결제 후 ${fmt(loyaltyPreview.estimatedEarnedPoints)}P 적립 (${loyaltyPreview.ratePct}%)`
+      ? `결제 후 ${fmt(estimatedEarnedPoints)}P 적립 (${loyaltyPreview.ratePct}%)`
       : `로그인하면 결제금액의 ${loyaltyPreview.ratePct}% 적립`
     : customerUserId && Number(wallet?.point_balance || 0) > 0
       ? "신규 적립 중지 · 보유 포인트 사용 가능"

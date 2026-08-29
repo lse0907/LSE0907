@@ -44,22 +44,27 @@ export function createRequestSupabaseClient(req: NextRequest) {
 
   return createServerClient(supabaseUrl, anonKey, {
     cookies: {
-      get(name: string) {
-        return req.cookies.get(name)?.value;
+      getAll() {
+        return req.cookies.getAll();
       },
-      set() {},
-      remove() {},
+      setAll() {},
     },
   });
 }
 
-async function getRequestUserId(req: NextRequest) {
+export async function getOptionalRequestUserId(req: NextRequest) {
   const supabase = createRequestSupabaseClient(req);
   const { data, error } = await supabase.auth.getUser();
-  if (error || !data?.user?.id) {
+  if (error || !data?.user?.id) return null;
+  return data.user.id;
+}
+
+async function getRequestUserId(req: NextRequest) {
+  const userId = await getOptionalRequestUserId(req);
+  if (!userId) {
     throw new ApiError(401, "로그인이 필요합니다.", "LOGIN_REQUIRED");
   }
-  return data.user.id;
+  return userId;
 }
 
 export function normalizeRole(raw: string | null | undefined): StoreRole {
