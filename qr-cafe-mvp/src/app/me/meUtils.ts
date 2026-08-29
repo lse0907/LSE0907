@@ -9,6 +9,11 @@ export type WalletRow = {
   updated_at?: string | null;
 };
 
+export type LoyaltyStatusMap = Record<string, {
+  pointsEnabled: boolean;
+  couponsEnabled: boolean;
+}>;
+
 export function pointExpiryText(wallet: WalletRow) {
   const points = Math.max(0, Number(wallet.expiring_soon_points || 0));
   if (!points || !wallet.nearest_expiry_at) return null;

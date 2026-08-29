@@ -19,6 +19,7 @@ import {
   type BenefitView,
   type CustomerCoupon,
   type CustomerOrder,
+  type LoyaltyStatusMap,
   type WalletRow,
   formatWon,
   orderStatusLabel,
@@ -71,6 +72,7 @@ export function MeDashboard() {
   const [couponCountMap, setCouponCountMap] = useState<Record<string, number>>(
     {},
   );
+  const [loyaltyStatusMap, setLoyaltyStatusMap] = useState<LoyaltyStatusMap>({});
   const [coupons, setCoupons] = useState<CustomerCoupon[]>([]);
   const [benefitView, setBenefitView] = useState<BenefitView>(null);
   const [orderBannerDismissed, setOrderBannerDismissed] = useState(false);
@@ -213,10 +215,8 @@ export function MeDashboard() {
         ),
       );
       if (storeIds.length) {
-        const { data: storeRows, error: storeErr } = await supabase.rpc(
-          "get_store_names",
-          { p_store_ids: storeIds },
-        );
+        const storeResult = await supabase.rpc("get_store_names", { p_store_ids: storeIds });
+        const { data: storeRows, error: storeErr } = storeResult;
 
         if (storeErr) {
           setMsg(
@@ -233,8 +233,31 @@ export function MeDashboard() {
           }
           setStoreNameMap(map);
         }
+        try {
+          const loyaltyResponse = await fetch("/api/customer/loyalty-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ storeIds }),
+          });
+          const loyaltyJson = await loyaltyResponse.json();
+          const statusMap: LoyaltyStatusMap = {};
+          if (loyaltyResponse.ok && loyaltyJson?.ok && Array.isArray(loyaltyJson.stores)) {
+            for (const row of loyaltyJson.stores) {
+              const sid = String(row?.storeId || "").trim();
+              if (!sid) continue;
+              statusMap[sid] = {
+                pointsEnabled: row?.pointsEnabled !== false,
+                couponsEnabled: row?.couponsEnabled !== false,
+              };
+            }
+          }
+          setLoyaltyStatusMap(statusMap);
+        } catch {
+          setLoyaltyStatusMap({});
+        }
       } else {
         setStoreNameMap({});
+        setLoyaltyStatusMap({});
       }
 
       const favoriteRes = await supabase
@@ -1463,6 +1486,7 @@ export function MeDashboard() {
           couponCountMap={couponCountMap}
           totalPoints={summary.totalPoints}
           totalCoupons={summary.totalCoupons}
+          loyaltyStatusMap={loyaltyStatusMap}
         />
       ) : null}
 

@@ -66,6 +66,14 @@ type CheckoutLoyaltySettings = {
   allow_point_or_coupon_only: boolean;
 };
 
+type LoyaltyPreview = {
+  pointsEnabled: boolean;
+  couponsEnabled: boolean;
+  eligible: boolean;
+  ratePct: number;
+  estimatedEarnedPoints: number;
+};
+
 const DEFAULT_CHECKOUT_LOYALTY_SETTINGS: CheckoutLoyaltySettings = {
   max_redeem_pct: 30,
   min_redeem_points: 100,
@@ -288,6 +296,13 @@ function ConfirmPageInner() {
   const [usedPointsInput, setUsedPointsInput] = useState("0");
   const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
   const [benefitsOpen, setBenefitsOpen] = useState(false);
+  const [loyaltyPreview, setLoyaltyPreview] = useState<LoyaltyPreview>({
+    pointsEnabled: true,
+    couponsEnabled: true,
+    eligible: false,
+    ratePct: 2,
+    estimatedEarnedPoints: 0,
+  });
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -582,6 +597,49 @@ function ConfirmPageInner() {
     ? couponDiscount
     : usedPoints;
   const payableAmount = Math.max(0, Math.round(totalPrice) - effectiveDiscount);
+
+  useEffect(() => {
+    if (!storeId || !cartLines.length) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/orders/loyalty-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId,
+            cartLines,
+            usedPoints: selectedCouponIdForApply ? 0 : usedPoints,
+            usedCouponId: selectedCouponIdForApply,
+          }),
+          signal: controller.signal,
+        });
+        const json = await response.json();
+        if (!response.ok || !json?.ok || !json?.loyalty) return;
+        setLoyaltyPreview({
+          pointsEnabled: json.loyalty.pointsEnabled !== false,
+          couponsEnabled: json.loyalty.couponsEnabled !== false,
+          eligible: Boolean(json.loyalty.eligible),
+          ratePct: Math.max(0, Number(json.loyalty.ratePct || 0)),
+          estimatedEarnedPoints: Math.max(0, Math.floor(Number(json.loyalty.estimatedEarnedPoints || 0))),
+        });
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [cartLines, selectedCouponIdForApply, storeId, usedPoints, customerUserId]);
+
+  const loyaltyNotice = loyaltyPreview.pointsEnabled
+    ? customerUserId
+      ? `결제 후 ${fmt(loyaltyPreview.estimatedEarnedPoints)}P 적립 (${loyaltyPreview.ratePct}%)`
+      : `로그인하면 결제금액의 ${loyaltyPreview.ratePct}% 적립`
+    : customerUserId && Number(wallet?.point_balance || 0) > 0
+      ? "신규 적립 중지 · 보유 포인트 사용 가능"
+      : "포인트 적립 미운영";
 
   const loadTossScript = async () => {
     if (typeof window === "undefined")
@@ -1009,6 +1067,7 @@ function ConfirmPageInner() {
           gap: 10px;
           margin-top: 16px;
         }
+        .benefitSummarySingle { grid-template-columns: 1fr; }
         .benefitSummary p {
           display: grid;
           gap: 3px;
@@ -1126,6 +1185,8 @@ function ConfirmPageInner() {
           font-weight: 500;
           text-align: center;
         }
+        .loyaltyEarnNotice { margin-top:14px; padding:12px 14px; border:1px solid #cfe0ff; border-radius:13px; background:#eef5ff; color:#174a9c; font-size:13px; font-weight:750; line-height:1.45; text-align:center; }
+        .loyaltyEarnNoticeOff { border-color:#dfe4eb; background:#f4f6f8; color:#64748b; }
         .requestInput {
           width: 100%;
           min-height: 112px;
@@ -1586,17 +1647,19 @@ function ConfirmPageInner() {
               </div>
               {customerUserId ? (
                 <>
-                  <div className="benefitSummary">
+                  <div className={`benefitSummary ${issuedCouponCount > 0 ? "" : "benefitSummarySingle"}`}>
                     <p>
                       <strong>
                         {fmt(Number(wallet?.point_balance || 0))}P
                       </strong>
                       <span>보유 포인트</span>
                     </p>
-                    <p>
-                      <strong>{issuedCouponCount}장</strong>
-                      <span>보유 쿠폰</span>
-                    </p>
+                    {issuedCouponCount > 0 ? (
+                      <p>
+                        <strong>{issuedCouponCount}장</strong>
+                        <span>사용 가능한 쿠폰</span>
+                      </p>
+                    ) : null}
                   </div>
                   <div className="appliedBenefit">
                     <div>
@@ -1960,10 +2023,7 @@ function ConfirmPageInner() {
               ) : (
                 <div className="guestBenefits">
                   <strong>회원 혜택을 놓치지 마세요</strong>
-                  <p>
-                    회원으로 주문하면 매장별 포인트가 쌓이고, 쿠폰과 다양한 할인
-                    혜택을 받을 수 있어요.
-                  </p>
+                  <p>{loyaltyNotice}</p>
                   <div className="guestBenefitActions">
                     <button
                       type="button"
@@ -2080,6 +2140,9 @@ function ConfirmPageInner() {
                   <dd>{fmt(payableAmount)}원</dd>
                 </div>
               </dl>
+              <div className={`loyaltyEarnNotice ${loyaltyPreview.pointsEnabled ? "" : "loyaltyEarnNoticeOff"}`}>
+                {loyaltyNotice}
+              </div>
 
               {submitError ? (
                 <div role="alert" className="submitError">

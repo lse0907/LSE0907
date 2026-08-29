@@ -4,6 +4,7 @@ import { CustomerSheet } from "../_components/CustomerSheet";
 import {
   type BenefitView,
   type CustomerCoupon,
+  type LoyaltyStatusMap,
   type WalletRow,
   couponBenefitText,
   couponExpiry,
@@ -20,6 +21,7 @@ type Props = {
   couponCountMap: Record<string, number>;
   totalPoints: number;
   totalCoupons: number;
+  loyaltyStatusMap: LoyaltyStatusMap;
 };
 
 export function MeBenefitSections({
@@ -31,6 +33,7 @@ export function MeBenefitSections({
   couponCountMap,
   totalPoints,
   totalCoupons,
+  loyaltyStatusMap,
 }: Props) {
   const [fullView, setFullView] = useState<Exclude<BenefitView, null> | null>(
     null,
@@ -82,6 +85,9 @@ export function MeBenefitSections({
                 </strong>
               </div>
               <p>이 매장에서 사용할 수 있는 매장 포인트예요.</p>
+              {loyaltyStatusMap[wallet.store_id]?.pointsEnabled === false ? (
+                <p><strong>신규 적립 중지 · 보유 포인트 사용 가능</strong></p>
+              ) : null}
               {expiryText ? <p>{expiryText}</p> : null}
             </article>
           );

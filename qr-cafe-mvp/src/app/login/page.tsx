@@ -1,15 +1,21 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "../lib/supabaseClient";
+import { useSearchParams } from "next/navigation";
 import { getCurrentStoreId } from "../lib/currentStore";
 import AuthShell from "@/app/_components/AuthShell";
 import { defaultViewerDestination, resolveViewerAccess } from "@/app/lib/viewerAccess";
 
+type LoginResponse = {
+  user?: User;
+  error?: {
+    message?: string;
+  };
+};
+
 function LoginPageInner() {
-  const router = useRouter();
   const sp = useSearchParams();
   const initialError = sp.get("error");
   const next = (sp.get("next") || "").trim();
@@ -55,42 +61,43 @@ function LoginPageInner() {
     }
 
     setLoading(true);
-    const authEmail = toAuthEmail(email);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: authEmail,
-      password,
-    });
-    setLoading(false);
-
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
 
     try {
-      if (rememberLoginId) window.localStorage.setItem("qrCafeRememberedLoginId", email.trim());
-      else window.localStorage.removeItem("qrCafeRememberedLoginId");
+      const authEmail = toAuthEmail(email);
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: authEmail, password }),
+      });
+      const result = (await response.json()) as LoginResponse;
+
+      if (!response.ok || !result.user) {
+        setMsg(result.error?.message || "로그인에 실패했습니다.");
+        return;
+      }
+
+      try {
+        if (rememberLoginId) window.localStorage.setItem("qrCafeRememberedLoginId", email.trim());
+        else window.localStorage.removeItem("qrCafeRememberedLoginId");
+      } catch {
+        // ignore saved login id write errors
+      }
+
+      const safeNext = resolveSafeNext(next);
+      if (safeNext) {
+        window.location.replace(safeNext);
+        return;
+      }
+
+      const access = await resolveViewerAccess(result.user);
+      window.location.replace(defaultViewerDestination(access));
     } catch {
-      // ignore saved login id write errors
+      setMsg("로그인 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setLoading(false);
     }
-
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData?.user;
-    const uid = user?.id;
-
-    if (!user || !uid) {
-      router.push("/login");
-      return;
-    }
-
-    const safeNext = resolveSafeNext(next);
-    if (safeNext) {
-      router.push(safeNext);
-      return;
-    }
-
-    const access = await resolveViewerAccess(user);
-    router.push(defaultViewerDestination(access));
   };
 
   return (

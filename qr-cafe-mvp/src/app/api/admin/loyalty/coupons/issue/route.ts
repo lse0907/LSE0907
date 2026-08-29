@@ -29,6 +29,20 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = createSupabaseAdminClient();
     await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner"] });
+    const settingsResult = await supabaseAdmin
+      .from("store_loyalty_settings")
+      .select("coupons_enabled")
+      .eq("store_id", storeId)
+      .maybeSingle();
+    if (settingsResult.error && !/coupons_enabled|column/i.test(settingsResult.error.message)) {
+      throw settingsResult.error;
+    }
+    if ((settingsResult.data as { coupons_enabled?: boolean } | null)?.coupons_enabled === false) {
+      return NextResponse.json(
+        { ok: false, code: "COUPON_ISSUANCE_DISABLED", message: "쿠폰 운영이 중지되어 새 쿠폰을 발급할 수 없습니다." },
+        { status: 409 },
+      );
+    }
     const result = await supabaseAdmin.rpc("admin_issue_coupon_to_selected_customers", {
       p_store_id: storeId,
       p_template_id: templateId,
@@ -36,9 +50,14 @@ export async function POST(req: NextRequest) {
       p_exclude_existing: body.excludeExisting !== false,
     });
     if (result.error) {
+      const disabled = result.error.message.includes("COUPON_ISSUANCE_DISABLED");
       return NextResponse.json(
-        { ok: false, code: "COUPON_ISSUE_FAILED", message: result.error.message },
-        { status: 400 },
+        {
+          ok: false,
+          code: disabled ? "COUPON_ISSUANCE_DISABLED" : "COUPON_ISSUE_FAILED",
+          message: disabled ? "쿠폰 운영이 중지되어 새 쿠폰을 발급할 수 없습니다." : result.error.message,
+        },
+        { status: disabled ? 409 : 400 },
       );
     }
     const data = Array.isArray(result.data) ? result.data[0] || null : result.data;
