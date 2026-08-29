@@ -573,11 +573,14 @@ function AdminLoyaltyInner() {
     return "";
   };
 
-  const saveSettings = async () => {
+  const saveSettings = async (source: "service" | "policy") => {
     if (!storeId) return;
     if (!requireOwner()) return;
     const validation = validateSettings();
     if (validation) return showMsg(validation, "error");
+    const saveScopeLabel = serviceDirty && policyDirty
+      ? "운영 설정과 포인트 정책"
+      : source === "service" ? "운영 설정" : "포인트 정책";
     const isStoppingService =
       (savedServiceStatus.pointsEnabled && !settings.points_enabled)
       || (savedServiceStatus.couponsEnabled && !settings.coupons_enabled);
@@ -588,14 +591,14 @@ function AdminLoyaltyInner() {
     setMsg("");
     const payload: LoyaltySettingsRow = { ...settings, store_id: storeId };
     const { error } = await supabase.from("store_loyalty_settings").upsert(payload, { onConflict: "store_id" });
-    if (error) showMsg(`포인트 정책 저장 실패: ${error.message}`, "error");
+    if (error) showMsg(`${saveScopeLabel} 저장 실패: ${error.message}`, "error");
     else {
       setSavedServiceStatus({
         pointsEnabled: settings.points_enabled,
         couponsEnabled: settings.coupons_enabled,
       });
       setSavedSettings(payload);
-      showMsg("포인트 정책을 저장했습니다.", "success");
+      showMsg(`${saveScopeLabel}을 저장했습니다.`, "success");
     }
     setSavingSettings(false);
   };
@@ -913,7 +916,7 @@ function AdminLoyaltyInner() {
         </div>
         <div className="serviceSaveRow">
           <p>기존 혜택은 만료일까지 유지됩니다.</p>
-          <button className="btn btnDark" type="button" onClick={saveSettings} disabled={savingSettings || !canManageLoyalty || !serviceDirty}>
+          <button className="btn btnDark" type="button" onClick={() => void saveSettings("service")} disabled={savingSettings || !canManageLoyalty || !serviceDirty}>
             {savingSettings ? "저장 중" : "운영 설정 저장"}
           </button>
         </div>
@@ -965,7 +968,7 @@ function AdminLoyaltyInner() {
           </div>
           <div className="sectionActions">
             <span className={policyDirty ? "saveState saveStateDirty" : "saveState"}>{policyDirty ? "변경사항 있음" : "저장됨"}</span>
-            <button className="btn btnDark" type="button" onClick={saveSettings} disabled={savingSettings || !canManageLoyalty || !policyDirty}>{savingSettings ? "저장 중" : "포인트 설정 저장"}</button>
+            <button className="btn btnDark" type="button" onClick={() => void saveSettings("policy")} disabled={savingSettings || !canManageLoyalty || !policyDirty}>{savingSettings ? "저장 중" : "포인트 설정 저장"}</button>
           </div>
         </div>
         {!settings.points_enabled ? <p className="settingModeNotice">적립 중지 중 · 설정은 미리 변경할 수 있습니다.</p> : null}
