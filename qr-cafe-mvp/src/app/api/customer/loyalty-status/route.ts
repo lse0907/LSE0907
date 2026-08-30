@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
         const row = byStore.get(storeId) as { points_enabled?: boolean; coupons_enabled?: boolean } | undefined;
         return {
           storeId,
-          pointsEnabled: row?.points_enabled !== false,
-          couponsEnabled: row?.coupons_enabled !== false,
+          pointsEnabled: row?.points_enabled === true,
+          couponsEnabled: row?.coupons_enabled === true,
         };
       }),
     });

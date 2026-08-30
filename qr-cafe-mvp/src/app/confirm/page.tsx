@@ -301,8 +301,8 @@ function ConfirmPageInner() {
   const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
   const [benefitsOpen, setBenefitsOpen] = useState(false);
   const [loyaltyPreview, setLoyaltyPreview] = useState<LoyaltyPreview>({
-    pointsEnabled: true,
-    couponsEnabled: true,
+    pointsEnabled: false,
+    couponsEnabled: false,
     eligible: false,
     ratePct: 2,
   });

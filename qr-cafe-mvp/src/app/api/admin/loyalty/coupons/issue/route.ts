@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     if (settingsResult.error && !/coupons_enabled|column/i.test(settingsResult.error.message)) {
       throw settingsResult.error;
     }
-    if ((settingsResult.data as { coupons_enabled?: boolean } | null)?.coupons_enabled === false) {
+    if ((settingsResult.data as { coupons_enabled?: boolean } | null)?.coupons_enabled !== true) {
       return NextResponse.json(
         { ok: false, code: "COUPON_ISSUANCE_DISABLED", message: "쿠폰 운영이 중지되어 새 쿠폰을 발급할 수 없습니다." },
         { status: 409 },

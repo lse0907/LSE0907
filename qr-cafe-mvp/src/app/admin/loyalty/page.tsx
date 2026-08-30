@@ -31,8 +31,8 @@ type TierRulesRow = {
 
 const DEFAULT_LOYALTY_SETTINGS: LoyaltySettingsRow = {
   store_id: "",
-  points_enabled: true,
-  coupons_enabled: true,
+  points_enabled: false,
+  coupons_enabled: false,
   tier_general_rate_pct: 2,
   tier_regular_rate_pct: 3,
   tier_vip_rate_pct: 5,
@@ -225,8 +225,8 @@ function AdminLoyaltyInner() {
   const [settings, setSettings] = useState<LoyaltySettingsRow>({ ...DEFAULT_LOYALTY_SETTINGS });
   const [savedSettings, setSavedSettings] = useState<LoyaltySettingsRow | null>(null);
   const [savedServiceStatus, setSavedServiceStatus] = useState({
-    pointsEnabled: true,
-    couponsEnabled: true,
+    pointsEnabled: false,
+    couponsEnabled: false,
   });
 
   const [tierRules, setTierRules] = useState<TierRulesRow>({ ...DEFAULT_TIER_RULES });
@@ -454,8 +454,8 @@ function AdminLoyaltyInner() {
       ...DEFAULT_LOYALTY_SETTINGS,
       ...loadedSettings,
       store_id: loadedSettings?.store_id || storeId,
-      points_enabled: loadedSettings?.points_enabled ?? true,
-      coupons_enabled: loadedSettings?.coupons_enabled ?? true,
+      points_enabled: loadedSettings?.points_enabled ?? false,
+      coupons_enabled: loadedSettings?.coupons_enabled ?? false,
     };
     setSavedServiceStatus({
       pointsEnabled: nextSettings.points_enabled,

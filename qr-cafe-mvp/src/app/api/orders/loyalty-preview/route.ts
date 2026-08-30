@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     const settings = settingsResult.data as SettingsRow | null;
-    const pointsEnabled = settings?.points_enabled !== false;
+    const pointsEnabled = settings?.points_enabled === true;
     const ratePct = rateForTier(settings, userId ? tier : "general");
     const estimatedEarnedPoints = userId && pointsEnabled
       ? Math.floor((validated.payableAmount * ratePct) / 100)
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       loyalty: {
         pointsEnabled,
-        couponsEnabled: settings?.coupons_enabled !== false,
+        couponsEnabled: settings?.coupons_enabled === true,
         eligible: Boolean(userId),
         tier,
         ratePct,
