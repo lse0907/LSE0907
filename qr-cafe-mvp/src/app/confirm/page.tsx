@@ -73,6 +73,11 @@ type LoyaltyPreview = {
   ratePct: number;
 };
 
+type LoyaltyPreviewResult = {
+  requestKey: string;
+  status: "ready" | "error";
+};
+
 const DEFAULT_CHECKOUT_LOYALTY_SETTINGS: CheckoutLoyaltySettings = {
   max_redeem_pct: 30,
   min_redeem_points: 100,
@@ -301,6 +306,8 @@ function ConfirmPageInner() {
     eligible: false,
     ratePct: 2,
   });
+  const [loyaltyPreviewResult, setLoyaltyPreviewResult] =
+    useState<LoyaltyPreviewResult | null>(null);
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -595,9 +602,29 @@ function ConfirmPageInner() {
     ? couponDiscount
     : usedPoints;
   const payableAmount = Math.max(0, Math.round(totalPrice) - effectiveDiscount);
+  const loyaltyPreviewRequestKey = useMemo(
+    () =>
+      JSON.stringify({
+        storeId,
+        cartLines,
+        usedPoints: selectedCouponIdForApply ? 0 : usedPoints,
+        usedCouponId: selectedCouponIdForApply,
+        customerUserId,
+        payableAmount,
+      }),
+    [
+      cartLines,
+      customerUserId,
+      payableAmount,
+      selectedCouponIdForApply,
+      storeId,
+      usedPoints,
+    ],
+  );
 
   useEffect(() => {
     if (!storeId || !cartLines.length) return;
+    let active = true;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
@@ -613,27 +640,67 @@ function ConfirmPageInner() {
           signal: controller.signal,
         });
         const json = await response.json();
-        if (!response.ok || !json?.ok || !json?.loyalty) return;
+        if (!response.ok || !json?.ok || !json?.loyalty) {
+          if (active) {
+            setLoyaltyPreviewResult({
+              requestKey: loyaltyPreviewRequestKey,
+              status: "error",
+            });
+          }
+          return;
+        }
         const serverPayableAmount = Math.max(
           0,
           Math.floor(Number(json.loyalty.payableAmount || 0)),
         );
-        if (serverPayableAmount !== payableAmount) return;
+        if (serverPayableAmount !== payableAmount) {
+          if (active) {
+            setLoyaltyPreviewResult({
+              requestKey: loyaltyPreviewRequestKey,
+              status: "error",
+            });
+          }
+          return;
+        }
+        if (!active) return;
         setLoyaltyPreview({
           pointsEnabled: json.loyalty.pointsEnabled !== false,
           couponsEnabled: json.loyalty.couponsEnabled !== false,
           eligible: Boolean(json.loyalty.eligible),
           ratePct: Math.max(0, Number(json.loyalty.ratePct || 0)),
         });
+        setLoyaltyPreviewResult({
+          requestKey: loyaltyPreviewRequestKey,
+          status: "ready",
+        });
       } catch (error: unknown) {
         if (error instanceof DOMException && error.name === "AbortError") return;
+        if (active) {
+          setLoyaltyPreviewResult({
+            requestKey: loyaltyPreviewRequestKey,
+            status: "error",
+          });
+        }
       }
     }, 250);
     return () => {
+      active = false;
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [cartLines, selectedCouponIdForApply, storeId, usedPoints, customerUserId, payableAmount]);
+  }, [
+    cartLines,
+    loyaltyPreviewRequestKey,
+    payableAmount,
+    selectedCouponIdForApply,
+    storeId,
+    usedPoints,
+  ]);
+
+  const loyaltyPreviewStatus =
+    loyaltyPreviewResult?.requestKey === loyaltyPreviewRequestKey
+      ? loyaltyPreviewResult.status
+      : "loading";
 
   const estimatedEarnedPoints =
     loyaltyPreview.pointsEnabled && loyaltyPreview.eligible
@@ -643,13 +710,18 @@ function ConfirmPageInner() {
         )
       : 0;
 
-  const loyaltyNotice = loyaltyPreview.pointsEnabled
-    ? customerUserId
-      ? `결제 후 ${fmt(estimatedEarnedPoints)}P 적립 (${loyaltyPreview.ratePct}%)`
-      : `로그인하면 결제금액의 ${loyaltyPreview.ratePct}% 적립`
-    : customerUserId && Number(wallet?.point_balance || 0) > 0
-      ? "신규 적립 중지 · 보유 포인트 사용 가능"
-      : "포인트 적립 미운영";
+  const loyaltyNotice =
+    loyaltyPreviewStatus === "loading"
+      ? "적립 혜택 확인 중"
+      : loyaltyPreviewStatus === "error"
+        ? "적립 혜택 확인 불가"
+        : loyaltyPreview.pointsEnabled
+          ? customerUserId
+            ? `결제 후 ${fmt(estimatedEarnedPoints)}P 적립 (${loyaltyPreview.ratePct}%)`
+            : `로그인하면 결제금액의 ${loyaltyPreview.ratePct}% 적립`
+          : customerUserId && Number(wallet?.point_balance || 0) > 0
+            ? "신규 적립 중지 · 보유 포인트 사용 가능"
+            : "포인트 적립 미운영";
 
   const loadTossScript = async () => {
     if (typeof window === "undefined")

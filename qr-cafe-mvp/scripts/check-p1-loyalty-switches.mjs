@@ -37,6 +37,16 @@ assert.ok(
   confirmPage.includes("(payableAmount * loyaltyPreview.ratePct) / 100"),
   "checkout must update the visible point estimate from the current payable amount",
 );
+assert.ok(
+  confirmPage.includes('loyaltyPreviewStatus === "loading"') &&
+    confirmPage.includes('"적립 혜택 확인 중"'),
+  "checkout must not show a temporary 0P estimate while the preview is loading",
+);
+assert.ok(
+  confirmPage.includes('requestKey: loyaltyPreviewRequestKey') &&
+    confirmPage.includes('status: "ready"'),
+  "checkout must show the earned-point estimate only after a valid preview response",
+);
 
 const storeAuth = read("src/app/api/_lib/storeAuth.ts");
 assert.ok(
