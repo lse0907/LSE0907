@@ -86,7 +86,9 @@ export function MeBenefitSections({
               </div>
               <p>이 매장에서 사용할 수 있는 매장 포인트예요.</p>
               {loyaltyStatusMap[wallet.store_id]?.pointsEnabled === false ? (
-                <p><strong>신규 적립 중지 · 보유 포인트 사용 가능</strong></p>
+                <p><strong>{loyaltyStatusMap[wallet.store_id]?.pointsProgramStatus === "closing" && loyaltyStatusMap[wallet.store_id]?.pointsRedemptionEndsAt
+                  ? `신규 적립 중지 · ${new Date(String(loyaltyStatusMap[wallet.store_id]?.pointsRedemptionEndsAt)).toLocaleDateString("ko-KR")}까지 사용`
+                  : "신규 적립 중지 · 보유 포인트 사용 가능"}</strong></p>
               ) : null}
               {expiryText ? <p>{expiryText}</p> : null}
             </article>

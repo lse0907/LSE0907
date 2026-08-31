@@ -12,6 +12,9 @@ export type WalletRow = {
 export type LoyaltyStatusMap = Record<string, {
   pointsEnabled: boolean;
   couponsEnabled: boolean;
+  pointsProgramStatus?: string;
+  couponsProgramStatus?: string;
+  pointsRedemptionEndsAt?: string | null;
 }>;
 
 export function pointExpiryText(wallet: WalletRow) {

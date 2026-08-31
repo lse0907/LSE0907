@@ -31,7 +31,7 @@ type OrderStatus =
   | "ready_for_packing"
   | "completed"
   | "cancelled";
-type PaymentStatus = "not_required" | "pending" | "paid" | "cancel_pending" | "refunded" | "failed";
+type PaymentStatus = "not_required" | "pending" | "paid" | "cancel_pending" | "refunded" | "failed" | "partial_refund_pending" | "partially_refunded";
 
 type DbOrderRow = CustomerOrderRow;
 
@@ -79,6 +79,8 @@ const PAYMENT_LABEL: Record<PaymentStatus, string> = {
   paid: "결제 완료",
   cancel_pending: "결제 취소 처리 중",
   refunded: "결제 취소 완료",
+  partial_refund_pending: "부분 환불 처리 중",
+  partially_refunded: "부분 환불 완료",
   failed: "결제 확인 필요",
 };
 
@@ -118,7 +120,7 @@ function normalizeStatus(v: unknown): OrderStatus {
 
 function normalizePaymentStatus(v: unknown): PaymentStatus {
   const status = String(v || "").trim();
-  if (status === "pending" || status === "paid" || status === "cancel_pending" || status === "refunded" || status === "failed") return status;
+  if (status === "pending" || status === "paid" || status === "cancel_pending" || status === "refunded" || status === "failed" || status === "partial_refund_pending" || status === "partially_refunded") return status;
   return "not_required";
 }
 
