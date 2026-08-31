@@ -43,6 +43,9 @@ type OrderView = {
   buzzerNo?: string;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  totalCount: number;
+  totalPrice: number;
+  refundedAmount: number;
   earnedPoints: number;
   pointsRate: number;
 };
@@ -133,7 +136,10 @@ function toOrderView(row: DbOrderRow): OrderView {
     buzzerNo: row.buzzer_no ? String(row.buzzer_no) : undefined,
     status: normalizeStatus(row.status),
     paymentStatus: normalizePaymentStatus(row.payment_status),
-    earnedPoints: Math.max(0, Number(row.earned_points ?? 0) || 0),
+    totalCount: Math.max(0, Number(row.total_count ?? 0) - Number(row.refunded_count ?? 0)),
+    totalPrice: Math.max(0, Number(row.adjusted_total_price ?? row.total_price ?? 0) || 0),
+    refundedAmount: Math.max(0, Number(row.refunded_amount ?? 0) || 0),
+    earnedPoints: Math.max(0, Number(row.effective_earned_points ?? row.earned_points ?? 0) || 0),
     pointsRate: Math.max(0, Number(row.points_rate_snapshot ?? 0) || 0),
   };
 }
@@ -542,8 +548,9 @@ function StatusPageInner() {
           color: #fff;
         }
         .autoUpdate { display:flex; align-items:center; gap:7px; margin-top:18px; color:var(--muted); font-size:13px; font-weight:500; }
-        .earnedPoints { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; padding:12px 14px; border:1px solid #cfe0ff; border-radius:13px; background:#eef5ff; color:#174a9c; font-size:13px; font-weight:700; }
+        .earnedPoints,.refundSummary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; padding:12px 14px; border:1px solid #cfe0ff; border-radius:13px; background:#eef5ff; color:#174a9c; font-size:13px; font-weight:700; }
         .earnedPoints strong { font-size:16px; }
+        .refundSummary { border-color:#d8dee8; background:#f8fafc; color:#334155; }
         .statusActions { margin-top:16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
         @media (max-width: 520px) {
           .wrap { padding-top: 16px; }
@@ -631,6 +638,13 @@ function StatusPageInner() {
             <div className="statusRow">
               결제: <b>{PAYMENT_LABEL[visibleOrder.paymentStatus]}</b>
             </div>
+
+            {visibleOrder.refundedAmount > 0 ? (
+              <div className="refundSummary">
+                <span>{visibleOrder.refundedAmount.toLocaleString()}원 환불</span>
+                <strong>최종 {visibleOrder.totalPrice.toLocaleString()}원 · {visibleOrder.totalCount}개</strong>
+              </div>
+            ) : null}
 
             {statusCopy ? (
               <>

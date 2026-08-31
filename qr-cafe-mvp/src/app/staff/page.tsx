@@ -53,6 +53,7 @@ type OrderItem = {
   name: string;
   price: number; // base
   qty: number;
+  refundedQty: number;
   status: ItemStatus;
   batch: number;
   options?: SelectedGroup[];
@@ -78,6 +79,9 @@ type OrderRecord = {
   items: OrderItem[];
   totalCount: number;
   totalPrice: number;
+  originalTotalCount: number;
+  originalTotalPrice: number;
+  refundedAmount: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
 };
@@ -92,7 +96,10 @@ type DbOrderRow = {
   buzzer_no: string | null;
   request_note: string | null;
   total_count: number | null;
+  refunded_count: number | null;
   total_price: number | null;
+  adjusted_total_price: number | null;
+  refunded_amount: number | null;
   status: string | null;
   payment_status?: string | null;
   store_id: string | null;
@@ -105,6 +112,7 @@ type DbOrderItemRow = {
   name: string | null;
   price: number | null;
   qty: number | null;
+  refunded_qty: number | null;
   status: string | null;
   batch: number | null;
   store_id: string | null;
@@ -659,7 +667,7 @@ function StaffPageInner() {
     let oRes = await supabase
       .from("orders")
       .select(
-        "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, payment_status, store_id"
+        "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, refunded_count, total_price, adjusted_total_price, refunded_amount, status, payment_status, store_id"
       )
       .eq("store_id", sid)
       .order("created_at", { ascending: false })
@@ -672,7 +680,7 @@ function StaffPageInner() {
         oRes = await supabase
           .from("orders")
           .select(
-            "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, total_price, status, payment_status, store_id"
+            "id, created_at, order_date, display_no, mode, table_no, buzzer_no, request_note, total_count, refunded_count, total_price, adjusted_total_price, refunded_amount, status, payment_status, store_id"
           )
           .eq("store_id", sid)
           .order("created_at", { ascending: false })
@@ -701,7 +709,7 @@ function StaffPageInner() {
 
     const { data: oiData, error: oiErr } = await supabase
       .from("order_items")
-      .select("id, order_id, menu_id, name, price, qty, status, batch, store_id")
+      .select("id, order_id, menu_id, name, price, qty, refunded_qty, status, batch, store_id")
       .in("order_id", orderIds);
 
     if (oiErr) {
@@ -795,6 +803,7 @@ function StaffPageInner() {
 
       const base = Math.round(Number(it.price ?? 0));
       const qty = Math.max(0, Number(it.qty ?? 0));
+      const refundedQty = Math.min(qty, Math.max(0, Number(it.refunded_qty ?? 0)));
       const unit = base + optionTotal;
       const lineTotal = unit * qty;
 
@@ -808,6 +817,7 @@ function StaffPageInner() {
         name: String(it.name ?? ""),
         price: base,
         qty,
+        refundedQty,
         status: normalizeItemStatus(it.status),
         batch: Number(it.batch ?? 0),
         options: groups.length ? groups : [],
@@ -827,15 +837,18 @@ function StaffPageInner() {
       const createdAtMs = o.created_at ? new Date(o.created_at).getTime() : Date.now();
       const items = itemsByOrder.get(o.id) || [];
 
-      const totalCount =
+      const originalTotalCount =
         Number.isFinite(Number(o.total_count)) && o.total_count !== null
           ? Number(o.total_count)
           : items.reduce((s, x) => s + (x.qty || 0), 0);
+      const refundedCount = Math.min(originalTotalCount, Math.max(0, Number(o.refunded_count ?? 0)));
+      const totalCount = Math.max(0, originalTotalCount - refundedCount);
 
-      const totalPrice =
+      const originalTotalPrice =
         Number.isFinite(Number(o.total_price)) && o.total_price !== null
           ? Number(o.total_price)
           : items.reduce((s, x) => s + Number(x.lineTotal || 0), 0);
+      const totalPrice = Math.max(0, Number(o.adjusted_total_price ?? originalTotalPrice));
 
       return {
         id: String(o.id),
@@ -849,6 +862,9 @@ function StaffPageInner() {
         items,
         totalCount,
         totalPrice,
+        originalTotalCount,
+        originalTotalPrice,
+        refundedAmount: Math.max(0, Number(o.refunded_amount ?? 0)),
         status: normalizeStatus(o.status),
         paymentStatus: normalizePaymentStatus(o.payment_status),
       };
@@ -3998,8 +4014,9 @@ function StaffPageInner() {
                   <span>결제상태: <b>{PAYMENT_LABEL[selected.paymentStatus]}</b></span>
                 </p>
                 <p className="metaSummary">
-                  <span>총 수량: <b>{selected.totalCount}</b></span>
-                  <span>총 금액: <b>{fmt(selected.totalPrice)}원</b></span>
+                  <span>{selected.refundedAmount > 0 ? "최종 수량" : "총 수량"}: <b>{selected.totalCount}</b></span>
+                  <span>{selected.refundedAmount > 0 ? "최종 금액" : "총 금액"}: <b>{fmt(selected.totalPrice)}원</b></span>
+                  {selected.refundedAmount > 0 ? <span>환불: <b>{fmt(selected.refundedAmount)}원</b></span> : null}
                 </p>
               </div>
 
@@ -4066,10 +4083,8 @@ function StaffPageInner() {
                           {rows.map((it, idx) => {
                             const optionTotal = Number(it.optionTotal || 0);
                             const unit = Number(it.price || 0) + optionTotal;
-                            const lineTotal =
-                              Number.isFinite(Number(it.lineTotal)) && it.lineTotal !== undefined
-                                ? Number(it.lineTotal)
-                                : unit * Number(it.qty || 0);
+                            const remainingQty = Math.max(0, Number(it.qty || 0) - Number(it.refundedQty || 0));
+                            const lineTotal = unit * remainingQty;
 
                             const optText = buildOptionText(it);
 
@@ -4077,7 +4092,8 @@ function StaffPageInner() {
                               <div key={`${it.id}_${idx}`} className="orderItemLine">
                                 <div className="orderItemLineTop">
                                   <div>
-                                    <div className="orderItemName">{it.name} x{it.qty}</div>
+                                    <div className="orderItemName">{it.name} x{remainingQty}</div>
+                                    {it.refundedQty > 0 ? <div className="optMuted">원주문 {it.qty}개 · 환불 {it.refundedQty}개</div> : null}
                                     {optText ? (
                                       <div className="optWrap">
                                         <div className="optLine">옵션: {optText}</div>
@@ -4137,10 +4153,11 @@ function StaffPageInner() {
                             ? "badgeDone"
                             : "badgeDone";
 
+                        const remainingQty = Math.max(0, Number(it.qty || 0) - Number(it.refundedQty || 0));
                         return (
                           <div key={`station_progress_${it.id}_${idx}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10 }}>
                             <div className="rowBetween">
-                              <div style={{ fontWeight: 800 }}>{it.name} × {it.qty}</div>
+                              <div style={{ fontWeight: 800 }}>{it.name} × {remainingQty}{it.refundedQty > 0 ? ` · 환불 ${it.refundedQty}` : ""}</div>
                               <span className={`badge statusPill ${statusClass}`}>{statusText}</span>
                             </div>
                             {optText ? <div className="muted" style={{ marginTop: 6 }}>{optText}</div> : null}
@@ -4257,8 +4274,9 @@ function StaffPageInner() {
               </div>
 
               <div className="detailBox">
-                <div className="rowBetween"><span>총 수량</span><b>{stationDetailOrder.totalCount}개</b></div>
-                <div className="rowBetween" style={{ marginTop: 8 }}><span>총 금액</span><b>{fmt(stationDetailOrder.totalPrice)}원</b></div>
+                <div className="rowBetween"><span>{stationDetailOrder.refundedAmount > 0 ? "최종 수량" : "총 수량"}</span><b>{stationDetailOrder.totalCount}개</b></div>
+                <div className="rowBetween" style={{ marginTop: 8 }}><span>{stationDetailOrder.refundedAmount > 0 ? "최종 금액" : "총 금액"}</span><b>{fmt(stationDetailOrder.totalPrice)}원</b></div>
+                {stationDetailOrder.refundedAmount > 0 ? <div className="rowBetween" style={{ marginTop: 8 }}><span>부분 환불</span><b>{fmt(stationDetailOrder.refundedAmount)}원</b></div> : null}
               </div>
 
               <div className="section" style={{ marginTop: 0 }}>
@@ -4274,13 +4292,12 @@ function StaffPageInner() {
                   {stationDetailOrder.items.map((item, index) => {
                     const optionText = buildOptionText(item);
                     const unitPrice = Number(item.price || 0) + Number(item.optionTotal || 0);
-                    const linePrice = Number.isFinite(Number(item.lineTotal)) && item.lineTotal !== undefined
-                      ? Number(item.lineTotal)
-                      : unitPrice * Number(item.qty || 0);
+                    const remainingQty = Math.max(0, Number(item.qty || 0) - Number(item.refundedQty || 0));
+                    const linePrice = unitPrice * remainingQty;
                     return (
                       <div key={`station_detail_${item.id}_${index}`} className="stationDetailItem">
                         <div className="rowBetween">
-                          <b>{item.name} × {item.qty}</b>
+                          <b>{item.name} × {remainingQty}{item.refundedQty > 0 ? ` · 환불 ${item.refundedQty}` : ""}</b>
                           <b>{fmt(linePrice)}원</b>
                         </div>
                         {optionText ? <div className="muted" style={{ marginTop: 6 }}>옵션: {optionText}</div> : null}
@@ -4346,7 +4363,10 @@ function StaffPageInner() {
           storeId={storeId}
           order={partialRefundTarget}
           onClose={() => setPartialRefundTarget(null)}
-          onCompleted={() => void fetchOrdersFromDb(true)}
+          onCompleted={() => {
+            setPartialRefundTarget(null);
+            void fetchOrdersFromDb(true);
+          }}
         />
       ) : null}
     </main>

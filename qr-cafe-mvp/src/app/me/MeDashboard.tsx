@@ -1347,7 +1347,7 @@ export function MeDashboard() {
                   {cartSummary
                     ? `담은 메뉴 ${cartSummary.count}개 · ${formatWon(cartSummary.total)}`
                     : activeOrder
-                      ? `주문 ${activeOrder.display_no || "-"} · ${Number(activeOrder.total_count || 0)}개 · ${formatWon(Number(activeOrder.total_price || 0))}`
+                      ? `주문 ${activeOrder.display_no || "-"} · ${Math.max(0, Number(activeOrder.total_count || 0) - Number(activeOrder.refunded_count || 0))}개 · ${formatWon(Number(activeOrder.adjusted_total_price ?? activeOrder.total_price ?? 0))}`
                       : ""}
                 </p>
               </div>

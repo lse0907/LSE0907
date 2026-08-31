@@ -45,6 +45,7 @@ type StoreAddonSummary = {
 type OrderSummaryRow = {
   order_date?: string | null;
   total_price?: number | string | null;
+  adjusted_total_price?: number | string | null;
 };
 
 type AdminIconName =
@@ -368,7 +369,7 @@ function AdminPageInner() {
     try {
       const { data, error } = await supabase
         .from("orders")
-        .select("order_date,total_price,status,store_id")
+        .select("order_date,total_price,adjusted_total_price,status,store_id")
         .eq("store_id", storeId)
         .gte("order_date", rangeStart)
         .lte("order_date", rangeEnd)
@@ -379,7 +380,7 @@ function AdminPageInner() {
       const rows = (Array.isArray(data) ? data : []) as OrderSummaryRow[];
       const sum = (list: OrderSummaryRow[]) =>
         list.reduce(
-          (acc, cur) => acc + Math.max(0, Number(cur.total_price || 0)),
+          (acc, cur) => acc + Math.max(0, Number(cur.adjusted_total_price ?? cur.total_price ?? 0)),
           0,
         );
 

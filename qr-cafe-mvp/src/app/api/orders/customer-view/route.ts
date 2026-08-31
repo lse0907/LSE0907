@@ -24,10 +24,14 @@ type CustomerOrderDbRow = {
   buzzer_no?: string | null;
   request_note?: string | null;
   total_count?: number | null;
+  refunded_count?: number | null;
   total_price?: number | null;
+  adjusted_total_price?: number | null;
+  refunded_amount?: number | null;
   status?: string | null;
   payment_status?: string | null;
   earned_points?: number | null;
+  effective_earned_points?: number | null;
   points_rate_snapshot?: number | null;
   store_id?: string | null;
   access_token?: string | null;
@@ -43,10 +47,14 @@ const CUSTOMER_ORDER_COLUMNS = [
   "buzzer_no",
   "request_note",
   "total_count",
+  "refunded_count",
   "total_price",
+  "adjusted_total_price",
+  "refunded_amount",
   "status",
   "payment_status",
   "earned_points",
+  "effective_earned_points",
   "points_rate_snapshot",
   "store_id",
   "access_token",

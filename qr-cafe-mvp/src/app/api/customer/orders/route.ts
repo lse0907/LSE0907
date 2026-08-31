@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const { data: orders, error } = await admin
     .from("orders")
     .select(
-      "id,store_id,created_at,display_no,mode,table_no,total_count,total_price,status,earned_points",
+      "id,store_id,created_at,display_no,mode,table_no,total_count,refunded_count,total_price,adjusted_total_price,refunded_amount,status,payment_status,earned_points,effective_earned_points",
     )
     .eq("customer_user_id", data.user.id)
     .order("created_at", { ascending: false })

@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     const itemIds = Array.from(new Set(items.map((item) => item.orderItemId)));
     const [orderItemsRes, optionsRes] = await Promise.all([
-      admin.from("order_items").select("id,name,price,qty").eq("order_id", orderId).eq("store_id", storeId).in("id", itemIds),
+      admin.from("order_items").select("id,name,price,qty,refunded_qty").eq("order_id", orderId).eq("store_id", storeId).in("id", itemIds),
       admin.from("order_item_options").select("order_item_id,price_delta,qty").eq("store_id", storeId).in("order_item_id", itemIds),
     ]);
     if (orderItemsRes.error || optionsRes.error || (orderItemsRes.data || []).length !== itemIds.length) {
@@ -68,6 +68,13 @@ export async function POST(req: NextRequest) {
       optionTotals.set(id, (optionTotals.get(id) || 0) + toInt(option.price_delta) * Math.max(1, toInt(option.qty)));
     }
     const itemMap = new Map((orderItemsRes.data || []).map((item) => [String(item.id), item]));
+    for (const selected of items) {
+      const item = itemMap.get(selected.orderItemId);
+      const remaining = Math.max(0, toInt(item?.qty) - toInt(item?.refunded_qty));
+      if (selected.quantity > remaining) {
+        throw new ApiError(409, "이미 환불된 수량을 제외한 남은 수량만 선택해 주세요.", "PARTIAL_REFUND_QUANTITY_EXCEEDED");
+      }
+    }
     const adjustmentAmount = items.reduce((sum, selected) => {
       const item = itemMap.get(selected.orderItemId);
       return sum + (toInt(item?.price) + (optionTotals.get(selected.orderItemId) || 0)) * selected.quantity;

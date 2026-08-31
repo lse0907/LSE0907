@@ -4,6 +4,9 @@ import { CustomerIcon } from "../_components/CustomerIcon";
 import { CustomerSheet } from "../_components/CustomerSheet";
 import {
   type CustomerOrder,
+  effectiveOrderCount,
+  effectiveOrderPoints,
+  effectiveOrderPrice,
   formatOrderDate,
   formatWon,
   orderStatusLabel,
@@ -35,10 +38,10 @@ export function RecentOrderCard({
             {formatOrderDate(order.created_at)} · 주문 {order.display_no || "-"}
           </small>
           <small>
-            {Number(order.total_count || 0)}개 ·{" "}
-            {formatWon(Number(order.total_price || 0))}
-            {Number(order.earned_points || 0) > 0
-              ? ` · +${Number(order.earned_points).toLocaleString()}P`
+            {effectiveOrderCount(order)}개 ·{" "}
+            {formatWon(effectiveOrderPrice(order))}
+            {effectiveOrderPoints(order) > 0
+              ? ` · +${effectiveOrderPoints(order).toLocaleString()}P`
               : ""}
           </small>
         </span>
@@ -110,10 +113,10 @@ export function OrderHistorySheet({
                 {order.display_no || "-"}
               </span>
               <span>
-                {Number(order.total_count || 0)}개 ·{" "}
-                {formatWon(Number(order.total_price || 0))}
-                {Number(order.earned_points || 0) > 0
-                  ? ` · +${Number(order.earned_points).toLocaleString()}P`
+                {effectiveOrderCount(order)}개 ·{" "}
+                {formatWon(effectiveOrderPrice(order))}
+                {effectiveOrderPoints(order) > 0
+                  ? ` · +${effectiveOrderPoints(order).toLocaleString()}P`
                   : ""}
               </span>
             </button>
@@ -148,16 +151,22 @@ export function OrderDetailSheet({
           </div>
           <div>
             <dt>주문 수량</dt>
-            <dd>{Number(order.total_count || 0)}개</dd>
+            <dd>{effectiveOrderCount(order)}개</dd>
           </div>
           <div>
             <dt>결제 금액</dt>
-            <dd>{formatWon(Number(order.total_price || 0))}</dd>
+            <dd>{formatWon(effectiveOrderPrice(order))}</dd>
           </div>
           <div>
             <dt>적립 포인트</dt>
-            <dd>{Number(order.earned_points || 0).toLocaleString()}P</dd>
+            <dd>{effectiveOrderPoints(order).toLocaleString()}P</dd>
           </div>
+          {Number(order.refunded_amount || 0) > 0 ? (
+            <div>
+              <dt>부분 환불</dt>
+              <dd>{formatWon(Number(order.refunded_amount || 0))}</dd>
+            </div>
+          ) : null}
         </dl>
       </article>
     </CustomerSheet>

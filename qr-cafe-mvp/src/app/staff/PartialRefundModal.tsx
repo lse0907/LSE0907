@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type RefundItem = { id: string; name: string; qty: number; price: number; optionTotal?: number; lineTotal?: number };
+type RefundItem = { id: string; name: string; qty: number; refundedQty?: number; price: number; optionTotal?: number; lineTotal?: number };
 
 export function PartialRefundModal({
   storeId,
@@ -20,7 +20,8 @@ export function PartialRefundModal({
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const selected = useMemo(() => order.items
-    .map((item) => ({ item, quantity: Math.min(item.qty, Math.max(0, Math.round(quantities[item.id] || 0))) }))
+    .map((item) => ({ item, remaining: Math.max(0, item.qty - Number(item.refundedQty || 0)) }))
+    .map(({ item, remaining }) => ({ item, quantity: Math.min(remaining, Math.max(0, Math.round(quantities[item.id] || 0))) }))
     .filter((row) => row.quantity > 0), [order.items, quantities]);
   const amount = selected.reduce((sum, row) => sum + (Number(row.item.price || 0) + Number(row.item.optionTotal || 0)) * row.quantity, 0);
 
@@ -55,12 +56,15 @@ export function PartialRefundModal({
       <section className="partialCard">
         <header><div><small>AFTER SERVICE</small><h3 id="partial-refund-title">부분 환불</h3><p>주문 {order.displayNo}</p></div><button type="button" onClick={onClose}>닫기</button></header>
         <div className="partialItems">
-          {order.items.map((item) => (
+          {order.items.map((item) => {
+            const remaining = Math.max(0, item.qty - Number(item.refundedQty || 0));
+            return (
             <label key={item.id}>
-              <span><b>{item.name}</b><small>최대 {item.qty}개 · {(Number(item.price || 0) + Number(item.optionTotal || 0)).toLocaleString()}원</small></span>
-              <input type="number" min="0" max={item.qty} value={quantities[item.id] || 0} onChange={(event) => setQuantities((prev) => ({ ...prev, [item.id]: Math.min(item.qty, Math.max(0, Math.round(Number(event.target.value || 0)))) }))} />
+              <span><b>{item.name}</b><small>{remaining > 0 ? `남은 수량 ${remaining}개` : "환불 가능 수량 없음"} · {(Number(item.price || 0) + Number(item.optionTotal || 0)).toLocaleString()}원</small></span>
+              <input type="number" min="0" max={remaining} disabled={remaining === 0} value={quantities[item.id] || 0} onChange={(event) => setQuantities((prev) => ({ ...prev, [item.id]: Math.min(remaining, Math.max(0, Math.round(Number(event.target.value || 0)))) }))} />
             </label>
-          ))}
+            );
+          })}
         </div>
         <label className="partialReason"><span>사유</span><select value={reason} onChange={(event) => setReason(event.target.value)}><option>고객 요청</option><option>품질 문제</option><option>누락·오배송</option><option>매장 사정</option><option>기타</option></select></label>
         <div className="partialSummary"><span>선택 금액</span><strong>{amount.toLocaleString()}원</strong><small>실제 환불액은 포인트·쿠폰을 다시 계산해 확정됩니다.</small></div>

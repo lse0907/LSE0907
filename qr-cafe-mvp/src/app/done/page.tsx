@@ -32,7 +32,7 @@ type OrderStatus =
   | "ready_for_packing"
   | "completed"
   | "cancelled";
-type PaymentStatus = "not_required" | "pending" | "paid" | "cancel_pending" | "refunded" | "failed";
+type PaymentStatus = "not_required" | "pending" | "paid" | "cancel_pending" | "refunded" | "failed" | "partial_refund_pending" | "partially_refunded";
 
 type DbOrderRow = CustomerOrderRow;
 
@@ -47,6 +47,7 @@ type OrderView = {
   requestNote: string;
   totalCount: number;
   totalPrice: number;
+  refundedAmount: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   earnedPoints: number;
@@ -102,7 +103,7 @@ function normalizeStatus(v: unknown): OrderStatus {
 
 function normalizePaymentStatus(v: unknown): PaymentStatus {
   const status = String(v || "").trim();
-  if (status === "pending" || status === "paid" || status === "cancel_pending" || status === "refunded" || status === "failed") return status;
+  if (status === "pending" || status === "paid" || status === "cancel_pending" || status === "refunded" || status === "failed" || status === "partial_refund_pending" || status === "partially_refunded") return status;
   return "not_required";
 }
 
@@ -117,11 +118,12 @@ function toOrderView(row: DbOrderRow): OrderView {
     table: row.table_no ? String(row.table_no) : undefined,
     buzzerNo: row.buzzer_no ? String(row.buzzer_no) : undefined,
     requestNote: String(row.request_note || ""),
-    totalCount: Math.max(0, Number(row.total_count ?? 0) || 0),
-    totalPrice: Math.max(0, Number(row.total_price ?? 0) || 0),
+    totalCount: Math.max(0, Number(row.total_count ?? 0) - Number(row.refunded_count ?? 0)),
+    totalPrice: Math.max(0, Number(row.adjusted_total_price ?? row.total_price ?? 0) || 0),
+    refundedAmount: Math.max(0, Number(row.refunded_amount ?? 0) || 0),
     status: normalizeStatus(row.status),
     paymentStatus: normalizePaymentStatus(row.payment_status),
-    earnedPoints: Math.max(0, Number(row.earned_points ?? 0) || 0),
+    earnedPoints: Math.max(0, Number(row.effective_earned_points ?? row.earned_points ?? 0) || 0),
     pointsRate: Math.max(0, Number(row.points_rate_snapshot ?? 0) || 0),
   };
 }
@@ -146,8 +148,9 @@ function DoneStyles() {
     .orderFacts div:first-child { padding-left:0; border-right:1px solid var(--customer-line); }
     dt { color:var(--customer-muted); font-size:13px; font-weight:500; } dd { margin:0; color:var(--customer-ink); font-size:17px; font-weight:750; }
     .nextGuide { margin:20px 0 0; padding:13px 14px; border-radius:14px; background:#f4f7fb; color:#526071; font-size:14px; font-weight:500; line-height:1.6; }
-    .earnedPoints { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 0; padding:13px 14px; border:1px solid #cfe0ff; border-radius:14px; background:#eef5ff; color:#174a9c; font-size:13px; font-weight:700; }
+    .earnedPoints,.refundSummary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 0; padding:13px 14px; border:1px solid #cfe0ff; border-radius:14px; background:#eef5ff; color:#174a9c; font-size:13px; font-weight:700; }
     .earnedPoints strong { font-size:16px; }
+    .refundSummary { border-color:#d8dee8; background:#f8fafc; color:#334155; }
     .actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
     .primaryAction,.secondaryAction { min-height:52px; display:flex; align-items:center; justify-content:center; padding:0 16px; border-radius:14px; font-size:15px; font-weight:750; text-align:center; }
     .primaryAction { border:1px solid var(--rion-navy); background:var(--rion-navy); color:#fff; box-shadow:0 10px 24px rgba(15,31,61,.2); }
@@ -371,6 +374,12 @@ function DonePageInner() {
                       : "취소된 주문이에요. 필요한 메뉴는 다시 주문해 주세요."
                 : "주문 상태 화면에서 준비 과정을 실시간으로 확인할 수 있어요."}
           </p>
+          {order.refundedAmount > 0 ? (
+            <div className="refundSummary">
+              <span>{fmt(order.refundedAmount)}원 환불</span>
+              <strong>최종 {fmt(order.totalPrice)}원</strong>
+            </div>
+          ) : null}
           {!isCancelled && order.earnedPoints > 0 ? (
             <div className="earnedPoints">
               <span>포인트 적립 완료{order.pointsRate > 0 ? ` · ${order.pointsRate}%` : ""}</span>

@@ -28,10 +28,16 @@ export async function POST(req: NextRequest) {
     const row = raw as Row;
     const attemptCount = Number(row.attempt_count || 0);
     if (attemptCount >= 3) {
-      await admin.from("order_payment_cancel_attempts").update({ status: "reconcile_required", next_retry_at: null, failure_code: "AUTO_RETRY_LIMIT_REACHED" }).eq("id", row.id);
+      await admin.from("order_payment_cancel_attempts").update({ status: "reconcile_required", next_retry_at: null, failure_code: "AUTO_RETRY_LIMIT_REACHED" }).eq("id", row.id).eq("status", "retryable");
       escalated += 1;
       continue;
     }
+    const nextCount = attemptCount + 1;
+    const claimed = await admin.from("order_payment_cancel_attempts").update({
+      status: "processing", attempt_count: nextCount, last_attempt_at: now,
+      next_retry_at: null, failure_code: null, failure_detail: null,
+    }).eq("id", row.id).eq("status", "retryable").lte("next_retry_at", now).select("id").maybeSingle();
+    if (claimed.error || !claimed.data) continue;
     const pg = await admin.from("store_pg_config").select("secret_key").eq("store_id", row.store_id).maybeSingle();
     const secretKey = String(pg.data?.secret_key || "").trim();
     if (!secretKey) {
@@ -39,13 +45,11 @@ export async function POST(req: NextRequest) {
       escalated += 1;
       continue;
     }
-    await admin.rpc("begin_order_payment_cancel_attempt", { p_attempt_id: row.id });
     const toss = await cancelTossOrderPayment({ secretKey, paymentKey: String(row.payment_key || "") || null, tossOrderId: String(row.toss_order_id || "") || null, idempotencyKey: String(row.idempotency_key), cancelReason: String(row.cancel_reason || "주문 취소") });
     if (toss.confirmed) {
       const finalized = await admin.rpc("finalize_order_payment_cancellation", { p_attempt_id: row.id, p_pg_status: toss.pgStatus, p_pg_cancel_transaction_key: toss.transactionKey, p_pg_response: toss.snapshot });
       if (!finalized.error) { completed += 1; continue; }
     }
-    const nextCount = attemptCount + 1;
     await admin.from("order_payment_cancel_attempts").update({
       status: nextCount >= 3 ? "reconcile_required" : "retryable",
       pg_status: toss.pgStatus, failure_code: toss.failureCode || "AUTO_RETRY_UNCONFIRMED",
@@ -61,10 +65,16 @@ export async function POST(req: NextRequest) {
     const row = raw as Row;
     const attemptCount = Number(row.attempt_count || 0);
     if (attemptCount >= 3) {
-      await admin.from("order_partial_refunds").update({ status: "reconcile_required", next_retry_at: null, failure_code: "AUTO_RETRY_LIMIT_REACHED" }).eq("id", row.id);
+      await admin.from("order_partial_refunds").update({ status: "reconcile_required", next_retry_at: null, failure_code: "AUTO_RETRY_LIMIT_REACHED" }).eq("id", row.id).eq("status", "retryable");
       escalated += 1;
       continue;
     }
+    const nextCount = attemptCount + 1;
+    const claimed = await admin.from("order_partial_refunds").update({
+      status: "processing", attempt_count: nextCount, last_attempt_at: now,
+      next_retry_at: null, failure_code: null, failure_detail: null,
+    }).eq("id", row.id).eq("status", "retryable").lte("next_retry_at", now).select("id").maybeSingle();
+    if (claimed.error || !claimed.data) continue;
     const pg = await admin.from("store_pg_config").select("secret_key").eq("store_id", row.store_id).maybeSingle();
     const secretKey = String(pg.data?.secret_key || "").trim();
     if (!secretKey) {
@@ -72,8 +82,6 @@ export async function POST(req: NextRequest) {
       escalated += 1;
       continue;
     }
-    const nextCount = attemptCount + 1;
-    await admin.from("order_partial_refunds").update({ status: "processing", attempt_count: nextCount, last_attempt_at: now, next_retry_at: null }).eq("id", row.id);
     const refundAmount = Number(row.refund_amount || 0);
     const toss = await cancelTossOrderPayment({
       secretKey,

@@ -8,10 +8,14 @@ export type CustomerOrderRow = {
   buzzer_no?: string | null;
   request_note?: string | null;
   total_count?: number | null;
+  refunded_count?: number | null;
   total_price?: number | null;
+  adjusted_total_price?: number | null;
+  refunded_amount?: number | null;
   status?: string | null;
   payment_status?: string | null;
   earned_points?: number | null;
+  effective_earned_points?: number | null;
   points_rate_snapshot?: number | null;
   store_id?: string | null;
 };

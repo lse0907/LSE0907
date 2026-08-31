@@ -31,9 +31,14 @@ export type CustomerOrder = {
   created_at: string;
   display_no: string | null;
   total_count: number | null;
+  refunded_count: number | null;
   total_price: number | null;
+  adjusted_total_price: number | null;
+  refunded_amount: number | null;
   status: string;
+  payment_status?: string | null;
   earned_points: number | null;
+  effective_earned_points: number | null;
   store: { name: string; logo: string };
 };
 
@@ -61,6 +66,18 @@ export function tierLabel(raw: string | null | undefined) {
 
 export function formatWon(value: number) {
   return `${Math.max(0, Number(value || 0)).toLocaleString()}원`;
+}
+
+export function effectiveOrderCount(order: CustomerOrder) {
+  return Math.max(0, Number(order.total_count || 0) - Number(order.refunded_count || 0));
+}
+
+export function effectiveOrderPrice(order: CustomerOrder) {
+  return Math.max(0, Number(order.adjusted_total_price ?? order.total_price ?? 0));
+}
+
+export function effectiveOrderPoints(order: CustomerOrder) {
+  return Math.max(0, Number(order.effective_earned_points ?? order.earned_points ?? 0));
 }
 
 export function couponBenefitText(coupon: CustomerCoupon) {

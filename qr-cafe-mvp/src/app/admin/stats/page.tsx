@@ -106,8 +106,8 @@ function dbOrderToRecord(row: RawOrderRow, storeId: string): OrderRecord {
     buzzerNo: getString(row, "buzzer_no") || undefined,
     requestNote: getString(row, "request_note"),
     items: [],
-    totalCount: Math.max(0, toInt(row.total_count, 0)),
-    totalPrice: Math.max(0, Math.round(getNumber(row, "total_price") || 0)),
+    totalCount: Math.max(0, toInt(row.total_count, 0) - toInt(row.refunded_count, 0)),
+    totalPrice: Math.max(0, Math.round(Number(row.adjusted_total_price ?? row.total_price ?? 0))),
     status: normalizeStatus(row.status),
     storeId,
     store_id: storeId,
@@ -186,7 +186,7 @@ function AdminStatsPageInner() {
       await fetchStoreMeta(storeId);
       const { data: oData, error: oErr } = await supabase
         .from("orders")
-        .select("id,created_at,order_date,display_no,mode,table_no,buzzer_no,request_note,total_count,total_price,status,store_id")
+        .select("id,created_at,order_date,display_no,mode,table_no,buzzer_no,request_note,total_count,refunded_count,total_price,adjusted_total_price,status,store_id")
         .eq("store_id", storeId)
         .gte("order_date", start)
         .lte("order_date", end)
@@ -200,7 +200,7 @@ function AdminStatsPageInner() {
       const base = orderRows.map((r) => dbOrderToRecord(r, storeId)).filter((x) => x.id);
       const { data: iData, error: iErr } = await supabase
         .from("order_items")
-        .select("id,order_id,menu_id,name,price,qty,store_id")
+        .select("id,order_id,menu_id,name,price,qty,refunded_qty,store_id")
         .eq("store_id", storeId)
         .in("order_id", base.map((o) => o.id));
       if (iErr) throw new Error(`[order_items] ${iErr.message}`);
@@ -214,16 +214,14 @@ function AdminStatsPageInner() {
           id: getString(it, "menu_id") || getString(it, "id"),
           name: getString(it, "name"),
           price: Math.max(0, Math.round(getNumber(it, "price") || 0)),
-          qty: Math.max(0, Math.round(getNumber(it, "qty") || 0)),
+          qty: Math.max(0, Math.round(getNumber(it, "qty") || 0) - Math.round(getNumber(it, "refunded_qty") || 0)),
         });
         itemsByOrder.set(oid, arr);
       }
 
       setOrders(base.map((o) => {
         const its = itemsByOrder.get(o.id) || [];
-        const computedCount = its.reduce((s, x) => s + (x.qty || 0), 0);
-        const computedPrice = its.reduce((s, x) => s + (x.qty || 0) * (x.price || 0), 0);
-        return { ...o, items: its, totalCount: o.totalCount || computedCount, totalPrice: o.totalPrice || computedPrice };
+        return { ...o, items: its };
       }));
       setDataMode("db");
     } catch (e: unknown) {

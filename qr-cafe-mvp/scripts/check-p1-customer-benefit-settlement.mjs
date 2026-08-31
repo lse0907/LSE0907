@@ -2,11 +2,18 @@ import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const migration = read("supabase/migrations/20260830170333_p1_customer_benefit_settlement.sql");
+const projectionMigration = read("supabase/migrations/20260831080848_p1_refund_projection_retry_cron.sql");
 const settingsRoute = read("src/app/api/admin/loyalty/settings/route.ts");
 const partialRoute = read("src/app/api/orders/partial-refund/route.ts");
 const retryRoute = read("src/app/api/internal/order-refund-retry/route.ts");
 const toss = read("src/app/api/orders/_lib/tossCancellation.ts");
 const loyaltyPage = read("src/app/admin/loyalty/page.tsx");
+const staffPage = read("src/app/staff/page.tsx");
+const partialModal = read("src/app/staff/PartialRefundModal.tsx");
+const customerView = read("src/app/api/orders/customer-view/route.ts");
+const customerOrders = read("src/app/api/customer/orders/route.ts");
+const adminPage = read("src/app/admin/page.tsx");
+const statsPage = read("src/app/admin/stats/page.tsx");
 
 const expect = (source, value, message) => {
   if (!source.includes(value)) throw new Error(message);
@@ -37,5 +44,19 @@ expect(retryRoute, "AUTO_RETRY_LIMIT_REACHED", "자동 재시도 한도/OPS 이�
 expect(retryRoute, "previous_refunded_amount", "재시도 시 누적 환불액 검증이 없습니다.");
 expect(retryRoute, "timingSafeEqual", "자동 재시도 엔드포인트 비밀 검증이 없습니다.");
 expect(loyaltyPage, "/api/admin/loyalty/settings", "점주 설정이 서버 보호 경로를 사용하지 않습니다.");
+expect(projectionMigration, "add column if not exists refunded_qty", "메뉴별 누적 환불 수량 스냅샷이 없습니다.");
+expect(projectionMigration, "add column if not exists refunded_count", "주문 누적 환불 수량 스냅샷이 없습니다.");
+expect(projectionMigration, "sync_completed_partial_refund_projection", "부분 환불 완료 스냅샷 동기화가 없습니다.");
+expect(projectionMigration, "cron.schedule", "자동 환불 재시도 스케줄이 없습니다.");
+expect(projectionMigration, "vault.decrypted_secrets", "자동 재시도 비밀값이 Vault를 사용하지 않습니다.");
+expect(retryRoute, '.eq("status", "retryable").lte("next_retry_at", now).select("id").maybeSingle()', "자동 재시도 원자적 선점이 없습니다.");
+expect(partialRoute, 'item?.refunded_qty', "부분 환불 API가 이미 환불된 수량을 제외하지 않습니다.");
+expect(partialModal, "남은 수량", "직원 부분 환불 화면에 남은 수량 안내가 없습니다.");
+expect(staffPage, "adjusted_total_price", "직원 화면이 최종 주문금액을 조회하지 않습니다.");
+expect(staffPage, "refunded_qty", "직원 화면이 메뉴 환불 수량을 조회하지 않습니다.");
+expect(customerView, "effective_earned_points", "고객 주문상태 API가 최종 적립 포인트를 제공하지 않습니다.");
+expect(customerOrders, "adjusted_total_price", "고객 주문내역 API가 최종 주문금액을 제공하지 않습니다.");
+expect(adminPage, "adjusted_total_price", "관리자 홈 매출이 최종 주문금액을 사용하지 않습니다.");
+expect(statsPage, "refunded_qty", "매출 통계가 환불된 메뉴 수량을 제외하지 않습니다.");
 
 console.log("P1 고객혜택·부분환불 정적 검증 통과");
