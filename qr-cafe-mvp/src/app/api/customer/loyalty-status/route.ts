@@ -39,9 +39,11 @@ export async function POST(req: NextRequest) {
     const allowed = Array.from(new Set((walletResult.data || []).map((row) => String(row.store_id || "")).filter(Boolean)));
     if (!allowed.length) return NextResponse.json({ ok: true, stores: [] });
 
+    await Promise.all(allowed.map((storeId) => admin.rpc("refresh_store_loyalty_program_status", { p_store_id: storeId })));
+
     const settingsResult = await admin
       .from("store_loyalty_settings")
-      .select("store_id,points_enabled,coupons_enabled")
+      .select("store_id,points_enabled,coupons_enabled,points_program_status,coupons_program_status,points_redemption_ends_at")
       .in("store_id", allowed);
     if (settingsResult.error && /points_enabled|coupons_enabled|column/i.test(settingsResult.error.message)) {
       return NextResponse.json({
@@ -55,11 +57,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       stores: allowed.map((storeId) => {
-        const row = byStore.get(storeId) as { points_enabled?: boolean; coupons_enabled?: boolean } | undefined;
+        const row = byStore.get(storeId) as {
+          points_enabled?: boolean;
+          coupons_enabled?: boolean;
+          points_program_status?: string;
+          coupons_program_status?: string;
+          points_redemption_ends_at?: string | null;
+        } | undefined;
         return {
           storeId,
           pointsEnabled: row?.points_enabled === true,
           couponsEnabled: row?.coupons_enabled === true,
+          pointsProgramStatus: row?.points_program_status || (row?.points_enabled ? "active" : "inactive"),
+          couponsProgramStatus: row?.coupons_program_status || (row?.coupons_enabled ? "active" : "inactive"),
+          pointsRedemptionEndsAt: row?.points_redemption_ends_at || null,
         };
       }),
     });

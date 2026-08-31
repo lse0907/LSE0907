@@ -10,6 +10,11 @@ type LoyaltySettingsRow = {
   store_id: string;
   points_enabled: boolean;
   coupons_enabled: boolean;
+  points_program_status: "inactive" | "active" | "closing" | "closed";
+  coupons_program_status: "inactive" | "active" | "closing" | "closed";
+  points_closure_notice_at: string | null;
+  points_redemption_ends_at: string | null;
+  coupons_closure_notice_at: string | null;
   tier_general_rate_pct: number;
   tier_regular_rate_pct: number;
   tier_vip_rate_pct: number;
@@ -33,6 +38,11 @@ const DEFAULT_LOYALTY_SETTINGS: LoyaltySettingsRow = {
   store_id: "",
   points_enabled: false,
   coupons_enabled: false,
+  points_program_status: "inactive",
+  coupons_program_status: "inactive",
+  points_closure_notice_at: null,
+  points_redemption_ends_at: null,
+  coupons_closure_notice_at: null,
   tier_general_rate_pct: 2,
   tier_regular_rate_pct: 3,
   tier_vip_rate_pct: 5,
@@ -426,7 +436,7 @@ function AdminLoyaltyInner() {
     const [settingsAttempt, tierRes] = await Promise.all([
       supabase
         .from("store_loyalty_settings")
-        .select("store_id,points_enabled,coupons_enabled,tier_general_rate_pct,tier_regular_rate_pct,tier_vip_rate_pct,thank_you_every_n_orders,max_redeem_pct,min_redeem_points,point_expiry_months,allow_point_or_coupon_only")
+        .select("store_id,points_enabled,coupons_enabled,points_program_status,coupons_program_status,points_closure_notice_at,points_redemption_ends_at,coupons_closure_notice_at,tier_general_rate_pct,tier_regular_rate_pct,tier_vip_rate_pct,thank_you_every_n_orders,max_redeem_pct,min_redeem_points,point_expiry_months,allow_point_or_coupon_only")
         .eq("store_id", storeId)
         .maybeSingle(),
       supabase
@@ -590,14 +600,33 @@ function AdminLoyaltyInner() {
     setSavingSettings(true);
     setMsg("");
     const payload: LoyaltySettingsRow = { ...settings, store_id: storeId };
-    const { error } = await supabase.from("store_loyalty_settings").upsert(payload, { onConflict: "store_id" });
-    if (error) showMsg(`${saveScopeLabel} 저장 실패: ${error.message}`, "error");
-    else {
-      setSavedServiceStatus({
+    const response = await fetch("/api/admin/loyalty/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        storeId,
         pointsEnabled: settings.points_enabled,
         couponsEnabled: settings.coupons_enabled,
+        reason: "점주 포인트·쿠폰 운영 설정 변경",
+        policy: Object.fromEntries(
+          Object.entries(payload).filter(([key]) => ![
+            "store_id", "points_enabled", "coupons_enabled", "points_program_status",
+            "coupons_program_status", "points_closure_notice_at", "points_redemption_ends_at",
+            "coupons_closure_notice_at",
+          ].includes(key)),
+        ),
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.ok) showMsg(`${saveScopeLabel} 저장 실패: ${String(result?.message || "저장 요청을 확인해 주세요.")}`, "error");
+    else {
+      const saved = { ...payload, ...(result.settings || {}) } as LoyaltySettingsRow;
+      setSavedServiceStatus({
+        pointsEnabled: saved.points_enabled,
+        couponsEnabled: saved.coupons_enabled,
       });
-      setSavedSettings(payload);
+      setSettings(saved);
+      setSavedSettings(saved);
       showMsg(`${saveScopeLabel}을 저장했습니다.`, "success");
     }
     setSavingSettings(false);
@@ -884,8 +913,8 @@ function AdminLoyaltyInner() {
           <article className={`serviceCard ${settings.points_enabled ? "serviceCardOn" : "serviceCardOff"}`}>
             <div>
               <span className="serviceLabel">포인트</span>
-              <strong>{settings.points_enabled ? "운영 중" : "적립 중지"}</strong>
-              <p>{settings.points_enabled ? "결제 후 포인트 적립" : "보유 포인트는 사용 가능"}</p>
+              <strong>{settings.points_enabled ? "운영 중" : settings.points_program_status === "closing" ? "종료 예정" : "적립 중지"}</strong>
+              <p>{settings.points_enabled ? "결제 후 포인트 적립" : settings.points_program_status === "closing" && settings.points_redemption_ends_at ? `보유 포인트 ${dateText(settings.points_redemption_ends_at)}까지 사용` : "보유 포인트는 사용 가능"}</p>
             </div>
             <button
               type="button"
@@ -900,7 +929,7 @@ function AdminLoyaltyInner() {
           <article className={`serviceCard ${settings.coupons_enabled ? "serviceCardOn" : "serviceCardOff"}`}>
             <div>
               <span className="serviceLabel">쿠폰</span>
-              <strong>{settings.coupons_enabled ? "운영 중" : "발급 중지"}</strong>
+              <strong>{settings.coupons_enabled ? "운영 중" : settings.coupons_program_status === "closing" ? "종료 예정" : "발급 중지"}</strong>
               <p>{settings.coupons_enabled ? "자동·수동 쿠폰 발급" : "발급 쿠폰은 사용 가능"}</p>
             </div>
             <button

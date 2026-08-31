@@ -248,6 +248,9 @@ export function MeDashboard() {
               statusMap[sid] = {
                 pointsEnabled: row?.pointsEnabled !== false,
                 couponsEnabled: row?.couponsEnabled !== false,
+                pointsProgramStatus: String(row?.pointsProgramStatus || ""),
+                couponsProgramStatus: String(row?.couponsProgramStatus || ""),
+                pointsRedemptionEndsAt: row?.pointsRedemptionEndsAt || null,
               };
             }
           }

@@ -65,15 +65,21 @@ function verifiedCancellation(
   value: unknown,
   expectedPaymentKey: string,
   expectedTossOrderId: string | null,
+  expectedCancelledAmount?: number | null,
 ): TossCancellationResult | null {
   const payment = asRecord(value);
   const paymentKey = String(payment.paymentKey || "").trim();
   const tossOrderId = String(payment.orderId || "").trim();
   const pgStatus = String(payment.status || "").trim().toUpperCase();
+  const cancelledAmount = Array.isArray(payment.cancels)
+    ? payment.cancels.reduce((sum, item) => sum + Math.max(0, Number(asRecord(item).cancelAmount || 0)), 0)
+    : 0;
+  const expectsPartial = Number(expectedCancelledAmount || 0) > 0;
   if (
-    pgStatus !== "CANCELED" ||
+    (expectsPartial ? !["PARTIAL_CANCELED", "CANCELED"].includes(pgStatus) : pgStatus !== "CANCELED") ||
     paymentKey !== expectedPaymentKey ||
-    (expectedTossOrderId && tossOrderId !== expectedTossOrderId)
+    (expectedTossOrderId && tossOrderId !== expectedTossOrderId) ||
+    (expectsPartial && cancelledAmount < Number(expectedCancelledAmount))
   ) {
     return null;
   }
@@ -137,6 +143,7 @@ export async function inspectTossOrderPayment(params: {
   secretKey: string;
   paymentKey?: string | null;
   tossOrderId?: string | null;
+  expectedCancelledAmount?: number | null;
 }): Promise<TossCancellationResult> {
   const basicToken = Buffer.from(`${params.secretKey}:`).toString("base64");
   const expectedTossOrderId = String(params.tossOrderId || "").trim() || null;
@@ -156,7 +163,7 @@ export async function inspectTossOrderPayment(params: {
     });
   }
 
-  const verified = verifiedCancellation(queried.value, paymentKey, expectedTossOrderId);
+  const verified = verifiedCancellation(queried.value, paymentKey, expectedTossOrderId, params.expectedCancelledAmount);
   if (verified) return verified;
   const pgStatus = String(payment.status || "").trim().toUpperCase();
   return pendingResult({
@@ -174,6 +181,8 @@ export async function cancelTossOrderPayment(params: {
   tossOrderId?: string | null;
   idempotencyKey: string;
   cancelReason: string;
+  cancelAmount?: number | null;
+  expectedCancelledAmount?: number | null;
 }): Promise<TossCancellationResult> {
   const basicToken = Buffer.from(`${params.secretKey}:`).toString("base64");
   const expectedTossOrderId = String(params.tossOrderId || "").trim() || null;
@@ -188,7 +197,7 @@ export async function cancelTossOrderPayment(params: {
     const queried = asRecord(initialQuery.value);
     paymentKey = paymentKey || String(queried.paymentKey || "").trim();
     if (paymentKey) {
-      const alreadyCancelled = verifiedCancellation(initialQuery.value, paymentKey, expectedTossOrderId);
+      const alreadyCancelled = verifiedCancellation(initialQuery.value, paymentKey, expectedTossOrderId, params.expectedCancelledAmount);
       if (alreadyCancelled) return alreadyCancelled;
     }
   }
@@ -213,13 +222,16 @@ export async function cancelTossOrderPayment(params: {
           "Content-Type": "application/json",
           "Idempotency-Key": params.idempotencyKey,
         },
-        body: JSON.stringify({ cancelReason: params.cancelReason || "주문 취소" }),
+        body: JSON.stringify({
+          cancelReason: params.cancelReason || "주문 취소",
+          ...(Number(params.cancelAmount || 0) > 0 ? { cancelAmount: Math.round(Number(params.cancelAmount)) } : {}),
+        }),
         cache: "no-store",
       },
     );
     cancelValue = await responseJson(cancelResponse);
     if (cancelResponse.ok) {
-      const verified = verifiedCancellation(cancelValue, paymentKey, expectedTossOrderId);
+      const verified = verifiedCancellation(cancelValue, paymentKey, expectedTossOrderId, params.expectedCancelledAmount);
       if (verified) return verified;
     }
   } catch {
@@ -228,7 +240,7 @@ export async function cancelTossOrderPayment(params: {
 
   const verification = await queryPayment({ basicToken, paymentKey });
   if (verification.ok) {
-    const verified = verifiedCancellation(verification.value, paymentKey, expectedTossOrderId);
+    const verified = verifiedCancellation(verification.value, paymentKey, expectedTossOrderId, params.expectedCancelledAmount);
     if (verified) return verified;
   }
 

@@ -7,10 +7,11 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import RionBrand from "@/app/components/RionBrand";
 import { PwaInstallGuide } from "@/app/_components/PwaInstallGuide";
+import { PartialRefundModal } from "./PartialRefundModal";
 
 type OrderMode = "dine-in" | "takeout";
 type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
-type PaymentStatus = "not_required" | "pending" | "paid" | "cancel_pending" | "refunded" | "failed";
+type PaymentStatus = "not_required" | "pending" | "paid" | "cancel_pending" | "refunded" | "failed" | "partial_refund_pending" | "partially_refunded";
 type StaffViewMode = "simple" | "station";
 type ItemStatus = "waiting" | "making" | "done";
 type StaffIconName = "home" | "logout" | "arrow-left" | "check" | "play" | "package-check" | "bell" | "order";
@@ -203,6 +204,8 @@ const PAYMENT_LABEL: Record<PaymentStatus, string> = {
   paid: "결제완료",
   cancel_pending: "결제취소 처리중",
   refunded: "결제취소 완료",
+  partial_refund_pending: "부분환불 처리중",
+  partially_refunded: "부분환불 완료",
   failed: "결제 확인필요",
 };
 
@@ -233,7 +236,7 @@ function normalizeItemStatus(v: any): ItemStatus {
 
 function normalizePaymentStatus(v: any): PaymentStatus {
   const s = String(v || "").trim();
-  if (s === "pending" || s === "paid" || s === "cancel_pending" || s === "refunded" || s === "failed") return s;
+  if (s === "pending" || s === "paid" || s === "cancel_pending" || s === "refunded" || s === "failed" || s === "partial_refund_pending" || s === "partially_refunded") return s;
   return "not_required";
 }
 
@@ -927,6 +930,7 @@ function StaffPageInner() {
 
   const selected = useMemo(() => orders.find((o) => o.id === selectedId) || null, [orders, selectedId]);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; displayNo: string; status: OrderStatus } | null>(null);
+  const [partialRefundTarget, setPartialRefundTarget] = useState<OrderRecord | null>(null);
   const [stationDetailOrderId, setStationDetailOrderId] = useState<string | null>(null);
   const [cancelReturnOrderId, setCancelReturnOrderId] = useState<string | null>(null);
   const stationDetailOrder = useMemo(
@@ -4176,6 +4180,9 @@ function StaffPageInner() {
                 >
                   주문 취소
                 </button>
+                {selected.status === "completed" && (loginRole === "owner" || loginRole === "manager") ? (
+                  <button className="actionBtn" onClick={() => setPartialRefundTarget(selected)}>부분 환불</button>
+                ) : null}
               </div>
 
               <div className="dockSpacer" />
@@ -4213,6 +4220,9 @@ function StaffPageInner() {
           >
             주문 취소
           </button>
+          {selected.status === "completed" && (loginRole === "owner" || loginRole === "manager") ? (
+            <button className="actionBtn" onClick={() => setPartialRefundTarget(selected)}>부분 환불</button>
+          ) : null}
         </div>
       ) : null}
 
@@ -4291,6 +4301,9 @@ function StaffPageInner() {
               >
                 주문 취소
               </button>
+              {stationDetailOrder.status === "completed" && (loginRole === "owner" || loginRole === "manager") ? (
+                <button type="button" className="actionBtn" onClick={() => { setStationDetailOrderId(null); setPartialRefundTarget(stationDetailOrder); }}>부분 환불</button>
+              ) : null}
             </footer>
           </section>
         </div>
@@ -4327,6 +4340,14 @@ function StaffPageInner() {
             </div>
           </div>
         </div>
+      ) : null}
+      {partialRefundTarget ? (
+        <PartialRefundModal
+          storeId={storeId}
+          order={partialRefundTarget}
+          onClose={() => setPartialRefundTarget(null)}
+          onCompleted={() => void fetchOrdersFromDb(true)}
+        />
       ) : null}
     </main>
   );

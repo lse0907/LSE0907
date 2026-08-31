@@ -15,7 +15,8 @@
     "test:p0-function-search-path": "node scripts/check-p0-function-search-path-hardening.mjs",
     "test:p0-password-policy": "node scripts/check-p0-password-policy.mjs",
     "test:p0-privacy": "node scripts/check-p0-privacy.mjs",
-    "test:p1-loyalty-switches": "node scripts/check-p1-loyalty-switches.mjs"
+    "test:p1-loyalty-switches": "node scripts/check-p1-loyalty-switches.mjs",
+    "test:p1-customer-benefit-settlement": "node scripts/check-p1-customer-benefit-settlement.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

@@ -111,6 +111,8 @@ type OrderCancelCaseRow = {
   next_retry_at: string | null;
   completed_at: string | null;
   updated_at: string;
+  kind?: "full" | "partial";
+  refund_amount?: number | null;
 };
 type OrderBaseRow = {
   store_id: string | null;
@@ -696,7 +698,7 @@ export default function OpsPage() {
     setOrderCancelLoading(false);
   }, [canManageBilling, isOps]);
 
-  const reconcileOrderCancel = async (attemptId: string, action: "inspect" | "retry") => {
+  const reconcileOrderCancel = async (attemptId: string, action: "inspect" | "retry", kind: "full" | "partial" = "full") => {
     const reason = String(orderCancelReasons[attemptId] || "").trim();
     if (reason.length < 2) {
       setMsg("주문 결제취소 확인·재시도 사유를 2자 이상 입력해 주세요.");
@@ -706,7 +708,7 @@ export default function OpsPage() {
     const response = await fetch("/api/ops/order-cancel-reconcile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ attemptId, action, reason }),
+      body: JSON.stringify({ attemptId, action, reason, kind }),
     });
     const result = await response.json().catch(() => ({}));
     if (response.ok && result?.ok) {
@@ -2576,7 +2578,7 @@ export default function OpsPage() {
                     return (
                       <tr key={item.id}>
                         <td>{fmtDateTime(item.requested_at)}</td>
-                        <td><div className="cellMain"><strong>{item.store_id}</strong><small>주문 {shortId(item.order_id)}</small></div></td>
+                        <td><div className="cellMain"><strong>{item.store_id}</strong><small>{item.kind === "partial" ? `부분 환불 ${Number(item.refund_amount || 0).toLocaleString()}원` : "전체 취소"} · 주문 {shortId(item.order_id)}</small></div></td>
                         <td><span className={`pill ${item.status === "reconcile_required" ? "danger" : "warn"}`}>{refundStatusLabel(item.status)}</span></td>
                         <td><span className={`pill ${item.pg_status === "CANCELED" ? "ok" : item.pg_status ? "warn" : ""}`}>{tossStatusLabel(item.pg_status)}</span></td>
                         <td><div className="cellMain"><strong>{item.attempt_count}회</strong><small>{fmtDateTime(item.last_attempt_at)}</small></div></td>
@@ -2584,8 +2586,8 @@ export default function OpsPage() {
                         <td>
                           <div className="refundActions">
                             <input className="input" value={reason} maxLength={240} placeholder="처리 사유" onChange={(event) => setOrderCancelReasons((prev) => ({ ...prev, [item.id]: event.target.value }))} />
-                            <button className="btn" disabled={isWorking || reason.trim().length < 2} onClick={() => void reconcileOrderCancel(item.id, "inspect")}>PG 상태 확인</button>
-                            <button className="btn primary" disabled={isWorking || reason.trim().length < 2} onClick={() => void reconcileOrderCancel(item.id, "retry")}>{isWorking ? "처리 중" : "동일 키로 재시도"}</button>
+                            <button className="btn" disabled={isWorking || reason.trim().length < 2} onClick={() => void reconcileOrderCancel(item.id, "inspect", item.kind)}>PG 상태 확인</button>
+                            <button className="btn primary" disabled={isWorking || reason.trim().length < 2} onClick={() => void reconcileOrderCancel(item.id, "retry", item.kind)}>{isWorking ? "처리 중" : "동일 키로 재시도"}</button>
                           </div>
                         </td>
                       </tr>
