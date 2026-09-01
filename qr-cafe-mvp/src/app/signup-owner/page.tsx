@@ -3,7 +3,6 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
-import DaumPostcodeEmbed, { Address } from "react-daum-postcode";
 import Link from "next/link";
 import AuthShell from "@/app/_components/AuthShell";
 import {
@@ -13,6 +12,7 @@ import {
   PASSWORD_POLICY_MESSAGE,
 } from "@/app/lib/passwordPolicy";
 import { signUpWithPasswordPolicy } from "@/app/lib/signUpWithPasswordPolicy";
+import SignupPolicyConsent from "@/app/_components/SignupPolicyConsent";
 
 function SignupOwnerPageInner() {
   const router = useRouter();
@@ -23,26 +23,14 @@ function SignupOwnerPageInner() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [addressDetail, setAddressDetail] = useState("");
   const [referralCode, setReferralCode] = useState("");
-  const [showAddr, setShowAddr] = useState(false);
+  const [minimumAgeConfirmed, setMinimumAgeConfirmed] = useState(false);
+  const [businessAuthorityConfirmed, setBusinessAuthorityConfirmed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyNoticeAcknowledged, setPrivacyNoticeAcknowledged] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [msg, setMsg] = useState<string>(initialError || "");
   const [loading, setLoading] = useState(false);
-
-  const openAddressSearch = () => setShowAddr(true);
-  const closeAddressSearch = () => setShowAddr(false);
-
-  const onCompleteAddress = (data: Address) => {
-    const picked = (data.address || "").trim();
-    setAddress(picked);
-    closeAddressSearch();
-
-    setTimeout(() => {
-      const el = document.getElementById("addressDetailInput");
-      if (el) (el as HTMLInputElement).focus();
-    }, 50);
-  };
 
   const validate = () => {
     if (!email.trim() || !password) return "이메일과 비밀번호를 입력해주세요.";
@@ -50,7 +38,9 @@ function SignupOwnerPageInner() {
     if (passwordError) return passwordError;
     if (!name.trim()) return "이름을 입력해주세요.";
     if (!phone.trim()) return "전화번호를 입력해주세요.";
-    if (!address.trim()) return "주소(거주지)를 검색해서 선택해주세요.";
+    if (!minimumAgeConfirmed) return "만 19세 이상 확인이 필요합니다.";
+    if (!businessAuthorityConfirmed) return "사업자 대표자 또는 위임받은 담당자 확인이 필요합니다.";
+    if (!termsAccepted || !privacyNoticeAcknowledged) return "이용정책 동의와 개인정보 처리 안내 확인이 필요합니다.";
     return "";
   };
 
@@ -69,6 +59,14 @@ function SignupOwnerPageInner() {
     const { data: signUpData, error: signUpErr } = await signUpWithPasswordPolicy(
       email.trim(),
       password,
+      {
+        audience: "owner",
+        minimumAgeConfirmed,
+        businessAuthorityConfirmed,
+        termsAccepted,
+        privacyNoticeAcknowledged,
+        marketingConsent,
+      },
       referralCode.trim(),
     );
 
@@ -97,8 +95,6 @@ function SignupOwnerPageInner() {
         user_id: userId,
         name: name.trim(),
         phone: phone.trim(),
-        address: address.trim(),
-        address_detail: addressDetail.trim() ? addressDetail.trim() : null,
       },
       { onConflict: "user_id" }
     );
@@ -130,81 +126,29 @@ function SignupOwnerPageInner() {
         <p className="authSectionTitle">대표자 정보</p>
         <label className="authField">이름<input className="authInput" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required placeholder="이름을 입력해 주세요" /></label>
         <label className="authField">전화번호<input className="authInput" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" autoComplete="tel" required placeholder="010-0000-0000" /></label>
-        <label className="authField">주소<span className="authRow"><input className="authInput" value={address} readOnly placeholder="주소 검색으로 입력" />
-            <button
-              type="button"
-              onClick={openAddressSearch}
-              className="addressButton"
-              disabled={loading}
-            >
-              주소 검색
-            </button>
-          </span></label>
-          <label className="authField">상세 주소<input
-            className="authInput"
-            id="addressDetailInput"
-            value={addressDetail}
-            onChange={(e) => setAddressDetail(e.target.value)}
-            placeholder="선택 사항 · 예: 101동 1203호"
-          /></label>
+        <p className="authHint">개인 거주지 주소는 수집하지 않습니다. 매장 주소는 매장 등록 단계에서 별도로 입력합니다.</p>
+        <SignupPolicyConsent
+          audience="owner"
+          minimumAgeConfirmed={minimumAgeConfirmed}
+          onMinimumAgeChange={setMinimumAgeConfirmed}
+          businessAuthorityConfirmed={businessAuthorityConfirmed}
+          onBusinessAuthorityChange={setBusinessAuthorityConfirmed}
+          termsAccepted={termsAccepted}
+          onTermsChange={setTermsAccepted}
+          privacyNoticeAcknowledged={privacyNoticeAcknowledged}
+          onPrivacyNoticeChange={setPrivacyNoticeAcknowledged}
+          marketingConsent={marketingConsent}
+          onMarketingConsentChange={setMarketingConsent}
+          disabled={loading}
+        />
         <button type="submit" disabled={loading} className="authButton">
           {loading ? "가입 처리 중..." : "점주 계정 만들기"}
         </button>
       </form>
 
-      {showAddr ? (
-        <div style={modalOverlayStyle} onClick={closeAddressSearch}>
-          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <b style={{ fontSize: 16 }}>주소 검색</b>
-              <button type="button" onClick={closeAddressSearch} style={closeBtnStyle}>
-                닫기
-              </button>
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <DaumPostcodeEmbed onComplete={onCompleteAddress} autoClose={false} />
-            </div>
-            <p style={{ marginTop: 10, color: "#6b7280", fontWeight: 700, fontSize: 13, lineHeight: 1.4 }}>
-              도로명 주소를 검색하고 선택하세요.
-            </p>
-          </div>
-        </div>
-      ) : null}
-      <style jsx>{`.addressButton{flex:0 0 auto;min-height:48px;padding:0 13px;border:1px solid #b8c8df;border-radius:12px;background:#f7f9fc;color:#294c78;font-weight:900;cursor:pointer}`}</style>
     </AuthShell>
   );
 }
-
-const modalOverlayStyle: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.35)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  padding: 16,
-  zIndex: 9999,
-};
-
-const modalStyle: React.CSSProperties = {
-  width: "min(520px, 100%)",
-  maxHeight: "85vh",
-  overflow: "auto",
-  background: "#fff",
-  borderRadius: 16,
-  border: "1px solid #e5e7eb",
-  padding: 14,
-  boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-};
-
-const closeBtnStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid #e5e7eb",
-  background: "#fff",
-  fontWeight: 900,
-  cursor: "pointer",
-};
 
 export default function SignupOwnerPage() {
   return (
