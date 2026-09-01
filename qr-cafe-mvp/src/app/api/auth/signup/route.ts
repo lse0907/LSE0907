@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 type SignupRequest = {
   email?: unknown;
   password?: unknown;
+  referralCode?: unknown;
 };
 
 function json(body: unknown, status = 200) {
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
 
   const email = typeof body.email === "string" ? body.email.trim() : "";
   const password = typeof body.password === "string" ? body.password : "";
+  const referralCode = typeof body.referralCode === "string" ? body.referralCode.trim().toUpperCase() : "";
 
   if (!email || !password) {
     return json({ error: { message: "이메일과 비밀번호를 입력해주세요." } }, 400);
@@ -40,8 +42,13 @@ export async function POST(request: Request) {
     return json({ error: { code: "weak_password", message: passwordError } }, 400);
   }
 
+  if (referralCode && !/^[A-Z0-9]{6,16}$/.test(referralCode)) {
+    return json({ error: { code: "invalid_referral_code", message: "추천코드를 다시 확인해 주세요." } }, 400);
+  }
+
   const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
   const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+  const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_KEY || "").trim();
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return json({ error: { message: "인증 서비스 설정을 확인할 수 없습니다." } }, 500);
@@ -54,6 +61,24 @@ export async function POST(request: Request) {
       detectSessionInUrl: false,
     },
   });
+
+  const admin = referralCode && serviceRole
+    ? createClient(supabaseUrl, serviceRole, { auth: { autoRefreshToken: false, persistSession: false } })
+    : null;
+  let referral: { id: number; store_id: string } | null = null;
+  if (referralCode) {
+    if (!admin) return json({ error: { message: "추천코드 확인 설정이 완료되지 않았습니다." } }, 503);
+    const referralRes = await admin
+      .from("store_referral_codes")
+      .select("id,store_id")
+      .eq("code_normalized", referralCode)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (referralRes.error || !referralRes.data) {
+      return json({ error: { code: "invalid_referral_code", message: "사용할 수 없는 추천코드입니다." } }, 400);
+    }
+    referral = { id: Number(referralRes.data.id), store_id: String(referralRes.data.store_id) };
+  }
 
   const { data, error } = await supabase.auth.signUp({ email, password });
 
@@ -74,8 +99,21 @@ export async function POST(request: Request) {
     );
   }
 
+  let referralWarning: string | null = null;
+  if (referral && data.user?.id && admin) {
+    const referralInsert = await admin.from("billing_referrals").insert({
+      referred_user_id: data.user.id,
+      referral_code_id: referral.id,
+      referring_store_id: referral.store_id,
+      status: "registered",
+    });
+    if (referralInsert.error) referralWarning = "가입은 완료됐지만 추천코드 연결을 확인하지 못했습니다. 지원센터에 문의해 주세요.";
+  }
+
   return json({
     userId: data.user?.id ?? null,
+    referralRegistered: Boolean(referral && !referralWarning),
+    referralWarning,
     session: data.session
       ? {
           access_token: data.session.access_token,

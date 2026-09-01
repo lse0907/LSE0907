@@ -9,13 +9,15 @@ type SignupApiError = {
 type SignupApiResponse = {
   error?: SignupApiError;
   userId?: string | null;
+  referralRegistered?: boolean;
+  referralWarning?: string | null;
   session?: {
     access_token: string;
     refresh_token: string;
   } | null;
 };
 
-export async function signUpWithPasswordPolicy(email: string, password: string) {
+export async function signUpWithPasswordPolicy(email: string, password: string, referralCode = "") {
   let response: Response;
 
   try {
@@ -24,7 +26,7 @@ export async function signUpWithPasswordPolicy(email: string, password: string) 
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, referralCode }),
       cache: "no-store",
     });
   } catch {
@@ -45,7 +47,7 @@ export async function signUpWithPasswordPolicy(email: string, password: string) 
 
   if (!payload?.session) {
     return {
-      data: { userId: payload?.userId ?? null, sessionEstablished: false },
+      data: { userId: payload?.userId ?? null, sessionEstablished: false, referralRegistered: payload?.referralRegistered === true, referralWarning: payload?.referralWarning || null },
       error: null,
     };
   }
@@ -60,7 +62,7 @@ export async function signUpWithPasswordPolicy(email: string, password: string) 
   }
 
   return {
-    data: { userId: payload.userId ?? null, sessionEstablished: true },
+    data: { userId: payload.userId ?? null, sessionEstablished: true, referralRegistered: payload.referralRegistered === true, referralWarning: payload.referralWarning || null },
     error: null,
   };
 }

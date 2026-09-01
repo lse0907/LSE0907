@@ -12,9 +12,13 @@ type Quote = {
   baseMonthlyKrw: number; addonMonthlyKrw: number;
   baseDiscountBps: number; addonDiscountBps: number; termDiscountBps: number;
   listAmountKrw: number; finalAmountKrw: number; discountAmountKrw: number;
+  referralDiscountKrw: number; creditAvailableKrw: number; creditRequestedKrw: number; creditAppliedKrw: number;
+  externalAmountKrw: number; baseFinalBeforeCreditKrw: number; baseExternalAmountKrw: number; addonExternalAmountKrw: number;
   baseFinalAmountKrw: number; addonFinalAmountKrw: number;
   founderBase: boolean; founderAddon: boolean; multiStore: boolean; storeSequence: number;
   vatIncluded: boolean; discountLabels: string[];
+  expectedBaseStartAt: string | null; expectedBaseEndAt: string | null;
+  expectedAddonStartAt: string | null; expectedAddonEndAt: string | null;
 };
 type Runtime = { baseStatus: string; addonStatus: string; addonEnabled: boolean; basePaidUntil: string | null; addonPaidUntil: string | null; lastPaidAt: string | null };
 type TossFactory = (key: string) => { requestPayment: (method: "카드", params: Record<string, unknown>) => Promise<void> };
@@ -46,6 +50,9 @@ function BillingPayContent() {
   const [planMonths, setPlanMonths] = useState<PlanMonths>(1);
   const [payBase, setPayBase] = useState(true);
   const [payAddon, setPayAddon] = useState(true);
+  const [creditToUse, setCreditToUse] = useState(0);
+  const [referralCode, setReferralCode] = useState("");
+  const [referralLoading, setReferralLoading] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(true);
   const [clientKey, setClientKey] = useState("");
@@ -54,6 +61,7 @@ function BillingPayContent() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [paying, setPaying] = useState(false);
   const handledReturn = useRef("");
+  const creditInitialized = useRef(false);
   const confirmButton = useRef<HTMLButtonElement>(null);
 
   const refreshRuntime = useCallback(async () => {
@@ -83,7 +91,7 @@ function BillingPayContent() {
     if (!prepare) setQuoteLoading(true);
     const response = await fetch("/api/billing/quote", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ storeId, planMonths, payBase, payAddon, prepare }),
+      body: JSON.stringify({ storeId, planMonths, payBase, payAddon, creditToUse, prepare }),
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.ok) {
@@ -91,15 +99,32 @@ function BillingPayContent() {
       setQuoteLoading(false);
       return null;
     }
-    setQuote(result.quote as Quote);
+    const nextQuote = result.quote as Quote;
+    setQuote(nextQuote);
+    if (!prepare && !creditInitialized.current) {
+      creditInitialized.current = true;
+      const maximum = Math.min(nextQuote.creditAvailableKrw || 0, nextQuote.baseFinalBeforeCreditKrw || 0);
+      if (maximum > 0) setCreditToUse(maximum);
+    } else if (!prepare && creditToUse !== nextQuote.creditAppliedKrw) {
+      setCreditToUse(nextQuote.creditAppliedKrw);
+    }
     setQuoteLoading(false);
     return result as { quote: Quote; orderId?: string };
-  }, [payAddon, payBase, planMonths, storeId]);
+  }, [creditToUse, payAddon, payBase, planMonths, storeId]);
 
   useEffect(() => {
     if (!storeId) { router.replace("/admin"); return; }
     setCurrentStoreId(storeId);
-    void refreshRuntime();
+    creditInitialized.current = false;
+    const timer = window.setTimeout(() => {
+      void refreshRuntime();
+      void (async () => {
+        const response = await fetch(`/api/billing/referral-code?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" });
+        const result = await response.json().catch(() => ({}));
+        if (response.ok && result.ok) setReferralCode(String(result.referralCode || ""));
+      })();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [refreshRuntime, router, storeId]);
 
   useEffect(() => {
@@ -144,9 +169,16 @@ function BillingPayContent() {
   useEffect(() => {
     if (!failCode && !failMessage) return;
     const cancelled = /CANCEL/i.test(failCode);
-    setMessage(cancelled ? "결제가 취소되었습니다. 카드가 승인되지 않았다면 다시 시도할 수 있습니다." : `${failMessage || "결제가 완료되지 않았습니다."} 카드 승인 여부를 먼저 확인해 주세요.`);
-    setMessageKind(cancelled ? "info" : "error");
-  }, [failCode, failMessage]);
+    const timer = window.setTimeout(() => {
+      setMessage(cancelled ? "결제가 취소되었습니다. 카드가 승인되지 않았다면 다시 시도할 수 있습니다." : `${failMessage || "결제가 완료되지 않았습니다."} 카드 승인 여부를 먼저 확인해 주세요.`);
+      setMessageKind(cancelled ? "info" : "error");
+      if (returnedOrderId) void fetch("/api/billing/release-payment-attempt", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId, orderId: returnedOrderId, reason: cancelled ? "점주 결제창 취소" : "PG 결제 실패" }),
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [failCode, failMessage, returnedOrderId, storeId]);
 
   const loadToss = async () => {
     if ((window as unknown as { TossPayments?: TossFactory }).TossPayments) return;
@@ -160,11 +192,25 @@ function BillingPayContent() {
   };
 
   const startPayment = async () => {
-    if (!clientKey) { setMessage("구독 결제 설정이 완료되지 않았습니다. 고객센터에 문의해 주세요."); setMessageKind("error"); return; }
     setPaying(true); setConfirmOpen(false); setMessage("결제창을 준비하고 있습니다."); setMessageKind("info");
     try {
       const prepared = await loadQuote(true);
       if (!prepared?.orderId || !prepared.quote) throw new Error("서버 결제 견적을 준비하지 못했습니다.");
+      if (prepared.quote.externalAmountKrw === 0) {
+        const response = await fetch("/api/billing/apply-zero-payment", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storeId, orderId: prepared.orderId }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) throw new Error(String(result.message || "크레딧 결제를 반영하지 못했습니다."));
+        setMessage("크레딧 결제가 완료되어 구독 기간에 반영됐습니다.");
+        setMessageKind("success");
+        setPaying(false);
+        await refreshRuntime();
+        await loadQuote(false);
+        return;
+      }
+      if (!clientKey) throw new Error("구독 결제 설정이 완료되지 않았습니다. 고객센터에 문의해 주세요.");
       await loadToss();
       const factory = (window as unknown as { TossPayments?: TossFactory }).TossPayments;
       if (!factory) throw new Error("토스 결제 모듈을 찾지 못했습니다.");
@@ -178,6 +224,24 @@ function BillingPayContent() {
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : "결제 요청 중 오류가 발생했습니다."); setMessageKind("error"); setPaying(false);
     }
+  };
+
+  const issueReferralCode = async () => {
+    setReferralLoading(true);
+    const response = await fetch("/api/billing/referral-code", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result.ok) setReferralCode(String(result.referralCode || ""));
+    else { setMessage(String(result.message || "추천코드를 발급하지 못했습니다.")); setMessageKind("error"); }
+    setReferralLoading(false);
+  };
+
+  const copyReferralCode = async () => {
+    if (!referralCode) return;
+    await navigator.clipboard.writeText(referralCode);
+    setMessage("추천코드를 복사했습니다.");
+    setMessageKind("success");
   };
 
   const statusLabel = (status: string) => status === "active" ? "이용 중" : status === "trialing" ? "무료 체험" : status === "past_due" ? "결제 필요" : "미이용";
@@ -205,25 +269,30 @@ function BillingPayContent() {
         </div>
       </section>
 
-      <section className="stepCard"><div className="stepHeading"><span>02</span><div><h2>이용 기간을 선택하세요</h2><p>장기 이용 시 최대 15% 할인됩니다. 창립 멤버 상품에는 더 큰 40% 혜택이 우선 적용됩니다.</p></div></div>
+      <section className="stepCard"><div className="stepHeading"><span>02</span><div><h2>이용 기간을 선택하세요</h2><p>장기 이용 시 최대 15% 할인됩니다. 베타 테스터 혜택은 40%가 우선 적용됩니다.</p></div></div>
         <div className="periodGrid">{PERIODS.map((period) => <button key={period.months} type="button" className={planMonths === period.months ? "period selected" : "period"} onClick={() => setPlanMonths(period.months)}><strong>{period.label}</strong><span>{period.discount}</span>{period.months === 12 ? <em>가장 큰 일반 혜택</em> : null}</button>)}</div>
       </section>
 
       <section className="checkoutGrid">
-        <article className="benefitPanel"><span className="eyebrow">YOUR BENEFITS</span><h2>적용된 혜택</h2>{quoteLoading ? <p>혜택을 계산하고 있습니다...</p> : quote?.discountLabels.length ? <ul>{quote.discountLabels.map((label) => <li key={label}>✓ {label}</li>)}</ul> : <p>현재 선택에는 기본 가격이 적용됩니다.</p>}{quote?.founderBase || quote?.founderAddon ? <div className="founderBadge">창립 멤버<br/><strong>베타 테스트에 함께해 주셔서 감사합니다.</strong></div> : null}{quote?.multiStore ? <div className="multiBadge">추가 매장 {quote.storeSequence}호점 혜택 적용</div> : null}</article>
+        <article className="benefitPanel"><span className="eyebrow">YOUR BENEFITS</span><h2>적용된 혜택</h2>{quoteLoading ? <p>혜택을 계산하고 있습니다...</p> : quote?.discountLabels.length ? <ul>{quote.discountLabels.map((label) => <li key={label}>✓ {label}</li>)}</ul> : <p>현재 선택에는 기본 가격이 적용됩니다.</p>}{quote?.founderBase || quote?.founderAddon ? <div className="founderBadge">베타 테스터<br/><strong>테스트에 함께해 주셔서 감사합니다.</strong></div> : null}{quote?.multiStore ? <div className="multiBadge">추가 매장 {quote.storeSequence}호점 혜택 적용</div> : null}
+          <div className="referralBox"><strong>매장 추천코드</strong>{referralCode ? <><code>{referralCode}</code><button type="button" onClick={() => void copyReferralCode()}>복사</button></> : <button type="button" disabled={referralLoading} onClick={() => void issueReferralCode()}>{referralLoading ? "발급 중" : "추천코드 발급"}</button>}<small>신규 점주 첫 구독 3,000원 할인</small></div>
+        </article>
         <article className="summaryPanel"><h2>결제 요약</h2>
           <div className="summaryRow"><span>정상 금액</span><span>{money(quote?.listAmountKrw || 0)}</span></div>
-          <div className="summaryRow discount"><span>총 할인</span><span>-{money(quote?.discountAmountKrw || 0)}</span></div>
+          <div className="summaryRow discount"><span>가격 할인</span><span>-{money(quote?.discountAmountKrw || 0)}</span></div>
           {payBase ? <div className="summaryRow detail"><span>기본 구독 {planMonths}개월</span><span>{money(quote?.baseFinalAmountKrw || 0)}</span></div> : null}
           {payAddon ? <div className="summaryRow detail"><span>선결제 옵션 {planMonths}개월</span><span>{money(quote?.addonFinalAmountKrw || 0)}</span></div> : null}
+          {payBase && (quote?.creditAvailableKrw || 0) > 0 ? <div className="creditBox"><label htmlFor="billing-credit"><span>추천 크레딧</span><small>보유 {money(quote?.creditAvailableKrw || 0)}</small></label><div><input id="billing-credit" type="number" min={0} max={Math.min(quote?.creditAvailableKrw || 0, quote?.baseFinalBeforeCreditKrw || 0)} step={100} value={creditToUse} onChange={(event) => setCreditToUse(Math.max(0, Math.min(Number(event.target.value || 0), quote?.creditAvailableKrw || 0, quote?.baseFinalBeforeCreditKrw || 0)))} /><button type="button" onClick={() => setCreditToUse(Math.min(quote?.creditAvailableKrw || 0, quote?.baseFinalBeforeCreditKrw || 0))}>전액 사용</button></div></div> : null}
+          {(quote?.creditAppliedKrw || 0) > 0 ? <div className="summaryRow credit"><span>크레딧 사용</span><span>-{money(quote?.creditAppliedKrw || 0)}</span></div> : null}
+          {quote?.expectedBaseEndAt || quote?.expectedAddonEndAt ? <div className="periodPreview">{quote?.expectedBaseEndAt ? <span>기본 구독 종료 <strong>{dateText(quote.expectedBaseEndAt)}</strong></span> : null}{quote?.expectedAddonEndAt ? <span>선결제 옵션 종료 <strong>{dateText(quote.expectedAddonEndAt)}</strong></span> : null}</div> : null}
           <div className="summaryTotal"><span>최종 결제 금액<small>부가세 포함</small></span><strong>{quoteLoading ? "계산 중" : money(quote?.finalAmountKrw || 0)}</strong></div>
-          <button className="payButton" type="button" disabled={paying || quoteLoading || !quote || (!payBase && !payAddon)} onClick={() => setConfirmOpen(true)}>{paying ? "결제창 준비 중..." : `${money(quote?.finalAmountKrw || 0)} 결제하기`}</button>
+          <button className="payButton" type="button" disabled={paying || quoteLoading || !quote || (!payBase && !payAddon)} onClick={() => setConfirmOpen(true)}>{paying ? "처리 중..." : quote?.externalAmountKrw === 0 ? "크레딧으로 결제" : `${money(quote?.finalAmountKrw || 0)} 결제하기`}</button>
           <button className="cancelLink" type="button" onClick={() => router.push(`/admin/billing/cancel?store=${encodeURIComponent(storeId)}`)}>최근 결제 취소·환불</button>
           <p className="policyText">결제한 기간은 현재 남은 기간 뒤에 이어서 추가됩니다. 결제 직후 10분 이내에는 최근 결제를 전체 취소할 수 있습니다.</p>
         </article>
       </section>
 
-      {confirmOpen && quote ? <div className="modalBackdrop" role="presentation" onMouseDown={() => !paying && setConfirmOpen(false)}><section className="confirmModal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" onMouseDown={(e) => e.stopPropagation()}><span className="eyebrow">FINAL CHECK</span><h2 id="confirm-title">구독 결제를 진행할까요?</h2><div className="confirmAmount">{money(quote.finalAmountKrw)}</div><p>{storeName} · {planMonths}개월 · 부가세 포함</p><div className="confirmLines">{quote.discountLabels.map((label) => <span key={label}>✓ {label}</span>)}</div><p className="warningText">결제창을 닫은 뒤 카드 승인 문자를 받았다면 중복 결제하지 말고 결과를 먼저 확인해 주세요.</p><div className="modalActions"><button className="secondaryButton" onClick={() => setConfirmOpen(false)} disabled={paying}>돌아가기</button><button ref={confirmButton} className="payButton" onClick={() => void startPayment()} disabled={paying}>{paying ? "준비 중..." : "결제 진행"}</button></div></section></div> : null}
+      {confirmOpen && quote ? <div className="modalBackdrop" role="presentation" onMouseDown={() => !paying && setConfirmOpen(false)}><section className="confirmModal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" onMouseDown={(e) => e.stopPropagation()}><span className="eyebrow">FINAL CHECK</span><h2 id="confirm-title">구독 결제를 진행할까요?</h2><div className="confirmAmount">{money(quote.finalAmountKrw)}</div><p>{storeName} · {planMonths}개월 · 부가세 포함</p><div className="confirmLines">{quote.discountLabels.map((label) => <span key={label}>✓ {label}</span>)}{quote.creditAppliedKrw > 0 ? <span>✓ 추천 크레딧 {money(quote.creditAppliedKrw)}</span> : null}</div><p className="warningText">{quote.externalAmountKrw === 0 ? "PG 결제 없이 크레딧으로 즉시 구독에 반영됩니다." : "결제창을 닫은 뒤 카드 승인 문자를 받았다면 중복 결제하지 말고 결과를 먼저 확인해 주세요."}</p><div className="modalActions"><button className="secondaryButton" onClick={() => setConfirmOpen(false)} disabled={paying}>돌아가기</button><button ref={confirmButton} className="payButton" onClick={() => void startPayment()} disabled={paying}>{paying ? "준비 중..." : quote.externalAmountKrw === 0 ? "크레딧 결제" : "결제 진행"}</button></div></section></div> : null}
     </main>
   );
 }
@@ -232,6 +301,7 @@ const css = `
   :root{--ink:#172033;--muted:#697386;--line:#e4e8ef;--brand:#2457d6;--brand-dark:#173f9f;--soft:#f4f7ff;--success:#067647;--warning:#b54708;--error:#b42318}*{box-sizing:border-box}body{margin:0;background:#f3f5f9;color:var(--ink);font-family:Arial,"Noto Sans KR",sans-serif}.billingWrap{width:min(1120px,100%);margin:auto;padding:28px 20px 80px;display:grid;gap:18px}.billingHeader{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:10px 4px}.billingHeader h1{font-size:34px;letter-spacing:-1.2px;margin:5px 0}.billingHeader p,.stepHeading p{margin:0;color:var(--muted);line-height:1.6}.eyebrow{color:var(--brand);font-size:11px;font-weight:900;letter-spacing:1.7px}.headerActions{display:flex;gap:8px}.secondaryButton,.payButton,.cancelLink{min-height:46px;border-radius:12px;font-weight:800;cursor:pointer}.secondaryButton{border:1px solid var(--line);background:#fff;color:var(--ink);padding:0 16px}.resultBanner{display:grid;gap:4px;border-radius:14px;padding:15px 18px;border:1px solid}.resultBanner.success{background:#ecfdf3;border-color:#abefc6;color:var(--success)}.resultBanner.warning{background:#fffaeb;border-color:#fedf89;color:var(--warning)}.resultBanner.error{background:#fef3f2;border-color:#fecdca;color:var(--error)}.resultBanner.info{background:var(--soft);border-color:#c7d7fe;color:var(--brand-dark)}.statusPanel{display:grid;grid-template-columns:repeat(3,1fr);background:#182238;color:#fff;border-radius:18px;padding:18px}.statusPanel>div{display:grid;gap:6px;padding:4px 18px;border-right:1px solid #344054}.statusPanel>div:last-child{border:0}.statusPanel span,.statusPanel small{color:#b8c2d7}.statusPanel strong{font-size:18px}.stepCard,.benefitPanel,.summaryPanel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 10px 30px rgba(16,24,40,.04)}.stepHeading{display:flex;gap:13px;align-items:flex-start;margin-bottom:18px}.stepHeading>span{display:grid;place-items:center;width:35px;height:35px;border-radius:11px;background:var(--brand);color:#fff;font-weight:900}.stepHeading h2,.benefitPanel h2,.summaryPanel h2{font-size:19px;margin:4px 0 5px}.productGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.productCard{position:relative;text-align:left;border:1px solid var(--line);background:#fff;border-radius:16px;padding:20px;color:var(--ink);cursor:pointer;transition:.18s}.productCard:hover{transform:translateY(-2px);border-color:#a8bcf5}.productCard.selected{border:2px solid var(--brand);padding:19px;background:linear-gradient(145deg,#fff,#f4f7ff)}.checkMark{position:absolute;right:16px;top:16px;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#edf1f7;color:#667085;font-weight:900}.selected .checkMark{background:var(--brand);color:#fff}.productTag{display:inline-block;background:#eef4ff;color:var(--brand-dark);border-radius:999px;padding:5px 8px;font-size:11px;font-weight:800}.productTag.option{background:#f3f0ff;color:#6941c6}.productCard h3{font-size:20px;margin:16px 0 5px}.price{font-size:17px}.productCard ul{margin:16px 0 0;padding-left:18px;color:var(--muted);line-height:1.8;font-size:13px}.periodGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.period{position:relative;min-height:92px;border:1px solid var(--line);background:#fff;border-radius:14px;display:grid;align-content:center;gap:6px;color:var(--ink);cursor:pointer}.period span{color:var(--muted);font-size:12px}.period em{position:absolute;top:-9px;left:50%;transform:translateX(-50%);white-space:nowrap;background:#182238;color:#fff;border-radius:999px;padding:4px 8px;font-size:10px;font-style:normal}.period.selected{border:2px solid var(--brand);background:var(--soft);color:var(--brand-dark)}.checkoutGrid{display:grid;grid-template-columns:.85fr 1.15fr;gap:18px}.benefitPanel ul{padding:0;list-style:none;display:grid;gap:11px;color:var(--success);font-weight:700}.benefitPanel p{color:var(--muted)}.founderBadge,.multiBadge{margin-top:16px;border-radius:14px;padding:15px}.founderBadge{background:linear-gradient(135deg,#172033,#344054);color:#fff;line-height:1.6}.multiBadge{background:#eff8ff;color:#175cd3;font-weight:800}.summaryPanel{display:grid;gap:12px}.summaryRow{display:flex;justify-content:space-between}.summaryRow.discount{color:var(--success);font-weight:800}.summaryRow.detail{font-size:13px;color:var(--muted)}.summaryTotal{display:flex;align-items:end;justify-content:space-between;border-top:1px solid var(--line);padding-top:16px}.summaryTotal span{display:grid;font-weight:800}.summaryTotal small{color:var(--muted);font-size:11px;margin-top:4px}.summaryTotal strong{font-size:28px;letter-spacing:-1px}.payButton{border:0;background:var(--brand);color:#fff;padding:0 18px;font-size:15px}.payButton:hover{background:var(--brand-dark)}.payButton:disabled,.secondaryButton:disabled{opacity:.55;cursor:not-allowed}.cancelLink{border:0;background:transparent;color:var(--error)}.policyText{font-size:12px;color:var(--muted);line-height:1.55;margin:0}.modalBackdrop{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.62);display:grid;place-items:center;padding:18px}.confirmModal{width:min(460px,100%);background:#fff;border-radius:20px;padding:24px;box-shadow:0 28px 90px rgba(0,0,0,.28)}.confirmModal h2{margin:7px 0}.confirmAmount{font-size:34px;font-weight:900;margin:18px 0 5px}.confirmModal>p{color:var(--muted)}.confirmLines{display:grid;gap:7px;background:#f7f9fc;border-radius:12px;padding:13px;color:var(--success);font-size:13px}.warningText{border-left:3px solid #f79009;padding-left:11px;font-size:12px;line-height:1.6}.modalActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:18px}.modalActions .payButton{width:100%}@media(max-width:760px){.billingWrap{padding:18px 13px 110px}.billingHeader{align-items:flex-start;display:grid}.billingHeader h1{font-size:28px}.headerActions{width:100%}.headerActions button{flex:1}.statusPanel{grid-template-columns:1fr;padding:11px}.statusPanel>div{border-right:0;border-bottom:1px solid #344054;padding:12px}.productGrid,.checkoutGrid{grid-template-columns:1fr}.periodGrid{grid-template-columns:1fr 1fr}.stepCard,.benefitPanel,.summaryPanel{padding:17px}.summaryPanel{position:sticky;bottom:8px;z-index:10;box-shadow:0 15px 45px rgba(16,24,40,.18)}.summaryRow.detail,.policyText,.summaryPanel h2{display:none}.summaryTotal strong{font-size:23px}.modalBackdrop{align-items:end;padding:10px}.confirmModal{border-radius:20px 20px 12px 12px}.productCard{min-height:220px}}`;
 
 const compactResponsiveCss = `
+  .referralBox{margin-top:16px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;border:1px solid var(--line);border-radius:14px;padding:13px;background:#f8fafc}.referralBox code{font-size:16px;font-weight:900;letter-spacing:1.2px;color:var(--brand-dark)}.referralBox button,.creditBox button{border:1px solid #b8c8df;border-radius:9px;background:#fff;color:var(--brand-dark);min-height:34px;padding:0 10px;font-weight:800;cursor:pointer}.referralBox small{grid-column:1/-1;color:var(--muted)}.creditBox{display:grid;gap:8px;border:1px solid #c7d7fe;background:var(--soft);border-radius:12px;padding:12px}.creditBox label{display:flex;justify-content:space-between;font-weight:800}.creditBox label small{color:var(--muted)}.creditBox>div{display:grid;grid-template-columns:1fr auto;gap:8px}.creditBox input{width:100%;min-height:38px;border:1px solid #b8c8df;border-radius:9px;padding:0 10px;font-weight:800}.summaryRow.credit{color:var(--brand-dark);font-weight:800}.periodPreview{display:grid;gap:5px;background:#f8fafc;border-radius:10px;padding:10px;font-size:12px;color:var(--muted)}.periodPreview span{display:flex;justify-content:space-between}.periodPreview strong{color:var(--ink)}
   @media (min-width:761px) and (max-width:1023px){.billingWrap{padding:22px 18px 64px;gap:14px}.billingHeader h1{font-size:30px}.stepCard,.benefitPanel,.summaryPanel{padding:18px}.productCard{padding:17px}.productCard.selected{padding:16px}.productCard ul{margin-top:11px}.period{min-height:78px}.statusPanel{padding:14px}}
   @media (max-width:760px){.billingWrap{padding:14px 12px 92px;gap:11px}.billingHeader{gap:12px;padding:2px}.billingHeader h1{font-size:26px;margin:3px 0}.billingHeader p{font-size:13px}.headerActions .secondaryButton{min-height:42px;padding:0 10px;font-size:12px}.statusPanel{padding:7px;border-radius:14px}.statusPanel>div{grid-template-columns:92px 1fr auto;align-items:center;gap:7px;padding:9px 7px}.statusPanel>div span,.statusPanel>div strong,.statusPanel>div small{font-size:12px}.statusPanel>div strong{text-align:left}.stepCard,.benefitPanel,.summaryPanel{padding:14px;border-radius:15px}.stepHeading{gap:9px;margin-bottom:12px}.stepHeading>span{width:30px;height:30px}.stepHeading h2{font-size:17px;margin-top:2px}.stepHeading p{font-size:12px}.productGrid{gap:9px}.productCard,.productCard.selected{min-height:0;padding:14px 48px 13px 14px}.productCard h3{font-size:17px;margin:10px 0 3px}.productCard .price{font-size:15px}.productCard ul{margin:8px 0 0;padding-left:16px;line-height:1.5;font-size:11px}.productCard ul li:nth-child(n+2){display:none}.checkMark{right:13px;top:50%;transform:translateY(-50%)}.periodGrid{gap:7px}.period{min-height:68px}.period em{position:static;transform:none;justify-self:center;padding:2px 6px}.benefitPanel{padding-bottom:10px}.benefitPanel h2{font-size:16px}.benefitPanel ul{gap:6px;font-size:12px}.founderBadge,.multiBadge{margin-top:8px;padding:10px;font-size:12px}.summaryPanel{position:static;box-shadow:0 8px 24px rgba(16,24,40,.08)}.summaryPanel h2,.summaryRow.detail,.policyText{display:flex}.summaryPanel .payButton{position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;box-shadow:0 10px 28px rgba(36,87,214,.35)}.summaryTotal strong{font-size:22px}}
   @media (max-width:479px){.eyebrow{font-size:9px}.billingHeader h1{font-size:24px}.statusPanel>div{grid-template-columns:82px 1fr}.statusPanel>div small{display:none}.productTag{font-size:9px}.period strong{font-size:13px}.period span{font-size:10px}.checkoutGrid{gap:9px}}

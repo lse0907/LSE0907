@@ -516,7 +516,7 @@ export default function OpsPage() {
     if (memberRes.error)
       setMsg(`점주 계정 연결 로딩 실패: ${memberRes.error.message}`);
     if (founderRes.error)
-      setMsg(`창립 멤버 정보 로딩 실패: ${founderRes.error.message}`);
+      setMsg(`베타 테스터 정보 로딩 실패: ${founderRes.error.message}`);
 
     const billMap = new Map(billRows.map((x) => [x.store_id, x]));
     const addonMap = new Map(addonRows.map((x) => [x.store_id, x]));
@@ -947,12 +947,12 @@ export default function OpsPage() {
   }, [loadBenefit, selectedStoreId]);
 
   const saveFounderBenefit = async () => {
-    if (!selectedStoreId || !benefitForm.founderReason.trim()) { setMsg("창립 멤버 설정 사유를 입력해 주세요."); return; }
+    if (!selectedStoreId || !benefitForm.founderReason.trim()) { setMsg("베타 테스터 혜택 설정 사유를 입력해 주세요."); return; }
     if (benefitForm.founderAddon && !window.confirm("선결제 베타 테스트 참여를 확인했습니까? 옵션 구독 40% 할인이 적용됩니다.")) return;
     setBenefitSaving(true);
     const response = await fetch("/api/ops/store-benefits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, founderMember: benefitForm.founderMember, founderBase: benefitForm.founderBase, founderAddon: benefitForm.founderAddon, founderReason: benefitForm.founderReason }) });
     const result = await response.json().catch(() => ({}));
-    setMsg(response.ok && result?.ok ? "창립 멤버 혜택을 저장했습니다." : String(result?.message || "혜택 저장에 실패했습니다."));
+    setMsg(response.ok && result?.ok ? "베타 테스터 혜택을 저장했습니다." : String(result?.message || "혜택 저장에 실패했습니다."));
     if (response.ok && result?.ok) { setBenefit(result.benefit); setBenefitEditorOpen(false); }
     setBenefitSaving(false);
   };
@@ -1089,7 +1089,7 @@ export default function OpsPage() {
                     </td>
                     <td>
                       <div className="cellMain">
-                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong>{r.founder_member ? <span className="pill founder" title="창립 멤버 혜택 적용 매장">창립</span> : null}</div>
+                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong>{r.founder_member ? <span className="pill founder" title="베타 테스터 혜택 적용 매장">베타</span> : null}</div>
                         <small>{r.store_id}</small>
                       </div>
                     </td>
@@ -1122,7 +1122,7 @@ export default function OpsPage() {
                     </td>
                     <td>
                       <div className="cellMain">
-                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong>{r.founder_member ? <span className="pill founder" title="창립 멤버 혜택 적용 매장">창립</span> : null}</div>
+                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong>{r.founder_member ? <span className="pill founder" title="베타 테스터 혜택 적용 매장">베타</span> : null}</div>
                         <small>{r.store_id}</small>
                       </div>
                     </td>
@@ -1266,10 +1266,10 @@ export default function OpsPage() {
           </div>
 
           <div className="benefitBox">
-            <div className="sectionTitle">창립 멤버 혜택</div>
-            <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "창립 멤버" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
+            <div className="sectionTitle">베타 테스터 혜택</div>
+            <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "베타 테스터" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
             <div className="benefitSummary"><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
-            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "창립 멤버 혜택 변경" : "조회 전용"}</button>
+            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "베타 테스터 혜택 변경" : "조회 전용"}</button>
           </div>
 
           <div className="quickLinks">
@@ -2976,12 +2976,12 @@ export default function OpsPage() {
       {benefitEditorOpen && selectedStore ? (
         <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setBenefitEditorOpen(false)}>
           <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="founder-editor-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div><div className="sectionTitle" id="founder-editor-title">창립 멤버 혜택 관리</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 현재 상태 {benefit?.baseStatus || "-"}</p></div>
-            <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>창립 멤버로 지정</span></label>
-            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 40% 할인</span></label>
-            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>선결제 옵션 40% 할인</span></label>
-            <textarea className="input" rows={3} maxLength={240} placeholder="창립 멤버 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
-            <button className="btn primary" disabled={benefitSaving || !benefitForm.founderReason.trim()} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "창립 멤버 혜택 저장"}</button>
+            <div><div className="sectionTitle" id="founder-editor-title">베타 테스터 혜택 관리</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 현재 상태 {benefit?.baseStatus || "-"}</p></div>
+            <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>베타 테스터로 지정</span></label>
+            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 베타 40%</span></label>
+            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>온라인 선결제 베타 40%</span></label>
+            <textarea className="input" rows={3} maxLength={240} placeholder="베타 자격 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
+            <button className="btn primary" disabled={benefitSaving || !benefitForm.founderReason.trim()} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "베타 테스터 혜택 저장"}</button>
             <button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>닫기</button>
           </section>
         </div>

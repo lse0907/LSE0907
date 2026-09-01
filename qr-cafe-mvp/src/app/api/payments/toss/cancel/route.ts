@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 
     const paymentRes = await supabaseAdmin
       .from("billing_payments")
-      .select("id, store_id, payment_key, order_id, amount_krw, paid_at, status, base_paid, addon_paid, before_paid_until, after_paid_until, note")
+      .select("id, store_id, payment_key, order_id, amount_krw, paid_at, status, payment_provider, base_paid, addon_paid, before_paid_until, after_paid_until, note")
       .eq("id", paymentId)
       .eq("store_id", storeId)
       .maybeSingle();
@@ -84,14 +84,15 @@ export async function POST(req: NextRequest) {
       return publicCancelError("REFUND_WINDOW_EXPIRED", `결제 후 ${CANCEL_WINDOW_MINUTES}분이 지나 즉시 취소할 수 없습니다.`, 409);
     }
 
-    const pgRes = await supabaseAdmin.from("platform_pg_config").select("secret_key").eq("id", 1).maybeSingle();
-    if (pgRes.error) {
-      return publicCancelError("PG_CONFIG_LOOKUP_FAILED", "환불 처리에 필요한 결제 설정을 확인할 수 없습니다.", 500);
+    const creditOnly = Number(payment.amount_krw || 0) === 0 && String(payment.payment_provider || "") === "service_credit";
+    let secretKey = "";
+    if (!creditOnly) {
+      const pgRes = await supabaseAdmin.from("platform_pg_config").select("secret_key").eq("id", 1).maybeSingle();
+      if (pgRes.error) return publicCancelError("PG_CONFIG_LOOKUP_FAILED", "환불 처리에 필요한 결제 설정을 확인할 수 없습니다.", 500);
+      secretKey = String(pgRes.data?.secret_key || "").trim();
     }
-
-    const secretKey = String(pgRes.data?.secret_key || "").trim();
     const paymentKey = String(payment.payment_key || "").trim();
-    if (!secretKey || !paymentKey) {
+    if (!creditOnly && (!secretKey || !paymentKey)) {
       return publicCancelError("PG_CANCEL_KEY_MISSING", "환불 처리에 필요한 결제 정보가 없습니다.", 400);
     }
 
@@ -127,6 +128,20 @@ export async function POST(req: NextRequest) {
       );
     }
     await markAttempt({ status: "processing" });
+
+    if (creditOnly) {
+      const finalized = await supabaseAdmin.rpc("finalize_store_billing_refund", {
+        p_payment_id: paymentId,
+        p_store_id: storeId,
+        p_cancel_reason: cancelReason,
+      });
+      if (finalized.error || !finalized.data) {
+        await markAttempt({ status: "reconcile_required", public_error_code: "CREDIT_REFUND_FINALIZE_FAILED", internal_error: finalized.error?.message || "credit refund returned no row" });
+        return publicCancelError("CREDIT_REFUND_FINALIZE_FAILED", "크레딧 복원 상태 확인이 필요합니다. 지원센터에 문의해 주세요.", 500);
+      }
+      await markAttempt({ status: "completed", public_error_code: null, internal_error: null, completed_at: new Date().toISOString() });
+      return NextResponse.json({ ok: true, code: "CREDIT_REFUND_COMPLETED", message: "구독 취소와 크레딧 복원이 완료되었습니다." });
+    }
 
     const basicToken = Buffer.from(`${secretKey}:`).toString("base64");
     let cancelRes: Response;
