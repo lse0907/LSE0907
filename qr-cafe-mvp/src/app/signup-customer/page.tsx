@@ -12,6 +12,7 @@ import {
   PASSWORD_POLICY_MESSAGE,
 } from "@/app/lib/passwordPolicy";
 import { signUpWithPasswordPolicy } from "@/app/lib/signUpWithPasswordPolicy";
+import SignupPolicyConsent from "@/app/_components/SignupPolicyConsent";
 
 function SignupCustomerPageInner() {
   const router = useRouter();
@@ -22,6 +23,10 @@ function SignupCustomerPageInner() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [minimumAgeConfirmed, setMinimumAgeConfirmed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyNoticeAcknowledged, setPrivacyNoticeAcknowledged] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [msg, setMsg] = useState<string>(initialError || "");
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +35,8 @@ function SignupCustomerPageInner() {
     const passwordError = getPasswordPolicyError(password);
     if (passwordError) return passwordError;
     if (!name.trim()) return "이름을 입력해주세요.";
-    if (!phone.trim()) return "전화번호를 입력해주세요.";
+    if (!minimumAgeConfirmed) return "만 14세 이상 확인이 필요합니다.";
+    if (!termsAccepted || !privacyNoticeAcknowledged) return "이용정책 동의와 개인정보 처리 안내 확인이 필요합니다.";
     return "";
   };
 
@@ -49,6 +55,14 @@ function SignupCustomerPageInner() {
     const { data: signUpData, error: signUpErr } = await signUpWithPasswordPolicy(
       email.trim(),
       password,
+      {
+        audience: "customer",
+        minimumAgeConfirmed,
+        businessAuthorityConfirmed: false,
+        termsAccepted,
+        privacyNoticeAcknowledged,
+        marketingConsent,
+      },
     );
 
     if (signUpErr) {
@@ -75,7 +89,8 @@ function SignupCustomerPageInner() {
       {
         user_id: userId,
         name: name.trim(),
-        phone: phone.trim(),
+        phone: phone.trim() || null,
+        marketing_consent: marketingConsent,
       },
       { onConflict: "user_id" }
     );
@@ -100,7 +115,21 @@ function SignupCustomerPageInner() {
         <div className="authDivider" />
         <p className="authSectionTitle">기본 정보</p>
         <label className="authField">이름<input className="authInput" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required placeholder="이름을 입력해 주세요" /></label>
-        <label className="authField">전화번호<input className="authInput" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" autoComplete="tel" required placeholder="010-0000-0000" /></label>
+        <label className="authField">전화번호 (선택)<input className="authInput" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="미입력으로도 가입할 수 있습니다" /><span className="authHint">전화번호 등록은 마케팅 수신 동의와 별개입니다.</span></label>
+        <SignupPolicyConsent
+          audience="customer"
+          minimumAgeConfirmed={minimumAgeConfirmed}
+          onMinimumAgeChange={setMinimumAgeConfirmed}
+          businessAuthorityConfirmed={false}
+          onBusinessAuthorityChange={() => undefined}
+          termsAccepted={termsAccepted}
+          onTermsChange={setTermsAccepted}
+          privacyNoticeAcknowledged={privacyNoticeAcknowledged}
+          onPrivacyNoticeChange={setPrivacyNoticeAcknowledged}
+          marketingConsent={marketingConsent}
+          onMarketingConsentChange={setMarketingConsent}
+          disabled={loading}
+        />
         <button type="submit" disabled={loading} className="authButton">
           {loading ? "가입 처리 중..." : "가입하고 혜택 받기"}
         </button>

@@ -1,4 +1,5 @@
 import { supabase } from "@/app/lib/supabaseClient";
+import type { SignupPolicyInput } from "@/app/lib/signupPolicy";
 
 type SignupApiError = {
   code?: string;
@@ -17,7 +18,12 @@ type SignupApiResponse = {
   } | null;
 };
 
-export async function signUpWithPasswordPolicy(email: string, password: string, referralCode = "") {
+export async function signUpWithPasswordPolicy(
+  email: string,
+  password: string,
+  policy: SignupPolicyInput,
+  referralCode = "",
+) {
   let response: Response;
 
   try {
@@ -26,7 +32,7 @@ export async function signUpWithPasswordPolicy(email: string, password: string, 
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email, password, referralCode }),
+      body: JSON.stringify({ email, password, referralCode, ...policy }),
       cache: "no-store",
     });
   } catch {
