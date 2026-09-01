@@ -25,6 +25,7 @@ function SignupOwnerPageInner() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [showAddr, setShowAddr] = useState(false);
   const [msg, setMsg] = useState<string>(initialError || "");
   const [loading, setLoading] = useState(false);
@@ -68,6 +69,7 @@ function SignupOwnerPageInner() {
     const { data: signUpData, error: signUpErr } = await signUpWithPasswordPolicy(
       email.trim(),
       password,
+      referralCode.trim(),
     );
 
     if (signUpErr) {
@@ -78,7 +80,7 @@ function SignupOwnerPageInner() {
 
     if (!signUpData?.sessionEstablished) {
       setLoading(false);
-      setMsg("가입 확인 이메일을 확인한 뒤 로그인해주세요.");
+      setMsg(signUpData?.referralWarning || "가입 확인 이메일을 확인한 뒤 로그인해주세요.");
       return;
     }
 
@@ -108,6 +110,11 @@ function SignupOwnerPageInner() {
       return;
     }
 
+    if (signUpData.referralWarning) {
+      setMsg(signUpData.referralWarning);
+      return;
+    }
+
     router.push("/admin");
   };
 
@@ -118,6 +125,7 @@ function SignupOwnerPageInner() {
         <p className="authSectionTitle">계정 정보</p>
         <label className="authField">이메일<input className="authInput" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" required placeholder="example@email.com" /></label>
         <label className="authField">비밀번호<input className="authInput" value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="new-password" required minLength={PASSWORD_MIN_LENGTH} aria-describedby="owner-password-policy" placeholder="10자 이상 · 소문자/숫자/특수문자" /><span id="owner-password-policy" className="authHint">{PASSWORD_POLICY_MESSAGE}</span></label>
+        <label className="authField">추천코드 (선택)<input className="authInput" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16))} autoCapitalize="characters" autoComplete="off" placeholder="코드 입력 시 첫 구독 3,000원 할인" /></label>
         <div className="authDivider" />
         <p className="authSectionTitle">대표자 정보</p>
         <label className="authField">이름<input className="authInput" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required placeholder="이름을 입력해 주세요" /></label>

@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
     try { parsed = JSON.parse(raw); } catch { parsed = { raw }; }
     if (!tossRes.ok) {
       await supabaseAdmin.from("billing_payment_attempts").update({ status: "failed", public_error_code: "TOSS_CONFIRM_FAILED" }).eq("id", attempt.id);
+      await supabaseAdmin.rpc("release_billing_payment_attempt_v2", { p_attempt_id: attempt.id, p_reason: "PG 승인 실패" });
       return publicError("TOSS_CONFIRM_FAILED", "결제가 승인되지 않았습니다. 카드 승인 여부를 확인해 주세요.", tossRes.status);
     }
 

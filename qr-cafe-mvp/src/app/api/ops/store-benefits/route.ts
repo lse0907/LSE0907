@@ -43,13 +43,13 @@ export async function POST(req: NextRequest) {
     const actor = await requireOpsUser(req, admin, body.trialEndAt !== undefined ? ["master"] : ["master", "billing"]);
     const before = await load(admin, storeId);
     if (typeof body.founderMember === "boolean") {
-      if (!founderReason) return NextResponse.json({ ok: false, message: "창립 멤버 설정 사유를 입력해 주세요." }, { status: 400 });
+      if (!founderReason) return NextResponse.json({ ok: false, message: "베타 테스터 혜택 설정 사유를 입력해 주세요." }, { status: 400 });
       if (!before.billingAccountId) return NextResponse.json({ ok: false, code: "BILLING_ACCOUNT_STORE_MISSING", message: "선택한 매장이 결제 계정에 연결되어 있지 않습니다. 후속 SQL의 연결 복구를 먼저 실행해 주세요." }, { status: 409 });
       const saved = await admin.rpc("set_store_founder_benefit", {
         p_store_id: storeId, p_actor_user_id: actor.userId, p_founder_member: body.founderMember,
         p_founder_base: body.founderBase === true, p_founder_addon: body.founderAddon === true, p_reason: founderReason,
       });
-      if (saved.error) return NextResponse.json({ ok: false, code: "FOUNDER_BENEFIT_SAVE_FAILED", message: `창립 멤버 혜택 저장 실패: ${saved.error.message}` }, { status: 500 });
+      if (saved.error) return NextResponse.json({ ok: false, code: "BETA_BENEFIT_SAVE_FAILED", message: `베타 테스터 혜택 저장 실패: ${saved.error.message}` }, { status: 500 });
     }
     if (body.trialEndAt !== undefined) {
       if (!trialReason) return NextResponse.json({ ok: false, message: "무료 체험 조정 사유를 입력해 주세요." }, { status: 400 });
