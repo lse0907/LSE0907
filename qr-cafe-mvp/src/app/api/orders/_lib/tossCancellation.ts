@@ -24,14 +24,13 @@ async function responseJson(response: Response) {
   }
 }
 
-function essentialPaymentSnapshot(value: unknown): JsonRecord {
+export function essentialPaymentSnapshot(value: unknown): JsonRecord {
   const payment = asRecord(value);
   const cancels = Array.isArray(payment.cancels)
     ? payment.cancels.slice(-10).map((cancel) => {
         const row = asRecord(cancel);
         return {
           cancelAmount: row.cancelAmount ?? null,
-          cancelReason: row.cancelReason ?? null,
           canceledAt: row.canceledAt ?? null,
           cancelStatus: row.cancelStatus ?? null,
           transactionKey: row.transactionKey ?? null,
@@ -45,6 +44,9 @@ function essentialPaymentSnapshot(value: unknown): JsonRecord {
     status: payment.status ?? null,
     totalAmount: payment.totalAmount ?? payment.amount ?? null,
     balanceAmount: payment.balanceAmount ?? null,
+    method: payment.method ?? null,
+    requestedAt: payment.requestedAt ?? null,
+    approvedAt: payment.approvedAt ?? null,
     lastTransactionKey: payment.lastTransactionKey ?? null,
     cancels,
   };

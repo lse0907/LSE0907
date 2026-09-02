@@ -83,5 +83,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return json({ user: data.user }, 200, authCookies);
+  const lifecycle = await supabase
+    .from("account_lifecycle_states")
+    .select("status")
+    .eq("subject_user_id", data.user.id)
+    .maybeSingle();
+  const accountLifecycleStatus = lifecycle.error ? null : String(lifecycle.data?.status || "active");
+
+  return json({ user: data.user, accountLifecycleStatus }, 200, authCookies);
 }

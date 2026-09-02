@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
+import { essentialPaymentSnapshot } from "../../orders/_lib/tossCancellation";
 
 type ConfirmSubscriptionBody = { paymentKey?: unknown; orderId?: unknown; amount?: unknown; storeId?: unknown };
 type AttemptRow = {
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
 
     const approvedUpdate = await supabaseAdmin.from("billing_payment_attempts").update({
-      status: "approved", payment_key: paymentKey, toss_response: parsed, approved_at: new Date().toISOString(), public_error_code: null,
+      status: "approved", payment_key: paymentKey, toss_response: essentialPaymentSnapshot(parsed), approved_at: new Date().toISOString(), public_error_code: null,
     }).eq("id", attempt.id);
     if (approvedUpdate.error) {
       return publicError("APPROVAL_SAVE_FAILED", "결제는 승인되었습니다. 구독 반영을 확인 중이니 다시 결제하지 마세요.", 202);

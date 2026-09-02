@@ -648,6 +648,12 @@ function AdminPageInner() {
         </div>
 
         <div className="topActions">
+          <a
+            className="btn"
+            href={`/account/privacy?from=admin${selectedStoreId ? `&store=${encodeURIComponent(selectedStoreId)}` : ""}`}
+          >
+            계정·개인정보
+          </a>
           <button
             className="btn"
             onClick={() => goPublic("/menu")}
