@@ -54,6 +54,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/staff") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/me") ||
+    pathname.startsWith("/account/privacy") ||
     (pathname.startsWith("/ops") && pathname !== "/ops/login");
 
   const isAuthPage =
@@ -68,10 +69,27 @@ export async function proxy(request: NextRequest) {
   const uid = typeof claims?.sub === "string" ? claims.sub : null;
   const isLoggedIn = Boolean(uid);
 
+  let lifecycleStatus = "active";
+  if (uid) {
+    const lifecycle = await supabase
+      .from("account_lifecycle_states")
+      .select("status")
+      .eq("subject_user_id", uid)
+      .maybeSingle();
+    if (!lifecycle.error && lifecycle.data?.status) lifecycleStatus = String(lifecycle.data.status);
+  }
+
   if (isProtected && !isLoggedIn) {
     const url = request.nextUrl.clone();
     url.pathname = pathname.startsWith("/ops") ? "/ops/login" : "/login";
     url.searchParams.set("next", pathname + (request.nextUrl.search || ""));
+    return redirectWithAuthCookies(url, getResponse());
+  }
+
+  if (isLoggedIn && lifecycleStatus !== "active" && pathname !== "/account/privacy") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/account/privacy";
+    url.search = "?restricted=1";
     return redirectWithAuthCookies(url, getResponse());
   }
 
@@ -126,6 +144,7 @@ export const config = {
     "/staff/:path*",
     "/onboarding/:path*",
     "/me/:path*",
+    "/account/privacy",
     "/ops/:path*",
     "/login",
     "/signup",

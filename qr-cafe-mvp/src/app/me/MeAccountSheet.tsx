@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { CustomerSheet } from "../_components/CustomerSheet";
 import { CustomerIcon } from "../_components/CustomerIcon";
 function maskEmail(value: string) {
@@ -130,6 +131,9 @@ export function MeAccountSheet({
           <button type="button" className="sheetAction" onClick={onEdit}>
             정보 수정
           </button>
+          <Link className="accountSecondary" href="/account/privacy">
+            계정·개인정보 관리
+          </Link>
           <hr />
           <button
             type="button"

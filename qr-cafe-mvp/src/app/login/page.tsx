@@ -10,6 +10,7 @@ import { defaultViewerDestination, resolveViewerAccess } from "@/app/lib/viewerA
 
 type LoginResponse = {
   user?: User;
+  accountLifecycleStatus?: string | null;
   error?: {
     message?: string;
   };
@@ -83,6 +84,11 @@ function LoginPageInner() {
         else window.localStorage.removeItem("qrCafeRememberedLoginId");
       } catch {
         // ignore saved login id write errors
+      }
+
+      if (result.accountLifecycleStatus && result.accountLifecycleStatus !== "active") {
+        window.location.replace("/account/privacy?restricted=1");
+        return;
       }
 
       const safeNext = resolveSafeNext(next);

@@ -1191,6 +1191,13 @@ export function MeDashboard() {
           color: #344054;
           font-weight: 900;
         }
+        .accountSummary > .accountSecondary {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 8px;
+          text-decoration: none;
+        }
         .logoutButton {
           width: 100%;
           display: inline-flex;

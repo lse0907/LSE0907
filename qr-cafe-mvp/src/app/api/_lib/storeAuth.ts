@@ -52,10 +52,22 @@ export function createRequestSupabaseClient(req: NextRequest) {
   });
 }
 
-export async function getOptionalRequestUserId(req: NextRequest) {
+export async function getOptionalRequestUserId(
+  req: NextRequest,
+  options: { allowRestricted?: boolean } = {},
+) {
   const supabase = createRequestSupabaseClient(req);
   const { data, error } = await supabase.auth.getUser();
   if (error || !data?.user?.id) return null;
+  if (!options.allowRestricted) {
+    const lifecycle = await supabase
+      .from("account_lifecycle_states")
+      .select("status")
+      .eq("subject_user_id", data.user.id)
+      .maybeSingle();
+    if (lifecycle.error && !["42P01", "PGRST205"].includes(String(lifecycle.error.code || ""))) return null;
+    if (lifecycle.data && lifecycle.data.status !== "active") return null;
+  }
   return data.user.id;
 }
 

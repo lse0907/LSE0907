@@ -4,6 +4,7 @@ import {
   getCheckoutAttempt,
   orderResponse,
 } from "../../../orders/_lib/checkoutAttempts";
+import { essentialPaymentSnapshot } from "../../../orders/_lib/tossCancellation";
 import { apiErrorResponse, createSupabaseAdminClient } from "../../../_lib/storeAuth";
 
 type ConfirmBody = {
@@ -227,7 +228,7 @@ export async function POST(req: NextRequest) {
         payment_key: paymentKey,
         pg_status: confirmedStatus,
         pg_approved_at: new Date().toISOString(),
-        toss_response: tossResult,
+        toss_response: essentialPaymentSnapshot(tossResult),
         failure_code: null,
         failure_detail: null,
       })
