@@ -33,7 +33,17 @@ export async function GET(req: NextRequest) {
     }
     const status = req.nextUrl.searchParams.get("status") || "open";
     const page = Number(req.nextUrl.searchParams.get("page") || "0");
+    const summary = req.nextUrl.searchParams.get("summary") === "1";
     if ((status !== "open" && status !== "all" && !Object.hasOwn(privacyStatuses, status)) || !Number.isInteger(page) || page < 0 || page > 10000) throw new ApiError(400, "조회 조건을 확인해 주세요.");
+    if (summary) {
+      let summaryQuery = admin.from("privacy_rights_requests").select("requested_at", { count: "exact" }).in("request_type", Object.keys(privacyTypes)).not("subject_user_id", "is", null)
+        .order("requested_at", { ascending: true }).limit(1);
+      if (status === "open") summaryQuery = summaryQuery.in("status", ["received", "identity_verification_required", "in_review", "partially_completed"]);
+      else if (status !== "all") summaryQuery = summaryQuery.eq("status", status);
+      const { data, error, count } = await summaryQuery;
+      if (error) throw new ApiError(500, "개인정보 요청을 불러오지 못했습니다.");
+      return privateResponse({ ok: true, count: count || 0, oldestRequestedAt: data?.[0]?.requested_at || null });
+    }
     let query = admin.from("privacy_rights_requests").select(columns, { count: "exact" }).in("request_type", Object.keys(privacyTypes)).not("subject_user_id", "is", null)
       .order("requested_at", { ascending: true }).order("id", { ascending: true }).range(page * 30, page * 30 + 29);
     if (status === "open") query = query.in("status", ["received", "identity_verification_required", "in_review", "partially_completed"]);

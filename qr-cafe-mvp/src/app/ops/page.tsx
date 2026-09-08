@@ -179,6 +179,8 @@ type KpiSummary = {
 type OpsWorkQueue = {
   businessVerificationCount: number;
   privacyRequestCount: number;
+  oldestBusinessVerificationAt: string | null;
+  oldestPrivacyRequestAt: string | null;
   loading: boolean;
   businessVerificationError: string;
   privacyRequestError: string;
@@ -234,6 +236,14 @@ function remainingDays(raw: string | null) {
   const t = new Date(raw).getTime();
   if (!Number.isFinite(t)) return null;
   return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function queueAgeLabel(raw: string | null, emptyLabel: string) {
+  if (!raw) return emptyLabel;
+  const time = new Date(raw).getTime();
+  if (!Number.isFinite(time)) return "접수 시점을 확인해 주세요.";
+  const days = Math.max(0, Math.floor((Date.now() - time) / (1000 * 60 * 60 * 24)));
+  return days === 0 ? "가장 오래된 요청이 오늘 접수되었습니다." : `가장 오래된 요청이 ${days}일 경과했습니다.`;
 }
 
 function subscriptionStatusLabel(status: string) {
@@ -438,6 +448,8 @@ export default function OpsPage() {
   const [opsWorkQueue, setOpsWorkQueue] = useState<OpsWorkQueue>({
     businessVerificationCount: 0,
     privacyRequestCount: 0,
+    oldestBusinessVerificationAt: null,
+    oldestPrivacyRequestAt: null,
     loading: true,
     businessVerificationError: "",
     privacyRequestError: "",
@@ -448,8 +460,8 @@ export default function OpsPage() {
   const loadOpsWorkQueue = useCallback(async () => {
     setOpsWorkQueue((current) => ({ ...current, loading: true, businessVerificationError: "", privacyRequestError: "" }));
     const [businessResponse, privacyResponse] = await Promise.all([
-      fetch("/api/ops/business-verifications?status=submitted", { cache: "no-store" }),
-      fetch("/api/ops/privacy-requests?status=open&page=0", { cache: "no-store" }),
+      fetch("/api/ops/business-verifications?status=submitted&summary=1", { cache: "no-store" }),
+      fetch("/api/ops/privacy-requests?status=open&summary=1", { cache: "no-store" }),
     ]);
     const [businessPayload, privacyPayload] = await Promise.all([
       businessResponse.json().catch(() => ({})),
@@ -459,6 +471,8 @@ export default function OpsPage() {
     setOpsWorkQueue({
       businessVerificationCount: businessResponse.ok && businessPayload?.ok ? Number(businessPayload.count || 0) : 0,
       privacyRequestCount: privacyResponse.ok && privacyPayload?.ok ? Number(privacyPayload.count || 0) : 0,
+      oldestBusinessVerificationAt: businessResponse.ok && businessPayload?.ok ? String(businessPayload.oldestSubmittedAt || "") || null : null,
+      oldestPrivacyRequestAt: privacyResponse.ok && privacyPayload?.ok ? String(privacyPayload.oldestRequestedAt || "") || null : null,
       loading: false,
       businessVerificationError: businessResponse.ok && businessPayload?.ok ? "" : "사업자 인증 데이터 준비 상태를 확인해야 합니다.",
       privacyRequestError: privacyResponse.ok && privacyPayload?.ok ? "" : "개인정보 요청 데이터를 불러오지 못했습니다.",
@@ -856,7 +870,11 @@ export default function OpsPage() {
     () =>
       rows
         .filter((r) => storeRiskRank(r) >= 6)
-        .sort((a, b) => storeRiskRank(b) - storeRiskRank(a))
+        .sort((a, b) => {
+          const riskDiff = storeRiskRank(b) - storeRiskRank(a);
+          if (riskDiff) return riskDiff;
+          return (usageEndAt(a) || "9999-12-31").localeCompare(usageEndAt(b) || "9999-12-31");
+        })
         .slice(0, 6),
     [rows],
   );
@@ -888,6 +906,15 @@ export default function OpsPage() {
   const noPaymentPaidStores = rows.filter(
     (r) => r.base_plan_status === "active" && r.paid_count === 0,
   );
+  const subscriptionCheckCount =
+    noPaymentPaidStores.length + kpi.expiringSoonStores;
+  const opsQueueCount =
+    opsWorkQueue.businessVerificationCount + opsWorkQueue.privacyRequestCount;
+  const opsQueueHasError = Boolean(
+    opsWorkQueue.businessVerificationError || opsWorkQueue.privacyRequestError,
+  );
+  const immediateActionCount =
+    kpi.openTickets + opsQueueCount + subscriptionCheckCount;
   const filteredTickets = useMemo(() => {
     return tickets
       .filter(
@@ -1534,6 +1561,39 @@ export default function OpsPage() {
           color: #6b7280;
           font-size: clamp(12px, 0.8vw, 13px);
         }
+        .opsPulse {
+          display:grid;
+          grid-template-columns:minmax(0,1fr) auto;
+          gap:20px;
+          align-items:center;
+          border-color:#c9dcf6;
+          background:linear-gradient(115deg,#f7fbff 0%,#fff 62%);
+        }
+        .opsPulseCopy { display:grid; gap:6px; }
+        .opsPulseLabel { display:inline-flex; align-items:center; gap:7px; color:#245797; font-size:11px; font-weight:950; letter-spacing:.08em; }
+        .opsPulseLabel svg { width:15px; height:15px; }
+        .opsPulse h2 { margin:0; font-size:clamp(19px,1.7vw,24px); letter-spacing:-.025em; }
+        .opsPulse p { margin:0; color:#64748b; font-size:13px; line-height:1.5; }
+        .opsPulseCount { display:grid; justify-items:end; gap:3px; text-align:right; }
+        .opsPulseCount strong { font-size:clamp(28px,3vw,38px); line-height:1; letter-spacing:-.05em; }
+        .opsPulseCount span { color:#64748b; font-size:12px; font-weight:850; }
+        .immediateActionGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+        .immediateAction {
+          min-width:0; display:grid; gap:8px; padding:14px; border:1px solid #dfe6ef; border-radius:14px;
+          background:#fff; color:var(--ops-charcoal); text-align:left; cursor:pointer;
+          transition:border-color .16s ease, background .16s ease, transform .16s ease;
+        }
+        .immediateAction:hover { border-color:#8eadd3; background:#f6faff; transform:translateY(-1px); }
+        .immediateAction:focus-visible { outline:3px solid #93c5fd; outline-offset:2px; }
+        .immediateAction:disabled { cursor:default; opacity:.72; }
+        .immediateAction:disabled:hover { border-color:#f4d06c; background:#fffaf0; transform:none; }
+        .immediateAction.warn { border-color:#f4d06c; background:#fffaf0; }
+        .immediateAction.danger { border-color:#fecaca; background:#fff8f8; }
+        .immediateActionTitle { display:flex; align-items:center; gap:7px; font-size:14px; font-weight:950; }
+        .immediateActionTitle svg { width:16px; height:16px; color:#245797; flex:0 0 auto; }
+        .immediateActionMeta { display:flex; justify-content:space-between; gap:8px; align-items:end; }
+        .immediateAction small { color:#667085; font-size:11px; line-height:1.35; }
+        .immediateAction b { font-size:21px; white-space:nowrap; }
         .tabs {
           display: flex;
           gap: 8px;
@@ -1954,36 +2014,6 @@ export default function OpsPage() {
           font-weight: 950;
           white-space: nowrap;
         }
-        .opsWorkCard { padding:18px; }
-        .opsWorkList { display:grid; gap:9px; }
-        .opsWorkItem {
-          width:100%;
-          display:grid;
-          grid-template-columns:minmax(0,1fr) auto;
-          gap:16px;
-          align-items:center;
-          padding:14px 15px;
-          border:1px solid #dfe6ef;
-          border-radius:14px;
-          background:#f8fafc;
-          color:var(--ops-charcoal);
-          text-align:left;
-          cursor:pointer;
-          transition:border-color .16s ease, background .16s ease, transform .16s ease;
-        }
-        .opsWorkItem:hover { border-color:#8eadd3; background:#f2f7ff; transform:translateY(-1px); }
-        .opsWorkItem:focus-visible { outline:3px solid #93c5fd; outline-offset:2px; }
-        .opsWorkItem:disabled { cursor:default; opacity:.72; }
-        .opsWorkItem:disabled:hover { border-color:#f4d06c; background:#fffaf0; transform:none; }
-        .opsWorkItem.warn { border-color:#f4d06c; background:#fffaf0; }
-        .opsWorkItem.danger { border-color:#fecaca; background:#fff8f8; }
-        .opsWorkCopy { display:grid; gap:4px; min-width:0; }
-        .opsWorkCopy strong { display:inline-flex; align-items:center; gap:7px; font-size:15px; font-weight:950; }
-        .opsWorkCopy strong svg { width:16px; height:16px; color:#245797; }
-        .opsWorkCopy small { color:#667085; font-size:12px; line-height:1.45; }
-        .opsWorkCount { display:grid; gap:3px; min-width:70px; text-align:right; }
-        .opsWorkCount b { font-size:20px; font-weight:950; white-space:nowrap; }
-        .opsWorkCount small { color:#667085; font-size:10px; font-weight:850; white-space:nowrap; }
         .panelHeader {
           display: flex;
           justify-content: space-between;
@@ -2062,13 +2092,20 @@ export default function OpsPage() {
           .businessGrid,
           .ticketStats,
           .refundSummary,
-          .subscriptionKpis {
+          .subscriptionKpis,
+          .immediateActionGrid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
           .subscriptionToolbar { grid-template-columns:1fr 1fr; }
           .detailCard {
             position: static;
           }
+        }
+        @media (max-width: 920px) {
+          .hero { align-items:flex-start; }
+          .opsAccount { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:min(100%,360px); }
+          .opsAccount > div { grid-column:1 / -1; text-align:left; }
+          .opsAccount .btn { width:100%; }
         }
         @media (max-width: 720px) {
           .wrap {
@@ -2091,9 +2128,12 @@ export default function OpsPage() {
           }
           .grid3,
           .businessGrid,
-          .ticketStats {
+          .ticketStats,
+          .immediateActionGrid {
             grid-template-columns: 1fr;
           }
+          .opsPulse { grid-template-columns:1fr; }
+          .opsPulseCount { justify-items:start; text-align:left; }
           .todoCard {
             grid-template-columns: 1fr;
           }
@@ -2118,7 +2158,7 @@ export default function OpsPage() {
           .refundActions { min-width:150px; }
           .modalActions { display:grid; grid-template-columns:1fr; }
           .modalActions .btn { width:100%; }
-          .opsAccount { width:100%; }
+          .opsAccount { width:100%; display:flex; }
           .opsAccount > div { text-align:left; width:100%; }
           .opsAccount .btn { flex:1; min-height:44px; }
           .modalBackdrop { align-items:end; padding:10px; }
@@ -2147,6 +2187,41 @@ export default function OpsPage() {
         <section className="card">
           <p className="muted">{msg}</p>
         </section>
+      ) : null}
+
+      {!loading && activeTab === "overview" ? (
+        <>
+          <section className="card opsPulse" aria-label="오늘의 운영 상태">
+            <div className="opsPulseCopy">
+              <span className="opsPulseLabel"><OpsIcon name="dashboard" />TODAY&apos;S OPS</span>
+              <h2>{opsQueueHasError ? "운영 데이터 확인이 필요합니다" : immediateActionCount > 0 ? "먼저 처리할 운영 업무가 있습니다" : "지금 처리할 운영 업무가 없습니다"}</h2>
+              <p>{opsQueueHasError ? "인증 또는 개인정보 요청 현황을 불러오지 못했습니다. 해당 메뉴에서 데이터를 확인해 주세요." : immediateActionCount > 0 ? "문의, 권한 검토, 개인정보 요청, 구독·결제 점검을 우선순위로 모았습니다." : "대기 중인 문의·권한 검토·개인정보 요청·구독 점검 항목이 없습니다."}</p>
+            </div>
+            <div className="opsPulseCount">
+              <strong>{opsQueueHasError ? "!" : immediateActionCount.toLocaleString()}</strong>
+              <span>{opsQueueHasError ? "데이터 확인 필요" : "우선 확인 항목"}</span>
+            </div>
+          </section>
+
+          <section className="immediateActionGrid" aria-label="즉시 처리 업무">
+            <button className={`immediateAction ${kpi.urgentTickets > 0 ? "danger" : kpi.openTickets > 0 ? "warn" : ""}`} onClick={() => setActiveTab("tickets")}>
+              <span className="immediateActionTitle"><OpsIcon name="support" />문의·장애</span>
+              <span className="immediateActionMeta"><small>{kpi.urgentTickets > 0 ? `긴급 ${kpi.urgentTickets.toLocaleString()}건을 먼저 확인하세요.` : "미처리 문의와 장애를 확인합니다."}</small><b>{kpi.openTickets.toLocaleString()}건</b></span>
+            </button>
+            <button className={`immediateAction ${opsWorkQueue.businessVerificationCount > 0 || opsWorkQueue.businessVerificationError ? "warn" : ""}`} disabled={Boolean(opsWorkQueue.businessVerificationError)} onClick={() => router.push("/ops/business-verifications")}>
+              <span className="immediateActionTitle"><OpsIcon name="shield" />사업자 인증</span>
+              <span className="immediateActionMeta"><small>{opsWorkQueue.businessVerificationError || queueAgeLabel(opsWorkQueue.oldestBusinessVerificationAt, "매장 생성 전 사업체와 증빙을 검토합니다.")}</small><b>{opsWorkQueue.loading || opsWorkQueue.businessVerificationError ? "-" : `${opsWorkQueue.businessVerificationCount.toLocaleString()}건`}</b></span>
+            </button>
+            <button className={`immediateAction ${opsWorkQueue.privacyRequestCount > 0 || opsWorkQueue.privacyRequestError ? "danger" : ""}`} disabled={Boolean(opsWorkQueue.privacyRequestError)} onClick={() => router.push("/ops/privacy-requests")}>
+              <span className="immediateActionTitle"><OpsIcon name="privacy" />개인정보 요청</span>
+              <span className="immediateActionMeta"><small>{opsWorkQueue.privacyRequestError || queueAgeLabel(opsWorkQueue.oldestPrivacyRequestAt, "요청 범위와 처리 기한을 확인합니다.")}</small><b>{opsWorkQueue.loading || opsWorkQueue.privacyRequestError ? "-" : `${opsWorkQueue.privacyRequestCount.toLocaleString()}건`}</b></span>
+            </button>
+            <button className={`immediateAction ${subscriptionCheckCount > 0 ? "warn" : ""}`} onClick={() => setActiveTab("stores")}>
+              <span className="immediateActionTitle"><OpsIcon name="card" />구독·결제 점검</span>
+              <span className="immediateActionMeta"><small>결제 없는 유료 매장과 만료 임박 매장을 확인합니다.</small><b>{subscriptionCheckCount.toLocaleString()}개</b></span>
+            </button>
+          </section>
+        </>
       ) : null}
 
       <section className="kpis">
@@ -2214,36 +2289,14 @@ export default function OpsPage() {
             <article className="card">
                         <div className="panelHeader">
                           <div>
-                            <div className="sectionTitle">오늘 확인할 일</div>
+                            <div className="sectionTitle">오늘 점검할 성장 신호</div>
                             <p>
-                              사업 운영에 바로 영향을 줄 수 있는 항목만 우선순위로
-                              정리했습니다.
+                              즉시 처리 업무와 분리해, 사용 저하와 전환 기회를 살핍니다.
                             </p>
                           </div>
                           <span className="pill warn">운영 체크</span>
                         </div>
                         <div className="todoList">
-                          <div
-                            className={`todoCard ${kpi.urgentTickets > 0 ? "danger" : kpi.openTickets > 0 ? "warn" : "ok"}`}
-                          >
-                            <div>
-                              <h3>문의/장애 대응</h3>
-                              <p>
-                                미처리 문의와 긴급 문의를 먼저 확인해 고객 불편을 줄입니다.
-                              </p>
-                            </div>
-                            <div className="row">
-                              <strong className="todoCount">
-                                {kpi.openTickets.toLocaleString()}건
-                              </strong>
-                              <button
-                                className="btn primary"
-                                onClick={() => setActiveTab("tickets")}
-                              >
-                                문의 확인
-                              </button>
-                            </div>
-                          </div>
                           <div
                             className={`todoCard ${paidNoOrderStores.length > 0 ? "warn" : "ok"}`}
                           >
@@ -2287,79 +2340,16 @@ export default function OpsPage() {
                               </button>
                             </div>
                           </div>
-                          <div
-                            className={`todoCard ${noPaymentPaidStores.length > 0 || kpi.expiringSoonStores > 0 ? "warn" : "ok"}`}
-                          >
-                            <div>
-                              <h3>구독/결제 점검</h3>
-                              <p>
-                                결제 없는 유료 매장과 만료 임박 매장을 확인해 매출 누락을
-                                방지합니다.
-                              </p>
-                            </div>
-                            <div className="row">
-                              <strong className="todoCount">
-                                {(
-                                  noPaymentPaidStores.length + kpi.expiringSoonStores
-                                ).toLocaleString()}
-                                개
-                              </strong>
-                              <button
-                                className="btn"
-                                onClick={() => setActiveTab("stores")}
-                              >
-                                결제 확인
-                              </button>
-                            </div>
-                          </div>
                         </div>
                       </article>
 
             <article className="card">
-                        <div className="sectionTitle">이탈 위험 매장</div>
-                        <div className="storeMiniList">
-                          {paidNoOrderStores.slice(0, 5).map((r) => (
-                            <div
-                              key={r.store_id}
-                              className="storeMini"
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => {
-                                setSelectedStoreId(r.store_id);
-                                setActiveTab("stores");
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  setSelectedStoreId(r.store_id);
-                                  setActiveTab("stores");
-                                }
-                              }}
-                            >
-                              <div className="row">
-                                <span className="pill warn">주문없음</span>
-                                <strong>{r.store_name || r.store_id}</strong>
-                              </div>
-                              <p className="muted">
-                                유료 구독 중이지만 이번 달 주문이 없어 사용 현황 확인이
-                                필요합니다.
-                              </p>
-                            </div>
-                          ))}
-                          {paidNoOrderStores.length === 0 ? (
-                            <p className="muted">
-                              현재 유료 구독 중 주문 없는 매장이 없습니다.
-                            </p>
-                          ) : null}
-                        </div>
-                      </article>
-
-            <article className="card">
-                        <div className="sectionTitle">우선 점검 신호</div>
+                        <div className="sectionTitle">주의할 매장</div>
                         <div className="storeMiniList">
                           {riskStores.length === 0 ? (
                             <p className="muted">현재 우선 점검할 위험 신호가 없습니다.</p>
                           ) : null}
-                          {riskStores.map((r) => (
+                          {riskStores.map((r, index) => (
                             <div
                               key={r.store_id}
                               className="storeMini"
@@ -2377,6 +2367,7 @@ export default function OpsPage() {
                               }}
                             >
                               <div className="row">
+                                <span className="pill danger">우선 {index + 1}</span>
                                 <span className="pill warn">{storeRiskLabel(r)}</span>
                                 <strong>{r.store_name || r.store_id}</strong>
                               </div>
@@ -2387,27 +2378,6 @@ export default function OpsPage() {
                       </article>
           </div>
           <div className="dashboardColumn">
-            <article className="card opsWorkCard">
-              <div className="panelHeader">
-                <div>
-                  <div className="sectionTitle">운영 요청</div>
-                  <p>서비스 권한과 개인정보 처리에 직접 연결되는 대기 업무입니다.</p>
-                </div>
-                <span className={`pill ${opsWorkQueue.businessVerificationCount + opsWorkQueue.privacyRequestCount > 0 || opsWorkQueue.businessVerificationError || opsWorkQueue.privacyRequestError ? "warn" : "ok"}`}>
-                  {opsWorkQueue.loading ? "확인 중" : opsWorkQueue.businessVerificationCount + opsWorkQueue.privacyRequestCount > 0 ? "처리 필요" : opsWorkQueue.businessVerificationError || opsWorkQueue.privacyRequestError ? "확인 필요" : "대기 없음"}
-                </span>
-              </div>
-              <div className="opsWorkList">
-                <button className={`opsWorkItem ${opsWorkQueue.businessVerificationCount > 0 || opsWorkQueue.businessVerificationError ? "warn" : ""}`} disabled={Boolean(opsWorkQueue.businessVerificationError)} onClick={() => router.push("/ops/business-verifications")}>
-                  <span className="opsWorkCopy"><strong><OpsIcon name="shield" />사업자 인증</strong><small>{opsWorkQueue.businessVerificationError || "사업체 정보와 증빙을 검토해 매장 생성 권한을 결정합니다."}</small></span>
-                  <span className="opsWorkCount"><b>{opsWorkQueue.loading || opsWorkQueue.businessVerificationError ? "-" : opsWorkQueue.businessVerificationCount.toLocaleString()}건</b><small>{opsWorkQueue.businessVerificationError ? "데이터 확인 필요" : "검토 대기"}</small></span>
-                </button>
-                <button className={`opsWorkItem ${opsWorkQueue.privacyRequestCount > 0 || opsWorkQueue.privacyRequestError ? "danger" : ""}`} disabled={Boolean(opsWorkQueue.privacyRequestError)} onClick={() => router.push("/ops/privacy-requests")}>
-                  <span className="opsWorkCopy"><strong><OpsIcon name="privacy" />개인정보 요청</strong><small>{opsWorkQueue.privacyRequestError || "회원 요청의 범위와 처리 기한을 확인하고 결과를 안내합니다."}</small></span>
-                  <span className="opsWorkCount"><b>{opsWorkQueue.loading || opsWorkQueue.privacyRequestError ? "-" : opsWorkQueue.privacyRequestCount.toLocaleString()}건</b><small>{opsWorkQueue.privacyRequestError ? "데이터 확인 필요" : "처리할 요청"}</small></span>
-                </button>
-              </div>
-            </article>
             <article className="card">
                         <div className="panelHeader">
                           <div>
