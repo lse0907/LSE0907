@@ -27,6 +27,17 @@ export async function GET(req: NextRequest) {
   try {
     const admin = createSupabaseAdminClient(); await requireOpsUser(req, admin, ["master", "billing"]);
     const storeId = String(new URL(req.url).searchParams.get("storeId") || "").trim();
+    if (new URL(req.url).searchParams.get("summary") === "1") {
+      const { data, error } = await admin
+        .from("billing_account_stores")
+        .select("store_id,billing_accounts!inner(founder_member)");
+      if (error) throw new Error("베타 테스터 요약 정보를 불러오지 못했습니다.");
+      const rows = (data || []).map((row) => {
+        const account = Array.isArray(row.billing_accounts) ? row.billing_accounts[0] : row.billing_accounts;
+        return { storeId: String(row.store_id), founderMember: account?.founder_member === true };
+      });
+      return NextResponse.json({ ok: true, rows });
+    }
     if (!storeId) return NextResponse.json({ ok: false, message: "매장을 선택해 주세요." }, { status: 400 });
     return NextResponse.json({ ok: true, benefit: await load(admin, storeId) });
   } catch (error: unknown) { return apiErrorResponse(error); }

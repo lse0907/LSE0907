@@ -48,13 +48,16 @@ function redirectWithAuthCookies(url: URL, authResponse: NextResponse) {
 
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
+  const isLocalPrivacyPreview = pathname === "/account/privacy"
+    && searchParams.get("preview") === "1"
+    && ["localhost", "127.0.0.1"].includes(request.nextUrl.hostname);
 
   const isProtected =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/staff") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/me") ||
-    pathname.startsWith("/account/privacy") ||
+    (pathname.startsWith("/account/privacy") && !isLocalPrivacyPreview) ||
     (pathname.startsWith("/ops") && pathname !== "/ops/login");
 
   const isAuthPage =

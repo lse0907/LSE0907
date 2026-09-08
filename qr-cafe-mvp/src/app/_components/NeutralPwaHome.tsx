@@ -36,6 +36,13 @@ export function NeutralPwaHome({
     access.canUseStaff ? { key: "staff", label: "주문 운영", description: "주문 확인 · 처리", badge: "STAFF", href: "/staff", icon: "orders", tone: "staff" } : null,
     access.canUseOps ? { key: "ops", label: "플랫폼 관리", description: "서비스 · 매장 지원", badge: access.isOpsMaster ? "OPS MASTER" : "OPS", href: "/ops", icon: "platform", tone: "ops" } : null,
   ].filter((item): item is Workspace => item !== null) : [];
+  const serviceStarter = access && !access.isSharedStoreAccount
+    ? !access.canUseAdmin
+      ? { label: "사업자 서비스 시작하기", description: "사업자 인증 후 매장을 운영하세요.", href: "/account/services/add/owner", icon: "store" as CustomerIconName, badge: "START BUSINESS" }
+      : !access.canUseCustomer
+        ? { label: "고객 기능 시작하기", description: "주문 · 포인트 · 쿠폰을 이용하세요.", href: "/account/services/add/customer", icon: "user" as CustomerIconName, badge: "ADD SERVICE" }
+        : null
+    : null;
 
   return (
     <main className="neutralHome">
@@ -77,6 +84,13 @@ export function NeutralPwaHome({
                   ))}
                 </div>
               ) : <p className="workspaceEmpty">사용 가능한 공간을 확인하지 못했어요. 고객 지원이 필요하면 계정 정보를 확인해 주세요.</p>}
+              {serviceStarter ? (
+                <button type="button" className="serviceStarter" onClick={() => onNavigate(serviceStarter.href)}>
+                  <span className="starterIcon"><CustomerIcon name={serviceStarter.icon} size={20} /></span>
+                  <span><small>{serviceStarter.badge}</small><strong>{serviceStarter.label}</strong><em>{serviceStarter.description}</em></span>
+                  <span className="cardArrow" aria-hidden="true"><CustomerIcon name="chevronRight" size={16} /></span>
+                </button>
+              ) : null}
               <button className="logoutAction" type="button" onClick={onLogout}><CustomerIcon name="logout" size={16} /> 로그아웃</button>
             </section>
           ) : (
@@ -127,6 +141,9 @@ export function NeutralPwaHome({
         .workspaceText strong { font-size: 15px; }
         .workspaceText em { overflow: hidden; color: #6b7280; font-size: 11px; font-style: normal; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
         .workspaceEmpty { margin: 0; padding: 14px; border-radius: 14px; background: #f7f9fc; color: #667085; font-size: 12px; line-height: 1.6; }
+        .serviceStarter { width:100%; min-height:76px; display:grid; grid-template-columns:40px minmax(0,1fr) auto; align-items:center; gap:11px; padding:12px 14px; border:1px dashed #8eadd3; border-radius:16px; background:linear-gradient(135deg,#f8fbff,#eef5ff); color:#172033; text-align:left; cursor:pointer; }
+        .starterIcon { width:40px; height:40px; display:grid; place-items:center; border-radius:13px; background:#173e73; color:#fff; }
+        .serviceStarter>span:nth-child(2){min-width:0;display:grid;gap:2px}.serviceStarter small{color:#54729c;font-size:9px;font-weight:950;letter-spacing:.1em}.serviceStarter strong{font-size:14px}.serviceStarter em{color:#6b7280;font-size:11px;font-style:normal;font-weight:650}
         .logoutAction { min-height: 44px; justify-self: end; display: flex; align-items: center; gap: 6px; padding: 7px 0 7px 12px; border: 0; background: transparent; color: #6b7280; font-size: 11px; font-weight: 750; cursor: pointer; }
         .accountPrompt { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 20px; border-top: 1px solid #e4e8ef; }
         .accountPrompt strong { font-size: 14px; }

@@ -1,44 +1,88 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
 import RionBrand from "@/app/components/RionBrand";
 
+const OPS_LOGIN_TIMEOUT_MS = 15_000;
+
+type OpsLoginResponse = {
+  user?: {
+    app_metadata?: Record<string, unknown>;
+  };
+  error?: {
+    message?: string;
+  };
+};
+
+class OpsLoginTimeoutError extends Error {
+  constructor() {
+    super("OPS login timed out");
+    this.name = "OpsLoginTimeoutError";
+  }
+}
+
+function withLoginTimeout<T>(promise: PromiseLike<T>) {
+  let timer: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(() => reject(new OpsLoginTimeoutError()), OPS_LOGIN_TIMEOUT_MS);
+  });
+
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => {
+    if (timer !== undefined) window.clearTimeout(timer);
+  });
+}
+
 export default function OpsLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void supabase.auth.getUser().then(({ data }) => {
-        if (String(data.user?.app_metadata?.role || "") === "ops") router.replace("/ops");
-      });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [router]);
-
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setLoading(true);
     setMessage("");
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error || !data.user) {
-      setMessage("운영자 계정 정보를 확인해 주세요.");
+
+    const signInRequest = fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), password }),
+    }).then(async (response) => ({
+      ok: response.ok,
+      result: (await response.json()) as OpsLoginResponse,
+    }));
+    let timedOut = false;
+
+    void signInRequest.then(async ({ ok, result }) => {
+      if (!timedOut || !ok || !result.user) return;
+      if (String(result.user.app_metadata?.role || "") !== "ops") {
+        await supabase.auth.signOut();
+        return;
+      }
+      window.location.replace("/ops");
+    }).catch(() => undefined);
+
+    try {
+      const { ok, result } = await withLoginTimeout(signInRequest);
+      if (!ok || !result.user) {
+        setMessage(result.error?.message || "운영자 계정 정보를 확인해 주세요.");
+        return;
+      }
+      if (String(result.user.app_metadata?.role || "") !== "ops") {
+        await supabase.auth.signOut();
+        setMessage("OPS 권한이 등록된 운영자 계정만 접근할 수 있습니다.");
+        return;
+      }
+      window.location.assign("/ops");
+    } catch (error) {
+      timedOut = error instanceof OpsLoginTimeoutError;
+      setMessage(timedOut
+        ? "인증 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요. 뒤늦게 로그인이 완료되면 OPS 홈으로 자동 이동합니다."
+        : "로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
       setLoading(false);
-      return;
     }
-    if (String(data.user.app_metadata?.role || "") !== "ops") {
-      await supabase.auth.signOut();
-      setMessage("OPS 권한이 등록된 운영자 계정만 접근할 수 있습니다.");
-      setLoading(false);
-      return;
-    }
-    router.replace("/ops");
-    router.refresh();
   };
 
   return (

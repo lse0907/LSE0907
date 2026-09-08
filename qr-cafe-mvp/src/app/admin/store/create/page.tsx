@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { setCurrentStoreId } from "@/app/lib/currentStore";
@@ -40,6 +40,9 @@ export default function AdminStoreCreatePage() {
   );
 
   const [bizNo, setBizNo] = useState("");
+  const [businessEntityId, setBusinessEntityId] = useState("");
+  const [businesses, setBusinesses] = useState<Array<{ id: string; legal_name: string; business_number: string }>>([]);
+  const [businessLoading, setBusinessLoading] = useState(true);
   const [industry, setIndustry] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -52,6 +55,26 @@ export default function AdminStoreCreatePage() {
   const [msg, setMsg] = useState("");
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const response = await fetch("/api/account/roles", { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as { businesses?: Array<{ business_entities?: { id?: string; legal_name?: string; business_number?: string; verification_status?: string } | Array<{ id?: string; legal_name?: string; business_number?: string; verification_status?: string }> | null }> };
+      const available = (payload.businesses || []).flatMap((membership) => {
+        const raw = membership.business_entities;
+        const entity = Array.isArray(raw) ? raw[0] : raw;
+        return entity && ["approved", "legacy_verified"].includes(String(entity.verification_status)) && entity.id
+          ? [{ id: String(entity.id), legal_name: String(entity.legal_name || "인증된 사업체"), business_number: String(entity.business_number || "") }]
+          : [];
+      });
+      setBusinesses(available);
+      if (available[0]) {
+        setBusinessEntityId(available[0].id);
+        setBizNo(available[0].business_number);
+      }
+      setBusinessLoading(false);
+    })();
+  }, []);
 
   const overlayBg = useMemo(() => {
     const aTop = 0.1 + 0.35 * (overlayStrength / 100);
@@ -69,7 +92,7 @@ export default function AdminStoreCreatePage() {
   const validate = () => {
     if (!storeName.trim()) return "매장명을 입력해주세요.";
     if (!storeId.trim()) return "매장 ID를 입력해주세요.";
-    if (!bizNo.trim()) return "사업자등록번호를 입력해주세요.";
+    if (!businessEntityId) return "인증 완료된 사업체를 선택해 주세요.";
     if (!industry.trim()) return "업종을 입력해주세요.";
     if (!phone.trim()) return "매장 전화번호를 입력해주세요.";
     if (!address.trim()) return "매장 주소를 검색해서 선택해주세요.";
@@ -176,6 +199,7 @@ export default function AdminStoreCreatePage() {
           store_id: id,
           store_name: name,
           owner_user_id: userId,
+          business_entity_id: businessEntityId,
         } as any,
       ]);
 
@@ -183,7 +207,7 @@ export default function AdminStoreCreatePage() {
         if (String(insStore.error.message || "").includes("owner_user_id")) {
           const retry = await supabase
             .from("stores")
-            .insert([{ store_id: id, store_name: name } as any]);
+            .insert([{ store_id: id, store_name: name, business_entity_id: businessEntityId } as any]);
           if (retry.error) throw retry.error;
         } else {
           throw insStore.error;
@@ -940,17 +964,30 @@ export default function AdminStoreCreatePage() {
           <section className="card" aria-labelledby="store-create-business-title">
           <h2 className="cardTitle" id="store-create-business-title">사업·운영 정보</h2>
 
+          {!businessLoading && businesses.length === 0 ? (
+            <div className="alert">인증 완료된 사업체가 없습니다. <a href="/account/business/start">사업자 인증을 먼저 완료해 주세요.</a></div>
+          ) : null}
+
           <div className="extraInfoGrid">
             <div className="field">
               <div className="label">
-                사업자등록번호 <span className="pill">필수</span>
+                인증된 사업체 <span className="pill">필수</span>
               </div>
-              <input
+              <select
                 className="input"
-                value={bizNo}
-                onChange={(e) => setBizNo(e.target.value)}
-                placeholder="예: 000-00-00000"
-              />
+                value={businessEntityId}
+                disabled={businessLoading || businesses.length === 0}
+                onChange={(e) => {
+                  const selected = businesses.find((business) => business.id === e.target.value);
+                  setBusinessEntityId(e.target.value);
+                  setBizNo(selected?.business_number || "");
+                }}
+              >
+                {businessLoading ? <option value="">사업체 확인 중...</option> : null}
+                {!businessLoading && businesses.length === 0 ? <option value="">인증된 사업체 없음</option> : null}
+                {businesses.map((business) => <option key={business.id} value={business.id}>{business.legal_name} · {business.business_number}</option>)}
+              </select>
+              <div className="hint">사업자등록번호는 인증 정보에서 자동으로 연결되며 이 화면에서 변경할 수 없습니다.</div>
             </div>
 
             <div className="field">
@@ -996,7 +1033,7 @@ export default function AdminStoreCreatePage() {
             <button
               className="btn btnPrimary"
               onClick={onCreate}
-              disabled={creating}
+              disabled={creating || businessLoading || businesses.length === 0}
             >
               {creating ? "생성 중..." : "매장 생성"}
             </button>
