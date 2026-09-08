@@ -115,7 +115,7 @@ function SignupOwnerPageInner() {
   };
 
   return (
-    <AuthShell eyebrow="OWNER ACCOUNT" title="점주 회원가입" description="점주 계정을 만든 다음 매장 정보와 메뉴 설정을 이어갈 수 있습니다." footer={<><Link href="/signup">가입 유형 다시 선택</Link><span> · </span><Link href="/login">로그인</Link></>}>
+    <AuthShell eyebrow="BUSINESS ACCOUNT" title="사업자 회원가입" description="사업자 계정을 만든 다음 매장 정보와 메뉴 설정을 이어갈 수 있습니다." footer={<><Link href="/signup">가입 유형 다시 선택</Link><span> · </span><Link href="/login">로그인</Link></>}>
       {msg ? <p className="authMessage" role="alert">{msg}</p> : null}
       <form onSubmit={onSubmit}>
         <p className="authSectionTitle">계정 정보</p>
@@ -142,7 +142,7 @@ function SignupOwnerPageInner() {
           disabled={loading}
         />
         <button type="submit" disabled={loading} className="authButton">
-          {loading ? "가입 처리 중..." : "점주 계정 만들기"}
+          {loading ? "가입 처리 중..." : "사업자 계정 만들기"}
         </button>
       </form>
 

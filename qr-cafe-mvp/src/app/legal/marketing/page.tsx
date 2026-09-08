@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ audience?: string }> }) {
   const params = await searchParams;
-  const audience = params.audience === "owner" ? "점주" : params.audience === "customer" ? "고객" : "회원";
+  const audience = params.audience === "owner" ? "사업자 회원" : params.audience === "customer" ? "고객" : "회원";
 
   return (
     <LegalPolicyPage title={`${audience} 마케팅 정보 수신 안내`} description="리온랩스가 보내는 혜택·이벤트 안내를 위한 선택 동의입니다.">

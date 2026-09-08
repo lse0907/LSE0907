@@ -7,6 +7,7 @@ import {
 } from "../../_lib/storeAuth";
 
 type Audience = "customer" | "owner";
+type RoleRow = { audience: Audience; status: string };
 
 function assertSameOrigin(req: NextRequest) {
   const origin = req.headers.get("origin");
@@ -21,23 +22,17 @@ async function requireUser(req: NextRequest) {
   return userId;
 }
 
-async function resolveAudience(userId: string): Promise<Audience> {
+async function resolveRoles(userId: string): Promise<RoleRow[]> {
   const admin = createSupabaseAdminClient();
-  const { data: confirmation, error } = await admin
-    .from("signup_policy_confirmations")
-    .select("audience")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) throw new ApiError(500, "계정 유형을 확인하지 못했습니다.", "AUDIENCE_CHECK_FAILED");
-  if (confirmation?.audience === "owner") return "owner";
-  if (confirmation?.audience === "customer") return "customer";
+  const { data, error } = await admin.from("account_roles").select("audience,status").eq("user_id", userId);
+  if (error) throw new ApiError(500, "계정 기능을 확인하지 못했습니다.", "ACCOUNT_ROLE_CHECK_FAILED");
+  return (data || []).filter((row): row is RoleRow => row.audience === "customer" || row.audience === "owner");
+}
 
-  const { data: ownerProfile } = await admin
-    .from("profiles")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return ownerProfile ? "owner" : "customer";
+function selectAudience(roles: RoleRow[], requested: unknown): Audience {
+  const audience = String(requested || "");
+  if ((audience === "customer" || audience === "owner") && roles.some((role) => role.audience === audience && role.status !== "withdrawn")) return audience;
+  return roles.find((role) => role.status !== "withdrawn")?.audience || "customer";
 }
 
 function cleanDetail(value: unknown) {
@@ -47,31 +42,37 @@ function cleanDetail(value: unknown) {
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireUser(req);
-    const audience = await resolveAudience(userId);
+    const roles = await resolveRoles(userId);
+    const audience = selectAudience(roles, req.nextUrl.searchParams.get("audience"));
     const admin = createSupabaseAdminClient();
     const [{ data: center, error: centerError }, { data: profile }, { data: marketingDocument }] = await Promise.all([
       admin.rpc("get_account_privacy_center", { p_user_id: userId }),
       audience === "customer"
-        ? admin.from("customer_profiles").select("phone,marketing_consent").eq("user_id", userId).maybeSingle()
-        : admin.from("profiles").select("phone").eq("user_id", userId).maybeSingle(),
+        ? admin.from("customer_profiles").select("name,phone,marketing_consent").eq("user_id", userId).maybeSingle()
+        : admin.from("profiles").select("name,phone").eq("user_id", userId).maybeSingle(),
       admin.from("policy_documents").select("id").eq("document_type", "marketing").eq("audience", audience).eq("status", "published").order("effective_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     if (centerError) throw new ApiError(500, "개인정보 요청 상태를 불러오지 못했습니다.", "PRIVACY_CENTER_LOAD_FAILED");
 
-    const accountProfile = profile as { phone?: string | null; marketing_consent?: boolean | null } | null;
+    const accountProfile = profile as { name?: string | null; phone?: string | null; marketing_consent?: boolean | null } | null;
     const { data: marketingEvent } = marketingDocument?.id
       ? await admin.from("policy_acceptance_events").select("action").eq("user_id", userId).eq("document_id", marketingDocument.id).order("occurred_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle()
       : { data: null };
     const marketingConsent = marketingEvent
       ? marketingEvent.action === "accepted"
       : audience === "customer" ? Boolean(accountProfile?.marketing_consent) : false;
+    const visibleRequests = (Array.isArray(center?.requests) ? center.requests : []).filter((row: { audience?: string }) => row.audience === audience || row.audience === "all");
+    const canViewProfile = roles.some((role) => role.audience === audience && !["withdrawn", "suspended"].includes(role.status))
+      && visibleRequests.some((row: { audience: string; profile_access_granted?: boolean }) => row.audience === audience && row.profile_access_granted === true);
     return Response.json({
       ok: true,
       audience,
+      roles,
       phonePresent: Boolean(accountProfile?.phone),
       marketingConsent,
-      center: center || { lifecycle: null, withdrawal: null, requests: [] },
-    });
+      accessProfile: canViewProfile && accountProfile ? { name: accountProfile.name || null, phone: accountProfile.phone || null } : null,
+      center: { ...(center || { lifecycle: null, withdrawal: null }), requests: visibleRequests },
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return apiErrorResponse(error);
   }
@@ -81,10 +82,11 @@ export async function POST(req: NextRequest) {
   try {
     assertSameOrigin(req);
     const userId = await requireUser(req);
-    const audience = await resolveAudience(userId);
     const admin = createSupabaseAdminClient();
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const action = String(body.action || "");
+    const roles = await resolveRoles(userId);
+    const audience = selectAudience(roles, body.audience);
     let result: unknown = null;
     let error: { message?: string } | null = null;
 
@@ -111,9 +113,12 @@ export async function POST(req: NextRequest) {
         p_request_detail: { note: cleanDetail(body.detail) },
       }));
     } else if (action === "request_withdrawal") {
+      const withdrawalAudience = body.audience === "all" && roles.filter((role) => role.status !== "withdrawn").length > 1
+        ? "all"
+        : audience;
       ({ data: result, error } = await admin.rpc("request_account_withdrawal", {
         p_user_id: userId,
-        p_audience: audience,
+        p_audience: withdrawalAudience,
         p_reason: cleanDetail(body.reason).slice(0, 500) || null,
       }));
     } else if (action === "cancel_withdrawal") {

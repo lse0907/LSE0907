@@ -19,7 +19,8 @@
     "test:p1-customer-benefit-settlement": "node scripts/check-p1-customer-benefit-settlement.mjs",
     "test:p1-subscription-referral": "node scripts/check-p1-subscription-referral.mjs",
     "test:p1-privacy-consent": "node scripts/check-p1-privacy-consent.mjs",
-    "test:p1-privacy-rights": "node scripts/check-p1-privacy-rights.mjs"
+    "test:p1-privacy-rights": "node scripts/check-p1-privacy-rights.mjs",
+    "test:p1-ops-privacy-requests": "node scripts/check-p1-ops-privacy-requests.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

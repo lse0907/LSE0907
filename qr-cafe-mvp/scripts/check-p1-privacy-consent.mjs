@@ -31,7 +31,8 @@ assert.match(signupApi, /admin\.auth\.admin\.deleteUser/);
 assert.match(customer, /phone: phone\.trim\(\) \|\| null/);
 assert.doesNotMatch(customer, /if \(!phone\.trim\(\)\)/);
 assert.doesNotMatch(owner, /react-daum-postcode|address_detail|address: address/);
-assert.match(consent, /\[선택\].*마케팅 정보 수신/s);
+assert.match(consent, /optionalBadge">선택<\/span>/);
+assert.match(consent, /checked=\{props\.marketingConsent\}.*마케팅 정보 수신/s);
 assert.match(consent, /동의하지 않아도 가입할 수 있습니다/);
 
 for (const path of [

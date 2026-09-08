@@ -20,7 +20,7 @@ export default function AuthShell({ eyebrow, title, description, children, foote
           <div className={styles.brandCopy}>
             <span>ORDER &amp; STORE PLATFORM</span>
             <strong>주문과 매장 운영을<br />하나의 흐름으로 연결합니다.</strong>
-            <p>고객의 주문부터 점주의 매장 관리까지 쉽고 안전하게 시작하세요.</p>
+            <p>고객의 주문부터 사업자 회원의 매장 관리까지 쉽고 안전하게 시작하세요.</p>
           </div>
           <div className={styles.brandMeta}>RION ORDER · SECURE ACCOUNT</div>
         </aside>

@@ -114,7 +114,14 @@ assert.match(page, /7일 복구 대기/);
 assert.match(page, /전화번호 삭제/);
 assert.match(page, /마케팅 철회/);
 assert.match(page, /개인정보 권리 요청/);
-assert.match(page, /자동 Auth 삭제/);
+assert.match(page, /계정 전체 탈퇴는 검토 완료 후 로그인 계정까지 삭제합니다/);
+assert.ok(page.includes('"all" | null>(null)'), "Withdrawal scope must not be preselected");
+assert.ok(page.includes('disabled={Boolean(busy) || !withdrawalScope}'), "Withdrawal requires an explicit scope selection");
+assert.ok(page.includes('disabled={!role || Boolean(busy)}'), "Unused services must not be selectable");
+assert.ok(page.includes('!role ? "미이용"'), "Unused services must be labeled");
+assert.ok(page.includes('{serviceLabel}만 탈퇴'), "Partial withdrawal must match the selected service");
+assert.ok(page.includes('유일하게 이용 중인 서비스입니다. 탈퇴 시 계정 전체 탈퇴로 진행되며'), "Last-service withdrawal must explain account deletion");
+assert.ok(page.includes('withdrawalScope !== data?.audience'), "Mismatched service withdrawal must be blocked");
 assert.match(page, /signOut\(\{ scope: "global" \}\)/);
 
 console.log("P1-3B privacy rights and retention checks passed.");

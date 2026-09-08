@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { maskToken } from "@/app/lib/billingSettings";
 import RionBrand from "@/app/components/RionBrand";
+import OpsIcon, { type OpsIconName } from "./_components/OpsIcon";
 
 type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "tickets" | "settings";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
@@ -65,7 +66,7 @@ type BillingBaseRow = {
   paid_until: string | null;
   trial_end_at: string | null;
 };
-type FounderStoreRow = { store_id: string | null; billing_accounts: { founder_member?: boolean | null } | Array<{ founder_member?: boolean | null }> | null };
+type FounderStoreRow = { storeId: string; founderMember: boolean };
 type AddonBaseRow = {
   store_id: string;
   prepay_addon_status: string | null;
@@ -175,13 +176,21 @@ type KpiSummary = {
   ownerAccounts: number;
 };
 
-const TABS: Array<{ id: OpsTab; label: string }> = [
-  { id: "overview", label: "대시보드" },
-  { id: "stores", label: "점주·매장" },
-  { id: "subscriptions", label: "구독" },
-  { id: "payments", label: "결제·환불" },
-  { id: "tickets", label: "문의/장애" },
-  { id: "settings", label: "시스템 설정" },
+type OpsWorkQueue = {
+  businessVerificationCount: number;
+  privacyRequestCount: number;
+  loading: boolean;
+  businessVerificationError: string;
+  privacyRequestError: string;
+};
+
+const TABS: Array<{ id: OpsTab; label: string; icon: OpsIconName }> = [
+  { id: "overview", label: "대시보드", icon: "dashboard" },
+  { id: "stores", label: "점주·매장", icon: "store" },
+  { id: "subscriptions", label: "구독", icon: "card" },
+  { id: "payments", label: "결제·환불", icon: "card" },
+  { id: "tickets", label: "문의/장애", icon: "support" },
+  { id: "settings", label: "시스템 설정", icon: "settings" },
 ];
 
 const ACTIVE_TICKET_STATUSES = new Set(["open", "in_progress"]);
@@ -426,8 +435,35 @@ export default function OpsPage() {
   const [orderCancelActionId, setOrderCancelActionId] = useState<string | null>(null);
   const [orderCancelReasons, setOrderCancelReasons] = useState<Record<string, string>>({});
   const [subscriptionActivityOpen, setSubscriptionActivityOpen] = useState(false);
+  const [opsWorkQueue, setOpsWorkQueue] = useState<OpsWorkQueue>({
+    businessVerificationCount: 0,
+    privacyRequestCount: 0,
+    loading: true,
+    businessVerificationError: "",
+    privacyRequestError: "",
+  });
   const isOpsMaster = opsIdentity.role === "master";
   const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
+
+  const loadOpsWorkQueue = useCallback(async () => {
+    setOpsWorkQueue((current) => ({ ...current, loading: true, businessVerificationError: "", privacyRequestError: "" }));
+    const [businessResponse, privacyResponse] = await Promise.all([
+      fetch("/api/ops/business-verifications?status=submitted", { cache: "no-store" }),
+      fetch("/api/ops/privacy-requests?status=open&page=0", { cache: "no-store" }),
+    ]);
+    const [businessPayload, privacyPayload] = await Promise.all([
+      businessResponse.json().catch(() => ({})),
+      privacyResponse.json().catch(() => ({})),
+    ]);
+
+    setOpsWorkQueue({
+      businessVerificationCount: businessResponse.ok && businessPayload?.ok ? Number(businessPayload.count || 0) : 0,
+      privacyRequestCount: privacyResponse.ok && privacyPayload?.ok ? Number(privacyPayload.count || 0) : 0,
+      loading: false,
+      businessVerificationError: businessResponse.ok && businessPayload?.ok ? "" : "사업자 인증 데이터 준비 상태를 확인해야 합니다.",
+      privacyRequestError: privacyResponse.ok && privacyPayload?.ok ? "" : "개인정보 요청 데이터를 불러오지 못했습니다.",
+    });
+  }, []);
 
   const loadOps = useCallback(async () => {
     setLoading(true);
@@ -477,7 +513,7 @@ export default function OpsPage() {
         .order("created_at", { ascending: false })
         .limit(200),
       supabase.from("store_members").select("store_id, user_id, role"),
-      supabase.from("billing_account_stores").select("store_id,billing_accounts(founder_member)"),
+      fetch("/api/ops/store-benefits?summary=1", { cache: "no-store" }),
     ]);
 
     if (
@@ -512,11 +548,10 @@ export default function OpsPage() {
     const orderRows = (orderRes.data || []) as OrderBaseRow[];
     const ticketRows = (ticketRes.data || []) as SupportTicketRow[];
     const memberRows = (memberRes.data || []) as StoreMemberRow[];
-    const founderRows = (founderRes.data || []) as FounderStoreRow[];
+    const founderPayload = await founderRes.json().catch(() => ({}));
+    const founderRows = founderRes.ok && founderPayload?.ok ? (founderPayload.rows || []) as FounderStoreRow[] : [];
     if (memberRes.error)
       setMsg(`점주 계정 연결 로딩 실패: ${memberRes.error.message}`);
-    if (founderRes.error)
-      setMsg(`베타 테스터 정보 로딩 실패: ${founderRes.error.message}`);
 
     const billMap = new Map(billRows.map((x) => [x.store_id, x]));
     const addonMap = new Map(addonRows.map((x) => [x.store_id, x]));
@@ -531,9 +566,7 @@ export default function OpsPage() {
     const founderMap = new Map<string, boolean>();
 
     for (const item of founderRows) {
-      const sid = String(item.store_id || "");
-      const account = Array.isArray(item.billing_accounts) ? item.billing_accounts[0] : item.billing_accounts;
-      if (sid) founderMap.set(sid, account?.founder_member === true);
+      if (item.storeId) founderMap.set(item.storeId, item.founderMember);
     }
 
     for (const m of memberRows) {
@@ -637,9 +670,10 @@ export default function OpsPage() {
     if (isOps !== true) return;
     const timer = setTimeout(() => {
       void loadOps();
+      void loadOpsWorkQueue();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isOps, loadOps]);
+  }, [isOps, loadOps, loadOpsWorkQueue]);
 
   useEffect(() => {
     if (isOps !== true) return;
@@ -1443,6 +1477,11 @@ export default function OpsPage() {
         .opsAccount small { color:#c6d0df; font-size:10px; font-weight:900; }
         .hero .btn { border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff; }
         .hero .btn:hover { background:rgba(255,255,255,.18); }
+        .opsControl { display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+        .opsControl svg { width:15px; height:15px; flex:0 0 auto; }
+        .tab { display:inline-flex; align-items:center; gap:7px; }
+        .tab svg { width:15px; height:15px; flex:0 0 auto; opacity:.72; }
+        .tab.active svg { opacity:1; }
         .modalBackdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:18px; background:rgba(15,23,42,.62); }
         .opsModal { width:min(460px,100%); display:grid; gap:14px; border-radius:18px; background:#fff; padding:22px; box-shadow:0 28px 80px rgba(15,23,42,.28); }
         .opsModal .opsField { display:grid;gap:7px;font-size:13px;font-weight:800; }
@@ -1915,6 +1954,36 @@ export default function OpsPage() {
           font-weight: 950;
           white-space: nowrap;
         }
+        .opsWorkCard { padding:18px; }
+        .opsWorkList { display:grid; gap:9px; }
+        .opsWorkItem {
+          width:100%;
+          display:grid;
+          grid-template-columns:minmax(0,1fr) auto;
+          gap:16px;
+          align-items:center;
+          padding:14px 15px;
+          border:1px solid #dfe6ef;
+          border-radius:14px;
+          background:#f8fafc;
+          color:var(--ops-charcoal);
+          text-align:left;
+          cursor:pointer;
+          transition:border-color .16s ease, background .16s ease, transform .16s ease;
+        }
+        .opsWorkItem:hover { border-color:#8eadd3; background:#f2f7ff; transform:translateY(-1px); }
+        .opsWorkItem:focus-visible { outline:3px solid #93c5fd; outline-offset:2px; }
+        .opsWorkItem:disabled { cursor:default; opacity:.72; }
+        .opsWorkItem:disabled:hover { border-color:#f4d06c; background:#fffaf0; transform:none; }
+        .opsWorkItem.warn { border-color:#f4d06c; background:#fffaf0; }
+        .opsWorkItem.danger { border-color:#fecaca; background:#fff8f8; }
+        .opsWorkCopy { display:grid; gap:4px; min-width:0; }
+        .opsWorkCopy strong { display:inline-flex; align-items:center; gap:7px; font-size:15px; font-weight:950; }
+        .opsWorkCopy strong svg { width:16px; height:16px; color:#245797; }
+        .opsWorkCopy small { color:#667085; font-size:12px; line-height:1.45; }
+        .opsWorkCount { display:grid; gap:3px; min-width:70px; text-align:right; }
+        .opsWorkCount b { font-size:20px; font-weight:950; white-space:nowrap; }
+        .opsWorkCount small { color:#667085; font-size:10px; font-weight:850; white-space:nowrap; }
         .panelHeader {
           display: flex;
           justify-content: space-between;
@@ -2067,10 +2136,10 @@ export default function OpsPage() {
         </div>
         <div className="row opsAccount">
           <div><strong>{opsIdentity.email || "OPS 사용자"}</strong><small>{opsIdentity.role.toUpperCase()}</small></div>
-          <button className="btn" onClick={loadOps} disabled={loading}>
-            {loading ? "업데이트 중..." : "새로고침"}
+          <button className="btn opsControl" onClick={() => { void loadOps(); void loadOpsWorkQueue(); }} disabled={loading || opsWorkQueue.loading}>
+            <OpsIcon name="refresh" />{loading ? "업데이트 중..." : "새로고침"}
           </button>
-          <button className="btn" onClick={() => void supabase.auth.signOut().then(() => router.replace("/ops/login"))}>로그아웃</button>
+          <button className="btn opsControl" onClick={() => void supabase.auth.signOut().then(() => router.replace("/ops/login"))}><OpsIcon name="logout" />로그아웃</button>
         </div>
       </header>
 
@@ -2128,7 +2197,7 @@ export default function OpsPage() {
               setActiveTab(tab.id);
             }}
           >
-            {tab.label}
+            <OpsIcon name={tab.icon} />{tab.label}
           </button>
         ))}
       </nav>
@@ -2318,6 +2387,27 @@ export default function OpsPage() {
                       </article>
           </div>
           <div className="dashboardColumn">
+            <article className="card opsWorkCard">
+              <div className="panelHeader">
+                <div>
+                  <div className="sectionTitle">운영 요청</div>
+                  <p>서비스 권한과 개인정보 처리에 직접 연결되는 대기 업무입니다.</p>
+                </div>
+                <span className={`pill ${opsWorkQueue.businessVerificationCount + opsWorkQueue.privacyRequestCount > 0 || opsWorkQueue.businessVerificationError || opsWorkQueue.privacyRequestError ? "warn" : "ok"}`}>
+                  {opsWorkQueue.loading ? "확인 중" : opsWorkQueue.businessVerificationCount + opsWorkQueue.privacyRequestCount > 0 ? "처리 필요" : opsWorkQueue.businessVerificationError || opsWorkQueue.privacyRequestError ? "확인 필요" : "대기 없음"}
+                </span>
+              </div>
+              <div className="opsWorkList">
+                <button className={`opsWorkItem ${opsWorkQueue.businessVerificationCount > 0 || opsWorkQueue.businessVerificationError ? "warn" : ""}`} disabled={Boolean(opsWorkQueue.businessVerificationError)} onClick={() => router.push("/ops/business-verifications")}>
+                  <span className="opsWorkCopy"><strong><OpsIcon name="shield" />사업자 인증</strong><small>{opsWorkQueue.businessVerificationError || "사업체 정보와 증빙을 검토해 매장 생성 권한을 결정합니다."}</small></span>
+                  <span className="opsWorkCount"><b>{opsWorkQueue.loading || opsWorkQueue.businessVerificationError ? "-" : opsWorkQueue.businessVerificationCount.toLocaleString()}건</b><small>{opsWorkQueue.businessVerificationError ? "데이터 확인 필요" : "검토 대기"}</small></span>
+                </button>
+                <button className={`opsWorkItem ${opsWorkQueue.privacyRequestCount > 0 || opsWorkQueue.privacyRequestError ? "danger" : ""}`} disabled={Boolean(opsWorkQueue.privacyRequestError)} onClick={() => router.push("/ops/privacy-requests")}>
+                  <span className="opsWorkCopy"><strong><OpsIcon name="privacy" />개인정보 요청</strong><small>{opsWorkQueue.privacyRequestError || "회원 요청의 범위와 처리 기한을 확인하고 결과를 안내합니다."}</small></span>
+                  <span className="opsWorkCount"><b>{opsWorkQueue.loading || opsWorkQueue.privacyRequestError ? "-" : opsWorkQueue.privacyRequestCount.toLocaleString()}건</b><small>{opsWorkQueue.privacyRequestError ? "데이터 확인 필요" : "처리할 요청"}</small></span>
+                </button>
+              </div>
+            </article>
             <article className="card">
                         <div className="panelHeader">
                           <div>
