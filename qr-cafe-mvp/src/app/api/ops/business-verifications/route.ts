@@ -8,6 +8,17 @@ export async function GET(req: NextRequest) {
     const admin = createSupabaseAdminClient();
     await requireOpsUser(req, admin, ["master", "support"]);
     const status = String(req.nextUrl.searchParams.get("status") || "submitted");
+    const summary = req.nextUrl.searchParams.get("summary") === "1";
+    if (summary) {
+      const query = admin
+        .from("business_verification_requests")
+        .select("submitted_at", { count: "exact" })
+        .order("submitted_at", { ascending: true })
+        .limit(1);
+      const { data, error, count } = status === "all" ? await query : await query.eq("status", status);
+      if (error) throw new ApiError(500, "사업자 인증 요청을 불러오지 못했습니다.", "OPS_BUSINESS_LIST_FAILED");
+      return Response.json({ ok: true, count: count || 0, oldestSubmittedAt: data?.[0]?.submitted_at || null });
+    }
     const query = admin
       .from("business_verification_requests")
       .select("id,status,applicant_user_id,applicant_role,business_phone,phone_verified_at,business_document_path,delegation_document_path,submitted_at,reviewed_at,review_note,business_entities(*)", { count: "exact" })
