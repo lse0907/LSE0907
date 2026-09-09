@@ -12,7 +12,11 @@
 .headerButton,.headerActions>button{min-height:40px;padding:9px 13px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #dce4f0;border-radius:12px;background:#fff;color:#14213d;-webkit-text-fill-color:#14213d;font-family:inherit;font-size:12px;font-weight:850;line-height:1.2;text-decoration:none;white-space:nowrap;appearance:none}
 .headerButton{gap:6px;box-shadow:0 3px 10px rgba(30,55,90,.06)}
 .headerButton:hover,.headerActions>button:hover{border-color:#afc2dc;background:#f8fbff}
-.homeIcon,.logoutIcon{width:15px;height:15px;flex:0 0 auto}
+.homeIcon{width:15px;height:15px;flex:0 0 auto}
+.accountMenu{position:relative}.accountMenu>summary{list-style:none;cursor:pointer}.accountMenu>summary::-webkit-details-marker{display:none}.accountMenu .headerButton{min-height:42px;padding:4px 10px 4px 5px;gap:8px}.accountMenu[open] .headerButton{border-color:#8eb5ec;background:#f8fbff;box-shadow:0 0 0 3px rgba(105,159,232,.18)}
+.profileAvatar{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:#dcecff;color:#174e94;flex:0 0 auto}.profileAvatar svg{width:16px;height:16px}.profileCopy{display:grid;gap:2px;text-align:left;line-height:1.1}.profileCopy strong{font-size:11px}.profileCopy small{color:#71819b;font-size:9px;font-weight:750}
+.accountMenuList{position:absolute;z-index:20;right:0;top:calc(100% + 7px);width:172px;padding:6px;border:1px solid #dce4f0;border-radius:12px;background:#fff;box-shadow:0 12px 26px rgba(30,55,90,.14)}
+.accountMenuHeading{padding:5px 9px 8px;border-bottom:1px solid #e9eef5;color:#71819b;font-size:10px;font-weight:850}.accountMenuList a{display:block;padding:10px 11px;border-radius:8px;color:#273b5a;font-size:12px;font-weight:800;line-height:1.3;text-decoration:none}.accountMenuList a:last-child{margin-top:3px;border-top:1px solid #e9eef5;border-radius:0;color:#79515e}.accountMenuList a:hover{background:#f1f6ff;color:#174e94}
 
 @media(max-width:640px){
   .adminPageHeader{gap:8px;padding:12px 14px;border-radius:16px}
@@ -24,6 +28,6 @@
   .pageCopy p{display:none}
   .storeChip{margin-top:3px;padding:4px 7px;font-size:10px}
   .headerActions{width:100%;align-self:center;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
-  .headerActions>:first-child:nth-last-child(3){grid-column:1/-1}
   .headerButton,.headerActions>button{min-height:40px;padding:8px 10px;font-size:11px}
+  .accountMenu{min-width:0}.accountMenu .headerButton{width:100%;justify-content:flex-start}.profileCopy small{display:none}.accountMenuList{width:100%;top:calc(100% + 5px)}
 }

@@ -32,17 +32,24 @@ export default function AdminPageHeader({ title, description, storeId, storeName
         </div>
         <div className={styles.headerActions}>
           {actions}
-          <Link className={styles.headerButton} href={`/account/privacy?from=admin${storeId ? `&store=${encodeURIComponent(storeId)}` : ""}`}>
-            <span>계정·개인정보</span>
-          </Link>
           <Link className={styles.headerButton} href={homeHref} aria-label="관리자 홈으로 이동">
             <svg className={styles.homeIcon} viewBox="0 0 20 20" aria-hidden="true"><path d="M3 9.2 10 3l7 6.2v7.3a.5.5 0 0 1-.5.5h-4.2v-5H7.7v5H3.5a.5.5 0 0 1-.5-.5V9.2Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
             <span>관리자 홈</span>
           </Link>
-          <Link className={styles.headerButton} href="/logout" aria-label="로그아웃">
-            <svg className={styles.logoutIcon} viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H4.5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1H8" /><path d="M12.5 6.5 16 10l-3.5 3.5M7 10h9" /></svg>
-            <span>로그아웃</span>
-          </Link>
+          <details className={styles.accountMenu}>
+            <summary className={styles.headerButton} aria-label="계정 메뉴 열기">
+              <span className={styles.profileAvatar} aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="10" cy="6.2" r="3" /><path d="M3.8 17c.8-3.1 3.1-4.8 6.2-4.8s5.4 1.7 6.2 4.8" /></svg>
+              </span>
+              <span className={styles.profileCopy}><strong>내 계정</strong></span>
+            </summary>
+            <div className={styles.accountMenuList}>
+              <div className={styles.accountMenuHeading}>개인 계정 관리</div>
+              <Link href={`/account?from=admin${storeId ? `&store=${encodeURIComponent(storeId)}` : ""}`}>내 계정</Link>
+              <Link href={`/account/privacy?from=account${storeId ? `&store=${encodeURIComponent(storeId)}` : ""}`}>개인정보·탈퇴 관리</Link>
+              <Link href="/logout">로그아웃</Link>
+            </div>
+          </details>
         </div>
       </div>
     </header>

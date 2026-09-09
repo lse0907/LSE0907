@@ -42,12 +42,6 @@ type StoreAddonSummary = {
   addonPaidUntil: string | null;
 };
 
-type OrderSummaryRow = {
-  order_date?: string | null;
-  total_price?: number | string | null;
-  adjusted_total_price?: number | string | null;
-};
-
 type AdminIconName =
   | "plus"
   | "sales"
@@ -65,6 +59,8 @@ type AdminIconName =
   | "weekly"
   | "monthly"
   | "subscription"
+  | "insight"
+  | "account"
   | "logout";
 
 function AdminIcon({ name, size = 18 }: { name: AdminIconName; size?: number }) {
@@ -85,6 +81,8 @@ function AdminIcon({ name, size = 18 }: { name: AdminIconName; size?: number }) 
     weekly: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M3 10h18" /><path d="m8 15 2 2 5-5" /></>,
     monthly: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M3 10h18" /><path d="M7 14h2" /><path d="M11 14h2" /><path d="M15 14h2" /><path d="M7 18h2" /><path d="M11 18h2" /></>,
     subscription: <><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7Z" /><path d="m9 12 2 2 4-4" /></>,
+    insight: <><path d="m12 3 .9 3.1L16 7l-3.1.9L12 11l-.9-3.1L8 7l3.1-.9L12 3Z" /><path d="m18 13 .6 2.1 2.1.6-2.1.6L18 18.5l-.6-2.2-2.1-.6 2.1-.6L18 13Z" /><path d="m6 14 .5 1.6L8 16l-1.5.4L6 18l-.5-1.6L4 16l1.5-.4L6 14Z" /></>,
+    account: <><circle cx="12" cy="8" r="3.5" /><path d="M4.5 21c.8-4 3.4-6.2 7.5-6.2s6.7 2.2 7.5 6.2" /></>,
     logout: <><path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5" /><path d="m15 8 4 4-4 4M9 12h10" /></>,
   };
 
@@ -203,31 +201,6 @@ function AdminPageInner() {
     setSelectedStoreIdState(storeId);
     setCurrentStoreId(storeId);
   };
-
-  const ymd = (d: Date) => {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  const startOfWeekMon = (d: Date) => {
-    const day = d.getDay(); // 0=일
-    const diff = day === 0 ? -6 : 1 - day;
-    const out = new Date(d);
-    out.setDate(d.getDate() + diff);
-    return out;
-  };
-
-  const endOfWeekMon = (d: Date) => {
-    const start = startOfWeekMon(d);
-    const out = new Date(start);
-    out.setDate(start.getDate() + 6);
-    return out;
-  };
-
-  const monthKey = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
   const loadMyStores = async (uid: string) => {
     const memRes = await supabase
@@ -355,54 +328,26 @@ function AdminPageInner() {
   };
 
   const fetchStatsSummaryForStore = async (storeId: string) => {
-    const today = new Date();
-    const todayKey = ymd(today);
-    const weekStart = ymd(startOfWeekMon(today));
-    const weekEnd = ymd(endOfWeekMon(today));
-    const month = monthKey(today);
-    const monthStart = `${month}-01`;
-    const rangeStart = [monthStart, weekStart].sort()[0];
-    const rangeEnd = [todayKey, weekEnd].sort().slice(-1)[0];
-
     setStatsLoading(true);
     setStatsErr("");
     try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("order_date,total_price,adjusted_total_price,status,store_id")
-        .eq("store_id", storeId)
-        .gte("order_date", rangeStart)
-        .lte("order_date", rangeEnd)
-        .neq("status", "cancelled");
-
-      if (error) throw error;
-
-      const rows = (Array.isArray(data) ? data : []) as OrderSummaryRow[];
-      const sum = (list: OrderSummaryRow[]) =>
-        list.reduce(
-          (acc, cur) => acc + Math.max(0, Number(cur.adjusted_total_price ?? cur.total_price ?? 0)),
-          0,
-        );
-
-      const daily = sum(
-        rows.filter((r) => String(r?.order_date || "") === todayKey),
+      const response = await fetch(
+        `/api/admin/store-summary?store=${encodeURIComponent(storeId)}`,
+        { cache: "no-store" },
       );
-      const weekly = sum(
-        rows.filter(
-          (r) =>
-            String(r?.order_date || "") >= weekStart &&
-            String(r?.order_date || "") <= weekEnd,
-        ),
-      );
-      const monthly = sum(
-        rows.filter((r) => String(r?.order_date || "").startsWith(month)),
-      );
-
-      setStatsSummary({ daily, weekly, monthly });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok || !payload?.summary) {
+        throw new Error(String(payload?.message || "매출 요약을 불러오지 못했습니다."));
+      }
+      setStatsSummary({
+        daily: Number(payload.summary.daily || 0),
+        weekly: Number(payload.summary.weekly || 0),
+        monthly: Number(payload.summary.monthly || 0),
+      });
     } catch (e: unknown) {
       const message = toErrorMessage(e);
       console.error("[admin] stats summary error:", message);
-      setStatsErr(message);
+      setStatsErr("매출 요약을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
       setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
     } finally {
       setStatsLoading(false);
@@ -648,30 +593,34 @@ function AdminPageInner() {
         </div>
 
         <div className="topActions">
-          <a
-            className="btn"
-            href={`/account/privacy?from=admin${selectedStoreId ? `&store=${encodeURIComponent(selectedStoreId)}` : ""}`}
-          >
-            계정·개인정보
-          </a>
-          <button
-            className="btn"
-            onClick={() => goPublic("/menu")}
-            disabled={!selectedStoreId}
-          >
-            고객화면 보기
-          </button>
-          <button
-            className="btn"
-            onClick={() => goPublic("/staff")}
-            disabled={!selectedStoreId}
-          >
-            직원화면 보기
-          </button>
-          <a className="btn" href="/logout" aria-label="로그아웃">
-            <AdminIcon name="logout" size={16} />
-            <span>로그아웃</span>
-          </a>
+          <div className="topWorkActions">
+            <button
+              className="btn"
+              onClick={() => goPublic("/menu")}
+              disabled={!selectedStoreId}
+            >
+              고객화면 보기
+            </button>
+            <button
+              className="btn"
+              onClick={() => goPublic("/staff")}
+              disabled={!selectedStoreId}
+            >
+              직원화면 보기
+            </button>
+          </div>
+          <details className="topAccountMenu">
+            <summary className="btn" aria-label="계정 메뉴 열기">
+              <span className="topProfileAvatar"><AdminIcon name="account" size={15} /></span>
+              <span className="topProfileCopy"><strong>내 계정</strong></span>
+            </summary>
+            <div className="topAccountMenuList">
+              <div className="topAccountMenuHeading">개인 계정 관리</div>
+              <a href={`/account?from=admin${selectedStoreId ? `&store=${encodeURIComponent(selectedStoreId)}` : ""}`}>내 계정</a>
+              <a href={`/account/privacy?from=account${selectedStoreId ? `&store=${encodeURIComponent(selectedStoreId)}` : ""}`}>개인정보·탈퇴 관리</a>
+              <a href="/logout">로그아웃</a>
+            </div>
+          </details>
         </div>
       </header>
 
@@ -918,13 +867,16 @@ function AdminPageInner() {
               <section className="overviewCard overviewCardSelected">
                 <div className="overviewHead">
                   <h2 className="overviewTitle">매장 현황</h2>
-                  <button
-                    className="btn btnSmall"
-                    onClick={() => go("/admin/stats")}
-                  >
-                    <AdminIcon name="sales" size={15} />
-                    매출보기
-                  </button>
+                  <div className="overviewActions" aria-label="매장 현황 바로가기">
+                    <button className="btn btnSmall overviewActionSecondary" onClick={() => go("/admin/stats")}>
+                      <AdminIcon name="sales" size={15} />
+                      매출 보기
+                    </button>
+                    <button className="btn btnSmall overviewActionInsight" onClick={() => go("/admin/ai")}>
+                      <AdminIcon name="insight" size={15} />
+                      AI 브리핑
+                    </button>
+                  </div>
                 </div>
                 <div className="overviewStoreLine">
                   <span className="currentStorePill">
@@ -987,7 +939,7 @@ function AdminPageInner() {
                     </span>
                   </div>
                   {statsErr ? (
-                    <div className="hint">요약 로딩 실패: {statsErr}</div>
+                    <div className="hint">{statsErr}</div>
                   ) : null}
                 </div>
               </section>
@@ -1217,16 +1169,24 @@ body {
 }
 .topActions{
   display:flex;
+  align-items:center;
   gap:8px;
   flex-wrap:wrap;
   justify-content:flex-end;
 }
+.topWorkActions{display:flex;gap:8px;align-items:center}
 .topActions .btn{
   min-height:40px;
   padding:10px 13px;
   border-radius:12px;
   font-size:clamp(12px, 0.75vw, 13px);
 }
+.topAccountMenu{position:relative}
+.topAccountMenu>summary{list-style:none;cursor:pointer}.topAccountMenu>summary::-webkit-details-marker{display:none}
+.topAccountMenu .btn{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:4px 10px 4px 5px}.topAccountMenu[open] .btn{border-color:#8eb5ec;background:#f8fbff;box-shadow:0 0 0 3px rgba(105,159,232,.18)}
+.topProfileAvatar{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:#dcecff;color:#174e94}.topProfileCopy{display:grid;gap:2px;text-align:left;line-height:1.1}.topProfileCopy strong{font-size:11px}.topProfileCopy small{color:#71819b;font-size:9px;font-weight:750}
+.topAccountMenuList{position:absolute;z-index:25;right:0;top:calc(100% + 7px);width:172px;padding:6px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 12px 26px rgba(30,55,90,.14)}
+.topAccountMenuHeading{padding:5px 9px 8px;border-bottom:1px solid #e9eef5;color:#71819b;font-size:10px;font-weight:850}.topAccountMenuList a{display:block;padding:10px 11px;border-radius:8px;color:#273b5a;font-size:12px;font-weight:800;line-height:1.3;text-decoration:none}.topAccountMenuList a:last-child{margin-top:3px;border-top:1px solid #e9eef5;border-radius:0;color:#79515e}.topAccountMenuList a:hover{background:#f1f6ff;color:#174e94}
 .welcomeHero{
   position:relative;
   overflow:hidden;
@@ -1446,6 +1406,28 @@ body {
   justify-content:space-between;
   gap:10px;
   flex-wrap:wrap;
+}
+.overviewActions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  margin-left:auto;
+}
+.overviewActionSecondary{
+  background:#fff;
+  border-color:#c9d6e8;
+  color:#29486d;
+}
+.overviewActionInsight{
+  background:#183b74;
+  border-color:#183b74;
+  color:#fff;
+  box-shadow:0 5px 12px rgba(24,59,116,.16);
+}
+.overviewActionInsight:hover:not(:disabled){
+  border-color:#183b74;
+  background:#102d5c;
 }
 .overviewStoreLine{
   display:flex;
@@ -1844,10 +1826,11 @@ body {
   }
   .topActions{
     width:100%;
-    display:grid;
-    grid-template-columns:repeat(3,minmax(0,1fr));
+    display:flex;
+    align-items:stretch;
     gap:7px;
   }
+  .topWorkActions{flex:1 1 auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .topActions .btn{
     width:100%;
     min-height:42px;
@@ -1855,6 +1838,7 @@ body {
     font-size:12px;
     white-space:nowrap;
   }
+  .topAccountMenu{min-width:0;flex:0 0 auto}.topAccountMenu .btn{width:auto;min-height:42px;padding:5px}.topProfileCopy{display:none}.topAccountMenuList{width:172px;top:calc(100% + 5px)}
   .adminBadge{ display:none; }
   .welcomeHero{ min-height:0; padding:16px; display:grid; grid-template-columns:minmax(0,.9fr) minmax(158px,1.1fr); gap:12px; border-radius:19px; }
   .welcomeHero::before{ width:240px; right:-86px; top:auto; bottom:-105px; }
@@ -1942,6 +1926,8 @@ body {
   .shortcutCopy small{ font-size:8px; }
   .shortcutArrow{ display:none; }
   .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .overviewActions{ width:100%; margin-left:0; }
+  .overviewActions .btn{ flex:1 1 0; min-height:38px; }
   .statsRow{ min-height:74px; padding:9px; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:3px 6px; }
   .statsIcon{ width:22px; height:22px; border-radius:7px; font-size:10px; grid-row:1/3; }
   .statsLabel{ font-size:10px; }
