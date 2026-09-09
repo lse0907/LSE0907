@@ -61,7 +61,9 @@ function AddServiceContent({ params }: { params: Promise<{ audience: string }> }
       });
       const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; message?: string; next?: string };
       if (!response.ok || !payload.ok) throw new Error(payload.message || "서비스를 추가하지 못했습니다.");
-      router.replace(payload.next || "/");
+      if (searchParams.get("from") === "account") {
+        router.replace(audience === "owner" ? "/account/business/start?from=account" : "/account");
+      } else router.replace(payload.next || "/");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "서비스를 추가하지 못했습니다.");
     } finally {
@@ -74,7 +76,7 @@ function AddServiceContent({ params }: { params: Promise<{ audience: string }> }
       eyebrow={isOwner ? "START BUSINESS" : "ADD CUSTOMER SERVICE"}
       title={isOwner ? "사업자 서비스 이용 신청" : "고객 서비스 이용 신청"}
       description={isOwner ? "현재 계정으로 사업자 서비스를 이용하기 위한 약관을 확인합니다." : "현재 계정으로 주문·포인트·쿠폰 서비스를 이용하기 위한 약관을 확인합니다."}
-      footer={<Link href="/">서비스 선택으로 돌아가기</Link>}
+      footer={<Link href={searchParams.get("from") === "account" ? "/account" : "/"}>{searchParams.get("from") === "account" ? "내 계정으로 돌아가기" : "서비스 선택으로 돌아가기"}</Link>}
     >
       {message ? <p className="authMessage" role="alert">{message}</p> : null}
       {checking ? <p className="authMessage">계정을 확인하고 있습니다.</p> : (

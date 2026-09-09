@@ -93,7 +93,7 @@ function BusinessStartContent() {
   return (
     <main className="businessStart">
       <div className="pageShell">
-        <header className="brandHeader"><RionBrand product auth /><div><Link href="/">서비스 선택</Link><button type="button" onClick={() => void signOut()}>로그아웃</button></div></header>
+        <header className="brandHeader"><RionBrand product auth /><div><Link href={searchParams.get("from") === "account" ? "/account" : "/"}>{searchParams.get("from") === "account" ? "내 계정" : "서비스 선택"}</Link><button type="button" onClick={() => void signOut()}>로그아웃</button></div></header>
         <section className="intro">
           <span>BUSINESS ONBOARDING</span>
           <h1>사업자 인증 신청</h1>
