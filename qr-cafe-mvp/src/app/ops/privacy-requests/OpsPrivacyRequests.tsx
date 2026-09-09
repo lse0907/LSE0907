@@ -16,7 +16,7 @@ const sampleRequests: PrivacyRequest[] = [
 const formatDate = (value: string) => new Date(value).toLocaleString("ko-KR", { hour12: false });
 const audienceLabel = (value: string) => value === "customer" ? "고객 서비스" : "사업자 서비스";
 
-export default function OpsPrivacyRequests({ preview = false }: { preview?: boolean }) {
+export default function OpsPrivacyRequests({ preview = false, embedded = false }: { preview?: boolean; embedded?: boolean }) {
   const [samples, setSamples] = useState(sampleRequests);
   const [rows, setRows] = useState<PrivacyRequest[]>([]);
   const [filter, setFilter] = useState("open");
@@ -117,9 +117,8 @@ export default function OpsPrivacyRequests({ preview = false }: { preview?: bool
   const request = detail?.request;
   const choices = request ? availablePrivacyActions(request) : [];
   const execution = Boolean(action) && isPrivacyExecution(action);
-  return <main className={styles.page}>
-    <header className={styles.header}><RionBrand product inverse /><nav><Link href="/ops"><OpsIcon name="home" />OPS 홈</Link><button disabled={busy} onClick={() => { setMessage(""); setRevision((current) => current + 1); }}><OpsIcon name="refresh" />새로고침</button></nav></header>
-    <section className={styles.title}><small>OPS · PRIVACY CARE</small><h1>개인정보 요청 관리</h1><p>요청 범위를 확인하고 실제 처리 결과를 회원에게 안내합니다.</p></section>
+  return <main className={`${styles.page} ${embedded ? styles.embedded : ""}`}>
+    {!embedded ? <header className={styles.header}><RionBrand product inverse /><nav><Link href="/ops"><OpsIcon name="home" />OPS 홈</Link><button disabled={busy} onClick={() => { setMessage(""); setRevision((current) => current + 1); }}><OpsIcon name="refresh" />새로고침</button></nav></header> : null}
     {preview && <p className={styles.preview}>디자인·동작 미리보기 · 가상 요청만 표시합니다. 실제 DB 조회·처리는 하지 않습니다.</p>}
     <nav className={styles.filters} aria-label="요청 상태 필터">{[["open", "처리할 요청"], ["completed", "완료"], ["rejected", "처리 제한"], ["all", "전체"]].map(([key, label]) => <button key={key} aria-pressed={filter === key} disabled={busy} className={filter === key ? styles.selected : ""} onClick={() => { setFilter(key); setPage(0); setSelectedId(null); }}>{label}</button>)}</nav>
     {message && <p role="status" className={styles.message}>{message}</p>}

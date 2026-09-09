@@ -6,8 +6,12 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { maskToken } from "@/app/lib/billingSettings";
 import RionBrand from "@/app/components/RionBrand";
 import OpsIcon, { type OpsIconName } from "./_components/OpsIcon";
+import OpsBusinessVerifications from "./business-verifications/page";
+import OpsPrivacyRequests from "./privacy-requests/OpsPrivacyRequests";
+import OpsAiUsage from "./ai-usage/page";
 
-type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "tickets" | "settings";
+type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "businessVerification" | "privacyRequests" | "ai" | "tickets" | "settings";
+type OpsPrimaryTab = "overview" | "merchant" | "billing" | "support" | "system";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
 type StoreSort =
   | "risk"
@@ -186,14 +190,23 @@ type OpsWorkQueue = {
   privacyRequestError: string;
 };
 
-const TABS: Array<{ id: OpsTab; label: string; icon: OpsIconName }> = [
-  { id: "overview", label: "대시보드", icon: "dashboard" },
-  { id: "stores", label: "점주·매장", icon: "store" },
-  { id: "subscriptions", label: "구독", icon: "card" },
-  { id: "payments", label: "결제·환불", icon: "card" },
-  { id: "tickets", label: "문의/장애", icon: "support" },
-  { id: "settings", label: "시스템 설정", icon: "settings" },
+type AiOpsSignal = { loading: boolean; error: string; blockedCount: number; failedCount: number; monthlyCostRate: number | null };
+
+const NAV_GROUPS: Array<{ id: OpsPrimaryTab; label: string; icon: OpsIconName; tabs: Array<{ id: OpsTab; label: string; icon: OpsIconName }> }> = [
+  { id: "overview", label: "대시보드", icon: "dashboard", tabs: [{ id: "overview", label: "대시보드", icon: "dashboard" }] },
+  { id: "merchant", label: "점주·매장", icon: "store", tabs: [{ id: "stores", label: "매장·점주 관리", icon: "store" }, { id: "businessVerification", label: "사업자 인증", icon: "shield" }] },
+  { id: "billing", label: "구독·결제", icon: "card", tabs: [{ id: "subscriptions", label: "구독 관리", icon: "card" }, { id: "payments", label: "결제·환불", icon: "card" }] },
+  { id: "support", label: "지원·장애", icon: "support", tabs: [{ id: "tickets", label: "문의·장애", icon: "support" }] },
+  { id: "system", label: "시스템·정책", icon: "settings", tabs: [{ id: "ai", label: "AI 운영", icon: "sparkles" }, { id: "privacyRequests", label: "개인정보 요청", icon: "privacy" }, { id: "settings", label: "시스템 설정", icon: "settings" }] },
 ];
+
+function primaryForTab(tab: OpsTab): OpsPrimaryTab {
+  if (tab === "stores" || tab === "businessVerification") return "merchant";
+  if (tab === "subscriptions" || tab === "payments") return "billing";
+  if (tab === "tickets") return "support";
+  if (tab === "ai" || tab === "privacyRequests" || tab === "settings") return "system";
+  return "overview";
+}
 
 const ACTIVE_TICKET_STATUSES = new Set(["open", "in_progress"]);
 
@@ -454,6 +467,7 @@ export default function OpsPage() {
     businessVerificationError: "",
     privacyRequestError: "",
   });
+  const [aiOpsSignal, setAiOpsSignal] = useState<AiOpsSignal>({ loading: true, error: "", blockedCount: 0, failedCount: 0, monthlyCostRate: null });
   const isOpsMaster = opsIdentity.role === "master";
   const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
 
@@ -476,6 +490,21 @@ export default function OpsPage() {
       loading: false,
       businessVerificationError: businessResponse.ok && businessPayload?.ok ? "" : "사업자 인증 데이터 준비 상태를 확인해야 합니다.",
       privacyRequestError: privacyResponse.ok && privacyPayload?.ok ? "" : "개인정보 요청 데이터를 불러오지 못했습니다.",
+    });
+  }, []);
+
+  const loadAiOpsSignal = useCallback(async () => {
+    setAiOpsSignal((current) => ({ ...current, loading: true, error: "" }));
+    const response = await fetch("/api/ops/ai-usage?summary=1", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    const limit = Number(payload?.summary?.monthlyLimitWon || 0);
+    const used = Number(payload?.summary?.monthCost || 0);
+    setAiOpsSignal({
+      loading: false,
+      error: response.ok && payload?.ok ? "" : "AI 운영 상태를 불러오지 못했습니다.",
+      blockedCount: response.ok && payload?.ok ? Number(payload?.summary?.blockedCount || 0) : 0,
+      failedCount: response.ok && payload?.ok ? Number(payload?.summary?.failedCount || 0) : 0,
+      monthlyCostRate: response.ok && payload?.ok && limit > 0 ? Math.round((used / limit) * 100) : null,
     });
   }, []);
 
@@ -685,9 +714,10 @@ export default function OpsPage() {
     const timer = setTimeout(() => {
       void loadOps();
       void loadOpsWorkQueue();
+      void loadAiOpsSignal();
     }, 0);
     return () => clearTimeout(timer);
-  }, [isOps, loadOps, loadOpsWorkQueue]);
+  }, [isOps, loadOps, loadOpsWorkQueue, loadAiOpsSignal]);
 
   useEffect(() => {
     if (isOps !== true) return;
@@ -913,8 +943,14 @@ export default function OpsPage() {
   const opsQueueHasError = Boolean(
     opsWorkQueue.businessVerificationError || opsWorkQueue.privacyRequestError,
   );
+  const aiOpsNeedsAttention = Boolean(aiOpsSignal.error || aiOpsSignal.blockedCount > 0 || aiOpsSignal.failedCount > 0 || (aiOpsSignal.monthlyCostRate || 0) >= 80);
   const immediateActionCount =
     kpi.openTickets + opsQueueCount + subscriptionCheckCount;
+  const activePrimary = primaryForTab(activeTab);
+  const activeNavGroup = NAV_GROUPS.find((group) => group.id === activePrimary) || NAV_GROUPS[0];
+  const availableNavTabs = activeNavGroup.tabs.filter(
+    (tab) => tab.id !== "settings" || isOpsMaster,
+  );
   const filteredTickets = useMemo(() => {
     return tickets
       .filter(
@@ -1427,7 +1463,7 @@ export default function OpsPage() {
   );
 
   return (
-    <main className="wrap">
+    <main className="wrap opsConsole">
       <style jsx global>{`
         :root { --ops-navy:#0f1f3d; --ops-charcoal:#2b2f36; --ops-muted:#667085; --ops-line:#e1e5eb; --ops-canvas:#f3f5f8; }
         body { background:var(--ops-canvas); color:var(--ops-charcoal); }
@@ -1499,7 +1535,16 @@ export default function OpsPage() {
         .activityGrid span { color:#64748b; font-size:11px; font-weight:800; }
         .activityGrid strong { font-size:12px; word-break:break-word; }
         .subscriptionLinks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding-top:12px; border-top:1px solid #eef2f7; }
-        .emptyState { margin:0; padding:24px; text-align:center; color:#64748b; }
+        .emptyState {
+          margin:0;
+          padding:28px 20px;
+          border:1px dashed #cbd7e6;
+          border-radius:14px;
+          background:#f8fafc;
+          color:#64748b;
+          text-align:center;
+          line-height:1.55;
+        }
         .opsAccount > div { display:grid; gap:2px; text-align:right; }
         .opsAccount small { color:#c6d0df; font-size:10px; font-weight:900; }
         .hero .btn { border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff; }
@@ -1578,6 +1623,15 @@ export default function OpsPage() {
         .opsPulseCount strong { font-size:clamp(28px,3vw,38px); line-height:1; letter-spacing:-.05em; }
         .opsPulseCount span { color:#64748b; font-size:12px; font-weight:850; }
         .immediateActionGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+        .aiOpsAlert { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-top:12px; padding:16px 18px; border-color:#f4cf77; background:#fffaf0; }
+        .aiOpsAlert.danger { border-color:#ffc3cd; background:#fff6f7; }
+        .aiOpsAlert > div { display:grid; gap:5px; }
+        .aiOpsAlert span { display:flex; align-items:center; gap:6px; color:#9a6300; font-size:11px; font-weight:950; }
+        .aiOpsAlert.danger span { color:#b42345; }
+        .aiOpsAlert span svg { width:15px; height:15px; }
+        .aiOpsAlert strong { font-size:14px; }
+        .aiOpsAlert p { margin:0; color:#6b7280; font-size:12px; }
+        .aiOpsAlert button { min-height:38px; padding:0 12px; border:1px solid #c9a856; border-radius:10px; background:#fff; color:#805500; font-size:12px; font-weight:900; white-space:nowrap; }
         .immediateAction {
           min-width:0; display:grid; gap:8px; padding:14px; border:1px solid #dfe6ef; border-radius:14px;
           background:#fff; color:var(--ops-charcoal); text-align:left; cursor:pointer;
@@ -1604,7 +1658,20 @@ export default function OpsPage() {
           background: #fff;
           box-shadow:0 5px 18px rgba(15,31,61,.035);
         }
+        .primaryTabs {
+          display:grid;
+          grid-template-columns:repeat(5, minmax(0, 1fr));
+          min-width:0;
+          max-width:100%;
+          overflow:visible;
+          gap:6px;
+          padding:5px;
+        }
         .tab {
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          gap:7px;
           border: 0;
           border-radius: 12px;
           padding: 10px 14px;
@@ -1613,6 +1680,81 @@ export default function OpsPage() {
           font-weight: 900;
           cursor: pointer;
           white-space: nowrap;
+        }
+        .primaryTabs .tab { min-width:0; }
+        .primaryTabs .tab:hover:not(.active) { background:#f3f6fa; color:#233a5e; }
+        .opsNavigation {
+          display:grid;
+          grid-template-columns:repeat(5, minmax(0, 1fr));
+          gap:0;
+          margin-bottom:-4px;
+          min-width:0;
+          padding:5px;
+          border:1px solid var(--ops-line);
+          border-radius:14px;
+          background:#fff;
+          box-shadow:0 5px 18px rgba(15,31,61,.035);
+        }
+        .opsNavigation .primaryTabs {
+          grid-column:1 / -1;
+          padding:0;
+          border:0;
+          border-radius:10px;
+          background:transparent;
+          box-shadow:none;
+        }
+        .subNavContext {
+          display:flex;
+          align-items:center;
+          justify-content:flex-start;
+          grid-column:1 / -1;
+          min-width:0;
+          padding:5px 4px 0;
+          border-top:1px solid #edf1f6;
+        }
+        .subTabs {
+          display:flex;
+          gap:2px;
+          margin:0;
+          padding:0 2px;
+          min-width:0;
+        }
+        .subTabs button {
+          position:relative;
+          display:inline-flex;
+          align-items:center;
+          gap:7px;
+          min-height:40px;
+          padding:9px 14px;
+          border:0;
+          border-radius:8px;
+          background:transparent;
+          color:#526174;
+          font-size:14px;
+          font-weight:800;
+          cursor:pointer;
+          white-space:nowrap;
+          transition:background .18s, color .18s;
+        }
+        .subTabs button svg { width:15px; height:15px; }
+        .subTabs button:hover:not(.active) { background:#f3f6fa; color:#233a5e; }
+        .subTabs button.active { background:transparent; color:#142b50; font-weight:950; }
+        .subTabs button.active::after {
+          content:"";
+          position:absolute;
+          left:14px;
+          right:14px;
+          bottom:0;
+          height:3px;
+          border-radius:999px;
+          background:var(--ops-navy);
+        }
+        @media (min-width: 921px) {
+          .opsNavigation.primary-overview .subNavContext { grid-column:1; }
+          .opsNavigation.primary-merchant .subNavContext { grid-column:2 / span 2; }
+          .opsNavigation.primary-billing .subNavContext { grid-column:3 / span 2; }
+          .opsNavigation.primary-support .subNavContext { grid-column:4; }
+          .opsNavigation.primary-system .subNavContext { grid-column:4 / -1; justify-content:flex-end; }
         }
         .tab.active {
           background: var(--ops-navy);
@@ -1668,6 +1810,7 @@ export default function OpsPage() {
           display: grid;
           gap: 8px;
         }
+        .paymentStack { gap:14px; }
         .notice {
           display: flex;
           justify-content: space-between;
@@ -1951,6 +2094,16 @@ export default function OpsPage() {
           gap: 10px;
           flex-wrap: wrap;
         }
+        .ticketExcerpt {
+          display:-webkit-box;
+          overflow:hidden;
+          margin:0;
+          color:#526071;
+          font-size:13px;
+          line-height:1.55;
+          -webkit-box-orient:vertical;
+          -webkit-line-clamp:2;
+        }
         .ticketTitle {
           font-weight: 950;
         }
@@ -2069,7 +2222,7 @@ export default function OpsPage() {
         .refundActions { display:grid; gap:6px; min-width:170px; }
         .refundActions .btn { width:100%; }
         .refundActions small { color:#6b7280; line-height:1.35; }
-        .refundSummary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+        .refundSummary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
         .refundSummary .notice { min-height:68px; }
         .refundSummary strong { font-size:20px; }
         .actionComplete { display:grid; gap:5px; justify-items:start; min-width:130px; }
@@ -2096,18 +2249,82 @@ export default function OpsPage() {
           .immediateActionGrid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+          .aiOpsAlert { align-items:flex-start; flex-direction:column; }
           .subscriptionToolbar { grid-template-columns:1fr 1fr; }
           .detailCard {
             position: static;
           }
         }
         @media (max-width: 920px) {
+          .primaryTabs { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+          .opsNavigation { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+          .opsNavigation.primary-overview .subNavContext,
+          .opsNavigation.primary-support .subNavContext { grid-column:1; }
+          .opsNavigation.primary-merchant .subNavContext { grid-column:2 / -1; }
+          .opsNavigation.primary-billing .subNavContext { grid-column:2 / -1; justify-content:flex-end; }
+          .opsNavigation.primary-system .subNavContext { grid-column:1 / -1; justify-content:center; }
           .hero { align-items:flex-start; }
           .opsAccount { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:min(100%,360px); }
           .opsAccount > div { grid-column:1 / -1; text-align:left; }
           .opsAccount .btn { width:100%; }
         }
+        /* The three newer work areas share the same visual rhythm as the original OPS tabs. */
+        .opsConsole .opsReview.embedded .filters,
+        .opsConsole .aiOps.embedded .filters,
+        .opsConsole .page.embedded .filters { margin:0 0 14px; }
+        .opsConsole .opsReview.embedded .filters button,
+        .opsConsole .page.embedded .filters button {
+          min-height:36px;
+          padding:8px 12px;
+          border-radius:999px;
+          font-size:12px;
+          box-shadow:none;
+        }
+        .opsConsole .opsReview.embedded .content,
+        .opsConsole .page.embedded .layout { gap:14px; }
+        .opsConsole .opsReview.embedded .requestList,
+        .opsConsole .opsReview.embedded .detail,
+        .opsConsole .page.embedded .list,
+        .opsConsole .page.embedded .detail,
+        .opsConsole .aiOps.embedded .metrics article,
+        .opsConsole .aiOps.embedded .notice,
+        .opsConsole .aiOps.embedded .panel {
+          border-color:var(--ops-line);
+          border-radius:16px;
+          box-shadow:0 7px 22px rgba(15,31,61,.045);
+        }
+        .opsConsole .opsReview.embedded .requestList,
+        .opsConsole .opsReview.embedded .detail { min-height:520px; }
+        .opsConsole .opsReview.embedded .request,
+        .opsConsole .page.embedded .row { border-radius:12px; }
+        .opsConsole .page.embedded .listHead { padding:5px 6px 14px; }
+        .opsConsole .page.embedded .detail { padding:22px; }
+        .opsConsole .page.embedded .empty {
+          margin:0;
+          padding:34px 20px;
+          border:1px dashed #cbd7e6;
+          border-radius:12px;
+          background:#f8fafc;
+        }
+        .opsConsole .aiOps.embedded .metrics { gap:10px; }
+        .opsConsole .aiOps.embedded .metrics article { min-height:104px; padding:16px; }
+        .opsConsole .aiOps.embedded .notice { margin:12px 0; padding:15px 16px; }
+        .opsConsole .aiOps.embedded .panelHead { padding:18px 18px 14px; }
+        .opsConsole .aiOps.embedded .panelHead h2 { font-size:18px; }
+        .opsConsole .aiOps.embedded th,
+        .opsConsole .aiOps.embedded td { padding:13px 15px; }
+        .ticketShell .filters { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+        .opsConsole .opsReview.embedded .request:hover,
+        .opsConsole .page.embedded .row:hover,
+        .opsConsole .aiOps.embedded tbody tr:hover { background:#f7fbff; }
         @media (max-width: 720px) {
+          .primaryTabs { display:flex; width:100%; overflow:auto; grid-template-columns:none; }
+          .primaryTabs .tab { flex:0 0 auto; }
+          .subNavContext { grid-column:1 / -1 !important; padding-left:2px; padding-right:2px; }
+          .subTabs { overflow:auto; padding-bottom:2px; }
+          .ticketShell .filters { grid-template-columns:1fr; }
+          .opsConsole .opsReview.embedded .requestList,
+          .opsConsole .opsReview.embedded .detail { min-height:auto; }
           .wrap {
             padding: 14px;
           }
@@ -2176,7 +2393,7 @@ export default function OpsPage() {
         </div>
         <div className="row opsAccount">
           <div><strong>{opsIdentity.email || "OPS 사용자"}</strong><small>{opsIdentity.role.toUpperCase()}</small></div>
-          <button className="btn opsControl" onClick={() => { void loadOps(); void loadOpsWorkQueue(); }} disabled={loading || opsWorkQueue.loading}>
+          <button className="btn opsControl" onClick={() => { void loadOps(); void loadOpsWorkQueue(); void loadAiOpsSignal(); }} disabled={loading || opsWorkQueue.loading || aiOpsSignal.loading}>
             <OpsIcon name="refresh" />{loading ? "업데이트 중..." : "새로고침"}
           </button>
           <button className="btn opsControl" onClick={() => void supabase.auth.signOut().then(() => router.replace("/ops/login"))}><OpsIcon name="logout" />로그아웃</button>
@@ -2188,6 +2405,30 @@ export default function OpsPage() {
           <p className="muted">{msg}</p>
         </section>
       ) : null}
+
+      <div className={`opsNavigation primary-${activePrimary}`}>
+        <nav className="tabs primaryTabs" aria-label="OPS 주요 메뉴">
+          {NAV_GROUPS.map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              className={`tab ${activePrimary === group.id ? "active" : ""}`}
+              onClick={() => {
+                const target = group.tabs.find((tab) => tab.id !== "settings" || isOpsMaster) || group.tabs[0];
+                if (target.id === "subscriptions" && selectedStore?.status === "deleted") setSelectedStoreId(subscriptionBaseRows[0]?.store_id || "");
+                setActiveTab(target.id);
+              }}
+            >
+              <OpsIcon name={group.icon} />{group.label}
+            </button>
+          ))}
+        </nav>
+        {availableNavTabs.length > 1 ? <div className="subNavContext">
+          <nav className="subTabs" aria-label={`${activeNavGroup.label} 세부 메뉴`}>
+            {availableNavTabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}><OpsIcon name={tab.icon} />{tab.label}</button>)}
+          </nav>
+        </div> : null}
+      </div>
 
       {!loading && activeTab === "overview" ? (
         <>
@@ -2208,11 +2449,11 @@ export default function OpsPage() {
               <span className="immediateActionTitle"><OpsIcon name="support" />문의·장애</span>
               <span className="immediateActionMeta"><small>{kpi.urgentTickets > 0 ? `긴급 ${kpi.urgentTickets.toLocaleString()}건을 먼저 확인하세요.` : "미처리 문의와 장애를 확인합니다."}</small><b>{kpi.openTickets.toLocaleString()}건</b></span>
             </button>
-            <button className={`immediateAction ${opsWorkQueue.businessVerificationCount > 0 || opsWorkQueue.businessVerificationError ? "warn" : ""}`} disabled={Boolean(opsWorkQueue.businessVerificationError)} onClick={() => router.push("/ops/business-verifications")}>
+            <button className={`immediateAction ${opsWorkQueue.businessVerificationCount > 0 || opsWorkQueue.businessVerificationError ? "warn" : ""}`} disabled={Boolean(opsWorkQueue.businessVerificationError)} onClick={() => setActiveTab("businessVerification")}>
               <span className="immediateActionTitle"><OpsIcon name="shield" />사업자 인증</span>
               <span className="immediateActionMeta"><small>{opsWorkQueue.businessVerificationError || queueAgeLabel(opsWorkQueue.oldestBusinessVerificationAt, "매장 생성 전 사업체와 증빙을 검토합니다.")}</small><b>{opsWorkQueue.loading || opsWorkQueue.businessVerificationError ? "-" : `${opsWorkQueue.businessVerificationCount.toLocaleString()}건`}</b></span>
             </button>
-            <button className={`immediateAction ${opsWorkQueue.privacyRequestCount > 0 || opsWorkQueue.privacyRequestError ? "danger" : ""}`} disabled={Boolean(opsWorkQueue.privacyRequestError)} onClick={() => router.push("/ops/privacy-requests")}>
+            <button className={`immediateAction ${opsWorkQueue.privacyRequestCount > 0 || opsWorkQueue.privacyRequestError ? "danger" : ""}`} disabled={Boolean(opsWorkQueue.privacyRequestError)} onClick={() => setActiveTab("privacyRequests")}>
               <span className="immediateActionTitle"><OpsIcon name="privacy" />개인정보 요청</span>
               <span className="immediateActionMeta"><small>{opsWorkQueue.privacyRequestError || queueAgeLabel(opsWorkQueue.oldestPrivacyRequestAt, "요청 범위와 처리 기한을 확인합니다.")}</small><b>{opsWorkQueue.loading || opsWorkQueue.privacyRequestError ? "-" : `${opsWorkQueue.privacyRequestCount.toLocaleString()}건`}</b></span>
             </button>
@@ -2221,10 +2462,11 @@ export default function OpsPage() {
               <span className="immediateActionMeta"><small>결제 없는 유료 매장과 만료 임박 매장을 확인합니다.</small><b>{subscriptionCheckCount.toLocaleString()}개</b></span>
             </button>
           </section>
+          {aiOpsNeedsAttention ? <section className={`card aiOpsAlert ${aiOpsSignal.error || aiOpsSignal.failedCount > 0 ? "danger" : "warn"}`}><div><span><OpsIcon name="sparkles" />AI 운영 확인</span><strong>{aiOpsSignal.error || aiOpsSignal.failedCount > 0 ? `오류 ${aiOpsSignal.failedCount.toLocaleString()}건을 확인해 주세요.` : aiOpsSignal.blockedCount > 0 ? `차단된 AI 요청 ${aiOpsSignal.blockedCount.toLocaleString()}건이 있습니다.` : `이번 달 AI 예산 ${aiOpsSignal.monthlyCostRate}%를 사용했습니다.`}</strong><p>AI 운영 화면에서 매장별 사용량·비용·한도와 중지 상태를 확인할 수 있습니다.</p></div><button onClick={() => setActiveTab("ai")}>AI 운영 열기</button></section> : null}
         </>
       ) : null}
 
-      <section className="kpis">
+      {!loading && activeTab === "overview" ? <section className="kpis">
         <article className="card kpi">
           <div className="kpiLabel">점주 계정 / 매장</div>
           <div className="kpiValue">
@@ -2259,23 +2501,7 @@ export default function OpsPage() {
             {kpi.todayNewTickets.toLocaleString()}건
           </div>
         </article>
-      </section>
-
-      <nav className="tabs" aria-label="OPS 탭">
-        {TABS.filter((tab) => tab.id !== "settings" || isOpsMaster).map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            className={`tab ${activeTab === tab.id ? "active" : ""}`}
-            onClick={() => {
-              if (tab.id === "subscriptions" && selectedStore?.status === "deleted") setSelectedStoreId(subscriptionBaseRows[0]?.store_id || "");
-              setActiveTab(tab.id);
-            }}
-          >
-            <OpsIcon name={tab.icon} />{tab.label}
-          </button>
-        ))}
-      </nav>
+      </section> : null}
 
       {loading ? (
         <section className="card">
@@ -2616,7 +2842,7 @@ export default function OpsPage() {
       ) : null}
 
       {!loading && activeTab === "payments" && canManageBilling ? (
-        <section className="noticeList">
+        <section className="noticeList paymentStack">
           <div className="refundSummary" aria-label="환불 처리 현황">
             <div className="notice"><span>처리 필요</span><strong>{refundCases.filter((item) => ["requested", "reviewing", "approved", "processing"].includes(item.status)).length}건</strong></div>
             <div className="notice"><span>확인 필요</span><strong>{refundCases.filter((item) => item.status === "reconcile_required").length}건</strong></div>
@@ -2656,7 +2882,7 @@ export default function OpsPage() {
                 </tbody>
               </table>
             </div>
-            {!orderCancelLoading && orderCancelCases.length === 0 ? <p className="muted">확인이 필요한 고객 주문 결제취소 건이 없습니다.</p> : null}
+            {!orderCancelLoading && orderCancelCases.length === 0 ? <p className="emptyState">확인이 필요한 고객 주문 결제취소 건이 없습니다.</p> : null}
           </article>
           {refundActionNotice ? (
             <div className={`refundActionNotice ${refundActionNotice.kind}`} role="status" aria-live="polite">
@@ -2705,7 +2931,7 @@ export default function OpsPage() {
                 </tbody>
               </table>
             </div>
-            {!refundLoading && refundCases.length === 0 ? <p className="muted">접수된 기간 경과 환불 요청이 없습니다.</p> : null}
+            {!refundLoading && refundCases.length === 0 ? <p className="emptyState">접수된 기간 경과 환불 요청이 없습니다.</p> : null}
           </article>
           <article className="card">
             <div className="panelHeader">
@@ -2736,7 +2962,7 @@ export default function OpsPage() {
                 </tbody>
               </table>
             </div>
-            {!refundLoading && refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).length === 0 ? <p className="muted">조건에 맞는 환불 이력이 없습니다.</p> : null}
+            {!refundLoading && refundRows.filter((row) => refundStatusFilter === "all" || row.status === refundStatusFilter).length === 0 ? <p className="emptyState">조건에 맞는 환불 이력이 없습니다.</p> : null}
           </article>
         </section>
       ) : null}
@@ -2761,11 +2987,15 @@ export default function OpsPage() {
         </div>
       ) : null}
 
+      {!loading && activeTab === "businessVerification" ? <OpsBusinessVerifications embedded /> : null}
+      {!loading && activeTab === "privacyRequests" ? <OpsPrivacyRequests embedded /> : null}
+      {!loading && activeTab === "ai" ? <OpsAiUsage embedded /> : null}
+
       {!loading && activeTab === "tickets" ? (
         <section className="card">
           <div className="panelHeader">
             <div>
-              <div className="sectionTitle">문의/장애</div>
+              <div className="sectionTitle">문의·장애</div>
               <p>고객 문의와 장애를 빠르게 확인하고 처리 상태를 변경합니다.</p>
             </div>
           </div>
@@ -2843,7 +3073,7 @@ export default function OpsPage() {
               </div>
               <div className="ticketList">
                 {filteredTickets.length === 0 ? (
-                  <p className="muted">조건에 맞는 티켓이 없습니다.</p>
+                  <p className="emptyState">조건에 맞는 티켓이 없습니다.</p>
                 ) : null}
                 {filteredTickets.slice(0, 12).map((t) => (
                   <div
@@ -2873,9 +3103,7 @@ export default function OpsPage() {
                         {ticketStatusLabel(t.status)}
                       </span>
                     </div>
-                    {t.body ? (
-                      <p style={{ margin: 0, fontSize: 13 }}>{t.body}</p>
-                    ) : null}
+                    {t.body ? <p className="ticketExcerpt">{t.body}</p> : null}
                   </div>
                 ))}
               </div>
