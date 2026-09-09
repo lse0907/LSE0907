@@ -25,7 +25,16 @@ type LimitRow = {
   monthly_cost_limit_won: number | string | null;
 };
 
-type SettingRow = { store_id: string; beta_status: string; ai_enabled: boolean; updated_at: string };
+type SettingRow = {
+  store_id: string;
+  beta_status: string;
+  ai_enabled: boolean;
+  daily_analysis_limit: number | null;
+  monthly_analysis_limit: number | null;
+  daily_cost_limit_won: number | string | null;
+  monthly_cost_limit_won: number | string | null;
+  updated_at: string;
+};
 type StoreRow = { store_id: string; store_name: string | null; owner_user_id: string | null };
 
 function privateResponse(body: unknown, status = 200) {
