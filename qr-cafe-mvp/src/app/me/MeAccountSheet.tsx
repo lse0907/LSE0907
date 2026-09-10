@@ -131,8 +131,8 @@ export function MeAccountSheet({
           <button type="button" className="sheetAction" onClick={onEdit}>
             정보 수정
           </button>
-          <Link className="accountSecondary" href="/account/privacy">
-            계정·개인정보 관리
+          <Link className="accountSecondary" href="/account">
+            내 계정 관리
           </Link>
           <Link className="accountSecondary" href="/account/services/add/owner">
             사업자 서비스 시작하기
