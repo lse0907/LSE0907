@@ -1,203 +1,39 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/app/lib/supabaseClient";
-import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
+import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
+import { fetchStoreProfileFromDb } from "@/app/lib/storeProfile";
 
-type TicketRow = {
-  id: number;
-  category: string;
-  priority: string;
-  status: string;
-  title: string;
-  body: string | null;
-  ops_note: string | null;
-  created_at: string;
-  updated_at: string;
-};
+type IntakeType = "help" | "billing" | "incident";
+type Ticket = { id:number; status:string; title:string; body:string|null; created_at:string; updated_at:string; intake_type:IntakeType|null; error_message:string|null };
+type TimelineEvent = { id:number; ticket_id:number; actor_kind:"owner"|"ops"|"system"|"ai"; body:string; created_at:string };
+type Attachment = { id:number; ticket_id:number; original_filename:string; byte_size:number };
+const options: Array<{id:IntakeType;label:string;copy:string;icon:"help"|"billing"|"incident"}> = [
+  {id:"help",label:"사용·설정 도움",copy:"기능 사용법이나 매장 설정을 안내받습니다.",icon:"help"},
+  {id:"billing",label:"결제·구독 문의",copy:"결제, 구독, 환불 검토가 필요한 경우입니다.",icon:"billing"},
+  {id:"incident",label:"오류 신고",copy:"화면 오류나 주문·결제 문제를 전달합니다.",icon:"incident"},
+];
+function Icon({name}:{name:"help"|"billing"|"incident"|"shield"|"clip"|"clock"|"check"|"arrow"}) { const p:Record<string,ReactNode>={help:<><circle cx="12" cy="12" r="8.6"/><path d="M9.8 9.2a2.35 2.35 0 1 1 3.25 2.18c-.71.32-1.05.83-1.05 1.7"/><path d="M12 16.8h.01"/></>,billing:<><rect x="3.4" y="5" width="17.2" height="14" rx="2.2"/><path d="M3.5 10h17"/><path d="M7.2 15h4"/></>,incident:<><path d="M12 3 21 19H3L12 3Z"/><path d="M12 9v4.4"/><path d="M12 16.6h.01"/></>,shield:<><path d="M12 3.2 4.8 6v5.1c0 4.5 2.9 7.7 7.2 9.2 4.3-1.5 7.2-4.7 7.2-9.2V6L12 3.2Z"/><path d="m9.4 11.8 1.7 1.7 3.7-3.7"/></>,clip:<path d="m8.8 12.9 5.3-5.3a3 3 0 1 1 4.3 4.3l-6.9 6.9a4.3 4.3 0 1 1-6.1-6.1l6.7-6.7"/>,clock:<><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.3 2"/></>,check:<><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.1 2.2 2.2 4.8-4.8"/></>,arrow:<><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></>}; return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{p[name]}</svg>; }
+function fmt(iso:string){const t=new Date(iso).getTime();return Number.isFinite(t)?new Date(t).toLocaleString("ko-KR",{dateStyle:"medium",timeStyle:"short",hour12:false}):iso;}
+function label(type:IntakeType|null){return options.find(x=>x.id===type)?.label||"문의";}
+function status(status:string){return status==="resolved"||status==="closed"?{label:"처리 완료",tone:"done"}:status==="in_progress"?{label:"운영팀 확인 중",tone:"progress"}:{label:"접수 완료",tone:"new"};}
+const sampleTicket:Ticket={id:101,status:"in_progress",title:"[사용·설정 도움] 메뉴 품절 설정 방법을 알고 싶습니다.",body:"특정 메뉴를 오늘만 주문할 수 없게 설정하려고 합니다. 설정 위치를 알려 주세요.",created_at:"2026-09-10T01:12:00.000Z",updated_at:"2026-09-10T01:25:00.000Z",intake_type:"help",error_message:null};
+const sampleEvents:TimelineEvent[]=[{id:1,ticket_id:101,actor_kind:"owner",body:"문의가 접수되었습니다.",created_at:"2026-09-10T01:12:00.000Z"},{id:2,ticket_id:101,actor_kind:"system",body:"운영팀이 매장 설정 상태를 확인하고 있습니다. 답변은 이 처리 이력에 남습니다.",created_at:"2026-09-10T01:13:00.000Z"}];
 
-function AdminSupportInner() {
-  const router = useRouter();
-  const sp = useSearchParams();
-
-  const storeId = useMemo(() => {
-    const q = (sp.get("store") || "").trim();
-    const saved = (getCurrentStoreId() || "").trim();
-    return q || saved;
-  }, [sp]);
-
-  const [storeName, setStoreName] = useState("-");
-  const [tickets, setTickets] = useState<TicketRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState("");
-
-  const [category, setCategory] = useState("inquiry");
-  const [priority, setPriority] = useState("normal");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-
-  const loadTickets = useCallback(async () => {
-    if (!storeId) return;
-    setLoading(true);
-    const [{ data: storeData }, { data, error }] = await Promise.all([
-      supabase.from("stores").select("store_name").eq("store_id", storeId).maybeSingle(),
-      supabase.from("support_tickets").select("id, category, priority, status, title, body, ops_note, created_at, updated_at").eq("store_id", storeId).order("created_at", { ascending: false }),
-    ]);
-
-    if (error) {
-      setMsg(`티켓 조회 실패: ${error.message}`);
-      setLoading(false);
-      return;
-    }
-
-    setStoreName(String(storeData?.store_name || storeId));
-    setTickets((data || []) as TicketRow[]);
-    setLoading(false);
-  }, [storeId]);
-
-  useEffect(() => {
-    if (!storeId) {
-      router.replace("/admin");
-      return;
-    }
-    setCurrentStoreId(storeId);
-  }, [router, storeId]);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      void loadTickets();
-    }, 0);
-    return () => clearTimeout(t);
-  }, [loadTickets]);
-
-  const onCreate = async () => {
-    setMsg("");
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) {
-      setMsg("제목을 입력해 주세요.");
-      return;
-    }
-
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !userData?.user?.id) {
-      setMsg("로그인 사용자 확인 실패. 다시 로그인해 주세요.");
-      return;
-    }
-
-    const { error } = await supabase.from("support_tickets").insert({
-      store_id: storeId,
-      requester_user_id: userData.user.id,
-      category,
-      priority,
-      title: trimmedTitle,
-      body: body.trim() || null,
-      status: "open",
-    });
-
-    if (error) {
-      setMsg(`티켓 등록 실패: ${error.message}`);
-      return;
-    }
-
-    setTitle("");
-    setBody("");
-    setMsg("티켓 등록 완료");
-    await loadTickets();
-  };
-
-  const fmt = (iso: string) => {
-    const t = new Date(iso).getTime();
-    if (!Number.isFinite(t)) return iso;
-    return new Date(t).toLocaleString("ko-KR", { hour12: false });
-  };
-
-  return (
-    <main className="wrap">
-      <style jsx global>{`
-        :root {
-          color-scheme: light;
-        }
-
-        body {
-          background: #f6f7f9;
-          color: #111827;
-        }
-      `}</style>
-      <style jsx>{`
-        .wrap { max-width: 920px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; color:#111827; }
-        .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        .h1 { margin: 0; font-size: 22px; font-weight: 900; }
-        .card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:14px; display:grid; gap:10px; }
-        .row { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
-        .btn { border:1px solid #d1d5db; background:#fff; color:#111827; -webkit-text-fill-color: currentColor; border-radius:10px; padding:9px 12px; font-weight:800; cursor:pointer; }
-        .btn.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
-        .input, .textarea, .select { width:100%; border:1px solid #d1d5db; border-radius:10px; padding:10px; font-size:14px; }
-        .textarea { min-height:90px; resize: vertical; }
-        .muted { color:#4b5563; margin:0; font-size:13px; }
-        .ticket { border:1px solid #e5e7eb; border-radius:12px; padding:10px; display:grid; gap:6px; background:#fff; }
-        .pill { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; }
-      `}</style>
-
-      <AdminPageHeader title="지원센터" description="운영 중 궁금한 점이나 문제를 접수하고 처리 상태를 확인하세요." storeId={storeId} storeName={storeName} eyebrow="SUPPORT CENTER" />
-
-      <section className="card">
-        <div className="row">
-          <span className="pill">현재 매장 · {storeName}</span>
-        </div>
-        <p className="muted">불편사항/문의/오류를 등록하면 OPS에서 처리 상태를 갱신합니다.</p>
-
-        <div className="row">
-          <select className="select" value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="inquiry">문의</option>
-            <option value="bug">오류</option>
-            <option value="improvement">개선요청</option>
-            <option value="billing">결제/구독</option>
-            <option value="etc">기타</option>
-          </select>
-          <select className="select" value={priority} onChange={(e) => setPriority(e.target.value)}>
-            <option value="low">낮음</option>
-            <option value="normal">보통</option>
-            <option value="high">높음</option>
-            <option value="urgent">긴급</option>
-          </select>
-        </div>
-
-        <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목" />
-        <textarea className="textarea" value={body} onChange={(e) => setBody(e.target.value)} placeholder="내용" />
-        <div className="row">
-          <button className="btn primary" onClick={onCreate}>등록</button>
-          {msg ? <span className="muted">{msg}</span> : null}
-        </div>
-      </section>
-
-      <section className="card">
-        <h2 style={{ margin: 0, fontSize: 16 }}>내 매장 티켓 목록</h2>
-        {loading ? <p className="muted">로딩 중...</p> : null}
-        {!loading && tickets.length === 0 ? <p className="muted">등록된 티켓이 없습니다.</p> : null}
-        {tickets.map((t) => (
-          <article key={t.id} className="ticket">
-            <div className="row">
-              <b>#{t.id} {t.title}</b>
-              <span className="pill">{t.status}</span>
-              <span className="pill">{t.category}</span>
-              <span className="pill">{t.priority}</span>
-            </div>
-            {t.body ? <p style={{ margin: 0 }}>{t.body}</p> : null}
-            {t.ops_note ? <p className="muted">OPS 답변: {t.ops_note}</p> : <p className="muted">OPS 답변 대기 중</p>}
-            <p className="muted">등록: {fmt(t.created_at)} / 수정: {fmt(t.updated_at)}</p>
-          </article>
-        ))}
-      </section>
-    </main>
-  );
-}
-
-export default function AdminSupportPage() {
-  return (
-    <Suspense fallback={<main className="wrap"><p className="muted">로딩 중...</p></main>}>
-      <AdminSupportInner />
-    </Suspense>
-  );
-}
+function Support(){const router=useRouter(),params=useSearchParams(),preview=params.get("preview")==="1";const storeId=useMemo(()=> (params.get("store")||getCurrentStoreId()||"").trim(),[params]);
+ const [storeName,setStoreName]=useState("선택한 매장"),[tickets,setTickets]=useState<Ticket[]>([]),[events,setEvents]=useState<TimelineEvent[]>([]),[attachments,setAttachments]=useState<Attachment[]>([]),[loading,setLoading]=useState(true),[note,setNote]=useState(""),[selectedId,setSelectedId]=useState<number|null>(null),[type,setType]=useState<IntakeType>("help"),[body,setBody]=useState(""),[errorText,setErrorText]=useState(""),[files,setFiles]=useState<File[]>([]),[confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false);
+ const load=useCallback(async()=>{if(!storeId)return;if(preview){setStoreName("시연 매장");setTickets([sampleTicket]);setEvents(sampleEvents);setAttachments([]);setSelectedId(101);setLoading(false);return;}setLoading(true);const response=await fetch(`/api/admin/support?storeId=${encodeURIComponent(storeId)}`,{cache:"no-store"});const data=await response.json().catch(()=>null);if(!response.ok||!data?.ok){setNote(String(data?.message||"문의 이력을 불러오지 못했습니다."));setLoading(false);return;}setStoreName(String(data.storeName||storeId));setTickets(data.tickets||[]);setEvents(data.events||[]);setAttachments(data.attachments||[]);setSelectedId(current=>current&&data.tickets?.some((x:Ticket)=>x.id===current)?current:data.tickets?.[0]?.id||null);setLoading(false);},[preview,storeId]);
+ useEffect(()=>{if(!storeId){router.replace("/admin");return;}setCurrentStoreId(storeId);},[router,storeId]);useEffect(()=>{if(!preview&&storeId)void fetchStoreProfileFromDb(storeId).then(profile=>{if(profile?.storeName)setStoreName(profile.storeName);}).catch(()=>{});},[preview,storeId]);useEffect(()=>{void load();},[load]);
+ const selected=tickets.find(x=>x.id===selectedId)||null,selectedEvents=events.filter(x=>x.ticket_id===selected?.id),selectedFiles=attachments.filter(x=>x.ticket_id===selected?.id),canSend=body.trim().length>=2&&confirmed&&!busy;
+ async function send(){if(!canSend)return;if(preview){setNote("미리보기에서는 접수하지 않습니다. 실제 매장에서는 동일한 흐름으로 접수됩니다.");return;}setBusy(true);setNote("");const form=new FormData();form.set("storeId",storeId);form.set("intakeType",type);form.set("body",body.trim());if(type==="incident"&&errorText.trim())form.set("errorMessage",errorText.trim());files.forEach(file=>form.append("evidence",file));const res=await fetch("/api/admin/support",{method:"POST",body:form});const data=await res.json().catch(()=>null);if(!res.ok||!data?.ok){setNote(String(data?.message||"문의를 접수하지 못했습니다."));setBusy(false);return;}setBody("");setErrorText("");setFiles([]);setConfirmed(false);setNote("문의가 접수되었습니다. 처리 상황은 아래 이력에서 확인할 수 있습니다.");setBusy(false);await load();setSelectedId(Number(data.ticketId));}
+ async function openFile(file:Attachment){if(preview)return;const res=await fetch(`/api/admin/support/attachment?storeId=${encodeURIComponent(storeId)}&attachmentId=${file.id}`,{cache:"no-store"}),data=await res.json().catch(()=>null);if(!res.ok||!data?.url){setNote(String(data?.message||"첨부 파일을 열지 못했습니다."));return;}window.open(data.url,"_blank","noopener,noreferrer");}
+ return <main className="support"><style>{css}</style><AdminPageHeader title="지원센터" description="궁금한 점과 오류를 안전하게 접수하고 처리 과정을 확인하세요." storeId={storeId} storeName={storeName} eyebrow="RION CARE"/>
+ <section className="hero"><div><span><Icon name="shield"/> 안전한 문의 접수</span><h2>무엇을 도와드릴까요?</h2><p>문의 유형을 선택하고 상황을 적어 주세요. 결제·환불·설정 변경은 확인 후 처리됩니다.</p></div><aside><Icon name="clock"/><small>문의 이력은<br/><b>시간순으로 보관</b>됩니다.</small></aside></section>{note?<p className="notice" role="status">{note==="문의 이력을 불러오지 못했습니다."?"문의 내역을 불러오는 중 문제가 발생했습니다. 잠시 후 새로고침해 주세요.":note}</p>:null}
+ <section className="panel"><header><div><span>NEW REQUEST</span><h2>새 문의 접수</h2></div><small>우선순위는 내용과 영향 범위를 확인한 뒤 운영팀이 정합니다.</small></header><div className="types">{options.map(o=><button type="button" className={type===o.id?"on":""} key={o.id} onClick={()=>{setType(o.id);setFiles([]);setErrorText("");}}><i><Icon name={o.icon}/></i><div><b>{o.label}</b><small>{o.copy}</small></div>{type===o.id?<em><Icon name="check"/></em>:null}</button>)}</div>
+ <div className="form"><label className="body"><b>상황을 알려 주세요</b><textarea value={body} maxLength={5000} onChange={e=>setBody(e.target.value)} placeholder={type==="incident"?"어떤 화면에서 어떤 문제가 생겼는지, 재현되는 순서를 적어 주세요.":"궁금한 점이나 도움이 필요한 상황을 편하게 적어 주세요."}/><small>{body.length.toLocaleString()} / 5,000</small></label>{type==="incident"?<div className="evidence"><label><b>오류 문구 <em>선택</em></b><textarea value={errorText} maxLength={2000} onChange={e=>setErrorText(e.target.value)} placeholder="화면에 표시된 오류 문구가 있다면 그대로 적어 주세요."/><small>{errorText.length.toLocaleString()} / 2,000</small></label><label className="upload"><input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={e=>{const next=Array.from(e.target.files||[]).slice(0,3);if((e.target.files?.length||0)>3)setNote("오류 캡처는 최대 3장까지 첨부할 수 있습니다.");setFiles(next);}}/><Icon name="clip"/><div><b>오류 캡처 추가</b><small>PNG, JPG, WEBP · 최대 3장 · 파일당 5MB</small></div></label>{files.map(file=><div className="chosen" key={`${file.name}-${file.size}`}><Icon name="clip"/><span>{file.name}</span><button type="button" onClick={()=>setFiles(current=>current.filter(x=>x!==file))}>삭제</button></div>)}</div>:<aside className="guide"><Icon name={type==="billing"?"billing":"help"}/><div><b>{type==="billing"?"결제·구독은 바로 변경되지 않습니다.":"직접 해결할 수 있는 방법부터 안내합니다."}</b><p>{type==="billing"?"환불·구독 변경은 결제 상태를 확인한 뒤 운영팀 검토와 승인 절차로 처리합니다.":"매장 설정이나 사용법은 안내와 바로가기부터 제공하고 필요한 경우 운영팀으로 이관합니다."}</p></div></aside>}</div>
+ <label className="privacy"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>카드번호·비밀번호·고객 연락처·주소 등 개인정보를 입력하거나 캡처에 포함하지 않았습니다.</span></label><footer><p><Icon name="shield"/>AI가 직접 환불·결제·매장 설정을 변경하지 않습니다.</p><button type="button" disabled={!canSend} onClick={()=>void send()}>{busy?"접수 중…":"문의 접수"}<Icon name="arrow"/></button></footer></section>
+ <section className="panel history"><header><div><span>REQUEST HISTORY</span><h2>문의와 처리 이력</h2><p>접수한 문의와 운영팀의 처리 안내를 시간순으로 확인하세요.</p></div><strong>{tickets.length}건</strong></header>{loading?<div className="empty">문의 이력을 불러오는 중입니다.</div>:!tickets.length?<div className="empty"><Icon name="help"/><b>아직 접수한 문의가 없습니다.</b><small>위에서 도움이 필요한 내용을 남기면 처리 상황을 이곳에서 확인할 수 있습니다.</small></div>:<div className="historyGrid"><div className="list">{tickets.map(t=>{const s=status(t.status);return <button type="button" key={t.id} className={t.id===selected?.id?"active":""} onClick={()=>setSelectedId(t.id)}><span className={`state ${s.tone}`}>{s.label}</span><b>{label(t.intake_type)}</b><strong>{t.title.replace(/^\[[^\]]+\]\s*/,"")}</strong><small>{fmt(t.updated_at)}</small></button>;})}</div>{selected?<article className="detail"><span className={`state ${status(selected.status).tone}`}>{status(selected.status).label}</span><h3>{label(selected.intake_type)}</h3><small>문의 #{selected.id} · {fmt(selected.created_at)}</small><div className="request"><b>점주 문의</b><p>{selected.body||"내용 없음"}</p>{selected.error_message?<><hr/><b className="error">오류 문구</b><p>{selected.error_message}</p></>:null}</div>{selectedFiles.length?<div className="attached"><b><Icon name="clip"/>첨부한 오류 캡처</b>{selectedFiles.map(file=><button type="button" key={file.id} onClick={()=>void openFile(file)}><span>{file.original_filename}</span><small>{Math.ceil(file.byte_size/1024)}KB · 열기</small></button>)}</div>:null}<div className="timeline"><h4>처리 이력</h4>{selectedEvents.length?selectedEvents.map(event=><div className={`event ${event.actor_kind}`} key={event.id}><i>{event.actor_kind==="owner"?"나":event.actor_kind==="ops"?"OPS":"안내"}</i><div><b>{event.actor_kind==="owner"?"문의 접수":event.actor_kind==="ops"?"운영팀 안내":"처리 안내"}</b><p>{event.body}</p><small>{fmt(event.created_at)}</small></div></div>):<div className="event system"><i>안내</i><div><b>운영팀 확인 대기</b><p>처리 과정이 시작되면 이곳에 안내가 추가됩니다.</p></div></div>}</div></article>:null}</div>}</section></main>}
+const css=`.support{max-width:1120px;margin:auto;padding:16px 16px 54px;display:grid;gap:14px;color:#182641}.hero{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:25px;border:1px solid #183e79;border-radius:20px;background:linear-gradient(120deg,#10284f,#1d4a86);box-shadow:0 15px 30px #0f346a29;color:#fff}.hero span,.panel header>div>span{display:flex;align-items:center;gap:6px;color:#a9cdfc;font-size:10px;font-weight:950;letter-spacing:.12em}.hero span svg{width:14px}.hero h2{margin:9px 0 0;font-size:clamp(23px,3vw,31px);letter-spacing:-.045em}.hero p{max-width:650px;margin:8px 0 0;color:#d5e3f7;font-size:13px;font-weight:650;line-height:1.6}.hero aside{display:flex;align-items:center;gap:10px;min-width:185px;padding:13px;border:1px solid #bed7fa59;border-radius:14px;background:#fff1;color:#c7dbfa;font-size:11px;line-height:1.55}.hero aside svg{width:25px}.hero aside b{color:#fff;font-size:12px}.notice{margin:0;padding:12px 14px;border:1px solid #b6d3fa;border-radius:13px;background:#eff6ff;color:#174f91;font-size:13px;font-weight:800}.panel{padding:21px;border:1px solid #dce5f1;border-radius:19px;background:#fff;box-shadow:0 8px 22px #1e3b6810}.panel header{display:flex;align-items:end;justify-content:space-between;gap:16px}.panel header>div>span{color:#3970bd}.panel h2{margin:5px 0 0;color:#1b2d49;font-size:20px;letter-spacing:-.035em}.panel header>small{max-width:290px;color:#73829a;font-size:11px;line-height:1.5;text-align:right}.types{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}.types button{min-height:92px;padding:13px;border:1px solid #dce5f1;border-radius:14px;background:#fff;color:#223653;display:grid;grid-template-columns:35px minmax(0,1fr) 18px;gap:9px;align-items:center;text-align:left;font:inherit;cursor:pointer}.types button:hover{border-color:#9fbce1;background:#f9fbff}.types button.on{border-color:#245a9c;background:#f2f7ff;box-shadow:inset 0 0 0 1px #245a9c}.types i{display:grid;place-items:center;width:35px;height:35px;border-radius:11px;background:#eaf2ff;color:#245a9c}.types i svg,.types em svg{width:17px}.types div{display:grid;gap:4px}.types b{font-size:13px}.types small{color:#718099;font-size:10px;font-weight:650;line-height:1.4}.types em{color:#1d5ca8}.form{display:grid;grid-template-columns:minmax(0,1.16fr) minmax(270px,.84fr);gap:12px;margin-top:13px}.body,.evidence label{display:grid;gap:7px}.body>b,.evidence label>b{color:#304866;font-size:12px}.evidence em{color:#728199;font-size:10px;font-style:normal}.body textarea,.evidence textarea{width:100%;min-height:164px;box-sizing:border-box;resize:vertical;padding:13px;border:1px solid #cfddeb;border-radius:13px;background:#fbfdff;color:#1e314f;font:inherit;font-size:13px;line-height:1.55}.evidence{display:grid;gap:9px}.evidence textarea{min-height:75px}.body small,.evidence label small{color:#8a97aa;font-size:10px;text-align:right}.guide{display:flex;align-items:flex-start;gap:11px;padding:17px;border:1px solid #dce7f5;border-radius:14px;background:#f6f9fe}.guide>svg{width:21px;color:#2b65ad}.guide b{color:#29496e;font-size:12px}.guide p{margin:6px 0 0;color:#728098;font-size:11px;font-weight:650;line-height:1.55}.upload{position:relative;min-height:76px;display:flex!important;align-items:center;gap:8px;padding:10px;border:1px dashed #9bbce5;border-radius:12px;background:#f8fbff;color:#2962a8;cursor:pointer}.upload input{position:absolute;inset:0;opacity:0;cursor:pointer}.upload svg{width:20px}.upload div{display:grid;gap:3px}.upload small{font-size:10px;color:#718099}.chosen{display:flex;align-items:center;gap:7px;padding:7px 8px;border-radius:9px;background:#f5f8fc;color:#405575;font-size:11px}.chosen svg{width:14px}.chosen span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chosen button{border:0;background:transparent;color:#7a5362;font:inherit;font-size:10px;font-weight:900;cursor:pointer}.privacy{display:flex;gap:8px;margin-top:14px;color:#586c87;font-size:11px;font-weight:700;line-height:1.5;cursor:pointer}.privacy input{margin:1px 0 0;accent-color:#1e579d}.panel footer{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:15px;padding-top:14px;border-top:1px solid #e7edf5}.panel footer p{display:flex;align-items:center;gap:6px;margin:0;color:#687b95;font-size:11px;font-weight:700}.panel footer p svg{width:15px;color:#2c64a9}.panel footer>button{min-height:41px;padding:0 15px;border:1px solid #173f78;border-radius:11px;background:#173f78;color:#fff;display:flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 6px 14px #173f782e}.panel footer>button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}.panel footer>button svg{width:15px}.history header{align-items:start}.history header p{margin:7px 0 0;color:#728098;font-size:12px;font-weight:650}.history header>strong{display:grid;place-items:center;min-width:43px;min-height:35px;border-radius:11px;background:#edf4ff;color:#235b9e;font-size:14px}.empty{min-height:156px;margin-top:16px;display:grid;place-items:center;align-content:center;gap:8px;border:1px dashed #c9d7e8;border-radius:14px;background:#fafcff;color:#76859a;font-size:12px;text-align:center}.empty svg{width:24px;color:#5681bb}.empty b{color:#3c5272;font-size:13px}.historyGrid{display:grid;grid-template-columns:minmax(260px,.75fr) minmax(0,1.25fr);gap:12px;margin-top:17px}.list{display:grid;align-content:start;gap:7px}.list>button{width:100%;padding:12px;border:1px solid #e0e8f2;border-radius:13px;background:#fff;color:#263b58;display:grid;grid-template-columns:auto 1fr;gap:6px 8px;text-align:left;font:inherit;cursor:pointer}.list>button.active{border-color:#6d9bd0;background:#f4f8fe;box-shadow:inset 0 0 0 1px #b4d0ee}.state{display:inline-flex;align-items:center;justify-content:center;width:max-content;padding:4px 6px;border-radius:999px;font-size:9px;font-weight:900}.state.new{background:#eaf2ff;color:#255f9f}.state.progress{background:#fff5df;color:#9a6509}.state.done{background:#eafaf1;color:#15754e}.list b{font-size:10px;color:#56759a}.list strong{grid-column:1/-1;overflow:hidden;font-size:12px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}.list small{grid-column:1/-1;color:#8795a8;font-size:10px}.detail{min-width:0;padding:17px;border:1px solid #dce6f1;border-radius:15px;background:#fbfdff}.detail h3{margin:9px 0 0;color:#1e3556;font-size:18px;letter-spacing:-.035em}.detail>small{display:block;margin-top:5px;color:#7b899c;font-size:10px}.request{margin-top:16px;padding:13px;border-radius:12px;background:#fff;border:1px solid #e4ebf3}.request>b{color:#4777b3;font-size:10px}.request p{margin:7px 0 0;color:#3c506d;font-size:12px;line-height:1.6;white-space:pre-wrap}.request hr{border:0;border-top:1px solid #edf1f5;margin:10px 0}.request .error{color:#a24a4a}.attached{display:grid;gap:7px;margin-top:12px}.attached>b{display:flex;align-items:center;gap:5px;color:#48617e;font-size:11px}.attached>b svg{width:14px}.attached button{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border:1px solid #dae5f1;border-radius:10px;background:#fff;color:#315c91;text-align:left;font:inherit;font-size:11px;cursor:pointer}.attached button small{color:#7c8da3;font-size:10px}.timeline{margin-top:18px;padding-top:15px;border-top:1px solid #e3ebf3}.timeline h4{margin:0 0 11px;color:#304866;font-size:12px}.event{position:relative;display:grid;grid-template-columns:31px minmax(0,1fr);gap:9px;padding-bottom:14px}.event:not(:last-child):before{content:"";position:absolute;left:15px;top:28px;bottom:0;border-left:1px solid #d7e2ef}.event>i{z-index:1;display:grid;place-items:center;width:31px;height:24px;border-radius:8px;background:#eaf2ff;color:#2b63a6;font-size:9px;font-style:normal;font-weight:900}.event.owner>i{background:#eff4fa;color:#465d79}.event.ops>i{background:#eafaf1;color:#16714c}.event b{color:#38506e;font-size:11px}.event p{margin:4px 0;color:#697b93;font-size:11px;line-height:1.55}.event small{color:#98a4b4;font-size:9px}@media(max-width:720px){.support{padding:12px 12px 42px;gap:11px}.hero{align-items:flex-start;padding:19px}.hero h2{font-size:24px}.hero p{font-size:12px}.hero aside{display:none}.panel{padding:16px;border-radius:16px}.panel header>small{display:none}.types{grid-template-columns:1fr;gap:7px;margin-top:14px}.types button{min-height:66px;padding:9px}.form,.historyGrid{grid-template-columns:1fr}.body textarea{min-height:125px}.panel footer{align-items:flex-start;flex-direction:column}.panel footer>button{width:100%;justify-content:center}.list{max-height:300px;overflow:auto}.detail{padding:14px}.history header p{font-size:11px}}`;
+export default function Page(){return <Suspense fallback={<main className="support"><p>로딩 중…</p></main>}><Support/></Suspense>;}
