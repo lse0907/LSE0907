@@ -9,6 +9,7 @@ import OpsIcon, { type OpsIconName } from "./_components/OpsIcon";
 import OpsBusinessVerifications from "./business-verifications/page";
 import OpsPrivacyRequests from "./privacy-requests/OpsPrivacyRequests";
 import OpsAiUsage from "./ai-usage/page";
+import OpsSupportDesk from "./support/OpsSupportDesk";
 
 type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "businessVerification" | "privacyRequests" | "ai" | "tickets" | "settings";
 type OpsPrimaryTab = "overview" | "merchant" | "billing" | "support" | "system";
@@ -2991,7 +2992,8 @@ export default function OpsPage() {
       {!loading && activeTab === "privacyRequests" ? <OpsPrivacyRequests embedded /> : null}
       {!loading && activeTab === "ai" ? <OpsAiUsage embedded /> : null}
 
-      {!loading && activeTab === "tickets" ? (
+      {!loading && activeTab === "tickets" ? <OpsSupportDesk /> : null}
+      {false && !loading && activeTab === "tickets" ? (
         <section className="card">
           <div className="panelHeader">
             <div>

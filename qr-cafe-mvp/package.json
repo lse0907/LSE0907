@@ -20,7 +20,9 @@
     "test:p1-subscription-referral": "node scripts/check-p1-subscription-referral.mjs",
     "test:p1-privacy-consent": "node scripts/check-p1-privacy-consent.mjs",
     "test:p1-privacy-rights": "node scripts/check-p1-privacy-rights.mjs",
-    "test:p1-ops-privacy-requests": "node scripts/check-p1-ops-privacy-requests.mjs"
+    "test:p1-ops-privacy-requests": "node scripts/check-p1-ops-privacy-requests.mjs",
+    "test:ai-execution-limits": "node scripts/check-ai-execution-limits.mjs",
+    "test:ai-support-intake": "node scripts/check-ai-support-intake.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

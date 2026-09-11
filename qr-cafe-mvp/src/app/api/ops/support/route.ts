@@ -1,0 +1,21 @@
+import { NextRequest } from "next/server";
+import { ApiError, apiErrorResponse, createSupabaseAdminClient } from "@/app/api/_lib/storeAuth";
+import { requireOpsUser } from "@/app/api/_lib/opsAuth";
+export const dynamic = "force-dynamic";
+const fields = "id,store_id,category,priority,status,title,body,ops_note,created_at,updated_at,resolved_at,intake_type,error_message,has_attachments";
+const reply = (v: unknown, status = 200) => Response.json(v, { status, headers: { "Cache-Control": "private, no-store" } });
+const statusLabel: Record<string, string> = { open: "접수됨", in_progress: "처리 중", resolved: "답변 완료", closed: "종료" };
+export async function GET(req: NextRequest) {
+ try { const admin=createSupabaseAdminClient(); await requireOpsUser(req,admin,["master","support"]); const id=Number(req.nextUrl.searchParams.get("ticketId")||0);
+  if(id){const ticket=await admin.from("support_tickets").select(fields).eq("id",id).maybeSingle(); if(ticket.error||!ticket.data)throw new ApiError(404,"문의를 찾을 수 없습니다."); const [events,attachments,store]=await Promise.all([admin.from("support_ticket_events").select("id,actor_kind,event_type,body,created_at").eq("ticket_id",id).order("created_at"),admin.from("support_ticket_attachments").select("id,original_filename,content_type,byte_size,created_at").eq("ticket_id",id).is("deleted_at",null).order("created_at"),admin.from("stores").select("store_name").eq("store_id",ticket.data.store_id).maybeSingle()]);if(events.error||attachments.error)throw new ApiError(500,"문의 처리 이력을 불러오지 못했습니다.");return reply({ok:true,ticket:{...ticket.data,store_name:store.data?.store_name||ticket.data.store_id},events:events.data||[],attachments:attachments.data||[]});}
+  const tickets=await admin.from("support_tickets").select(fields).order("created_at",{ascending:false}).limit(200);if(tickets.error)throw new ApiError(500,"문의 목록을 불러오지 못했습니다.");
+  const rows=tickets.data||[];
+  const storeIds=[...new Set(rows.map((ticket)=>ticket.store_id).filter(Boolean))];
+  const stores=storeIds.length?await admin.from("stores").select("store_id,store_name").in("store_id",storeIds):{data:[],error:null};
+  if(stores.error)throw new ApiError(500,"매장 정보를 불러오지 못했습니다.");
+  const names=new Map((stores.data||[]).map((store)=>[store.store_id,store.store_name]));
+  return reply({ok:true,tickets:rows.map((ticket)=>({...ticket,store_name:names.get(ticket.store_id)||ticket.store_id}))});
+ }catch(error){return apiErrorResponse(error);}}
+export async function POST(req: NextRequest) {
+ try {if(req.headers.get("origin")!==req.nextUrl.origin||req.headers.get("sec-fetch-site")==="cross-site")throw new ApiError(403,"허용되지 않은 요청입니다.");const admin=createSupabaseAdminClient();const actor=await requireOpsUser(req,admin,["master","support"]);const body=await req.json().catch(()=>({}));const id=Number(body.ticketId||0),status=String(body.status||"").trim(),message=String(body.reply||"").trim();if(!Number.isInteger(id)||id<1)throw new ApiError(400,"문의 번호를 확인해 주세요.");if(status&&!['open','in_progress','resolved','closed'].includes(status))throw new ApiError(400,"처리 상태를 확인해 주세요.");if(!status&&!message)throw new ApiError(400,"답변 또는 처리 상태를 입력해 주세요.");if(message.length>5000)throw new ApiError(400,"답변은 5,000자 이내로 입력해 주세요.");const current=await admin.from("support_tickets").select("status").eq("id",id).maybeSingle();if(current.error||!current.data)throw new ApiError(404,"문의를 찾을 수 없습니다.");const statusChanged=Boolean(status&&status!==current.data.status);if(statusChanged){const done=status==='resolved'||status==='closed';const saved=await admin.from("support_tickets").update({status,resolved_at:done?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq("id",id);if(saved.error)throw new ApiError(500,"처리 상태를 저장하지 못했습니다.");}const events=[] as Array<{ticket_id:number;actor_kind:string;event_type:string;body:string}>;if(message)events.push({ticket_id:id,actor_kind:'ops',event_type:'message',body:message});if(statusChanged)events.push({ticket_id:id,actor_kind:'ops',event_type:'status_changed',body:`처리 상태가 ${statusLabel[status]}로 변경되었습니다. (OPS ${actor.userId.slice(0,8)})`});if(events.length){const saved=await admin.from("support_ticket_events").insert(events);if(saved.error)throw new ApiError(500,"처리 이력을 저장하지 못했습니다.");}return reply({ok:true});
+ }catch(error){return apiErrorResponse(error);}}
