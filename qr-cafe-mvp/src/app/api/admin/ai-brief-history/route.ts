@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await admin
       .from("ai_briefs")
-      .select("id,brief_period,period_start,period_end,headline,summary,brief_status,data_confidence,generated_at,source_order_count,source_sales_won")
+      .select("id,brief_period,period_start,period_end,headline,summary,recommendation,brief_status,data_confidence,generated_at,source_order_count,source_sales_won")
       .eq("store_id", storeId)
       .eq("brief_period", period)
       .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
