@@ -42,6 +42,14 @@ type StoreAddonSummary = {
   addonPaidUntil: string | null;
 };
 
+type AiBriefNotice = {
+  storeId: string;
+  id: string;
+  brief_period: "daily" | "weekly" | "monthly";
+  headline: string;
+  summary: string;
+};
+
 type AdminIconName =
   | "plus"
   | "sales"
@@ -159,6 +167,8 @@ function AdminPageInner() {
   const [mobileStorePickerOpen, setMobileStorePickerOpen] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
+  const [aiBriefNotice, setAiBriefNotice] = useState<AiBriefNotice | null>(null);
+  const [referenceNow] = useState(() => Date.now());
   const [statsSummary, setStatsSummary] = useState({
     daily: 0,
     weekly: 0,
@@ -324,7 +334,7 @@ function AdminPageInner() {
     if (!raw) return null;
     const t = new Date(raw).getTime();
     if (!Number.isFinite(t)) return null;
-    return Math.max(0, Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24)));
+    return Math.max(0, Math.ceil((t - referenceNow) / (1000 * 60 * 60 * 24)));
   };
 
   const fetchStatsSummaryForStore = async (storeId: string) => {
@@ -399,38 +409,48 @@ function AdminPageInner() {
 
   useEffect(() => {
     if (!storesLoaded) return;
-    const selectableStores = stores.filter(
-      (store) => getStoreLifecycleStatus(store) !== "deleted",
-    );
-    if (!selectableStores.length) {
-      setSelectedStoreIdState(null);
-      clearCurrentStoreId();
-      return;
-    }
-    if (
-      selectedStoreId &&
-      selectableStores.some((s) => s.store_id === selectedStoreId)
-    ) {
-      return;
-    }
-    setSelectedStoreIdState(null);
-    clearCurrentStoreId();
+    const frame = window.requestAnimationFrame(() => {
+      const selectableStores = stores.filter(
+        (store) => getStoreLifecycleStatus(store) !== "deleted",
+      );
+      if (!selectableStores.length || !selectedStoreId || !selectableStores.some((store) => store.store_id === selectedStoreId)) {
+        setSelectedStoreIdState(null);
+        clearCurrentStoreId();
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [stores, selectedStoreId, storesLoaded]);
 
   useEffect(() => {
-    if (!selectedStoreId) {
-      setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
+    const frame = window.requestAnimationFrame(() => {
+      if (!selectedStoreId) {
+        setStatsSummary({ daily: 0, weekly: 0, monthly: 0 });
+        setHideSetupBannerForCurrentSelection(false);
+        setSelectedStoreCounts(null);
+        return;
+      }
       setHideSetupBannerForCurrentSelection(false);
-      setSelectedStoreCounts(null);
-      return;
-    }
-    fetchStatsSummaryForStore(selectedStoreId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      fetchStatsSummaryForStore(selectedStoreId);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [selectedStoreId]);
 
   useEffect(() => {
     if (!selectedStoreId) return;
-    setHideSetupBannerForCurrentSelection(false);
+    const controller = new AbortController();
+    fetch(`/api/admin/ai-brief-notification?store=${encodeURIComponent(selectedStoreId)}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.ok || payload.ready === false) return null;
+        return payload.brief as Omit<AiBriefNotice, "storeId"> | null;
+      })
+      .then((brief) => {
+        if (!controller.signal.aborted) setAiBriefNotice(brief ? { ...brief, storeId: selectedStoreId } : null);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setAiBriefNotice(null);
+      });
+    return () => controller.abort();
   }, [selectedStoreId]);
 
   useEffect(() => {
@@ -864,6 +884,13 @@ function AdminPageInner() {
           {selectedStoreId ? (
             /* 2차 관리자 홈 보완: 별도 현재 매장 박스 대신 매장 현황 카드 안에서 선택 매장을 함께 표시합니다. */
             <div className="dashboardGrid" aria-label="관리자 홈 요약">
+              {aiBriefNotice?.storeId === selectedStoreId ? (
+                <section className="aiBriefArrival" aria-label="새 AI 브리핑 알림">
+                  <span className="aiBriefArrivalIcon" aria-hidden="true"><AdminIcon name="insight" size={18} /></span>
+                  <div className="aiBriefArrivalCopy"><strong>새 AI 브리핑이 도착했어요.</strong><p>{aiBriefNotice.summary || aiBriefNotice.headline}</p></div>
+                  <button className="btn btnSmall aiBriefArrivalAction" onClick={() => go("/admin/ai")}>브리핑 보기</button>
+                </section>
+              ) : null}
               <section className="overviewCard overviewCardSelected">
                 <div className="overviewHead">
                   <h2 className="overviewTitle">매장 현황</h2>
@@ -875,6 +902,7 @@ function AdminPageInner() {
                     <button className="btn btnSmall overviewActionInsight" onClick={() => go("/admin/ai")}>
                       <AdminIcon name="insight" size={15} />
                       AI 브리핑
+                      {aiBriefNotice?.storeId === selectedStoreId ? <span className="aiBriefNew">NEW</span> : null}
                     </button>
                   </div>
                 </div>
@@ -1390,6 +1418,8 @@ body {
   display:grid;
   gap:10px;
 }
+.aiBriefArrival{display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:12px;padding:14px 15px;border:1px solid #c6dbf7;border-radius:15px;background:linear-gradient(105deg,#eff7ff,#fff)}
+.aiBriefArrivalIcon{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:#173f77;color:#ffd34f}.aiBriefArrivalCopy{min-width:0}.aiBriefArrivalCopy strong{display:block;color:#203b60;font-size:13px;font-weight:900}.aiBriefArrivalCopy p{overflow:hidden;margin:4px 0 0;color:#5d7493;font-size:11px;font-weight:650;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}.aiBriefArrivalAction{min-height:35px;border-color:#1c4b89;background:#1c4b89;color:#fff;font-size:11px}.aiBriefNew{display:inline-flex;align-items:center;min-height:17px;padding:0 5px;border-radius:999px;background:#e6f3ff;color:#1c68ad;font-size:8px;font-weight:950;letter-spacing:.06em}
 .overviewCard{
   border:1px solid var(--line);
   background:#fff;
@@ -1928,6 +1958,7 @@ body {
   .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
   .overviewActions{ width:100%; margin-left:0; }
   .overviewActions .btn{ flex:1 1 0; min-height:38px; }
+  .aiBriefArrival{grid-template-columns:36px minmax(0,1fr);gap:10px;padding:13px}.aiBriefArrivalIcon{width:36px;height:36px;border-radius:11px}.aiBriefArrivalAction{grid-column:2;justify-self:start;min-height:33px}
   .statsRow{ min-height:74px; padding:9px; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:3px 6px; }
   .statsIcon{ width:22px; height:22px; border-radius:7px; font-size:10px; grid-row:1/3; }
   .statsLabel{ font-size:10px; }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 import { getCurrentStoreId } from "@/app/lib/currentStore";
+import { fetchStoreProfileFromDb } from "@/app/lib/storeProfile";
 
 type Brief = {
   stage: "data_waiting" | "data_collection" | "observation";
@@ -82,6 +83,7 @@ function nextStepFor(stage: Brief["stage"], recommendation: string | null) {
 function AiBriefContent() {
   const params = useSearchParams();
   const storeId = (params.get("store") || getCurrentStoreId() || "").trim();
+  const [storeName, setStoreName] = useState(() => storeId ? "매장 정보 확인 중" : "");
   const [brief, setBrief] = useState<Brief | null>(null);
   const [error, setError] = useState("");
   const [historyPeriod, setHistoryPeriod] = useState<BriefPeriod>("daily");
@@ -90,6 +92,21 @@ function AiBriefContent() {
   const [feedbackByBrief, setFeedbackByBrief] = useState<Record<string, BriefFeedback>>({});
   const [feedbackBusy, setFeedbackBusy] = useState("");
   const [unhelpfulBriefId, setUnhelpfulBriefId] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    if (!storeId) return () => { active = false; };
+
+    void fetchStoreProfileFromDb(storeId)
+      .then((profile) => {
+        if (active) setStoreName(profile?.storeName || "매장");
+      })
+      .catch(() => {
+        if (active) setStoreName("매장");
+      });
+
+    return () => { active = false; };
+  }, [storeId]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -132,6 +149,30 @@ function AiBriefContent() {
     return () => controller.abort();
   }, [historyPeriod, storeId]);
 
+  // A home-screen badge is cleared only after the owner reaches this briefing
+  // page. Visiting the dashboard or seeing the banner never marks it as read.
+  useEffect(() => {
+    if (!storeId) return;
+    const controller = new AbortController();
+    fetch(`/api/admin/ai-brief-notification?store=${encodeURIComponent(storeId)}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.ok || payload.ready === false || !payload.brief?.id) return null;
+        return String(payload.brief.id);
+      })
+      .then(async (briefId) => {
+        if (!briefId || controller.signal.aborted) return;
+        await fetch("/api/admin/ai-brief-notification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ store: storeId, briefId }),
+          signal: controller.signal,
+        });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [storeId]);
+
   useEffect(() => {
     if (!storeId || !history.length) return;
     const controller = new AbortController();
@@ -163,13 +204,13 @@ function AiBriefContent() {
 
   return <main className="aiBriefPage">
     <style>{styles}</style>
-    <AdminPageHeader title="RION Insight AI 브리핑" description="주문 흐름의 사실과 AI 해석, 다음 관찰 포인트를 구분해 안내합니다." storeId={storeId} eyebrow="RION INSIGHT" />
+    <AdminPageHeader title="RION AI 브리핑" description="주문 흐름의 사실과 AI 해석, 다음 관찰 포인트를 구분해 안내합니다." storeId={storeId} storeName={storeName} eyebrow="AI INSIGHT" />
     {!storeId ? <section className="aiNotice" role="alert">먼저 관리자 홈에서 매장을 선택해 주세요.</section> : null}
     {storeId && !brief && !error ? <section className="aiLoading" aria-live="polite"><span /><div><strong>AI 브리핑을 준비하고 있습니다.</strong><p>선택한 매장의 주문 흐름만 확인하고 있습니다.</p></div><Image className="aiLoadingGuide" src="/brand/rio-ai-guide-transparent.png" alt="AI 브리핑을 준비하는 리오" width={72} height={72} sizes="72px" priority /></section> : null}
     {error ? <section className="aiNotice" role="alert">{error}</section> : null}
     {brief && meta ? <>
-      <section className="aiHero" aria-labelledby="ai-headline"><div><span className="aiEyebrow"><AiIcon name="sparkle" />RION INSIGHT</span><h2 id="ai-headline">{brief.headline}</h2><p>{meta.description}</p></div><div className="aiHeroSide"><span className="aiStage">{meta.label}</span>{brief.stage !== "observation" ? <Image className="aiGuide" src="/brand/rio-ai-guide-transparent.png" alt="주문 기록을 정리하는 리오" width={106} height={106} sizes="106px" priority /> : null}</div></section>
-      {nextStep ? <section className="aiNext" aria-label="지금 확인할 내용"><span className="aiNextIcon"><AiIcon name="proposal" /></span><div><span className="aiSectionLabel">지금 확인할 내용</span><h2>{nextStep.title}</h2><p>{nextStep.body}</p></div><div className="aiNextActions"><span className="aiNextLabel">{nextStep.label}</span><Link href={`/admin/ai/experiments?store=${encodeURIComponent(storeId)}`} className="aiExperimentLink">실험 관리</Link></div></section> : null}
+      <section className="aiHero" aria-labelledby="ai-headline"><div><span className="aiEyebrow"><AiIcon name="sparkle" />AI INSIGHT</span><h2 id="ai-headline">{brief.headline}</h2><p>{meta.description}</p></div><div className="aiHeroSide"><span className={`aiStage${brief.stage === "data_collection" ? " isCollecting" : ""}`}>{brief.stage === "data_collection" ? <i aria-hidden="true" /> : null}{meta.label}</span>{brief.stage !== "observation" ? <Image className="aiGuide" src="/brand/rio-ai-guide-transparent.png" alt="주문 기록을 정리하는 리오" width={88} height={88} sizes="88px" priority /> : null}</div></section>
+      {nextStep ? <section className="aiNext" aria-label="지금 확인할 내용"><span className="aiNextIcon"><AiIcon name="proposal" /></span><div><span className="aiSectionLabel">지금 확인할 내용</span><h2>{nextStep.title}</h2><p>{nextStep.body}</p></div><div className="aiNextActions"><span className={`aiNextLabel${nextStep.label === "기록 수집 중" ? " isCollecting" : ""}`}>{nextStep.label === "기록 수집 중" ? <i aria-hidden="true" /> : null}{nextStep.label}</span><Link href={`/admin/ai/experiments?store=${encodeURIComponent(storeId)}`} className="aiExperimentLink"><AiIcon name="proposal" /><span>AI 제안 보기</span></Link></div></section> : null}
       <details className="aiDetails"><summary><span><span className="aiDetailsIcon"><AiIcon name="fact" /></span><span><b>매장 현황과 분석 근거</b><small>오늘의 주문 현황과 AI가 확인한 내용을 볼 수 있어요.</small></span></span><span className="aiDetailsHint">펼쳐 보기</span></summary><div className="aiDetailsBody"><section className="aiMetrics" aria-label="오늘의 매장 신호"><span><b>오늘 주문</b><strong>{brief.todayOrders.toLocaleString()}건</strong></span><i /><span><b>오늘 매출</b><strong>{money(brief.todaySales)}</strong></span><i /><span><b>수집 주문</b><strong>{brief.totalOrders.toLocaleString()}건</strong></span></section><div className="aiInsight"><div className="aiPanelHeading"><span className="aiPanelIcon fact"><AiIcon name="fact" /></span><div><h2>AI가 확인한 내용</h2><p>기록된 주문 데이터로 확인한 사실입니다.</p></div></div><p className="aiFact">{brief.fact}</p><div className="aiEvidence"><span>분석 기준</span><strong>최근 8주 주문 기록 · 신뢰도 {brief.confidence === "medium" ? "중간" : "초기"}</strong></div>{brief.hypothesis ? <div className="aiHypothesis"><strong>가능한 원인</strong><p>{brief.hypothesis}</p></div> : null}<div className="aiSafety"><AiIcon name="shield" /><span>AI는 메뉴·가격·쿠폰·주문 설정을 직접 바꾸지 않습니다.</span></div></div></div></details>
       <details className="aiHistory" aria-label="지난 AI 브리핑"><summary><span><b>지난 브리핑</b><small>일간·주간·월간으로 저장된 안내를 다시 볼 수 있어요.</small></span><span className="aiDetailsHint">이력 보기</span></summary><div className="aiHistoryBody">
         <div className="aiHistoryHead"><div><h2>지난 브리핑</h2><p>생성 당시의 데이터와 안내 내용을 다시 확인할 수 있습니다.</p></div><span>매장별 기록</span></div>
@@ -192,7 +233,9 @@ const styles = `
 .aiBriefPage{max-width:920px;margin:0 auto;padding:16px;display:grid;gap:12px;color:#182641}.aiHero{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px;border:1px solid #173c75;border-radius:18px;background:linear-gradient(128deg,#10284f 0%,#1c477f 100%);box-shadow:0 12px 28px rgba(19,51,101,.15);color:#fff}.aiHero>div{min-width:0}.aiHeroSide{display:flex;align-items:flex-end;flex-direction:column;gap:8px}.aiGuide{display:block;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(3,17,46,.25))}.aiEyebrow,.aiSectionLabel{display:inline-flex;align-items:center;gap:6px;color:#a9ceff;font-size:10px;font-weight:900;letter-spacing:.1em}.aiEyebrow{margin-bottom:9px}.aiEyebrow svg{width:14px;height:14px}.aiHero h2{margin:0;font-size:clamp(21px,2.5vw,28px);line-height:1.3;letter-spacing:-.035em}.aiHero p{max-width:600px;margin:8px 0 0;color:#d7e5fa;font-size:13px;font-weight:650;line-height:1.55}.aiStage{border:1px solid #cae1ff;border-radius:999px;background:#eef6ff;color:#174e94;padding:7px 10px;font-size:11px;font-weight:900;white-space:nowrap}.aiNext{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:17px 18px;border:1px solid #c7dcfa;border-radius:16px;background:#f3f7ff}.aiNextIcon,.aiDetailsIcon,.aiPanelIcon{display:grid;place-items:center;flex:0 0 auto;border-radius:12px}.aiNextIcon{width:40px;height:40px;background:#dceaff;color:#1e5aa4}.aiNextIcon svg,.aiDetailsIcon svg{width:19px;height:19px}.aiNext h2{margin:4px 0 0;color:#1c3357;font-size:16px;letter-spacing:-.025em}.aiNext p{margin:5px 0 0;color:#536a8c;font-size:12px;font-weight:650;line-height:1.55}.aiNextLabel{border-radius:999px;background:#fff;color:#2f609d;padding:6px 9px;font-size:11px;font-weight:850;white-space:nowrap}.aiDetails,.aiHistory{border:1px solid #dbe5f2;border-radius:16px;background:#fff;box-shadow:0 6px 16px rgba(33,61,105,.045)}.aiDetails summary,.aiHistory summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;cursor:pointer;list-style:none}.aiDetails summary::-webkit-details-marker,.aiHistory summary::-webkit-details-marker{display:none}.aiDetails summary>span:first-child{display:flex;align-items:center;gap:10px}.aiDetailsIcon{width:32px;height:32px;background:#e9f2ff;color:#235da9}.aiDetails b,.aiHistory summary b{display:block;color:#263e60;font-size:14px}.aiDetails small,.aiHistory summary small{display:block;margin-top:3px;color:#77869a;font-size:11px;font-weight:650;line-height:1.4}.aiDetailsHint{color:#52729a;font-size:11px;font-weight:850;white-space:nowrap}.aiDetails[open] summary,.aiHistory[open] summary{border-bottom:1px solid #e8edf5}.aiDetailsBody,.aiHistoryBody{padding:16px 18px 18px}.aiMetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.aiMetrics article{padding:13px;border:1px solid #e0e9f5;border-radius:12px;background:#fafcff}.aiMetrics span{display:block;color:#6a7890;font-size:11px;font-weight:800}.aiMetrics strong{display:block;margin-top:6px;color:#172b4c;font-size:21px;letter-spacing:-.035em}.aiMetrics small{display:block;margin-top:4px;color:#8794a8;font-size:10px;font-weight:650}.aiInsight{margin-top:12px;padding:16px;border:1px solid #e0e9f5;border-radius:13px}.aiPanelHeading{display:flex;align-items:flex-start;gap:10px}.aiPanelIcon{width:32px;height:32px;background:#e9f2ff;color:#235da9}.aiPanelIcon svg{width:16px;height:16px}.aiPanelHeading h2{margin:0;color:#1c2d48;font-size:14px}.aiPanelHeading p{margin:3px 0 0;color:#728199;font-size:11px;font-weight:650;line-height:1.45}.aiFact{margin:15px 0 0;padding-left:12px;border-left:3px solid #3d7ad2;color:#334a6c;font-size:13px;font-weight:700;line-height:1.65}.aiEvidence{display:grid;gap:4px;margin-top:14px;padding-top:12px;border-top:1px solid #e8edf5}.aiEvidence span{color:#7a879b;font-size:10px;font-weight:800}.aiEvidence strong{color:#405574;font-size:11px;line-height:1.45}.aiHypothesis{margin-top:12px;padding:11px 12px;border-radius:10px;background:#f7f9fc;color:#52647f}.aiHypothesis strong{font-size:11px;color:#2d466b}.aiHypothesis p{margin:4px 0 0;font-size:11px;font-weight:650;line-height:1.6}.aiSafety{display:flex;align-items:flex-start;gap:7px;margin-top:12px;color:#718098;font-size:11px;font-weight:650;line-height:1.5}.aiSafety svg{width:14px;height:14px;flex:0 0 auto;margin-top:1px}.aiHistoryHead{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.aiHistoryHead h2{margin:0;color:#1c2d48;font-size:15px}.aiHistoryHead p{margin:4px 0 0;color:#728199;font-size:11px;font-weight:650;line-height:1.45}.aiHistoryHead>span{color:#6d7e96;font-size:11px;font-weight:800;white-space:nowrap}.aiHistoryTabs{display:flex;gap:7px;margin-top:14px;padding-bottom:11px;border-bottom:1px solid #e8edf5}.aiHistoryTabs button{border:1px solid #d5e0ee;border-radius:999px;background:#fff;color:#60718b;padding:7px 11px;font:inherit;font-size:12px;font-weight:800}.aiHistoryTabs button.active{border-color:#1c4b89;background:#1c4b89;color:#fff}.aiHistoryEmpty{margin:0;padding:15px 0 1px;color:#718098;font-size:12px;font-weight:650}.aiHistoryRow{display:grid;grid-template-columns:70px minmax(0,1fr) auto;gap:12px;align-items:start;padding:14px 0;border-bottom:1px solid #edf1f6}.aiHistoryRow:last-child{border-bottom:0;padding-bottom:0}.aiHistoryRow time{color:#315070;font-size:12px;font-weight:800}.aiHistoryRow strong{display:block;color:#2b405f;font-size:13px;line-height:1.45}.aiHistoryRow p{margin:3px 0 0;color:#77869a;font-size:12px;font-weight:650;line-height:1.45}.aiHistoryStatus{border-radius:999px;background:#edf7f1;color:#287151;padding:5px 8px;font-size:10px;font-weight:800;white-space:nowrap}.aiFeedback{display:grid;gap:8px;margin-top:13px;padding-top:12px;border-top:1px solid #e8edf5}.aiFeedback>div:first-child{display:grid;gap:3px}.aiFeedback b{color:#314b6f;font-size:12px}.aiFeedback span{color:#77869a;font-size:11px;font-weight:650;line-height:1.45}.aiFeedbackChoices,.aiFeedbackReasons{display:flex;flex-wrap:wrap;gap:6px}.aiFeedbackChoices button,.aiFeedbackReasons button{border:1px solid #d5e0ee;border-radius:8px;background:#fff;color:#395475;padding:7px 9px;font:inherit;font-size:11px;font-weight:800}.aiFeedbackChoices button:hover,.aiFeedbackReasons button:hover{border-color:#1d579e;color:#1d579e}.aiFeedbackChoices button:disabled{opacity:.55}.aiFeedbackReasons{align-items:center;padding:9px 10px;border-radius:9px;background:#f4f8fd}.aiFeedbackReasons>span{width:100%;color:#46627f}.aiFeedbackSaved{color:#287151!important;font-size:11px!important;font-weight:800!important}.aiNotice,.aiLoading{border:1px solid #dbe5f2;border-radius:15px;background:#fff;padding:17px;color:#51647f;font-size:13px;font-weight:700}.aiLoading{display:flex;align-items:center;gap:12px}.aiLoading>span{width:21px;height:21px;border:3px solid #d9e6f8;border-top-color:#245fae;border-radius:50%;animation:aiSpin .8s linear infinite}.aiLoading strong{color:#243c60}.aiLoading p{margin:3px 0 0;color:#718098;font-size:12px;font-weight:650}.aiLoadingGuide{width:58px;height:58px;object-fit:contain;margin-left:auto;filter:drop-shadow(0 5px 8px rgba(34,62,104,.12))}@keyframes aiSpin{to{transform:rotate(360deg)}}@media(max-width:720px){.aiBriefPage{padding:12px;gap:10px}.aiHero{position:relative;display:block;min-height:150px;padding:17px 102px 17px 18px;border-radius:16px}.aiHeroSide{position:absolute;top:14px;right:15px;display:block}.aiGuide{position:absolute;top:31px;right:0;width:74px;height:74px}.aiNext{grid-template-columns:36px minmax(0,1fr);padding:15px}.aiNextIcon{width:36px;height:36px}.aiNextLabel{grid-column:2;justify-self:start}.aiDetails summary,.aiHistory summary{padding:14px 15px}.aiDetailsBody,.aiHistoryBody{padding:14px 15px 16px}.aiMetrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.aiMetrics article:last-child{grid-column:1/-1}.aiHistoryHead{display:block}.aiHistoryHead>span{display:block;margin-top:6px}.aiHistoryRow{grid-template-columns:61px minmax(0,1fr);gap:9px}.aiHistoryStatus{grid-column:2;justify-self:start}.aiFeedbackChoices button,.aiFeedbackReasons button{min-height:34px}}@media(prefers-reduced-motion:reduce){.aiLoading>span{animation-duration:1.8s}}
 /* Dense values are supporting evidence, not three dashboard cards. */
 .aiMetrics{display:flex;align-items:center;gap:13px;padding:11px 13px;border:1px solid #e0e9f5;border-radius:12px;background:#fafcff}.aiMetrics>span{display:grid;gap:3px;min-width:0;flex:1}.aiMetrics b{color:#6a7890;font-size:10px;font-weight:800}.aiMetrics strong{margin:0;color:#172b4c;font-size:16px;letter-spacing:-.03em;white-space:nowrap}.aiMetrics i{width:1px;height:28px;background:#dfe8f4}.aiMetrics article{display:none}@media(max-width:720px){.aiMetrics{gap:8px;padding:10px}.aiMetrics strong{font-size:14px}.aiMetrics i{height:24px}}
-.aiNextActions{display:grid;justify-items:end;gap:6px}.aiExperimentLink{color:#245b9d;font-size:11px;font-weight:850;text-decoration:none}.aiExperimentLink:hover{text-decoration:underline}@media(max-width:720px){.aiNextActions{grid-column:2;justify-items:start}.aiNextLabel{grid-column:auto}}
+.aiStage.isCollecting,.aiNextLabel.isCollecting{display:inline-flex;align-items:center;gap:6px;border-color:#bce6cd;background:#edf9f1;color:#23734b}.aiStage.isCollecting i,.aiNextLabel.isCollecting i{width:7px;height:7px;border-radius:50%;background:#2ca866;box-shadow:0 0 0 0 rgba(44,168,102,.45);animation:aiCollectPulse 1.8s ease-out infinite}.aiNextActions{display:grid;justify-items:end;gap:7px}.aiExperimentLink{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;border:1px solid #1c4b89;border-radius:10px;background:#1c4b89;color:#fff;padding:0 11px;font-size:12px;font-weight:850;text-decoration:none;box-shadow:0 4px 9px rgba(28,75,137,.14)}.aiExperimentLink svg{width:15px;height:15px;color:#ffd24b;filter:drop-shadow(0 1px 1px rgba(0,0,0,.16))}.aiExperimentLink:hover{background:#153e74;border-color:#153e74}.aiExperimentLink:focus-visible{outline:3px solid #a9ceff;outline-offset:2px}@keyframes aiCollectPulse{70%{box-shadow:0 0 0 5px rgba(44,168,102,0)}100%{box-shadow:0 0 0 0 rgba(44,168,102,0)}}@media(max-width:720px){.aiNextActions{grid-column:2;justify-items:start}.aiNextLabel{grid-column:auto}.aiExperimentLink{min-height:38px;padding:0 12px}}@media(prefers-reduced-motion:reduce){.aiStage.isCollecting i,.aiNextLabel.isCollecting i{animation:none}}
+/* Keep the briefing compact: the insight is the focus, not the hero decoration. */
+.aiHero{padding:18px 20px;gap:15px}.aiHeroSide{gap:6px}.aiGuide{width:88px;height:88px}.aiEyebrow{margin-bottom:7px}.aiHero p{margin-top:6px}@media(max-width:720px){.aiHero{min-height:132px;padding:15px 88px 15px 17px}.aiHeroSide{top:12px;right:13px}.aiGuide{top:28px;width:66px;height:66px}}
 `;
 
 export default function AdminAiBriefPage() {
