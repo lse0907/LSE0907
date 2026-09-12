@@ -10,8 +10,10 @@ import OpsBusinessVerifications from "./business-verifications/page";
 import OpsPrivacyRequests from "./privacy-requests/OpsPrivacyRequests";
 import OpsAiUsage from "./ai-usage/page";
 import OpsSupportDesk from "./support/OpsSupportDesk";
+import OpsIncidentAnalysis from "./support/OpsIncidentAnalysis";
+import OpsApprovalCenter from "./approvals/OpsApprovalCenter";
 
-type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "businessVerification" | "privacyRequests" | "ai" | "tickets" | "settings";
+type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "businessVerification" | "privacyRequests" | "ai" | "approvals" | "tickets" | "incidentAnalysis" | "settings";
 type OpsPrimaryTab = "overview" | "merchant" | "billing" | "support" | "system";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
 type StoreSort =
@@ -197,15 +199,15 @@ const NAV_GROUPS: Array<{ id: OpsPrimaryTab; label: string; icon: OpsIconName; t
   { id: "overview", label: "대시보드", icon: "dashboard", tabs: [{ id: "overview", label: "대시보드", icon: "dashboard" }] },
   { id: "merchant", label: "점주·매장", icon: "store", tabs: [{ id: "stores", label: "매장·점주 관리", icon: "store" }, { id: "businessVerification", label: "사업자 인증", icon: "shield" }] },
   { id: "billing", label: "구독·결제", icon: "card", tabs: [{ id: "subscriptions", label: "구독 관리", icon: "card" }, { id: "payments", label: "결제·환불", icon: "card" }] },
-  { id: "support", label: "지원·장애", icon: "support", tabs: [{ id: "tickets", label: "문의·장애", icon: "support" }] },
-  { id: "system", label: "시스템·정책", icon: "settings", tabs: [{ id: "ai", label: "AI 운영", icon: "sparkles" }, { id: "privacyRequests", label: "개인정보 요청", icon: "privacy" }, { id: "settings", label: "시스템 설정", icon: "settings" }] },
+  { id: "support", label: "지원·장애", icon: "support", tabs: [{ id: "tickets", label: "문의·장애", icon: "support" }, { id: "incidentAnalysis", label: "AI 장애 분석", icon: "sparkles" }] },
+  { id: "system", label: "시스템·정책", icon: "settings", tabs: [{ id: "ai", label: "AI 운영", icon: "sparkles" }, { id: "approvals", label: "승인함", icon: "approval" }, { id: "privacyRequests", label: "개인정보 요청", icon: "privacy" }, { id: "settings", label: "시스템 설정", icon: "settings" }] },
 ];
 
 function primaryForTab(tab: OpsTab): OpsPrimaryTab {
   if (tab === "stores" || tab === "businessVerification") return "merchant";
   if (tab === "subscriptions" || tab === "payments") return "billing";
-  if (tab === "tickets") return "support";
-  if (tab === "ai" || tab === "privacyRequests" || tab === "settings") return "system";
+  if (tab === "tickets" || tab === "incidentAnalysis") return "support";
+  if (tab === "ai" || tab === "approvals" || tab === "privacyRequests" || tab === "settings") return "system";
   return "overview";
 }
 
@@ -2991,8 +2993,10 @@ export default function OpsPage() {
       {!loading && activeTab === "businessVerification" ? <OpsBusinessVerifications embedded /> : null}
       {!loading && activeTab === "privacyRequests" ? <OpsPrivacyRequests embedded /> : null}
       {!loading && activeTab === "ai" ? <OpsAiUsage embedded /> : null}
+      {!loading && activeTab === "approvals" ? <OpsApprovalCenter /> : null}
 
       {!loading && activeTab === "tickets" ? <OpsSupportDesk /> : null}
+      {!loading && activeTab === "incidentAnalysis" ? <OpsIncidentAnalysis /> : null}
       {false && !loading && activeTab === "tickets" ? (
         <section className="card">
           <div className="panelHeader">
