@@ -3,6 +3,8 @@ import {
   finalizeCheckoutAttempt,
   getCheckoutAttempt,
   orderResponse,
+  paymentWebhookSecretHash,
+  recordApprovedCheckoutRecoveryFailure,
 } from "../../../orders/_lib/checkoutAttempts";
 import { essentialPaymentSnapshot } from "../../../orders/_lib/tossCancellation";
 import { apiErrorResponse, createSupabaseAdminClient } from "../../../_lib/storeAuth";
@@ -98,8 +100,21 @@ export async function POST(req: NextRequest) {
     }
 
     if (attempt.status === "approved_not_applied" && attempt.pg_status === "DONE") {
-      const recovered = await finalizeCheckoutAttempt(supabaseAdmin, attempt.id);
-      return NextResponse.json({ ok: true, order: orderResponse(recovered), recovered: true });
+      try {
+        const recovered = await finalizeCheckoutAttempt(supabaseAdmin, attempt.id);
+        return NextResponse.json({ ok: true, order: orderResponse(recovered), recovered: true });
+      } catch (error: unknown) {
+        await recordApprovedCheckoutRecoveryFailure(supabaseAdmin, attempt.id, error);
+        return NextResponse.json(
+          {
+            ok: false,
+            state: "recovery_pending",
+            code: "PAYMENT_APPROVED_ORDER_RECOVERY_PENDING",
+            message: "결제는 확인되었습니다. 주문을 매장에 전달하고 있습니다. 재결제하지 마세요.",
+          },
+          { status: 202 },
+        );
+      }
     }
 
     if (!["quoted", "confirming"].includes(attempt.status)) {
@@ -228,7 +243,10 @@ export async function POST(req: NextRequest) {
         payment_key: paymentKey,
         pg_status: confirmedStatus,
         pg_approved_at: new Date().toISOString(),
-        toss_response: essentialPaymentSnapshot(tossResult),
+        toss_response: {
+          ...essentialPaymentSnapshot(tossResult),
+          webhookSecretHash: paymentWebhookSecretHash(toss.secret),
+        },
         failure_code: null,
         failure_detail: null,
       })
@@ -249,22 +267,15 @@ export async function POST(req: NextRequest) {
       const finalized = await finalizeCheckoutAttempt(supabaseAdmin, attempt.id);
       return NextResponse.json({ ok: true, order: orderResponse(finalized) });
     } catch (error: unknown) {
-      const detail = error instanceof Error ? error.message : String(error);
-      await supabaseAdmin
-        .from("order_checkout_attempts")
-        .update({
-          status: "approved_not_applied",
-          failure_code: "ORDER_FINALIZE_FAILED",
-          failure_detail: detail.slice(0, 1000),
-        })
-        .eq("id", attempt.id);
+      await recordApprovedCheckoutRecoveryFailure(supabaseAdmin, attempt.id, error);
       return NextResponse.json(
         {
           ok: false,
-          code: "PAYMENT_APPROVED_ORDER_RECOVERY_REQUIRED",
-          message: "결제는 확인됐으며 주문 접수를 복구하고 있습니다. 다시 확인해주세요.",
+          state: "recovery_pending",
+          code: "PAYMENT_APPROVED_ORDER_RECOVERY_PENDING",
+          message: "결제는 확인되었습니다. 주문을 매장에 전달하고 있습니다. 재결제하지 마세요.",
         },
-        { status: 500 },
+        { status: 202 },
       );
     }
   } catch (error: unknown) {
