@@ -237,6 +237,26 @@ export async function getCheckoutAttempt(params: {
   return (result.data || null) as CheckoutAttemptRow | null;
 }
 
+/**
+ * Server-only reconciliation inventory. This deliberately returns only
+ * attempts that already have a durable checkout record; it never invents an
+ * order from a payment event.
+ */
+export async function listPendingPrepaidCheckoutAttempts(params: {
+  supabaseAdmin: SupabaseClient;
+  limit?: number;
+}) {
+  const result = await params.supabaseAdmin
+    .from("order_checkout_attempts")
+    .select(ATTEMPT_COLUMNS)
+    .eq("checkout_type", "prepaid")
+    .in("status", ["confirming", "approved_not_applied"])
+    .order("updated_at", { ascending: true })
+    .limit(Math.min(Math.max(Math.floor(params.limit || 50), 1), 100));
+  if (result.error) throw new Error(`CHECKOUT_ATTEMPT_RECONCILIATION_LOOKUP_FAILED: ${result.error.message}`);
+  return (result.data || []) as unknown as CheckoutAttemptRow[];
+}
+
 export function verifyCheckoutRecoveryToken(attempt: CheckoutAttemptRow, rawToken: unknown) {
   const token = String(rawToken || "").trim();
   return !!token && safeTokenEqual(attempt.recovery_token_hash, token);

@@ -12,6 +12,7 @@ const checkoutAttempts = read("src/app/api/orders/_lib/checkoutAttempts.ts");
 const createRoute = read("src/app/api/orders/create/route.ts");
 const confirmRoute = read("src/app/api/payments/toss/confirm/route.ts");
 const webhookRoute = read("src/app/api/payments/toss/webhook/route.ts");
+const reconciliationRoute = read("src/app/api/internal/order-payment-reconcile/route.ts");
 const successPage = read("src/app/confirm/success/page.tsx");
 
 const failures = [];
@@ -78,6 +79,10 @@ expectText(webhookRoute, "timingSafeEqual", "webhook secret comparison must be t
 expectText(webhookRoute, "paymentWebhookSecretHash", "webhook stores or compares a raw verification secret");
 expectText(webhookRoute, "https://api.tosspayments.com/v1/payments/", "webhook does not independently verify Toss payment state");
 expectText(webhookRoute, "finalizeCheckoutAttempt", "payment webhook does not finalize the order");
+expectText(reconciliationRoute, "v1/payments/orders/", "webhook-independent orderId payment lookup missing");
+expectText(reconciliationRoute, "verifiedDone", "reconciliation does not verify PG DONE state");
+expectText(reconciliationRoute, "finalizeCheckoutAttempt", "reconciliation does not use the idempotent order finalizer");
+rejectText(reconciliationRoute, "/cancel", "reconciliation must never cancel a payment");
 rejectText(successPage, 'fetch("/api/orders/create"', "browser still creates paid order separately");
 expectText(successPage, 'status === "pending"', "customer payment-pending state missing");
 rejectText(successPage, "완료될 때까지 이 화면을 닫거나 뒤로 이동하지 마세요.", "customer is incorrectly told that closing the page loses recovery");
