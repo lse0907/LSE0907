@@ -8,6 +8,7 @@ const migration = read("supabase/migrations/20260825025143_p0_order_integrity.sq
 const finalizerFix = read("supabase/migrations/20260825025531_fix_p0_finalizer_counter_conflict.sql");
 const checkoutIndexes = read("supabase/migrations/20260825025735_add_p0_checkout_attempt_fk_indexes.sql");
 const adjustedTotalSafetyNet = read("supabase/migrations/20260913173000_default_order_adjusted_total.sql");
+const settlementDefaults = read("supabase/migrations/20260913130700_order_settlement_defaults.sql");
 const checkoutAttempts = read("src/app/api/orders/_lib/checkoutAttempts.ts");
 const createRoute = read("src/app/api/orders/create/route.ts");
 const confirmRoute = read("src/app/api/payments/toss/confirm/route.ts");
@@ -52,6 +53,26 @@ expectText(
   adjustedTotalSafetyNet,
   "new.adjusted_total_price := new.total_price",
   "order settlement total safety-net does not initialize the amount",
+);
+expectText(
+  settlementDefaults,
+  "new.effective_used_points := coalesce(new.used_points, 0)",
+  "order settlement defaults do not initialize used points",
+);
+expectText(
+  settlementDefaults,
+  "new.effective_coupon_discount := 0",
+  "order settlement defaults do not initialize coupon discount",
+);
+expectText(
+  settlementDefaults,
+  "new.effective_earned_points := coalesce(new.earned_points, 0)",
+  "order settlement defaults do not initialize earned points",
+);
+expectText(
+  settlementDefaults,
+  "sync_order_effective_settlement_fields_before_update",
+  "loyalty settlement projection sync trigger missing",
 );
 expectText(
   checkoutIndexes,
