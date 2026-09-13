@@ -28,6 +28,33 @@ self.addEventListener("message", (event) => {
   self.skipWaiting();
 });
 
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch { payload = {}; }
+  const title = typeof payload.title === "string" && payload.title ? payload.title : "RION Order";
+  const body = typeof payload.body === "string" && payload.body ? payload.body : "메뉴가 준비되었습니다.";
+  const orderUrl = typeof payload.url === "string" && payload.url.startsWith("/") ? payload.url : "/";
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
+    icon: "/icons/rion-order-192.png",
+    badge: "/icons/rion-order-maskable-192.png",
+    tag: typeof payload.tag === "string" && payload.tag ? payload.tag : `rion-order-${Date.now()}`,
+    renotify: false,
+    data: { url: orderUrl },
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = typeof event.notification.data?.url === "string" ? event.notification.data.url : "/";
+  event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+    const expectedUrl = new URL(targetUrl, self.location.origin).href;
+    const existing = windows.find((client) => client.url === expectedUrl);
+    if (existing) return existing.focus();
+    return clients.openWindow(targetUrl);
+  }));
+});
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;

@@ -16,6 +16,7 @@ import { CustomerIcon } from "@/app/_components/CustomerIcon";
 import { CustomerOrderProgress } from "@/app/_components/CustomerOrderProgress";
 import { CustomerLoadingState } from "@/app/_components/CustomerLoadingState";
 import { PwaInstallGuide } from "@/app/_components/PwaInstallGuide";
+import { CustomerOrderNotificationCard } from "@/app/_components/CustomerOrderNotificationCard";
 import {
   lsLastOrderIdKey,
   lsLastOrderTokenKey,
@@ -149,6 +150,11 @@ function DoneStyles() {
     dt { color:var(--customer-muted); font-size:13px; font-weight:500; } dd { margin:0; color:var(--customer-ink); font-size:17px; font-weight:750; }
     .nextGuide { margin:20px 0 0; padding:13px 14px; border-radius:14px; background:#f4f7fb; color:#526071; font-size:14px; font-weight:500; line-height:1.6; }
     .earnedPoints,.refundSummary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 0; padding:13px 14px; border:1px solid #cfe0ff; border-radius:14px; background:#eef5ff; color:#174a9c; font-size:13px; font-weight:700; }
+    .customerNotificationCard { display:grid; grid-template-columns:42px 1fr auto; align-items:center; gap:12px; margin-top:14px; padding:16px; border:1px solid #cfe0ff; border-radius:16px; background:linear-gradient(135deg,#f5f9ff,#edf5ff); }
+    .customerNotificationIcon { width:42px; height:42px; display:grid; place-items:center; border-radius:13px; background:#174a9c; color:#fff; font-size:16px; box-shadow:0 8px 18px rgba(23,74,156,.18); }
+    .customerNotificationCopy h2 { margin:0; color:var(--rion-navy); font-size:15px; font-weight:800; letter-spacing:-.02em; }.customerNotificationCopy p { margin:4px 0 0; color:#526071; font-size:12px; line-height:1.45; }
+    .customerNotificationButton,.customerNotificationTextButton { min-height:40px; padding:0 12px; border-radius:11px; font-size:13px; font-weight:750; cursor:pointer; }.customerNotificationButton { border:0; background:var(--rion-navy); color:#fff; }.customerNotificationTextButton { border:1px solid #b7c8e8; background:#fff; color:#174a9c; }.customerNotificationButton:disabled,.customerNotificationTextButton:disabled { opacity:.55; cursor:not-allowed; }
+    .customerNotificationHint,.customerNotificationNote { grid-column:2 / -1; margin:0; color:#526071; font-size:12px; line-height:1.5; }.customerNotificationHint { color:#174a9c; font-weight:650; }.customerNotificationNote { color:#71809a; }
     .earnedPoints strong { font-size:16px; }
     .refundSummary { border-color:#d8dee8; background:#f8fafc; color:#334155; }
     .actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
@@ -183,6 +189,7 @@ function DonePageInner() {
     [sp],
   );
   const storeFromQuery = useMemo(() => (sp.get("store") || "").trim(), [sp]);
+  const notificationPreview = useMemo(() => sp.get("notificationPreview") === "1", [sp]);
 
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<OrderView | null>(null);
@@ -387,6 +394,10 @@ function DonePageInner() {
             </div>
           ) : null}
         </article>
+
+        {!isCancelled && order.status !== "completed" ? (
+          <CustomerOrderNotificationCard storeId={storeIdForLinks} orderId={order.id} accessToken={accessTokenForLinks} preview={notificationPreview} />
+        ) : null}
 
         <div className="actions">
           {!isCancelled ? (

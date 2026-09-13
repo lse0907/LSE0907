@@ -22,7 +22,8 @@
     "test:p1-privacy-rights": "node scripts/check-p1-privacy-rights.mjs",
     "test:p1-ops-privacy-requests": "node scripts/check-p1-ops-privacy-requests.mjs",
     "test:ai-execution-limits": "node scripts/check-ai-execution-limits.mjs",
-    "test:ai-support-intake": "node scripts/check-ai-support-intake.mjs"
+    "test:ai-support-intake": "node scripts/check-ai-support-intake.mjs",
+    "test:customer-order-notifications": "node scripts/check-customer-order-notifications.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
@@ -31,12 +32,14 @@
     "react": "19.2.3",
     "react-daum-postcode": "^3.2.0",
     "react-dom": "19.2.3",
-    "styled-jsx": "^5.1.7"
+    "styled-jsx": "^5.1.7",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "typescript": "^5"

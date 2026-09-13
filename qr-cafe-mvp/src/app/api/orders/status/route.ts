@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
+import { sendReadyOrderPush } from "../_lib/customerOrderPush";
 
 type OrderStatus = "new" | "checked" | "making" | "ready_for_packing" | "completed" | "cancelled";
 type StatusBody = {
@@ -15,6 +16,7 @@ type OrderRow = {
   id: string;
   status: string | null;
   store_id: string | null;
+  display_no: string | null;
 };
 
 const ALLOWED_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("orders")
-      .select("id,status,store_id")
+      .select("id,status,store_id,display_no")
       .eq("id", orderId)
       .eq("store_id", storeId)
       .maybeSingle();
@@ -98,6 +100,20 @@ export async function POST(req: NextRequest) {
         metadata: { patch: payload },
       });
       if (eventRes.error) console.warn("[order_events] insert skipped:", eventRes.error.message);
+    }
+
+    if (payload.status === "ready_for_packing") {
+      try {
+        await sendReadyOrderPush({
+          admin: supabaseAdmin,
+          storeId,
+          orderId,
+          displayNo: String(order.display_no || ""),
+        });
+      } catch (pushError: unknown) {
+        // A notification failure must not roll back the staff-confirmed order status.
+        console.error("[order-status] customer push delivery failed", pushError);
+      }
     }
 
     if (payload.status === "completed") {
