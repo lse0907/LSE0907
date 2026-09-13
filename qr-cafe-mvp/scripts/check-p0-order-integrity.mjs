@@ -7,9 +7,11 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const migration = read("supabase/migrations/20260825025143_p0_order_integrity.sql");
 const finalizerFix = read("supabase/migrations/20260825025531_fix_p0_finalizer_counter_conflict.sql");
 const checkoutIndexes = read("supabase/migrations/20260825025735_add_p0_checkout_attempt_fk_indexes.sql");
+const adjustedTotalSafetyNet = read("supabase/migrations/20260913173000_default_order_adjusted_total.sql");
 const checkoutAttempts = read("src/app/api/orders/_lib/checkoutAttempts.ts");
 const createRoute = read("src/app/api/orders/create/route.ts");
 const confirmRoute = read("src/app/api/payments/toss/confirm/route.ts");
+const webhookRoute = read("src/app/api/payments/toss/webhook/route.ts");
 const successPage = read("src/app/confirm/success/page.tsx");
 
 const failures = [];
@@ -41,6 +43,16 @@ expectText(
   "checkout customer foreign-key index missing",
 );
 expectText(
+  adjustedTotalSafetyNet,
+  "default_order_adjusted_total_before_insert",
+  "order settlement total safety-net trigger missing",
+);
+expectText(
+  adjustedTotalSafetyNet,
+  "new.adjusted_total_price := new.total_price",
+  "order settlement total safety-net does not initialize the amount",
+);
+expectText(
   checkoutIndexes,
   "idx_order_checkout_attempts_used_coupon",
   "checkout coupon foreign-key index missing",
@@ -57,7 +69,18 @@ expectText(confirmRoute, '"Idempotency-Key"', "Toss idempotency header missing")
 expectText(confirmRoute, ".select(\"id\")", "PG confirm can start without locking in the attempt state");
 expectText(confirmRoute, 'status: "approved_not_applied"', "approved payment recovery state missing");
 expectText(confirmRoute, "finalizeCheckoutAttempt", "approved payment not bound to order finalizer");
+expectText(confirmRoute, "recordApprovedCheckoutRecoveryFailure", "approved payment recovery failures are not recorded");
+expectText(confirmRoute, 'state: "recovery_pending"', "customer recovery-pending state missing");
+expectText(webhookRoute, 'eventType || "").trim() !== "PAYMENT_STATUS_CHANGED"', "payment webhook event gate missing");
+expectText(webhookRoute, 'data.status || "").trim() !== "DONE"', "webhook must not approve an in-progress payment");
+expectText(webhookRoute, "sameSecret", "webhook secret verification missing");
+expectText(webhookRoute, "timingSafeEqual", "webhook secret comparison must be timing safe");
+expectText(webhookRoute, "paymentWebhookSecretHash", "webhook stores or compares a raw verification secret");
+expectText(webhookRoute, "https://api.tosspayments.com/v1/payments/", "webhook does not independently verify Toss payment state");
+expectText(webhookRoute, "finalizeCheckoutAttempt", "payment webhook does not finalize the order");
 rejectText(successPage, 'fetch("/api/orders/create"', "browser still creates paid order separately");
+expectText(successPage, 'status === "pending"', "customer payment-pending state missing");
+rejectText(successPage, "완료될 때까지 이 화면을 닫거나 뒤로 이동하지 마세요.", "customer is incorrectly told that closing the page loses recovery");
 
 if (failures.length) {
   console.error("P0 주문 무결성 정적 검증 실패");

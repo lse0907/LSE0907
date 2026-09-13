@@ -73,7 +73,7 @@ function ConfirmSuccessPageInner() {
   const orderId = useMemo(() => String(sp.get("orderId") || "").trim(), [sp]);
   const amount = useMemo(() => Number(sp.get("amount") || 0), [sp]);
 
-  const [status, setStatus] = useState<"idle" | "working" | "done" | "error">(
+  const [status, setStatus] = useState<"idle" | "working" | "pending" | "done" | "error">(
     "idle",
   );
   const [message, setMessage] = useState("결제 확인을 준비중입니다.");
@@ -140,6 +140,14 @@ function ConfirmSuccessPageInner() {
         });
 
         const confirmJson = await confirmRes.json();
+        if (confirmJson?.state === "recovery_pending") {
+          if (mounted) {
+            setStatus("pending");
+            setMessage("결제는 확인되었습니다. 주문을 매장에 전달하고 있습니다. 재결제하지 마세요.");
+          }
+          return;
+        }
+
         if (!confirmRes.ok || !confirmJson?.ok || !confirmJson?.order) {
           throw new Error(
             String(
@@ -202,6 +210,12 @@ function ConfirmSuccessPageInner() {
     };
   }, [amount, attemptId, orderId, paymentKey, poid, retryCount, router, storeId]);
 
+  useEffect(() => {
+    if (status !== "pending") return;
+    const timer = window.setTimeout(() => setRetryCount((count) => count + 1), 5_000);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+
   return (
     <main className="paymentPage customer-page">
       <section className="paymentCard" aria-live="polite">
@@ -213,20 +227,37 @@ function ConfirmSuccessPageInner() {
           {status === "error" ? <CustomerIcon name="warning" size={28} /> : ""}
         </div>
         <span className="eyebrow">
-          {status === "error" ? "PAYMENT CHECK" : "SECURE PAYMENT"}
+          {status === "error" ? "PAYMENT CHECK" : status === "pending" ? "ORDER DELIVERY" : "SECURE PAYMENT"}
         </span>
         <h1>
           {status === "error"
             ? "결제 상태를 확인해 주세요"
-            : "결제를 확인하고 있어요"}
+            : status === "pending"
+              ? "주문을 매장에 전달하고 있어요"
+              : "결제를 확인하고 있어요"}
         </h1>
         <p className={status === "error" ? "message error" : "message"}>
           {message}
         </p>
-        {status !== "error" ? (
+        {status === "working" ? (
           <p className="notice">
-            완료될 때까지 이 화면을 닫거나 뒤로 이동하지 마세요.
+            결제 확인 후 주문을 접수하고 있습니다.
           </p>
+        ) : null}
+        {status === "pending" ? (
+          <p className="notice">
+            결제 내역은 안전하게 보관됩니다. 주문이 접수되면 이 화면에서 확인할 수 있습니다.
+          </p>
+        ) : null}
+        {status === "pending" ? (
+          <div className="actions">
+            <button
+              className="secondary"
+              onClick={() => setRetryCount((count) => count + 1)}
+            >
+              상태 다시 확인
+            </button>
+          </div>
         ) : null}
         {status === "error" ? (
           <div className="actions">
@@ -242,7 +273,7 @@ function ConfirmSuccessPageInner() {
                 router.push(`/confirm?store=${encodeURIComponent(storeId)}`)
               }
             >
-              주문 확인으로
+              메뉴로 돌아가기
             </button>
           </div>
         ) : null}

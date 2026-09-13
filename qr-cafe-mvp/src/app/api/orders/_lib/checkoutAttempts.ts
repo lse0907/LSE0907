@@ -25,6 +25,7 @@ export type CheckoutAttemptRow = {
   toss_order_id: string | null;
   payment_key: string | null;
   pg_status: string | null;
+  toss_response: Record<string, unknown> | null;
   confirm_idempotency_key: string | null;
   order_id: string | null;
   recovery_token_hash: string;
@@ -63,6 +64,7 @@ const ATTEMPT_COLUMNS = [
   "toss_order_id",
   "payment_key",
   "pg_status",
+  "toss_response",
   "confirm_idempotency_key",
   "order_id",
   "recovery_token_hash",
@@ -248,6 +250,38 @@ export async function finalizeCheckoutAttempt(supabaseAdmin: SupabaseClient, att
   const row = Array.isArray(result.data) ? result.data[0] : result.data;
   if (!row?.order_id || !row?.access_token) throw new Error("ORDER_FINALIZE_RESULT_MISSING");
   return row as FinalizedOrder;
+}
+
+export function paymentWebhookSecretHash(rawSecret: unknown) {
+  const secret = String(rawSecret || "").trim();
+  return secret
+    ? createHmac("sha256", recoverySecret()).update(`toss-webhook:${secret}`).digest("hex")
+    : null;
+}
+
+/**
+ * A paid checkout must remain recoverable even when order creation briefly
+ * fails. The next idempotent finalization resumes from this ledger entry.
+ */
+export async function recordApprovedCheckoutRecoveryFailure(
+  supabaseAdmin: SupabaseClient,
+  attemptId: string,
+  error: unknown,
+) {
+  const detail = error instanceof Error ? error.message : String(error);
+  const result = await supabaseAdmin
+    .from("order_checkout_attempts")
+    .update({
+      status: "approved_not_applied",
+      failure_code: "ORDER_FINALIZE_FAILED",
+      failure_detail: detail.slice(0, 1000),
+    })
+    .eq("id", attemptId)
+    .eq("status", "approved_not_applied");
+
+  if (result.error) {
+    throw new Error(`CHECKOUT_RECOVERY_STATE_UPDATE_FAILED: ${result.error.message}`);
+  }
 }
 
 export function orderResponse(row: FinalizedOrder) {
