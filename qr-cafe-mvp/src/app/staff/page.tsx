@@ -644,6 +644,37 @@ function StaffPageInner() {
   // ✅ “새 주문 들어옴” 감지용
   const lastTopOrderIdRef = useRef<string>("");
   const mountedRef = useRef(false);
+  const readyPushRecoveryAttemptedRef = useRef(new Set<string>());
+
+  const recoverPendingReadyNotifications = async (visibleOrders: OrderRecord[]) => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid) return;
+
+    const readyOrderIds = new Set(
+      visibleOrders.filter((order) => order.status === "ready_for_packing").map((order) => order.id),
+    );
+    for (const attemptedId of readyPushRecoveryAttemptedRef.current) {
+      if (!readyOrderIds.has(attemptedId)) readyPushRecoveryAttemptedRef.current.delete(attemptedId);
+    }
+
+    for (const orderId of readyOrderIds) {
+      if (readyPushRecoveryAttemptedRef.current.has(orderId)) continue;
+      readyPushRecoveryAttemptedRef.current.add(orderId);
+      try {
+        const response = await fetch("/api/orders/ready-notification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storeId: sid, orderId }),
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.ok) {
+          console.warn("[staff] ready notification recovery skipped", { orderId, message: result?.message || response.status });
+        }
+      } catch (error) {
+        console.warn("[staff] ready notification recovery request failed", { orderId, error });
+      }
+    }
+  };
 
   const fetchOrdersFromDb = async (silent = false) => {
     const sid = storeIdRef.current || storeId;
@@ -878,6 +909,7 @@ function StaffPageInner() {
 
     setOrders(assembled);
     setInitialLoading(false);
+    void recoverPendingReadyNotifications(assembled);
   };
 
   // ✅ 최초 로드 + 폴링(조용히 갱신)
