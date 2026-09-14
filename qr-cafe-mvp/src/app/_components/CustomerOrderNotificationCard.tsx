@@ -83,7 +83,7 @@ export function CustomerOrderNotificationCard({ storeId, orderId, accessToken, p
         if (!saved) {
           if (!disposed) {
             setState("idle");
-            setMessage("이 기기의 알림 설정을 완료하면 다음 주문에도 자동으로 적용됩니다.");
+            setMessage("");
           }
           return;
         }
@@ -91,7 +91,7 @@ export function CustomerOrderNotificationCard({ storeId, orderId, accessToken, p
         if (!status.subscribed) await save("subscribe", saved);
         if (!disposed) {
           setState("enabled");
-          setMessage("이 기기의 알림 설정이 이 주문에 자동으로 적용되었습니다.");
+          setMessage("");
         }
       } catch (error: unknown) {
         if (!disposed) {
@@ -126,7 +126,7 @@ export function CustomerOrderNotificationCard({ storeId, orderId, accessToken, p
       if (!saved) throw new Error("이 기기의 알림 정보를 확인할 수 없습니다.");
       await save("subscribe", saved);
       setState("enabled");
-      setMessage("다음 주문에도 이 기기의 알림 설정이 자동으로 적용됩니다.");
+      setMessage("");
     } catch (error: unknown) {
       setState("error");
       setMessage(error instanceof Error ? error.message : "알림 설정 중 문제가 발생했습니다.");
@@ -143,7 +143,7 @@ export function CustomerOrderNotificationCard({ storeId, orderId, accessToken, p
       if (saved) await save("disable_device", saved);
       await subscription?.unsubscribe();
       setState("idle");
-      setMessage("이 기기의 RION Order 주문 알림을 껐습니다.");
+      setMessage("");
     } catch (error: unknown) {
       setState("error");
       setMessage(error instanceof Error ? error.message : "알림 해제 중 문제가 발생했습니다.");
@@ -159,12 +159,11 @@ export function CustomerOrderNotificationCard({ storeId, orderId, accessToken, p
       <div className="customerNotificationIcon" aria-hidden="true">●</div>
       <div className="customerNotificationCopy">
         <h2 id="customer-notification-title">메뉴 준비 알림</h2>
-        <p>{state === "enabled" ? "이 주문의 준비 완료를 이 기기로 알려드립니다." : "한 번만 설정하면 다음 주문에도 자동으로 적용됩니다."}</p>
+        {state === "enabled" ? <span className="customerNotificationConnected">알림 연결됨</span> : <p>{state === "working" ? "알림을 연결하고 있어요." : "준비되면 이 기기로 알려드려요."}</p>}
       </div>
       {state === "enabled" ? <button type="button" className="customerNotificationTextButton" onClick={disable} disabled={!canRequest}>이 기기 알림 끄기</button> : <button type="button" className="customerNotificationButton" onClick={enable} disabled={!canRequest || state === "working"}>{state === "working" ? "연결 중" : "알림 받기"}</button>}
       {message ? <p className="customerNotificationHint" role="status">{message}</p> : null}
       {!message && state === "unavailable" ? <p className="customerNotificationHint">이 기기 또는 현재 서비스 설정에서는 알림을 받을 수 없습니다. 주문 조회 화면에서 준비 상태를 확인해 주세요.</p> : null}
-      <p className="customerNotificationNote">휴대폰 설정, 무음 또는 집중 모드에 따라 소리·진동은 제한될 수 있습니다.</p>
     </section>
   );
 }

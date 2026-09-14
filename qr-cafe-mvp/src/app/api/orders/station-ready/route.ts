@@ -94,6 +94,15 @@ export async function POST(req: NextRequest) {
     if (!updated) return NextResponse.json({ ok: false, code: "ORDER_CHANGED", message: "다른 화면에서 주문 상태가 변경되었습니다. 새로고침 후 확인해 주세요." }, { status: 409 });
 
     const actorPinId = value(body.actorPinId, 80) || null;
+    let pushResult: { sent: number; skipped: string | null } | null = null;
+    try {
+      pushResult = await sendReadyOrderPush({ admin, storeId, orderId, displayNo: String(order.display_no || "") });
+    } catch (pushError: unknown) {
+      // Staff confirmation is durable; notification delivery is recorded and
+      // must never undo the order state if a device is temporarily offline.
+      console.error("[station-ready] customer push delivery failed", pushError);
+    }
+
     const eventRes = await admin.from("order_events").insert({
       store_id: storeId,
       order_id: orderId,
@@ -102,19 +111,11 @@ export async function POST(req: NextRequest) {
       after_status: "ready_for_packing",
       actor_user_id: auth.userId,
       actor_pin_id: actorPinId,
-      metadata: { source: "station_ready", item_count: itemIds.length },
+      metadata: { source: "station_ready", item_count: itemIds.length, push: pushResult },
     });
     if (eventRes.error) console.warn("[station-ready] event insert skipped:", eventRes.error.message);
 
-    try {
-      await sendReadyOrderPush({ admin, storeId, orderId, displayNo: String(order.display_no || "") });
-    } catch (pushError: unknown) {
-      // Staff confirmation is durable; notification delivery is recorded and
-      // must never undo the order state if a device is temporarily offline.
-      console.error("[station-ready] customer push delivery failed", pushError);
-    }
-
-    return NextResponse.json({ ok: true, status: "ready_for_packing" });
+    return NextResponse.json({ ok: true, status: "ready_for_packing", notification: pushResult });
   } catch (error: unknown) {
     return apiErrorResponse(error);
   }
