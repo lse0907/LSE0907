@@ -53,23 +53,26 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as NotificationBody;
     const action = value(body.action, 32);
-    if (action !== "subscribe" && action !== "unsubscribe" && action !== "status") {
+    if (action !== "subscribe" && action !== "status" && action !== "disable_device") {
       return privateJson({ ok: false, code: "INVALID_ACTION", message: "알림 요청 형식이 올바르지 않습니다." }, 400);
     }
     const order = await verifiedOrder(body);
     if (!order) return privateJson({ ok: false, code: "ORDER_ACCESS_DENIED", message: "주문 정보를 확인할 수 없습니다." }, 404);
 
+    const subscription = validSubscription(body.subscription);
+    if (!subscription) return privateJson({ ok: false, code: "INVALID_SUBSCRIPTION", message: "이 기기의 알림 정보를 확인할 수 없습니다." }, 400);
+
     if (action === "status") {
-      const { data, error } = await order.admin.from("customer_order_push_subscriptions").select("status").eq("store_id", order.storeId).eq("order_id", order.orderId).eq("status", "active").limit(1).maybeSingle();
+      const { data, error } = await order.admin.from("customer_order_push_subscriptions").select("status").eq("store_id", order.storeId).eq("order_id", order.orderId).eq("endpoint", subscription.endpoint).eq("status", "active").limit(1).maybeSingle();
       if (error) throw error;
       return privateJson({ ok: true, subscribed: Boolean(data) });
     }
 
-    const subscription = validSubscription(body.subscription);
-    if (!subscription) return privateJson({ ok: false, code: "INVALID_SUBSCRIPTION", message: "이 기기의 알림 정보를 확인할 수 없습니다." }, 400);
-
-    if (action === "unsubscribe") {
-      const { error } = await order.admin.from("customer_order_push_subscriptions").update({ status: "revoked", revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("store_id", order.storeId).eq("order_id", order.orderId).eq("endpoint", subscription.endpoint).eq("status", "active");
+    if (action === "disable_device") {
+      // Browser PushSubscription is device-wide. Keep the server record in
+      // lockstep so a later order cannot send to a device the customer disabled.
+      const now = new Date().toISOString();
+      const { error } = await order.admin.from("customer_order_push_subscriptions").update({ status: "revoked", revoked_at: now, updated_at: now }).eq("endpoint", subscription.endpoint).eq("status", "active");
       if (error) throw error;
       return privateJson({ ok: true, subscribed: false });
     }

@@ -1352,6 +1352,26 @@ function StaffPageInner() {
     }
   };
 
+  const markStationOrderReady = async (order: OrderRecord) => {
+    const sid = storeIdRef.current || storeId;
+    if (!sid || !requireWorkerPin()) return false;
+    try {
+      const res = await fetch("/api/orders/station-ready", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId: sid, orderId: order.id, actorPinId: actorPinIdForEvent || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(String(json?.message || "준비 완료 처리에 실패했습니다."));
+      setOrders((previous) => previous.map((current) => (current.id === order.id ? { ...current, status: "ready_for_packing" } : current)));
+      return true;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      setErrMsg(`준비 완료 처리 실패: ${message}`);
+      return false;
+    }
+  };
+
   const canAdvanceSelected =
     !!selected &&
     !(selected.status === "completed" || selected.status === "cancelled" || (prepayAddonActive && selected.paymentStatus === "pending" && selected.status === "new"));
@@ -3725,14 +3745,15 @@ function StaffPageInner() {
                   const checkedCount = doneItems.filter((it) => !!it.packingChecked).length;
                   const allItemsDone = o.items.length > 0 && o.items.every((it) => it.status === "done");
                   const allDoneChecked = doneItems.length > 0 && checkedCount === doneItems.length;
-                  const canCompleteOrder = allItemsDone && allDoneChecked;
+                  const canMarkReady = allItemsDone && allDoneChecked;
+                  const isReadyForHandoff = o.status === "ready_for_packing";
 
                   return (
                       <div key={`ready_${o.id}`} className="itemBtn" style={{ cursor: "default" }}>
                         <div className="rowBetween">
                           <div className="bigNo">주문번호 {o.displayNo}</div>
                           <div className="readyHeaderActions">
-                            <span className="badge">준비 확인 {checkedCount}/{doneItems.length}</span>
+                            <span className="badge">준비 확인 {checkedCount}/{o.items.length}</span>
                             <button
                               type="button"
                               className="stationOrderButton"
@@ -3815,11 +3836,11 @@ function StaffPageInner() {
                         <button
                           type="button"
                           className="quickActionBtn quickActionBtnPrimary"
-                          onClick={() => updateOrderInDb(o.id, { status: "completed" })}
-                          disabled={!canCompleteOrder}
-                          style={{ opacity: canCompleteOrder ? 1 : 0.45 }}
+                          onClick={() => isReadyForHandoff ? updateOrderInDb(o.id, { status: "completed" }) : markStationOrderReady(o)}
+                          disabled={isReadyForHandoff ? false : !canMarkReady}
+                          style={{ opacity: isReadyForHandoff || canMarkReady ? 1 : 0.45 }}
                         >
-                          <StaffIcon name="package-check" /> 전달 완료
+                          <StaffIcon name={isReadyForHandoff ? "package-check" : "bell"} /> {isReadyForHandoff ? "전달 완료" : "준비 완료 알림"}
                         </button>
                       </div>
                     </div>
