@@ -553,6 +553,15 @@ export function MeDashboard() {
     [activeOrder, recentOrders],
   );
 
+  const openOrderStatus = useCallback(
+    (order: CustomerOrder) => {
+      router.push(
+        `/status?store=${encodeURIComponent(order.store_id)}&orderId=${encodeURIComponent(order.id)}`,
+      );
+    },
+    [router],
+  );
+
   const favoriteSet = useMemo(
     () => new Set(favoriteStoreIds),
     [favoriteStoreIds],
@@ -1104,6 +1113,12 @@ export function MeDashboard() {
         .sheetOrderButton > span:not(.sheetCardHead) {
           font-size: 13px;
         }
+        .sheetOrderAction {
+          margin-top: 2px;
+          color: #315fba;
+          font-size: 12px !important;
+          font-weight: 900;
+        }
         .orderDetailList {
           display: grid;
           gap: 0;
@@ -1190,6 +1205,83 @@ export function MeDashboard() {
           background: #fff;
           color: #344054;
           font-weight: 900;
+        }
+        .orderItems {
+          margin-top: 18px;
+          padding-top: 16px;
+          border-top: 1px solid #dfe7f1;
+        }
+        .orderItemsHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .orderItemsHead h4 {
+          margin: 0;
+          color: #0f1f3d;
+          font-size: 15px;
+        }
+        .orderItemsHead span {
+          color: #315fba;
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .orderItemList {
+          display: grid;
+          gap: 10px;
+          margin-top: 11px;
+        }
+        .orderItem {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px;
+          border: 1px solid #e1e8f2;
+          border-radius: 12px;
+          background: #fff;
+        }
+        .orderItem > div:first-child {
+          display: grid;
+          gap: 4px;
+          min-width: 0;
+        }
+        .orderItem > div:first-child strong {
+          color: #17233b;
+          font-size: 14px;
+        }
+        .orderItem small {
+          color: #667085;
+          font-size: 12px;
+          line-height: 1.45;
+        }
+        .orderItem .refundItem {
+          color: #b54708;
+          font-weight: 800;
+        }
+        .orderItemAmount {
+          display: grid;
+          flex: 0 0 auto;
+          gap: 3px;
+          color: #0f1f3d;
+          text-align: right;
+        }
+        .orderItemAmount strong {
+          font-size: 13px;
+        }
+        .orderItemAmount span {
+          color: #536b8b;
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .orderItemsEmpty {
+          margin: 11px 0 0 !important;
+          padding: 12px;
+          border-radius: 10px;
+          background: #f5f7fb;
+          color: #667085;
+          font-size: 12px !important;
         }
         .accountSummary > .accountSecondary {
           display: flex;
@@ -1372,7 +1464,7 @@ export function MeDashboard() {
                 style={{ marginTop: 0 }}
                 type="button"
                 onClick={() =>
-                  cartSummary ? returnToOrder() : openPanel("orders")
+                  cartSummary ? returnToOrder() : activeOrder ? openOrderStatus(activeOrder) : openPanel("orders")
                 }
               >
                 {cartSummary ? "주문 계속하기" : "주문 상태 보기"}
@@ -1510,6 +1602,10 @@ export function MeDashboard() {
           onSelect={(order) => {
             setActivePanel(null);
             setSelectedOrder(order);
+          }}
+          onOpenStatus={(order) => {
+            setActivePanel(null);
+            openOrderStatus(order);
           }}
           onStartQr={() => {
             setActivePanel(null);

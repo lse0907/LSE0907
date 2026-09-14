@@ -66,11 +66,65 @@ export async function GET(req: NextRequest) {
       { name: row.store_name || "매장", logo: row.logo_image_url || "" },
     ]),
   );
+  const orderIds = (orders || []).map((order) => String(order.id || "")).filter(Boolean);
+  const { data: orderItems, error: orderItemsError } = orderIds.length
+    ? await admin
+        .from("order_items")
+        .select("id,order_id,name,price,qty,refunded_qty")
+        .in("order_id", orderIds)
+    : { data: [], error: null };
+  if (orderItemsError)
+    return NextResponse.json(
+      { ok: false, message: "주문 메뉴를 불러오지 못했어요." },
+      { status: 500 },
+    );
+
+  const itemIds = (orderItems || []).map((item) => String(item.id || "")).filter(Boolean);
+  const { data: itemOptions, error: itemOptionsError } = itemIds.length
+    ? await admin
+        .from("order_item_options")
+        .select("order_item_id,name,price_delta,qty")
+        .in("order_item_id", itemIds)
+    : { data: [], error: null };
+  if (itemOptionsError)
+    return NextResponse.json(
+      { ok: false, message: "주문 옵션을 불러오지 못했어요." },
+      { status: 500 },
+    );
+
+  const optionsByItemId = new Map<string, Array<{ name: string; price_delta: number; qty: number }>>();
+  for (const option of itemOptions || []) {
+    const itemId = String(option.order_item_id || "");
+    if (!itemId) continue;
+    const list = optionsByItemId.get(itemId) || [];
+    list.push({
+      name: String(option.name || "옵션"),
+      price_delta: Math.max(0, Number(option.price_delta || 0)),
+      qty: Math.max(1, Number(option.qty || 1)),
+    });
+    optionsByItemId.set(itemId, list);
+  }
+  const itemsByOrderId = new Map<string, Array<Record<string, unknown>>>();
+  for (const item of orderItems || []) {
+    const orderId = String(item.order_id || "");
+    if (!orderId) continue;
+    const list = itemsByOrderId.get(orderId) || [];
+    list.push({
+      id: String(item.id || ""),
+      name: String(item.name || "메뉴"),
+      price: Math.max(0, Number(item.price || 0)),
+      qty: Math.max(0, Number(item.qty || 0)),
+      refunded_qty: Math.max(0, Number(item.refunded_qty || 0)),
+      options: optionsByItemId.get(String(item.id || "")) || [],
+    });
+    itemsByOrderId.set(orderId, list);
+  }
   return NextResponse.json({
     ok: true,
     orders: (orders || []).map((order) => ({
       ...order,
       store: storeMap[order.store_id] || { name: "매장", logo: "" },
+      items: itemsByOrderId.get(String(order.id || "")) || [],
     })),
   });
 }

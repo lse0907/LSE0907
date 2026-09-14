@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   apiErrorResponse,
   createSupabaseAdminClient,
+  getOptionalRequestUserId,
 } from "../../_lib/storeAuth";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ type CustomerOrderDbRow = {
   effective_earned_points?: number | null;
   points_rate_snapshot?: number | null;
   store_id?: string | null;
+  customer_user_id?: string | null;
   access_token?: string | null;
 };
 
@@ -57,6 +59,7 @@ const CUSTOMER_ORDER_COLUMNS = [
   "effective_earned_points",
   "points_rate_snapshot",
   "store_id",
+  "customer_user_id",
   "access_token",
 ].join(",");
 
@@ -72,7 +75,6 @@ function hasValidInputLength(storeId: string, orderId: string, accessToken: stri
     storeId.length <= 120 &&
     orderId.length > 0 &&
     orderId.length <= 80 &&
-    accessToken.length > 0 &&
     accessToken.length <= 200
   );
 }
@@ -148,15 +150,20 @@ export async function POST(req: NextRequest) {
     }
 
     const order = data as unknown as CustomerOrderDbRow | null;
-    if (!order || !secureTokenMatches(order.access_token, accessToken)) {
+    const requestUserId = await getOptionalRequestUserId(req);
+    const tokenAuthorized = Boolean(accessToken) && secureTokenMatches(order?.access_token, accessToken);
+    const customerAuthorized = Boolean(requestUserId) && requestUserId === String(order?.customer_user_id || "");
+    if (!order || (!tokenAuthorized && !customerAuthorized)) {
       return notFoundResponse();
     }
 
     const {
       access_token: _accessToken,
+      customer_user_id: _customerUserId,
       ...customerSafeOrder
     } = order;
     void _accessToken;
+    void _customerUserId;
 
     return NextResponse.json(
       { ok: true, order: customerSafeOrder },

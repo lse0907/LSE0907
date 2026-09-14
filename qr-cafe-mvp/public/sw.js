@@ -1,4 +1,4 @@
-const CACHE_NAME = "rion-order-static-v2";
+const CACHE_NAME = "rion-order-static-v3";
 const CACHE_PREFIX = "rion-order-static-";
 const STATIC_ASSETS = [
   "/offline.html",
@@ -7,6 +7,7 @@ const STATIC_ASSETS = [
   "/icons/rion-order-512.png",
   "/icons/rion-order-maskable-192.png",
   "/icons/rion-order-maskable-512.png",
+  "/icons/rion-order-notification-badge-96.png",
 ];
 let activationRequested = false;
 
@@ -37,7 +38,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(title, {
     body,
     icon: "/icons/rion-order-192.png",
-    badge: "/icons/rion-order-maskable-192.png",
+    badge: "/icons/rion-order-notification-badge-96.png",
     tag: typeof payload.tag === "string" && payload.tag ? payload.tag : `rion-order-${Date.now()}`,
     renotify: false,
     data: { url: orderUrl },

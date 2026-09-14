@@ -252,13 +252,6 @@ function StatusPageInner() {
       setOrder(null);
       return;
     }
-    if (!accessToken) {
-      setErrMsg(
-        "주문 확인용 토큰이 없습니다. 주문 완료 화면에서 다시 진입해주세요.",
-      );
-      setOrder(null);
-      return;
-    }
     if (orderFetchInFlightRef.current) return;
 
     orderFetchInFlightRef.current = true;
@@ -266,7 +259,7 @@ function StatusPageInner() {
       const data = await fetchCustomerOrder({
         storeId,
         orderId: id,
-        accessToken,
+        accessToken: accessToken || undefined,
       });
       setOrder(toOrderView(data));
     } catch (error: unknown) {
@@ -287,11 +280,6 @@ function StatusPageInner() {
         setLoading(false);
         return;
       }
-      if (!accessToken) {
-        setOrder(null);
-        setLoading(false);
-        return;
-      }
       await fetchOrder(orderId);
       setLoading(false);
     };
@@ -300,7 +288,7 @@ function StatusPageInner() {
   }, [orderId, storeId, accessToken]);
 
   useEffect(() => {
-    if (!storeId || !orderId || !accessToken) return;
+    if (!storeId || !orderId) return;
     if (order?.status === "completed" || (order?.status === "cancelled" && order.paymentStatus !== "cancel_pending")) return;
 
     const t = window.setInterval(() => {

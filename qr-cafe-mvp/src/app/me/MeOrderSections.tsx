@@ -13,6 +13,10 @@ import {
   orderStatusTone,
 } from "./meUtils";
 
+function canTrackOrder(order: CustomerOrder) {
+  return ["new", "checked", "making", "ready_for_packing"].includes(order.status);
+}
+
 export function RecentOrderCard({
   order,
   onOpen,
@@ -61,6 +65,7 @@ export function OrderHistorySheet({
   onRetry,
   onClose,
   onSelect,
+  onOpenStatus,
   onStartQr,
 }: {
   orders: CustomerOrder[];
@@ -69,6 +74,7 @@ export function OrderHistorySheet({
   onRetry: () => void;
   onClose: () => void;
   onSelect: (order: CustomerOrder) => void;
+  onOpenStatus: (order: CustomerOrder) => void;
   onStartQr: () => void;
 }) {
   return (
@@ -93,12 +99,13 @@ export function OrderHistorySheet({
             </button>
           </div>
         ) : (
-          orders.map((order) => (
-            <button
+          orders.map((order) => {
+            const canTrack = canTrackOrder(order);
+            return <button
               type="button"
               className="sheetCard sheetOrderButton"
               key={order.id}
-              onClick={() => onSelect(order)}
+              onClick={() => canTrack ? onOpenStatus(order) : onSelect(order)}
             >
               <span className="sheetCardHead">
                 <strong>{order.store.name}</strong>
@@ -119,8 +126,11 @@ export function OrderHistorySheet({
                   ? ` · +${effectiveOrderPoints(order).toLocaleString()}P`
                   : ""}
               </span>
-            </button>
-          ))
+              <span className="sheetOrderAction">
+                {canTrack ? "진행 상태 보기" : "주문 상세 보기"}
+              </span>
+            </button>;
+          })
         )}
       </div>
     </CustomerSheet>
@@ -134,6 +144,7 @@ export function OrderDetailSheet({
   order: CustomerOrder;
   onClose: () => void;
 }) {
+  const items = Array.isArray(order.items) ? order.items : [];
   return (
     <CustomerSheet title="주문 상세" onClose={onClose}>
       <article className="sheetCard orderDetailCard">
@@ -168,6 +179,31 @@ export function OrderDetailSheet({
             </div>
           ) : null}
         </dl>
+        <section className="orderItems" aria-labelledby="order-items-title">
+          <div className="orderItemsHead">
+            <h4 id="order-items-title">주문 메뉴</h4>
+            <span>{items.reduce((total, item) => total + Math.max(0, Number(item.qty || 0) - Number(item.refunded_qty || 0)), 0)}개</span>
+          </div>
+          {items.length ? (
+            <div className="orderItemList">
+              {items.map((item) => {
+                const quantity = Math.max(0, Number(item.qty || 0) - Number(item.refunded_qty || 0));
+                const optionPrice = (item.options || []).reduce((total, option) => total + Math.max(0, Number(option.price_delta || 0)) * Math.max(1, Number(option.qty || 1)), 0);
+                return <article className="orderItem" key={item.id}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    {item.options?.length ? <small>옵션: {item.options.map((option) => `${option.name}${Number(option.qty || 1) > 1 ? ` ${option.qty}개` : ""}`).join(" · ")}</small> : null}
+                    {Number(item.refunded_qty || 0) > 0 ? <small className="refundItem">{item.refunded_qty}개 환불</small> : null}
+                  </div>
+                  <div className="orderItemAmount">
+                    <strong>{quantity}개</strong>
+                    <span>{formatWon((Math.max(0, Number(item.price || 0)) + optionPrice) * quantity)}</span>
+                  </div>
+                </article>;
+              })}
+            </div>
+          ) : <p className="orderItemsEmpty">이 주문의 메뉴 상세 기록을 불러오지 못했어요.</p>}
+        </section>
       </article>
     </CustomerSheet>
   );
