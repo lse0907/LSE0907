@@ -40,6 +40,14 @@ export type CustomerOrder = {
   earned_points: number | null;
   effective_earned_points: number | null;
   store: { name: string; logo: string };
+  items?: Array<{
+    id: string;
+    name: string;
+    price: number;
+    qty: number;
+    refunded_qty: number;
+    options: Array<{ name: string; price_delta: number; qty: number }>;
+  }>;
 };
 
 export type CustomerCoupon = {

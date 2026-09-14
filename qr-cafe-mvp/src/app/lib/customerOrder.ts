@@ -30,7 +30,7 @@ type CustomerOrderResponse = {
 export async function fetchCustomerOrder(params: {
   storeId: string;
   orderId: string;
-  accessToken: string;
+  accessToken?: string;
 }) {
   const response = await fetch("/api/orders/customer-view", {
     method: "POST",
