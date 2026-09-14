@@ -1,7 +1,6 @@
 // src/app/status/page.tsx
 "use client";
 
-import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
@@ -593,9 +592,9 @@ function StatusPageInner() {
           </button>
         ) : null}
 
-        <Link className="btn homeButton" href={homeHref} aria-label="매장 홈으로 이동">
+        <a className="btn homeButton" href={homeHref} aria-label="매장 홈으로 이동">
           <CustomerIcon name="store" size={17} /> 매장 홈
-        </Link>
+        </a>
       </div>
 
       {!orderId ? (
