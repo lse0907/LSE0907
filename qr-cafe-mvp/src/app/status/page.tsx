@@ -429,6 +429,17 @@ function StatusPageInner() {
           align-items: center;
           justify-content: center;
         }
+        .topRow .homeButton {
+          border-color: #b9cce5;
+          background: #f3f7fc;
+          color: #173f78;
+          box-shadow: 0 2px 7px rgba(23, 63, 120, 0.10);
+        }
+        .topRow .homeButton:hover {
+          border-color: #7da5d3;
+          background: #e9f1fb;
+        }
+        .topRow .homeButton:active { transform: translateY(1px); }
         .card {
           margin-top: 16px;
           padding: 22px;
@@ -582,8 +593,8 @@ function StatusPageInner() {
           </button>
         ) : null}
 
-        <Link className="btn" href={homeHref}>
-          홈으로
+        <Link className="btn homeButton" href={homeHref} aria-label="매장 홈으로 이동">
+          <CustomerIcon name="store" size={17} /> 매장 홈
         </Link>
       </div>
 
