@@ -47,7 +47,10 @@ export async function POST(req: NextRequest) {
 
     const order = orderData as OrderRow;
     const currentStatus = String(order.status || "new");
-    if (currentStatus === "ready_for_packing") return NextResponse.json({ ok: true, status: "ready_for_packing", alreadyReady: true });
+    if (currentStatus === "ready_for_packing") {
+      const notification = await sendReadyOrderPush({ admin, storeId, orderId, displayNo: String(order.display_no || "") });
+      return NextResponse.json({ ok: true, status: "ready_for_packing", alreadyReady: true, notification });
+    }
     if (currentStatus !== "checked" && currentStatus !== "making") {
       return NextResponse.json({ ok: false, code: "INVALID_STATUS_FLOW", message: "현재 주문은 준비 완료 처리할 수 없습니다." }, { status: 409 });
     }

@@ -16,7 +16,19 @@ export async function sendReadyOrderPush(params: {
   const subject = env("WEB_PUSH_VAPID_SUBJECT");
   const publicKey = env("WEB_PUSH_VAPID_PUBLIC_KEY");
   const privateKey = env("WEB_PUSH_VAPID_PRIVATE_KEY");
-  if (!subject || !publicKey || !privateKey) return { sent: 0, skipped: "not_configured" as const };
+  if (!subject || !publicKey || !privateKey) {
+    // Keep the failure observable without exposing any server configuration to
+    // the customer browser. A later recovery request will retry once VAPID is set.
+    const { error } = await params.admin
+      .from("customer_order_push_subscriptions")
+      .update({ last_error_code: "PUSH_NOT_CONFIGURED", updated_at: new Date().toISOString() })
+      .eq("store_id", params.storeId)
+      .eq("order_id", params.orderId)
+      .eq("status", "active")
+      .is("ready_notified_at", null);
+    if (error) console.error("[customer-order-push] configuration state update failed", error.message);
+    return { sent: 0, skipped: "not_configured" as const };
+  }
 
   webpush.setVapidDetails(subject, publicKey, privateKey);
   const { data, error } = await params.admin
@@ -27,6 +39,7 @@ export async function sendReadyOrderPush(params: {
     .eq("status", "active")
     .is("ready_notified_at", null);
   if (error) throw new Error(error.message);
+  if (!data?.length) return { sent: 0, skipped: "no_active_subscription" as const };
 
   const payload = JSON.stringify({
     title: "메뉴가 준비되었습니다",
@@ -38,7 +51,10 @@ export async function sendReadyOrderPush(params: {
   for (const subscription of data || []) {
     try {
       await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth_secret } }, payload, { TTL: 60 * 30 });
-      const { error: updateError } = await params.admin.from("customer_order_push_subscriptions").update({ status: "sent", ready_notified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", subscription.id);
+      const { error: updateError } = await params.admin
+        .from("customer_order_push_subscriptions")
+        .update({ status: "sent", ready_notified_at: new Date().toISOString(), last_error_code: null, updated_at: new Date().toISOString() })
+        .eq("id", subscription.id);
       if (updateError) throw new Error(updateError.message);
       sent += 1;
     } catch (error: unknown) {
@@ -49,5 +65,5 @@ export async function sendReadyOrderPush(params: {
       console.warn("[customer-order-push] delivery failed", { orderId: params.orderId, subscriptionId: subscription.id, statusCode });
     }
   }
-  return { sent, skipped: null };
+  return { sent, skipped: null as null };
 }
