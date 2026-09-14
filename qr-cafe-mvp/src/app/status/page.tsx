@@ -409,11 +409,16 @@ function StatusPageInner() {
           align-items: center;
         }
         .btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           min-height: 44px;
           padding: 10px 14px;
           border-radius: 12px;
           border: 1px solid var(--line);
           background: #fff;
+          color: inherit;
+          text-decoration: none;
           font-weight: 700;
           gap: 7px;
           cursor: pointer;
