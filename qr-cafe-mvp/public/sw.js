@@ -1,4 +1,4 @@
-const CACHE_NAME = "rion-order-static-v3";
+const CACHE_NAME = "rion-order-static-v4";
 const CACHE_PREFIX = "rion-order-static-";
 const STATIC_ASSETS = [
   "/offline.html",
