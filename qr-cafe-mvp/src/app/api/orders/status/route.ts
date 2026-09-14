@@ -85,6 +85,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, code: "NO_CHANGE", message: "변경할 내용이 없습니다." }, { status: 400 });
     }
 
+    // A prior ready transition may have succeeded while its delivery worker was
+    // interrupted. Before the terminal update revokes active subscriptions,
+    // make one idempotent recovery attempt. sendReadyOrderPush only targets
+    // rows whose ready notification was never recorded.
+    let readyPushGuard: { sent: number; skipped: string | null } | null = null;
+    if (payload.status === "completed" && currentStatus === "ready_for_packing") {
+      try {
+        readyPushGuard = await sendReadyOrderPush({
+          admin: supabaseAdmin,
+          storeId,
+          orderId,
+          displayNo: String(order.display_no || ""),
+        });
+      } catch (pushError: unknown) {
+        console.error("[order-status] ready push recovery failed", pushError);
+      }
+    }
+
     const updateRes = await supabaseAdmin.from("orders").update(payload).eq("id", orderId).eq("store_id", storeId);
     if (updateRes.error) return NextResponse.json({ ok: false, code: "ORDER_STATUS_UPDATE_FAILED", message: `저장 실패: ${updateRes.error.message}` }, { status: 500 });
 
@@ -97,7 +115,7 @@ export async function POST(req: NextRequest) {
         after_status: payload.status || currentStatus,
         actor_user_id: auth.userId,
         actor_pin_id: body.actorPinId || null,
-        metadata: { patch: payload },
+        metadata: { patch: payload, ready_push_guard: readyPushGuard },
       });
       if (eventRes.error) console.warn("[order_events] insert skipped:", eventRes.error.message);
     }
