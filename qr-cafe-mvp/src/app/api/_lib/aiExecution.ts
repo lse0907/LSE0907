@@ -2,7 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 
 import { ApiError } from "@/app/api/_lib/storeAuth";
 
-export type AiFeature = "daily_brief" | "weekly_brief" | "monthly_brief" | "support_response" | "incident_analysis";
+export type AiFeature = "daily_brief" | "weekly_brief" | "monthly_brief" | "support_response" | "incident_analysis" | "provider_check";
 
 export const AI_PROVIDER = "openai" as const;
 
@@ -12,6 +12,7 @@ const MODEL_BY_FEATURE: Record<AiFeature, string> = {
   weekly_brief: "gpt-5.6-terra",
   monthly_brief: "gpt-5.6-terra",
   incident_analysis: "gpt-5.6-terra",
+  provider_check: "gpt-5.6-luna",
 };
 
 const USD_PER_MILLION: Record<string, { input: number; cachedInput: number; output: number }> = {

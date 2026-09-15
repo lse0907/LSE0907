@@ -1,6 +1,5 @@
 import { ApiError } from "@/app/api/_lib/storeAuth";
-
-type Feature = "daily_brief" | "weekly_brief" | "monthly_brief" | "support_response" | "incident_analysis";
+import type { AiFeature } from "@/app/api/_lib/aiExecution";
 
 export type BriefProviderResult = {
   headline: string;
@@ -31,7 +30,7 @@ function providerError(status: number, code?: string) {
  * customer, payment nor free-form order data is ever included in the prompt.
  */
 export async function generateBriefWithOpenAi(params: {
-  feature: Feature;
+  feature: AiFeature;
   model: string;
   periodLabel: string;
   orderCount: number;
@@ -51,6 +50,9 @@ export async function generateBriefWithOpenAi(params: {
       signal: controller.signal,
       body: JSON.stringify({
         model: params.model,
+        // The response is only needed for the current server request. Keeping it
+        // out of provider-side response storage also reduces retention surface.
+        store: false,
         max_output_tokens: 350,
         input: [
           { role: "system", content: "You are RION Order's Korean store operations analyst. Use only supplied aggregate metrics. Never invent facts, never propose automatic changes, and return compact Korean JSON only." },
