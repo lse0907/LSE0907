@@ -23,6 +23,8 @@
     "test:p1-ops-privacy-requests": "node scripts/check-p1-ops-privacy-requests.mjs",
     "test:ai-execution-limits": "node scripts/check-ai-execution-limits.mjs",
     "test:ai-support-intake": "node scripts/check-ai-support-intake.mjs",
+    "test:ai-beta-scenarios": "node scripts/check-ai-beta-scenarios.mjs",
+    "check:ai-provider-readiness": "node scripts/check-ai-provider-readiness.mjs",
     "test:customer-order-notifications": "node scripts/check-customer-order-notifications.mjs"
   },
   "dependencies": {
