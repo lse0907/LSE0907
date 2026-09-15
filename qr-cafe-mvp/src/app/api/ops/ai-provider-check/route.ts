@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { finalizeAiExecution, isExternalAiEnabled, reserveAiExecution } from "@/app/api/_lib/aiExecution";
-import { generateBriefWithOpenAi } from "@/app/api/_lib/openAiProvider";
+import { generateBriefWithOpenAi, OpenAiProviderError } from "@/app/api/_lib/openAiProvider";
 import { requireOpsUser } from "@/app/api/_lib/opsAuth";
 import { ApiError, apiErrorResponse, createSupabaseAdminClient } from "@/app/api/_lib/storeAuth";
 
@@ -85,8 +85,9 @@ export async function POST(req: NextRequest) {
         requestId: reservation.requestId,
         model: reservation.model,
         status: "failed",
-        inputTokens: 0,
-        outputTokens: 0,
+        inputTokens: error instanceof OpenAiProviderError ? error.usage.inputTokens : 0,
+        outputTokens: error instanceof OpenAiProviderError ? error.usage.outputTokens : 0,
+        cachedInputTokens: error instanceof OpenAiProviderError ? error.usage.cachedInputTokens : 0,
         errorCode: error instanceof ApiError ? error.code : "AI_PROVIDER_CHECK_FAILED",
       });
       throw error;

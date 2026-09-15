@@ -15,9 +15,74 @@ export type BriefProviderResult = {
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const TIMEOUT_MS = 20_000;
 
+type ProviderUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+};
+
+type OpenAiResponseBody = {
+  output_text?: unknown;
+  output?: unknown;
+  status?: unknown;
+  error?: { code?: unknown } | null;
+  usage?: {
+    input_tokens?: unknown;
+    output_tokens?: unknown;
+    input_tokens_details?: { cached_tokens?: unknown };
+  };
+};
+
 function text(value: unknown, max: number) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
+
+function number(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function usageFrom(body: OpenAiResponseBody): ProviderUsage {
+  return {
+    inputTokens: number(body.usage?.input_tokens),
+    outputTokens: number(body.usage?.output_tokens),
+    cachedInputTokens: number(body.usage?.input_tokens_details?.cached_tokens),
+  };
+}
+
+function outputTextFrom(body: OpenAiResponseBody) {
+  const direct = text(body.output_text, 3_000);
+  if (direct) return direct;
+  if (!Array.isArray(body.output)) return "";
+
+  return text(body.output.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const content = (item as { content?: unknown }).content;
+    if (!Array.isArray(content)) return [];
+    return content.map((part) => part && typeof part === "object" ? (part as { text?: unknown }).text : "");
+  }).filter((value): value is string => typeof value === "string").join("\n"), 3_000);
+}
+
+export class OpenAiProviderError extends ApiError {
+  usage: ProviderUsage;
+
+  constructor(status: number, message: string, code: string, usage: ProviderUsage = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }) {
+    super(status, message, code);
+    this.usage = usage;
+  }
+}
+
+const BRIEF_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    headline: { type: "string" },
+    summary: { type: "string" },
+    fact: { type: "string" },
+    hypothesis: { type: ["string", "null"] },
+    recommendation: { type: ["string", "null"] },
+  },
+  required: ["headline", "summary", "fact", "hypothesis", "recommendation"],
+} as const;
 
 function providerError(status: number, code?: string) {
   if (status === 401 || status === 403) return new ApiError(502, "AI 연결 권한을 확인하지 못했습니다.", "AI_PROVIDER_AUTH_FAILED");
@@ -54,6 +119,15 @@ export async function generateBriefWithOpenAi(params: {
         // out of provider-side response storage also reduces retention surface.
         store: false,
         max_output_tokens: 350,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "rion_brief",
+            strict: true,
+            schema: BRIEF_RESPONSE_SCHEMA,
+          },
+          verbosity: "low",
+        },
         input: [
           { role: "system", content: "You are RION Order's Korean store operations analyst. Use only supplied aggregate metrics. Never invent facts, never propose automatic changes, and return compact Korean JSON only." },
           { role: "user", content: `분석 기간: ${params.periodLabel}\n주문 건수: ${params.orderCount}\n매출 합계(원): ${params.salesWon}\n반환 JSON: {\"headline\":string,\"summary\":string,\"fact\":string,\"hypothesis\":string|null,\"recommendation\":string|null}. 사실과 추정을 분리하고, 데이터가 부족하면 hypothesis와 recommendation은 null.` },
@@ -61,21 +135,24 @@ export async function generateBriefWithOpenAi(params: {
       }),
     });
     if (!response.ok) throw providerError(response.status, `AI_PROVIDER_HTTP_${response.status}`);
-    const body = await response.json() as { output_text?: unknown; usage?: { input_tokens?: unknown; output_tokens?: unknown; input_tokens_details?: { cached_tokens?: unknown } } };
-    const raw = text(body.output_text, 3_000).replace(/^```json\s*|\s*```$/g, "");
+    const body = await response.json() as OpenAiResponseBody;
+    const usage = usageFrom(body);
+    const responseStatus = text(body.status, 32);
+    if (responseStatus && responseStatus !== "completed") {
+      throw new OpenAiProviderError(502, "AI 분석 응답을 완료하지 못했습니다.", text(body.error?.code, 80) || "AI_PROVIDER_INCOMPLETE", usage);
+    }
+    const raw = outputTextFrom(body).replace(/^```json\s*|\s*```$/g, "");
     let parsed: Record<string, unknown>;
-    try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { throw new ApiError(502, "AI 분석 응답을 확인하지 못했습니다.", "AI_PROVIDER_RESPONSE_INVALID"); }
+    try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { throw new OpenAiProviderError(502, "AI 분석 응답을 확인하지 못했습니다.", "AI_PROVIDER_RESPONSE_INVALID", usage); }
     const headline = text(parsed.headline, 90);
     const summary = text(parsed.summary, 300);
     const fact = text(parsed.fact, 300);
-    if (!headline || !summary || !fact) throw new ApiError(502, "AI 분석 응답이 불완전합니다.", "AI_PROVIDER_RESPONSE_INVALID");
+    if (!headline || !summary || !fact) throw new OpenAiProviderError(502, "AI 분석 응답이 불완전합니다.", "AI_PROVIDER_RESPONSE_INVALID", usage);
     return {
       headline, summary, fact,
       hypothesis: text(parsed.hypothesis, 300) || null,
       recommendation: text(parsed.recommendation, 300) || null,
-      inputTokens: Number(body.usage?.input_tokens || 0),
-      outputTokens: Number(body.usage?.output_tokens || 0),
-      cachedInputTokens: Number(body.usage?.input_tokens_details?.cached_tokens || 0),
+      ...usage,
     };
   } catch (error) {
     if (error instanceof ApiError) throw error;

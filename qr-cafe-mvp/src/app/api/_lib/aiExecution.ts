@@ -71,7 +71,9 @@ export async function finalizeAiExecution(params: {
   cachedInputTokens?: number;
   errorCode?: string | null;
 }) {
-  const modelCost = params.status === "succeeded" ? estimateAiCostUsd(params.model, params.inputTokens, params.outputTokens, params.cachedInputTokens || 0) : 0;
+  // A provider can consume tokens and still return an incomplete or invalid
+  // response. Record that actual cost for both successful and failed calls.
+  const modelCost = estimateAiCostUsd(params.model, params.inputTokens, params.outputTokens, params.cachedInputTokens || 0);
   const { error } = await params.admin.rpc("ai_finalize_execution", {
     p_request_id: params.requestId,
     p_status: params.status,
