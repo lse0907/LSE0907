@@ -158,6 +158,7 @@ export async function GET(req: NextRequest) {
     return privateResponse({
       ok: true,
       canControl: actor.opsRole === "master" || actor.opsRole === "billing",
+      canRunProviderCheck: actor.opsRole === "master",
       summary: {
         todayCalls: platformTodayCalls,
         monthCalls: platformMonthCalls,
