@@ -159,6 +159,10 @@ export async function GET(req: NextRequest) {
       ok: true,
       canControl: actor.opsRole === "master" || actor.opsRole === "billing",
       canRunProviderCheck: actor.opsRole === "master",
+      canRunPreviewFailureTest:
+        actor.opsRole === "master" &&
+        process.env.VERCEL_ENV === "preview" &&
+        process.env.AI_PROVIDER_PREVIEW_FAILURE_TESTS === "true",
       summary: {
         todayCalls: platformTodayCalls,
         monthCalls: platformMonthCalls,
