@@ -30,8 +30,10 @@ async function runWithConcurrency<T>(tasks: Array<() => Promise<T>>, concurrency
 }
 
 /**
- * Vercel invokes this once daily at 03:20 KST. It only stores aggregate,
- * completed-period snapshots for enrolled stores; it never calls an AI provider.
+ * Vercel invokes this once daily at 03:20 KST. Completed-period snapshots are
+ * saved for enrolled stores. A provider call is possible only here, only when
+ * the server's external-AI switch is on, and only after the ledger reservation
+ * succeeds. Reading a briefing page never triggers a provider call.
  */
 export async function GET(req: NextRequest) {
   const secret = String(process.env.CRON_SECRET || "").trim();
@@ -56,6 +58,7 @@ export async function GET(req: NextRequest) {
           storeId: store_id,
           period,
           range: rangeForCompletedPeriod(period),
+          allowExternalProvider: true,
         });
         return { storeId: store_id, period, created: result.created };
       } catch (error) {

@@ -16,6 +16,9 @@ const feedback = read("src/app/api/admin/ai-brief-feedback/route.ts");
 const history = read("src/app/api/admin/ai-brief-history/route.ts");
 const readiness = read("scripts/check-ai-provider-readiness.mjs");
 const previewFailure = read("src/app/api/ops/ai-provider-check/preview-failure/route.ts");
+const briefSnapshot = read("src/app/api/_lib/aiBriefSnapshot.ts");
+const briefCron = read("src/app/api/cron/ai-briefs/route.ts");
+const briefProvider = read("src/app/api/_lib/openAiProvider.ts");
 
 // AI-5: These checks cover beta-safe behavior that is testable without an
 // external provider, Docker, or a production database write.
@@ -44,5 +47,8 @@ for (const code of ["AI_PROVIDER_AUTH_FAILED", "AI_PROVIDER_RATE_LIMITED", "AI_P
   expect(previewFailure.includes(code), `Missing preview-only provider failure scenario: ${code}`);
 }
 expect(previewFailure.includes('actualCostUsd: 0') && !previewFailure.includes("generateBriefWithOpenAi"), "Failure simulation must not call OpenAI or record cost");
+expect(briefSnapshot.includes("allowExternalProvider = false") && briefSnapshot.includes("allowExternalProvider && stage.dataStage"), "Briefs must be aggregate-only unless the protected scheduler explicitly allows a provider call");
+expect(briefCron.includes("allowExternalProvider: true"), "Only the scheduled briefing route may opt into a provider call");
+expect(!briefProvider.includes('fact: { type: "string" }') && briefSnapshot.includes("const fact = orderCount"), "Owner-facing facts must be generated from stored aggregates, not provider output");
 
 console.log("AI beta safety scenario checks passed.");
