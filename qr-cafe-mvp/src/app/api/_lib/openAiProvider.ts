@@ -4,7 +4,6 @@ import type { AiFeature } from "@/app/api/_lib/aiExecution";
 export type BriefProviderResult = {
   headline: string;
   summary: string;
-  fact: string;
   hypothesis: string | null;
   recommendation: string | null;
   inputTokens: number;
@@ -77,11 +76,10 @@ const BRIEF_RESPONSE_SCHEMA = {
   properties: {
     headline: { type: "string" },
     summary: { type: "string" },
-    fact: { type: "string" },
     hypothesis: { type: ["string", "null"] },
     recommendation: { type: ["string", "null"] },
   },
-  required: ["headline", "summary", "fact", "hypothesis", "recommendation"],
+  required: ["headline", "summary", "hypothesis", "recommendation"],
 } as const;
 
 function providerError(status: number, code?: string) {
@@ -130,7 +128,7 @@ export async function generateBriefWithOpenAi(params: {
         },
         input: [
           { role: "system", content: "You are RION Order's Korean store operations analyst. Use only supplied aggregate metrics. Never invent facts, never propose automatic changes, and return compact Korean JSON only." },
-          { role: "user", content: `분석 기간: ${params.periodLabel}\n주문 건수: ${params.orderCount}\n매출 합계(원): ${params.salesWon}\n반환 JSON: {\"headline\":string,\"summary\":string,\"fact\":string,\"hypothesis\":string|null,\"recommendation\":string|null}. 사실과 추정을 분리하고, 데이터가 부족하면 hypothesis와 recommendation은 null.` },
+          { role: "user", content: `분석 기간: ${params.periodLabel}\n주문 건수: ${params.orderCount}\n매출 합계(원): ${params.salesWon}\n반환 JSON: {\"headline\":string,\"summary\":string,\"hypothesis\":string|null,\"recommendation\":string|null}. 제공된 집계 외의 수치나 사실을 만들지 말고, 추정은 hypothesis에만 쓰세요. 데이터가 부족하면 hypothesis와 recommendation은 null.` },
         ],
       }),
     });
@@ -146,10 +144,9 @@ export async function generateBriefWithOpenAi(params: {
     try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { throw new OpenAiProviderError(502, "AI 분석 응답을 확인하지 못했습니다.", "AI_PROVIDER_RESPONSE_INVALID", usage); }
     const headline = text(parsed.headline, 90);
     const summary = text(parsed.summary, 300);
-    const fact = text(parsed.fact, 300);
-    if (!headline || !summary || !fact) throw new OpenAiProviderError(502, "AI 분석 응답이 불완전합니다.", "AI_PROVIDER_RESPONSE_INVALID", usage);
+    if (!headline || !summary) throw new OpenAiProviderError(502, "AI 분석 응답이 불완전합니다.", "AI_PROVIDER_RESPONSE_INVALID", usage);
     return {
-      headline, summary, fact,
+      headline, summary,
       hypothesis: text(parsed.hypothesis, 300) || null,
       recommendation: text(parsed.recommendation, 300) || null,
       ...usage,

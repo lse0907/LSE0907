@@ -97,8 +97,13 @@ export async function createBriefSnapshot(params: {
   period: BriefPeriod;
   range: BriefRange;
   requestedByUserId?: string | null;
+  /**
+   * Only the protected scheduler can opt into a provider call. Owner page
+   * reads and refreshes always remain aggregate-only and cost nothing.
+   */
+  allowExternalProvider?: boolean;
 }): Promise<{ created: boolean; brief: BriefSnapshot }> {
-  const { admin, storeId, period, range, requestedByUserId = null } = params;
+  const { admin, storeId, period, range, requestedByUserId = null, allowExternalProvider = false } = params;
   const { start, end } = range;
 
   const { data: existing, error: existingError } = await admin
@@ -132,20 +137,27 @@ export async function createBriefSnapshot(params: {
     ? "주문이 쌓이면 이 매장만의 흐름을 바탕으로 브리핑을 안내합니다."
     : "기록된 주문 데이터만 사용했으며, 다른 매장의 데이터를 섞지 않았습니다.";
   const sourceSummary = { period, periodStart: start, periodEnd: end, orderCount, salesWon: sales };
-  let fact = summary;
+  // This sentence is produced by our server from the stored aggregate, never
+  // by the provider. It remains safe to label as a fact on the owner screen.
+  const fact = orderCount < 1
+    ? "이 매장의 완료된 주문 기록이 아직 없습니다. 다른 매장의 데이터로 대신 분석하지 않습니다."
+    : `${label} 완료 주문 ${orderCount.toLocaleString()}건과 매출 ${sales.toLocaleString()}원을 기준으로 정리했습니다.`;
   let hypothesis: string | null = null;
   let recommendation: string | null = null;
 
   // Providers are deliberately skipped while data is still being collected.
   // A provider failure never blocks the deterministic, evidence-only snapshot.
-  if (stage.dataStage === "early_observation" && isExternalAiEnabled()) {
+  if (allowExternalProvider && stage.dataStage === "early_observation" && isExternalAiEnabled()) {
     const feature = analysisType(period);
     try {
       const reservation = await reserveAiExecution({ admin, storeId, requestedByUserId, feature, estimatedInputTokens: 700, estimatedOutputTokens: 350 });
       try {
         const generated = await generateBriefWithOpenAi({ feature, model: reservation.model || modelForAiFeature(feature), periodLabel: label, orderCount, salesWon: sales });
         await finalizeAiExecution({ admin, requestId: reservation.requestId, model: reservation.model, status: "succeeded", inputTokens: generated.inputTokens, outputTokens: generated.outputTokens, cachedInputTokens: generated.cachedInputTokens });
-        headline = generated.headline; summary = generated.summary; fact = generated.fact; hypothesis = generated.hypothesis; recommendation = generated.recommendation;
+        headline = generated.headline;
+        summary = generated.summary;
+        hypothesis = generated.hypothesis;
+        recommendation = generated.recommendation;
       } catch (error) {
         await finalizeAiExecution({ admin, requestId: reservation.requestId, model: reservation.model, status: "failed", inputTokens: 0, outputTokens: 0, errorCode: error instanceof ApiError ? error.code : "AI_PROVIDER_FAILED" });
       }
