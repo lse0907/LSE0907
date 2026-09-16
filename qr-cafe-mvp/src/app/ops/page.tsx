@@ -2388,7 +2388,7 @@ export default function OpsPage() {
 
       <header className="hero">
         <div className="heroBrand">
-          <RionBrand inverse />
+          <RionBrand inverse original />
           <div className="heroMeta">
             <span className="liveBadge">LIVE</span>
             <p className="sub">마지막 업데이트 {lastLoadedAt ? fmtDateTime(lastLoadedAt) : "-"}</p>
