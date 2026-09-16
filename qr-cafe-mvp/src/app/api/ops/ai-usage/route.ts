@@ -9,6 +9,8 @@ type UsageRow = {
   store_id: string;
   requested_by_user_id: string | null;
   estimated_cost_won: number | string | null;
+  estimated_cost_usd: number | string | null;
+  actual_cost_usd: number | string | null;
   status: string;
   occurred_at: string;
 };
@@ -75,7 +77,7 @@ export async function GET(req: NextRequest) {
     const summaryOnly = req.nextUrl.searchParams.get("summary") === "1";
     const since = atKstStart(monthStartKst());
     const [usageRes, storesRes, settingsRes, limitsRes] = await Promise.all([
-      admin.from("ai_usage_events").select("store_id,requested_by_user_id,estimated_cost_won,status,occurred_at").gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(5000),
+      admin.from("ai_usage_events").select("store_id,requested_by_user_id,estimated_cost_won,estimated_cost_usd,actual_cost_usd,status,occurred_at").gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(5000),
       admin.from("stores").select("store_id,store_name,owner_user_id").is("deleted_at", null).order("created_at", { ascending: false }),
       admin.from("ai_store_settings").select("store_id,beta_status,ai_enabled,updated_at"),
       admin.from("ai_usage_limits").select("target_scope,target_store_id,target_user_id,target_feature,ai_enabled,daily_analysis_limit,monthly_analysis_limit,daily_cost_limit_won,monthly_cost_limit_won"),
@@ -92,6 +94,8 @@ export async function GET(req: NextRequest) {
     const byStore = new Map<string, { todayCalls: number; monthCalls: number; todayCost: number; monthCost: number; blocked: number; failed: number; lastOccurredAt: string | null }>();
     let platformTodayCost = 0;
     let platformMonthCost = 0;
+    let platformTodayCostUsd = 0;
+    let platformMonthCostUsd = 0;
     let platformTodayCalls = 0;
     let platformMonthCalls = 0;
     let blockedCount = 0;
@@ -99,11 +103,13 @@ export async function GET(req: NextRequest) {
     for (const event of usage) {
       const previous = byStore.get(event.store_id) || { todayCalls: 0, monthCalls: 0, todayCost: 0, monthCost: 0, blocked: 0, failed: 0, lastOccurredAt: null };
       const cost = money(event.estimated_cost_won);
+      const costUsd = money(event.actual_cost_usd ?? event.estimated_cost_usd);
       previous.monthCalls += 1;
       previous.monthCost += cost;
       if (!previous.lastOccurredAt || previous.lastOccurredAt < event.occurred_at) previous.lastOccurredAt = event.occurred_at;
       platformMonthCalls += 1;
       platformMonthCost += cost;
+      platformMonthCostUsd += costUsd;
       if (event.status === "blocked") { previous.blocked += 1; blockedCount += 1; }
       if (event.status === "failed") { previous.failed += 1; failedCount += 1; }
       if (event.occurred_at >= todayStart) {
@@ -111,6 +117,7 @@ export async function GET(req: NextRequest) {
         previous.todayCost += cost;
         platformTodayCalls += 1;
         platformTodayCost += cost;
+        platformTodayCostUsd += costUsd;
       }
       byStore.set(event.store_id, previous);
     }
@@ -124,6 +131,8 @@ export async function GET(req: NextRequest) {
           monthCalls: platformMonthCalls,
           todayCost: platformTodayCost,
           monthCost: platformMonthCost,
+          todayCostUsd: platformTodayCostUsd,
+          monthCostUsd: platformMonthCostUsd,
           monthlyLimitWon: platformMonthlyLimitWon,
           blockedCount,
           failedCount,
@@ -137,7 +146,7 @@ export async function GET(req: NextRequest) {
       const usageSummary = byStore.get(store.store_id) || { todayCalls: 0, monthCalls: 0, todayCost: 0, monthCost: 0, blocked: 0, failed: 0, lastOccurredAt: null };
       const setting = settings.get(store.store_id) || null;
       const limit = storeLimits.get(store.store_id) || null;
-      const disabled = setting?.ai_enabled === false || limit?.ai_enabled === false;
+      const enabled = setting?.ai_enabled === true && setting.beta_status === "enrolled" && limit?.ai_enabled !== false;
       const monthCostLimit = money(limit?.monthly_cost_limit_won ?? setting?.monthly_cost_limit_won);
       const costRate = monthCostLimit > 0 ? Math.round((usageSummary.monthCost / monthCostLimit) * 100) : null;
       return {
@@ -145,7 +154,7 @@ export async function GET(req: NextRequest) {
         storeName: store.store_name || "이름 없는 매장",
         ownerEmail: emails.get(store.owner_user_id || "") || null,
         betaStatus: setting?.beta_status || "not_enrolled",
-        aiEnabled: !disabled,
+        aiEnabled: enabled,
         ...usageSummary,
         dailyAnalysisLimit: limit?.daily_analysis_limit ?? setting?.daily_analysis_limit ?? null,
         monthlyAnalysisLimit: limit?.monthly_analysis_limit ?? setting?.monthly_analysis_limit ?? null,
@@ -168,6 +177,8 @@ export async function GET(req: NextRequest) {
         monthCalls: platformMonthCalls,
         todayCost: platformTodayCost,
         monthCost: platformMonthCost,
+        todayCostUsd: platformTodayCostUsd,
+        monthCostUsd: platformMonthCostUsd,
         monthlyLimitWon: platformMonthlyLimitWon,
         blockedCount,
         failedCount,
