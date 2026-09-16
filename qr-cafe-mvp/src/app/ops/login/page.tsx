@@ -96,7 +96,7 @@ export default function OpsLoginPage() {
       </section>
       <section className="opsLoginArea">
         <form className="opsLoginCard" onSubmit={submit}>
-          <div className="opsMobileBrand"><RionBrand product /></div>
+          <div className="opsMobileBrand"><RionBrand /></div>
           <div className="opsLoginTitle"><span className="opsEyebrow">SECURE OPERATIONS</span><h1>운영자 로그인</h1></div>
           <p>RION Order 운영 권한이 등록된 계정으로 로그인해 주세요.</p>
           <label className="opsField"><span>운영자 이메일</span><input className="opsInput" type="email" autoComplete="username" inputMode="email" required disabled={loading} value={email} onChange={(event) => setEmail(event.target.value)}/></label>
