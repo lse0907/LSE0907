@@ -193,7 +193,7 @@ type OpsWorkQueue = {
   privacyRequestError: string;
 };
 
-type AiOpsSignal = { loading: boolean; error: string; blockedCount: number; failedCount: number; monthlyCostRate: number | null };
+type AiOpsSignal = { loading: boolean; error: string; failedCount: number; monthlyCostRate: number | null };
 
 const NAV_GROUPS: Array<{ id: OpsPrimaryTab; label: string; icon: OpsIconName; tabs: Array<{ id: OpsTab; label: string; icon: OpsIconName }> }> = [
   { id: "overview", label: "대시보드", icon: "dashboard", tabs: [{ id: "overview", label: "대시보드", icon: "dashboard" }] },
@@ -470,7 +470,7 @@ export default function OpsPage() {
     businessVerificationError: "",
     privacyRequestError: "",
   });
-  const [aiOpsSignal, setAiOpsSignal] = useState<AiOpsSignal>({ loading: true, error: "", blockedCount: 0, failedCount: 0, monthlyCostRate: null });
+  const [aiOpsSignal, setAiOpsSignal] = useState<AiOpsSignal>({ loading: true, error: "", failedCount: 0, monthlyCostRate: null });
   const isOpsMaster = opsIdentity.role === "master";
   const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
 
@@ -505,7 +505,6 @@ export default function OpsPage() {
     setAiOpsSignal({
       loading: false,
       error: response.ok && payload?.ok ? "" : "AI 운영 상태를 불러오지 못했습니다.",
-      blockedCount: response.ok && payload?.ok ? Number(payload?.summary?.blockedCount || 0) : 0,
       failedCount: response.ok && payload?.ok ? Number(payload?.summary?.failedCount || 0) : 0,
       monthlyCostRate: response.ok && payload?.ok && limit > 0 ? Math.round((used / limit) * 100) : null,
     });
@@ -946,7 +945,7 @@ export default function OpsPage() {
   const opsQueueHasError = Boolean(
     opsWorkQueue.businessVerificationError || opsWorkQueue.privacyRequestError,
   );
-  const aiOpsNeedsAttention = Boolean(aiOpsSignal.error || aiOpsSignal.blockedCount > 0 || aiOpsSignal.failedCount > 0 || (aiOpsSignal.monthlyCostRate || 0) >= 80);
+  const aiOpsNeedsAttention = Boolean(aiOpsSignal.error || aiOpsSignal.failedCount > 0 || (aiOpsSignal.monthlyCostRate || 0) >= 80);
   const immediateActionCount =
     kpi.openTickets + opsQueueCount + subscriptionCheckCount;
   const activePrimary = primaryForTab(activeTab);
@@ -2465,7 +2464,7 @@ export default function OpsPage() {
               <span className="immediateActionMeta"><small>결제 없는 유료 매장과 만료 임박 매장을 확인합니다.</small><b>{subscriptionCheckCount.toLocaleString()}개</b></span>
             </button>
           </section>
-          {aiOpsNeedsAttention ? <section className={`card aiOpsAlert ${aiOpsSignal.error || aiOpsSignal.failedCount > 0 ? "danger" : "warn"}`}><div><span><OpsIcon name="sparkles" />AI 운영 확인</span><strong>{aiOpsSignal.error || aiOpsSignal.failedCount > 0 ? `오류 ${aiOpsSignal.failedCount.toLocaleString()}건을 확인해 주세요.` : aiOpsSignal.blockedCount > 0 ? `차단된 AI 요청 ${aiOpsSignal.blockedCount.toLocaleString()}건이 있습니다.` : `이번 달 AI 예산 ${aiOpsSignal.monthlyCostRate}%를 사용했습니다.`}</strong><p>AI 운영 화면에서 매장별 사용량·비용·한도와 중지 상태를 확인할 수 있습니다.</p></div><button onClick={() => setActiveTab("ai")}>AI 운영 열기</button></section> : null}
+          {aiOpsNeedsAttention ? <section className={`card aiOpsAlert ${aiOpsSignal.error || aiOpsSignal.failedCount > 0 ? "danger" : "warn"}`}><div><span><OpsIcon name="sparkles" />AI 운영 확인</span><strong>{aiOpsSignal.error || aiOpsSignal.failedCount > 0 ? `브리핑 생성 확인 ${aiOpsSignal.failedCount.toLocaleString()}건이 있습니다.` : `이번 달 AI 예산 ${aiOpsSignal.monthlyCostRate}%를 사용했습니다.`}</strong><p>{aiOpsSignal.error || aiOpsSignal.failedCount > 0 ? "실제 브리핑 생성이 완료되지 않은 경우만 표시합니다. 주문·결제에는 영향이 없습니다." : "비용 기준에 가까워졌습니다. 필요하면 AI 운영에서 한도와 사용 상태를 확인하세요."}</p></div><button onClick={() => setActiveTab("ai")}>AI 운영 열기</button></section> : null}
         </>
       ) : null}
 
