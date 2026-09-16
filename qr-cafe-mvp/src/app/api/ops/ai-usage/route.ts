@@ -6,8 +6,11 @@ import { requireOpsUser } from "@/app/api/_lib/opsAuth";
 export const dynamic = "force-dynamic";
 
 type UsageRow = {
+  id: number;
   store_id: string;
   requested_by_user_id: string | null;
+  feature: string;
+  error_code: string | null;
   estimated_cost_won: number | string | null;
   estimated_cost_usd: number | string | null;
   actual_cost_usd: number | string | null;
@@ -77,7 +80,7 @@ export async function GET(req: NextRequest) {
     const summaryOnly = req.nextUrl.searchParams.get("summary") === "1";
     const since = atKstStart(monthStartKst());
     const [usageRes, storesRes, settingsRes, limitsRes] = await Promise.all([
-      admin.from("ai_usage_events").select("store_id,requested_by_user_id,estimated_cost_won,estimated_cost_usd,actual_cost_usd,status,occurred_at").gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(5000),
+      admin.from("ai_usage_events").select("id,store_id,requested_by_user_id,feature,error_code,estimated_cost_won,estimated_cost_usd,actual_cost_usd,status,occurred_at").gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(5000),
       admin.from("stores").select("store_id,store_name,owner_user_id").is("deleted_at", null).order("created_at", { ascending: false }),
       admin.from("ai_store_settings").select("store_id,beta_status,ai_enabled,updated_at"),
       admin.from("ai_usage_limits").select("target_scope,target_store_id,target_user_id,target_feature,ai_enabled,daily_analysis_limit,monthly_analysis_limit,daily_cost_limit_won,monthly_cost_limit_won"),
@@ -91,35 +94,49 @@ export async function GET(req: NextRequest) {
     const storeLimits = new Map(limits.filter((row) => row.target_scope === "store" && row.target_store_id).map((row) => [row.target_store_id as string, row]));
     const platformLimit = limits.find((row) => row.target_scope === "platform") || null;
     const todayStart = atKstStart(kstDate());
-    const byStore = new Map<string, { todayCalls: number; monthCalls: number; todayCost: number; monthCost: number; blocked: number; failed: number; lastOccurredAt: string | null }>();
+    const isBrief = (feature: string) => ["daily_brief", "weekly_brief", "monthly_brief"].includes(feature);
+    const byStore = new Map<string, { todayBriefs: number; monthBriefs: number; todayCost: number; monthCost: number; blocked: number; providerChecks: number; lastOccurredAt: string | null; openIssue: { feature: string; errorCode: string | null; occurredAt: string } | null }>();
+    const latestByStoreFeature = new Map<string, UsageRow>();
     let platformTodayCost = 0;
     let platformMonthCost = 0;
     let platformTodayCostUsd = 0;
     let platformMonthCostUsd = 0;
-    let platformTodayCalls = 0;
-    let platformMonthCalls = 0;
+    let platformTodayBriefs = 0;
+    let platformMonthBriefs = 0;
     let blockedCount = 0;
-    let failedCount = 0;
+    let openIssueCount = 0;
     for (const event of usage) {
-      const previous = byStore.get(event.store_id) || { todayCalls: 0, monthCalls: 0, todayCost: 0, monthCost: 0, blocked: 0, failed: 0, lastOccurredAt: null };
+      const previous = byStore.get(event.store_id) || { todayBriefs: 0, monthBriefs: 0, todayCost: 0, monthCost: 0, blocked: 0, providerChecks: 0, lastOccurredAt: null, openIssue: null };
       const cost = money(event.estimated_cost_won);
       const costUsd = money(event.actual_cost_usd ?? event.estimated_cost_usd);
-      previous.monthCalls += 1;
+      if (isBrief(event.feature)) previous.monthBriefs += 1;
+      if (event.feature === "provider_check") previous.providerChecks += 1;
       previous.monthCost += cost;
       if (!previous.lastOccurredAt || previous.lastOccurredAt < event.occurred_at) previous.lastOccurredAt = event.occurred_at;
-      platformMonthCalls += 1;
+      if (isBrief(event.feature)) platformMonthBriefs += 1;
       platformMonthCost += cost;
       platformMonthCostUsd += costUsd;
       if (event.status === "blocked") { previous.blocked += 1; blockedCount += 1; }
-      if (event.status === "failed") { previous.failed += 1; failedCount += 1; }
       if (event.occurred_at >= todayStart) {
-        previous.todayCalls += 1;
+        if (isBrief(event.feature)) previous.todayBriefs += 1;
         previous.todayCost += cost;
-        platformTodayCalls += 1;
+        if (isBrief(event.feature)) platformTodayBriefs += 1;
         platformTodayCost += cost;
         platformTodayCostUsd += costUsd;
       }
+      // Results are ordered newest first. The latest result for a real briefing
+      // feature is the only one that can remain an open operational issue.
+      const key = `${event.store_id}:${event.feature}`;
+      if (!latestByStoreFeature.has(key)) latestByStoreFeature.set(key, event);
       byStore.set(event.store_id, previous);
+    }
+
+    for (const event of latestByStoreFeature.values()) {
+      if (isBrief(event.feature) && event.status === "failed") {
+        const summary = byStore.get(event.store_id);
+        if (summary) summary.openIssue = { feature: event.feature, errorCode: event.error_code, occurredAt: event.occurred_at };
+        openIssueCount += 1;
+      }
     }
 
     const platformMonthlyLimitWon = money(platformLimit?.monthly_cost_limit_won);
@@ -127,15 +144,15 @@ export async function GET(req: NextRequest) {
       return privateResponse({
         ok: true,
         summary: {
-          todayCalls: platformTodayCalls,
-          monthCalls: platformMonthCalls,
+          todayCalls: platformTodayBriefs,
+          monthCalls: platformMonthBriefs,
           todayCost: platformTodayCost,
           monthCost: platformMonthCost,
           todayCostUsd: platformTodayCostUsd,
           monthCostUsd: platformMonthCostUsd,
           monthlyLimitWon: platformMonthlyLimitWon,
           blockedCount,
-          failedCount,
+          failedCount: openIssueCount,
           activeStores: [...settings.values()].filter((row) => row.ai_enabled && row.beta_status === "enrolled").length,
         },
       });
@@ -143,7 +160,7 @@ export async function GET(req: NextRequest) {
 
     const emails = await ownerEmails(admin, stores.map((store) => store.owner_user_id || ""));
     const rows = stores.map((store) => {
-      const usageSummary = byStore.get(store.store_id) || { todayCalls: 0, monthCalls: 0, todayCost: 0, monthCost: 0, blocked: 0, failed: 0, lastOccurredAt: null };
+      const usageSummary = byStore.get(store.store_id) || { todayBriefs: 0, monthBriefs: 0, todayCost: 0, monthCost: 0, blocked: 0, providerChecks: 0, lastOccurredAt: null, openIssue: null };
       const setting = settings.get(store.store_id) || null;
       const limit = storeLimits.get(store.store_id) || null;
       const enabled = setting?.ai_enabled === true && setting.beta_status === "enrolled" && limit?.ai_enabled !== false;
@@ -155,7 +172,14 @@ export async function GET(req: NextRequest) {
         ownerEmail: emails.get(store.owner_user_id || "") || null,
         betaStatus: setting?.beta_status || "not_enrolled",
         aiEnabled: enabled,
-        ...usageSummary,
+        todayCalls: usageSummary.todayBriefs,
+        monthCalls: usageSummary.monthBriefs,
+        todayCost: usageSummary.todayCost,
+        monthCost: usageSummary.monthCost,
+        blocked: usageSummary.blocked,
+        providerChecks: usageSummary.providerChecks,
+        openIssue: usageSummary.openIssue,
+        lastOccurredAt: usageSummary.lastOccurredAt,
         dailyAnalysisLimit: limit?.daily_analysis_limit ?? setting?.daily_analysis_limit ?? null,
         monthlyAnalysisLimit: limit?.monthly_analysis_limit ?? setting?.monthly_analysis_limit ?? null,
         dailyCostLimitWon: money(limit?.daily_cost_limit_won ?? setting?.daily_cost_limit_won),
@@ -173,15 +197,15 @@ export async function GET(req: NextRequest) {
         process.env.VERCEL_ENV === "preview" &&
         process.env.AI_PROVIDER_PREVIEW_FAILURE_TESTS === "true",
       summary: {
-        todayCalls: platformTodayCalls,
-        monthCalls: platformMonthCalls,
+        todayCalls: platformTodayBriefs,
+        monthCalls: platformMonthBriefs,
         todayCost: platformTodayCost,
         monthCost: platformMonthCost,
         todayCostUsd: platformTodayCostUsd,
         monthCostUsd: platformMonthCostUsd,
         monthlyLimitWon: platformMonthlyLimitWon,
         blockedCount,
-        failedCount,
+        failedCount: openIssueCount,
         activeStores: rows.filter((row) => row.aiEnabled && row.betaStatus === "enrolled").length,
       },
       stores: rows,
