@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
 
 type RionBrandProps = {
   compact?: boolean;
@@ -13,13 +12,15 @@ type RionBrandProps = {
 };
 
 export default function RionBrand({ compact = false, inverse = false, product = false, admin = false, auth = false, staff = false }: RionBrandProps) {
-  const [adminLogoFailed, setAdminLogoFailed] = useState(false);
   const usesWordmark = admin || auth || staff;
-  const logoSrc = inverse ? "/rion-logo-white.png" : usesWordmark && !adminLogoFailed ? "/rion-logo-deepnavy.png" : "/rion-symbol.svg";
+  // The PNG lockups include a wide wordmark canvas. Rendering them inside the
+  // square symbol slot makes the CI look like a different logo at small sizes.
+  // Use the source RION Labs symbols here and keep the product name as live text.
+  const logoSrc = inverse ? "/rion-symbol-white.svg" : "/rion-symbol.svg";
   const productLabel = admin ? "ADMIN" : staff ? "STAFF" : "OPS";
 
   return (
-    <div className={`rionBrand ${compact ? "compact" : ""} ${inverse ? "inverse" : ""} ${admin ? "admin" : ""} ${auth ? "auth" : ""} ${staff ? "staff" : ""} ${adminLogoFailed ? "adminFallback" : ""}`} aria-label={product ? (auth ? "RION Order" : `RION Order ${productLabel}`) : "RION Labs"}>
+    <div className={`rionBrand ${compact ? "compact" : ""} ${inverse ? "inverse" : ""} ${admin ? "admin" : ""} ${auth ? "auth" : ""} ${staff ? "staff" : ""}`} aria-label={product ? (auth ? "RION Order" : `RION Order ${productLabel}`) : "RION Labs"}>
       <Image
         className="rionBrandLogo"
         src={logoSrc}
@@ -29,7 +30,6 @@ export default function RionBrand({ compact = false, inverse = false, product = 
         alt=""
         aria-hidden="true"
         priority
-        onError={usesWordmark ? () => setAdminLogoFailed(true) : undefined}
       />
       <div className="rionBrandCopy">
         <strong>{product ? <>RION Order{!admin && !auth && !staff ? <> <b>{productLabel}</b></> : null}</> : <>RION <b>Labs</b></>}</strong>
