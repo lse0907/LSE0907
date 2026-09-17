@@ -2,7 +2,7 @@
 
 상태: **연결 검증 완료 · 외부 호출 비활성화 유지**
 
-실제 브리핑 제한 운영 절차는 [AI 브리핑 제한 운영 기록](./ai-limited-operation-runbook.md)을 기준으로 한다.
+실제 브리핑 제한 운영 절차는 [AI 브리핑 제한 운영 기록](./ai-limited-operation-runbook.md)을 기준으로 한다. 전체 완료·보류 상태는 [AI 현재 운영 체크리스트](./ai-current-operation-checklist.md)를 우선한다.
 
 이 문서는 API 키를 만들고 연결할 수 있는 시점에만 사용한다. 외부 호출은
 명시적인 검증·베타 운영 시간에만 제한적으로 켠다.

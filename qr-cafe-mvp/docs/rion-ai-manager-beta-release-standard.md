@@ -1,6 +1,8 @@
 # Rion AI Manager 베타 공개 기준
 
-상태: **AI 기능 구현 전 내부 기준 확정**
+상태: **초기 설계 기준(현재 완료 상태는 `ai-current-operation-checklist.md`를 우선)**
+
+> 이 문서의 체크박스는 설계 당시의 요구사항을 보존한다. 구현·검증·보류 여부는 [AI 현재 운영 체크리스트](./ai-current-operation-checklist.md)를 단일 기준으로 확인한다.
 
 ## 이 문서의 목적
 
