@@ -993,7 +993,7 @@ function MenuPageInner() {
           height: 100%;
           max-width: 760px;
           margin: 0 auto;
-          padding: 14px;
+          padding: 12px 14px 15px;
           display: grid;
           align-content: end;
         }
@@ -1006,15 +1006,22 @@ function MenuPageInner() {
           z-index: 3;
         }
         .topBtn {
-          border: 1px solid rgba(255, 255, 255, 0.35);
-          background: rgba(17, 24, 39, 0.5);
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          border: 1px solid rgba(255, 255, 255, 0.46);
+          background: rgba(255, 255, 255, 0.14);
+          backdrop-filter: blur(10px);
           color: #fff;
-          font-weight: 650;
+          font-weight: 750;
           border-radius: 999px;
-          padding: 6px 10px;
+          padding: 7px 12px;
           font-size: 12px;
           cursor: pointer;
         }
+        .topBtn:active { transform: translateY(1px); }
         .stickyHead {
           background: rgba(243, 245, 248, 0.94);
           backdrop-filter: blur(14px);
@@ -1029,9 +1036,9 @@ function MenuPageInner() {
         }
         .titleRow {
           display: flex;
-          align-items: end;
-          justify-content: space-between;
-          gap: 10px;
+          align-items: flex-end;
+          gap: 8px;
+          flex-wrap: wrap;
         }
         .h1 {
           margin: 0;
@@ -1043,10 +1050,17 @@ function MenuPageInner() {
         }
         .sub {
           margin: 0;
-          color: rgba(255, 255, 255, 0.9);
-          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          min-height: 27px;
+          padding: 5px 9px;
+          border: 1px solid rgba(255, 255, 255, 0.28);
+          border-radius: 999px;
+          background: rgba(9, 23, 47, 0.32);
+          color: rgba(255, 255, 255, 0.94);
+          font-weight: 750;
           font-size: 12px;
-          text-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
+          text-shadow: 0 1px 5px rgba(0, 0, 0, 0.28);
         }
         .content {
           padding: 16px 12px 32px;
@@ -1062,6 +1076,19 @@ function MenuPageInner() {
           gap: 8px;
           overflow-x: auto;
           padding-bottom: 2px;
+        }
+        .catTabsWrap {
+          position: relative;
+        }
+        .catTabsWrap::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          right: 0;
+          width: 24px;
+          height: 100%;
+          pointer-events: none;
+          background: linear-gradient(90deg, rgba(243,245,248,0), rgba(243,245,248,.96));
         }
         .catTabs::-webkit-scrollbar {
           display: none;
@@ -1091,8 +1118,8 @@ function MenuPageInner() {
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          min-height: 42px;
-          padding: 9px 11px;
+          min-height: 38px;
+          padding: 7px 10px;
           border: 1px solid #d7e1f0;
           border-radius: 13px;
           background: linear-gradient(145deg, #f8fbff, #eef4fb);
@@ -1107,7 +1134,7 @@ function MenuPageInner() {
         }
         .benefitCta {
           flex: 0 0 auto;
-          min-height: 32px;
+          min-height: 30px;
           padding: 0 10px;
           border: 1px solid #b9cae3;
           border-radius: 999px;
@@ -1145,6 +1172,14 @@ function MenuPageInner() {
           font-weight: 800;
           letter-spacing: -0.025em;
           color: var(--rion-navy);
+          display: flex;
+          align-items: baseline;
+          gap: 7px;
+        }
+        .sectionCount {
+          color: #70809a;
+          font-size: 12px;
+          font-weight: 700;
         }
         .sectionTitle::before {
           content: "";
@@ -1183,10 +1218,22 @@ function MenuPageInner() {
           display: grid;
           justify-items: center;
           gap: 4px;
-          color: #7b8798;
-          font-weight: 550;
+          width: 100%;
+          height: 100%;
+          align-content: center;
+          background:
+            radial-gradient(circle at 78% 18%, rgba(45,95,174,.18), transparent 34%),
+            linear-gradient(145deg, #f5f8fc, #e8eef7);
+          color: #536b91;
+          font-weight: 700;
           font-size: 10px;
           line-height: 1.2;
+        }
+        .noImg span {
+          color: #50698f;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: .1em;
         }
         .cartCheck {
           position: absolute;
@@ -1661,47 +1708,25 @@ function MenuPageInner() {
           <div className="heroInner">
             <div className="topActions">
               {customerUserId ? (
-                <>
-                  <button
-                    className="topBtn"
-                    onClick={() =>
-                      router.push(
-                        `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`,
-                      )
-                    }
-                  >
-                    내 정보
-                  </button>
-                  <button
-                    className="topBtn"
-                    onClick={async () => {
-                      await supabase.auth.signOut();
-                      setCustomerUserId(null);
-                      setWallet(null);
-                    }}
-                  >
-                    로그아웃
-                  </button>
-                </>
+                <button
+                  className="topBtn"
+                  onClick={() =>
+                    router.push(
+                      `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`,
+                    )
+                  }
+                >
+                  <CustomerIcon name="user" size={15} /> 내 정보
+                </button>
               ) : (
-                <>
-                  <button
-                    className="topBtn"
-                    onClick={() =>
-                      router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
-                    }
-                  >
-                    로그인
-                  </button>
-                  <button
-                    className="topBtn"
-                    onClick={() =>
-                      router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)
-                    }
-                  >
-                    회원가입
-                  </button>
-                </>
+                <button
+                  className="topBtn"
+                  onClick={() =>
+                    router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
+                  }
+                >
+                  <CustomerIcon name="user" size={15} /> 로그인
+                </button>
               )}
             </div>
             <div className="titleRow">
@@ -1724,10 +1749,7 @@ function MenuPageInner() {
                 </span>
               ) : (
                 <>
-                  <span>
-                    회원으로 주문하면 매장별 포인트와 쿠폰 혜택을 받을 수
-                    있어요.
-                  </span>
+                  <span>회원 주문 혜택 · 포인트와 쿠폰을 받을 수 있어요.</span>
                   <button
                     type="button"
                     className="benefitCta"
@@ -1735,18 +1757,15 @@ function MenuPageInner() {
                       router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)
                     }
                   >
-                    회원가입
+                    혜택 받기
                   </button>
                 </>
               )}
             </div>
 
             {!menuLoading && !optionsLoading ? (
-              <div
-                className="catTabs"
-                role="tablist"
-                aria-label="메뉴 카테고리"
-              >
+              <div className="catTabsWrap">
+              <div className="catTabs" role="tablist" aria-label="메뉴 카테고리">
                 <button
                   className={`catTab ${highlightedCategoryId === "all" ? "catTabOn" : ""}`}
                   onClick={() => {
@@ -1769,6 +1788,7 @@ function MenuPageInner() {
                     {cat.name}
                   </button>
                 ))}
+              </div>
               </div>
             ) : null}
           </div>
@@ -1797,9 +1817,10 @@ function MenuPageInner() {
                 }}
                 style={{ display: "grid", gap: 10 }}
               >
-                {selectedCategoryId === "all" ? (
-                  <div className="sectionTitle">{section.name}</div>
-                ) : null}
+                <div className="sectionTitle">
+                  {section.name}
+                  <span className="sectionCount">{section.items.length}개</span>
+                </div>
 
                 {section.items.map((m: any) => {
                   const hasOptions =
@@ -1827,7 +1848,7 @@ function MenuPageInner() {
                           ) : (
                             <div className="noImg">
                               <CustomerIcon name="image" size={21} />
-                              <span>이미지 준비 중</span>
+                              <span>RION MENU</span>
                             </div>
                           )}
                           {isInCart ? (
