@@ -2242,7 +2242,9 @@ function ConfirmPageInner() {
                   className="submitButton"
                 >
                   {submitting
-                    ? "저장 중..."
+                    ? isPrepayStore
+                      ? "결제창 여는 중…"
+                      : "주문 접수 중…"
                     : isPrepayStore
                       ? "결제하기"
                       : "주문 접수"}
@@ -2265,7 +2267,9 @@ function ConfirmPageInner() {
           </div>
           <button onClick={onSubmit} disabled={!canSubmit}>
             {submitting
-              ? "처리 중이에요"
+              ? isPrepayStore
+                ? "결제창 여는 중…"
+                : "주문 접수 중…"
               : isPrepayStore
                 ? "결제하기"
                 : "주문 접수하기"}
