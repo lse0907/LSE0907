@@ -146,7 +146,7 @@ export default function OpsAiUsagePage({ embedded = false }: { embedded?: boolea
   const hasPlatformConfig = Boolean(platform.config);
 
   return <main className={`aiOps ${embedded ? "embedded" : ""}`}>
-    {!embedded ? <header className="topbar"><div className="brand"><RionBrand inverse original /><span>AI OPERATIONS</span></div><nav><Link href="/ops"><OpsIcon name="home" />OPS 홈</Link><button onClick={() => void load()} disabled={loading}><OpsIcon name="refresh" />{loading ? "불러오는 중" : "새로고침"}</button></nav></header> : null}
+    {!embedded ? <header className="topbar"><div className="brand"><RionBrand inverse /><span>AI OPERATIONS</span></div><nav><Link href="/ops"><OpsIcon name="home" />OPS 홈</Link><button onClick={() => void load()} disabled={loading}><OpsIcon name="refresh" />{loading ? "불러오는 중" : "새로고침"}</button></nav></header> : null}
     {message ? <p className="message">{message}</p> : null}
     <section className="platformOverview" aria-label="AI 운영 요약" aria-busy={isInitialLoading}>
       <div className="platformLead"><span className="eyebrow">AI 운영</span><h1>AI 운영 상태</h1><p>브리핑은 자동으로 생성됩니다. 문제가 있을 때만 이 화면에서 상태를 확인하세요.</p></div>
