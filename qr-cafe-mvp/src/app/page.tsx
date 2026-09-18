@@ -59,6 +59,7 @@ function HomeStartInner() {
   const [lastOrderToken, setLastOrderToken] = useState<string>("");
   const [orderHidden, setOrderHidden] = useState<boolean>(false);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [storeGuideOpen, setStoreGuideOpen] = useState(false);
   const [viewerAccess, setViewerAccess] = useState<ViewerAccess | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [scanError, setScanError] = useState("");
@@ -382,7 +383,7 @@ function HomeStartInner() {
           display: grid;
           align-content: end;
           gap: 10px;
-          padding: 18px;
+          padding: 16px 18px 22px;
           max-width: 680px;
           margin: 0 auto;
         }
@@ -395,15 +396,22 @@ function HomeStartInner() {
           z-index: 3;
         }
         .topBtn {
-          border: 1px solid rgba(255, 255, 255, 0.35);
-          background: rgba(17, 24, 39, 0.5);
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          border: 1px solid rgba(255, 255, 255, 0.46);
+          background: rgba(255, 255, 255, 0.14);
+          backdrop-filter: blur(10px);
           color: #fff;
-          font-weight: 650;
+          font-weight: 750;
           border-radius: 999px;
-          padding: 6px 10px;
+          padding: 7px 12px;
           font-size: 12px;
           cursor: pointer;
         }
+        .topBtn:active { transform: translateY(1px); }
 
         .logoRow {
           display: flex;
@@ -442,9 +450,13 @@ function HomeStartInner() {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          margin-top: 2px;
-          color: rgba(255, 255, 255, 0.85);
-          font-weight: 650;
+          margin-top: 8px;
+          padding: 6px 10px;
+          border: 1px solid rgba(255, 255, 255, 0.28);
+          border-radius: 999px;
+          background: rgba(9, 23, 47, 0.32);
+          color: rgba(255, 255, 255, 0.94);
+          font-weight: 750;
           font-size: 13px;
         }
 
@@ -469,9 +481,9 @@ function HomeStartInner() {
           background: var(--card);
           border: 1px solid var(--line);
           border-radius: var(--radius);
-          padding: 22px;
+          padding: 18px;
           box-shadow: var(--customer-shadow);
-          transform: translateY(-22px);
+          transform: translateY(-18px);
         }
 
         .desc {
@@ -534,6 +546,35 @@ function HomeStartInner() {
           display: grid;
           gap: 6px;
         }
+        .storeGuide {
+          display: grid;
+          gap: 4px;
+        }
+        .storeGuideToggle {
+          width: fit-content;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          cursor: pointer;
+          color: #31415b;
+          font-size: 13px;
+          font-weight: 750;
+        }
+        .storeGuideToggle::after {
+          content: "⌄";
+          margin-left: 6px;
+          color: #63738b;
+        }
+        .storeGuideToggle[aria-expanded="true"]::after { content: "⌃"; }
+        .storeGuide .desc {
+          display: -webkit-box;
+          overflow: hidden;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+        }
+        .storeGuide .descExpanded {
+          display: block;
+        }
         .statusIntro {
           margin: 4px 0 -2px;
           color: var(--muted);
@@ -571,46 +612,25 @@ function HomeStartInner() {
         <div className="heroInner">
           <div className="topActions">
             {authUserId ? (
-              <>
-                <button
-                  className="topBtn"
-                  onClick={() =>
-                    router.push(
-                      `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`,
-                    )
-                  }
-                >
-                  내 정보
-                </button>
-                <button
-                  className="topBtn"
-                  onClick={async () => {
-                    await supabase.auth.signOut();
-                    setAuthUserId(null);
-                  }}
-                >
-                  로그아웃
-                </button>
-              </>
+              <button
+                className="topBtn"
+                onClick={() =>
+                  router.push(
+                    `/me?store=${encodeURIComponent(storeId)}&return_to=${encodeURIComponent(nextUrl)}`,
+                  )
+                }
+              >
+                <CustomerIcon name="user" size={15} /> 내 정보
+              </button>
             ) : (
-              <>
-                <button
-                  className="topBtn"
-                  onClick={() =>
-                    router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
-                  }
-                >
-                  로그인
-                </button>
-                <button
-                  className="topBtn"
-                  onClick={() =>
-                    router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)
-                  }
-                >
-                  회원가입
-                </button>
-              </>
+              <button
+                className="topBtn"
+                onClick={() =>
+                  router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
+                }
+              >
+                <CustomerIcon name="user" size={15} /> 로그인
+              </button>
             )}
           </div>
           <div className="logoRow">
@@ -618,7 +638,7 @@ function HomeStartInner() {
               <h1 className="storeName">{STORE_NAME}</h1>
               <div className="tag">
                 <span className="tagDot" />
-                {table ? `매장 이용 · 테이블 ${table}` : "매장 주문"}
+                {table ? `테이블 ${table}에서 주문 중` : "포장·카운터 주문"}
               </div>
             </div>
           </div>
@@ -632,9 +652,23 @@ function HomeStartInner() {
               <CustomerIcon name="orders" size={21} /> 주문 시작하기
             </button>
 
-            <div className="descDetails">
-              <p className="desc">{STORE_DESC}</p>
-            </div>
+            {STORE_DESC ? (
+              <div className="descDetails">
+                <div className="storeGuide">
+                  <p className={`desc ${storeGuideOpen ? "descExpanded" : ""}`}>{STORE_DESC}</p>
+                  {STORE_DESC.length > 58 ? (
+                    <button
+                      type="button"
+                      className="storeGuideToggle"
+                      aria-expanded={storeGuideOpen}
+                      onClick={() => setStoreGuideOpen((open) => !open)}
+                    >
+                      {storeGuideOpen ? "매장 안내 접기" : "매장 안내 보기"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             {/* ✅ “주문 상태 확인” 버튼은 조건부로만 표시(ready 이후 숨김 포함) */}
             {showStatusButton ? (
