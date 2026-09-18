@@ -9,20 +9,17 @@ type RionBrandProps = {
   admin?: boolean;
   auth?: boolean;
   staff?: boolean;
-  original?: boolean;
 };
 
-export default function RionBrand({ compact = false, inverse = false, product = false, admin = false, auth = false, staff = false, original = false }: RionBrandProps) {
+export default function RionBrand({ compact = false, inverse = false, product = false, admin = false, auth = false, staff = false }: RionBrandProps) {
   const usesWordmark = admin || auth || staff;
-  // The official PNG is used only where the corporate CI itself is required.
-  // Product surfaces retain the compact service symbol and their live product label.
-  const logoSrc = original
-    ? inverse ? "/rion-logo-white.png" : "/rion-logo-deepnavy.png"
-    : inverse ? "/rion-symbol-white.svg" : "/rion-symbol.svg";
+  // All product and operational surfaces use the approved RION brand CI.
+  // Do not add a fallback service symbol here: brand-ci verification rejects it.
+  const logoSrc = inverse ? "/rion-logo-white.png" : "/rion-logo-deepnavy.png";
   const productLabel = admin ? "ADMIN" : staff ? "STAFF" : "OPS";
 
   return (
-    <div className={`rionBrand ${compact ? "compact" : ""} ${inverse ? "inverse" : ""} ${admin ? "admin" : ""} ${auth ? "auth" : ""} ${staff ? "staff" : ""} ${original ? "original" : ""}`} aria-label={product ? (auth ? "RION Order" : `RION Order ${productLabel}`) : "RION Labs"}>
+    <div className={`rionBrand ${compact ? "compact" : ""} ${inverse ? "inverse" : ""} ${admin ? "admin" : ""} ${auth ? "auth" : ""} ${staff ? "staff" : ""}`} aria-label={product ? (auth ? "RION Order" : `RION Order ${productLabel}`) : "RION Labs"}>
       <Image
         className="rionBrandLogo"
         src={logoSrc}
@@ -51,7 +48,6 @@ export default function RionBrand({ compact = false, inverse = false, product = 
         .rionBrand.auth.inverse.adminFallback .rionBrandLogo { padding:0; background:transparent; }
         .rionBrand.adminFallback .rionBrandLogo { width:42px; height:42px; }
         .rionBrand.inverse .rionBrandLogo { width:48px; height:48px; }
-        .rionBrand.original .rionBrandLogo { width:52px; height:52px; }
         .rionBrandCopy { display:grid; gap:2px; min-width:0; }
         .rionBrandCopy strong { font-family:Inter,"Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size:23px; line-height:1; letter-spacing:-.045em; white-space:nowrap; }
         .rionBrandCopy strong b { font-weight:500; }
