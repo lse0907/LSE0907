@@ -50,6 +50,13 @@ type AiBriefNotice = {
   summary: string;
 };
 
+const LOCAL_AI_BRIEF_PREVIEW = {
+  id: "local-ai-brief-preview",
+  brief_period: "daily" as const,
+  headline: "점심 시간 주문 흐름을 확인해 보세요.",
+  summary: "오늘 주문 흐름을 바탕으로, 혼잡 시간대에 메뉴 준비를 앞당겨 보세요.",
+};
+
 type AdminIconName =
   | "plus"
   | "sales"
@@ -136,20 +143,13 @@ function calcRemainingDays(createdAt?: string | null) {
   return Math.max(0, FREE_TRIAL_DAYS - usedDays);
 }
 
-function hasActivePrepayAddon(addon?: StoreAddonSummary | null) {
-  if (!addon) return false;
-  const paidUntilMs = addon.addonPaidUntil
-    ? new Date(addon.addonPaidUntil).getTime()
-    : NaN;
-  return (
-    addon.prepayAddonStatus === "active" ||
-    (Number.isFinite(paidUntilMs) && paidUntilMs > Date.now())
-  );
-}
-
 function AdminPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
+  // 화면 점검을 위한 로컬 전용 예시입니다. 운영·Preview 배포에서는 작동하지 않고,
+  // 실제 AI 브리핑·읽음 이력을 만들거나 변경하지 않습니다.
+  const isLocalAiBriefPreview =
+    process.env.NODE_ENV !== "production" && sp.get("briefPreview") === "1";
 
   const [booting, setBooting] = useState(true);
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -180,6 +180,9 @@ function AdminPageInner() {
   const [addonByStore, setAddonByStore] = useState<
     Record<string, StoreAddonSummary>
   >({});
+  const [paymentConnectionState, setPaymentConnectionState] = useState<
+    "loading" | "connected" | "needed" | "attention"
+  >("loading");
   const [
     hideSetupBannerForCurrentSelection,
     setHideSetupBannerForCurrentSelection,
@@ -196,6 +199,13 @@ function AdminPageInner() {
     if (!selectedStoreId) return null;
     return stores.find((s) => s.store_id === selectedStoreId) || null;
   }, [stores, selectedStoreId]);
+
+  const displayedAiBriefNotice = useMemo<AiBriefNotice | null>(() => {
+    if (isLocalAiBriefPreview && selectedStoreId) {
+      return { ...LOCAL_AI_BRIEF_PREVIEW, storeId: selectedStoreId };
+    }
+    return aiBriefNotice;
+  }, [aiBriefNotice, isLocalAiBriefPreview, selectedStoreId]);
 
   const visibleStores = useMemo(() => {
     return stores
@@ -437,6 +447,9 @@ function AdminPageInner() {
 
   useEffect(() => {
     if (!selectedStoreId) return;
+    if (isLocalAiBriefPreview) {
+      return;
+    }
     const controller = new AbortController();
     fetch(`/api/admin/ai-brief-notification?store=${encodeURIComponent(selectedStoreId)}`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
@@ -451,7 +464,7 @@ function AdminPageInner() {
         if (!controller.signal.aborted) setAiBriefNotice(null);
       });
     return () => controller.abort();
-  }, [selectedStoreId]);
+  }, [isLocalAiBriefPreview, selectedStoreId]);
 
   useEffect(() => {
     if (didOpenDefaultSectionRef.current || !selectedStoreId) return;
@@ -531,7 +544,6 @@ function AdminPageInner() {
     ? billingByStore[selectedStoreId]
     : null;
   const selectedAddon = selectedStoreId ? addonByStore[selectedStoreId] : null;
-  const canOpenOnlinePaymentSettings = hasActivePrepayAddon(selectedAddon);
   const selectedFreeRemaining = selectedStore
     ? calcRemainingDays(selectedStore.created_at)
     : null;
@@ -549,6 +561,28 @@ function AdminPageInner() {
   const dismissSetupBanner = () => {
     setHideSetupBannerForCurrentSelection(true);
   };
+
+  useEffect(() => {
+    if (!selectedStoreId) {
+      setPaymentConnectionState("needed");
+      return;
+    }
+    let mounted = true;
+    setPaymentConnectionState("loading");
+    void fetch(`/api/billing/store-pg-config?storeId=${encodeURIComponent(selectedStoreId)}`, { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!mounted) return;
+        const config = response.ok && result?.ok ? result.config : null;
+        setPaymentConnectionState(
+          config?.mid && config?.clientKey && config?.hasSecret ? "connected" : response.ok ? "needed" : "attention",
+        );
+      })
+      .catch(() => {
+        if (mounted) setPaymentConnectionState("attention");
+      });
+    return () => { mounted = false; };
+  }, [selectedStoreId]);
 
   useEffect(() => {
     if (!selectedStoreId) return;
@@ -728,25 +762,30 @@ function AdminPageInner() {
             관리할 매장을 선택하면 오른쪽의 운영 도구가 활성화됩니다.
           </p>
           {stores.length > 0 ? (
-            <button
-              className="mobileStoreToggle"
-              type="button"
-              aria-expanded={mobileStorePickerOpen}
-              aria-controls="admin-store-picker"
-              onClick={() => setMobileStorePickerOpen((open) => !open)}
-            >
-              <span>
-                <small>현재 관리 매장</small>
-                <strong>
-                  {selectedStore
-                    ? selectedStore.store_name || selectedStore.store_id
-                    : "매장을 선택해 주세요"}
-                </strong>
-              </span>
-              <span className="mobileStoreToggleAction">
-                {mobileStorePickerOpen ? "닫기" : "매장 변경"}
-              </span>
-            </button>
+            <div className="mobileStoreQuickRow">
+              <button
+                className="mobileStoreToggle"
+                type="button"
+                aria-expanded={mobileStorePickerOpen}
+                aria-controls="admin-store-picker"
+                onClick={() => setMobileStorePickerOpen((open) => !open)}
+              >
+                <span>
+                  <small>현재 관리 매장</small>
+                  <strong>
+                    {selectedStore
+                      ? selectedStore.store_name || selectedStore.store_id
+                      : "매장을 선택해 주세요"}
+                  </strong>
+                </span>
+                <span className="mobileStoreToggleAction">
+                  {mobileStorePickerOpen ? "닫기" : "매장 변경"}
+                </span>
+              </button>
+              <button className="mobileStoreBilling" type="button" onClick={() => go("/admin/billing/pay")}>
+                <AdminIcon name="subscription" size={15} />구독 결제
+              </button>
+            </div>
           ) : null}
           <div id="admin-store-picker" className="storePickerDetails">
           {stores.length > 0 ? (
@@ -852,7 +891,7 @@ function AdminPageInner() {
                             초기설정
                           </button>
                         ) : null}
-                        {on && !selectedStoreShouldShowSetup ? (
+                        {on ? (
                           <button
                             className="btn btnBilling btnSmall storeActionButton"
                             onClick={() =>
@@ -861,7 +900,7 @@ function AdminPageInner() {
                               )
                             }
                           >
-                            구독결제
+                            구독 결제
                           </button>
                         ) : null}
                       </div>
@@ -884,10 +923,10 @@ function AdminPageInner() {
           {selectedStoreId ? (
             /* 2차 관리자 홈 보완: 별도 현재 매장 박스 대신 매장 현황 카드 안에서 선택 매장을 함께 표시합니다. */
             <div className="dashboardGrid" aria-label="관리자 홈 요약">
-              {aiBriefNotice?.storeId === selectedStoreId ? (
+              {displayedAiBriefNotice?.storeId === selectedStoreId ? (
                 <section className="aiBriefArrival" aria-label="새 AI 브리핑 알림">
                   <span className="aiBriefArrivalIcon" aria-hidden="true"><AdminIcon name="insight" size={18} /></span>
-                  <div className="aiBriefArrivalCopy"><strong>새 AI 브리핑이 도착했어요.</strong><p>{aiBriefNotice.summary || aiBriefNotice.headline}</p></div>
+                  <div className="aiBriefArrivalCopy"><strong>새 AI 브리핑이 도착했어요.{isLocalAiBriefPreview ? <span className="aiBriefPreviewLabel">미리보기</span> : null}</strong><p>{displayedAiBriefNotice.summary || displayedAiBriefNotice.headline}</p></div>
                   <button className="btn btnSmall aiBriefArrivalAction" onClick={() => go("/admin/ai")}>브리핑 보기</button>
                 </section>
               ) : null}
@@ -902,7 +941,7 @@ function AdminPageInner() {
                     <button className="btn btnSmall overviewActionInsight" onClick={() => go("/admin/ai")}>
                       <AdminIcon name="insight" size={15} />
                       AI 브리핑
-                      {aiBriefNotice?.storeId === selectedStoreId ? <span className="aiBriefNew">NEW</span> : null}
+                      {displayedAiBriefNotice?.storeId === selectedStoreId ? <span className="aiBriefNew">NEW</span> : null}
                     </button>
                   </div>
                 </div>
@@ -1066,20 +1105,26 @@ function AdminPageInner() {
                 <span className="shortcutArrow" aria-hidden="true">›</span>
               </button>
               <button
-                className={`shortcutCard ${canOpenOnlinePaymentSettings ? "" : "shortcutCardDisabled"}`}
-                onClick={() => {
-                  if (canOpenOnlinePaymentSettings) {
-                    go("/admin/billing");
-                    return;
-                  }
-                  setMsg("온라인 결제 설정은 선결제 옵션 구독 후 사용할 수 있습니다.");
-                }}
+                className="shortcutCard"
+                onClick={() => go("/admin/billing/pay")}
+                type="button"
+              >
+                <span className="shortcutIcon shortcutIconBilling"><AdminIcon name="subscription" /></span>
+                <span className="shortcutCopy"><strong>구독 결제</strong><small>이용 요금과 선결제 옵션</small></span>
+                <span className="shortcutArrow" aria-hidden="true">›</span>
+              </button>
+              <button
+                className="shortcutCard"
+                onClick={() => go("/admin/billing")}
                 type="button"
               >
                 <span className="shortcutIcon shortcutIconPayment"><AdminIcon name="payment" /></span>
                 <span className="shortcutCopy">
-                  <strong>온라인 결제{canOpenOnlinePaymentSettings ? "" : " · 잠김"}</strong>
-                  <small>{canOpenOnlinePaymentSettings ? "선결제와 결제 설정" : "선결제 옵션 구독 후 사용 가능"}</small>
+                  <strong>온라인 결제 설정</strong>
+                  <small>선결제 상태와 결제 연결 정보</small>
+                </span>
+                <span className={`paymentConnectionBadge paymentConnection${paymentConnectionState[0].toUpperCase()}${paymentConnectionState.slice(1)}`}>
+                  {paymentConnectionState === "connected" ? "연결됨" : paymentConnectionState === "attention" ? "확인 필요" : paymentConnectionState === "loading" ? "확인 중" : "연결 필요"}
                 </span>
                 <span className="shortcutArrow" aria-hidden="true">›</span>
               </button>
@@ -1254,7 +1299,7 @@ body {
   background:rgba(80,145,255,.16);
 }
 .welcomeCopy{ max-width:650px; }
-.mobileWelcome,.mobileStoreToggle{ display:none; }
+.mobileWelcome,.mobileStoreToggle,.mobileStoreQuickRow,.mobileStoreBilling{ display:none; }
 .eyebrow,.sectionLabel{
   display:block;
   color:#7baaff;
@@ -1419,7 +1464,7 @@ body {
   gap:10px;
 }
 .aiBriefArrival{display:grid;grid-template-columns:40px minmax(0,1fr) auto;align-items:center;gap:12px;padding:14px 15px;border:1px solid #c6dbf7;border-radius:15px;background:linear-gradient(105deg,#eff7ff,#fff)}
-.aiBriefArrivalIcon{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:#173f77;color:#ffd34f}.aiBriefArrivalCopy{min-width:0}.aiBriefArrivalCopy strong{display:block;color:#203b60;font-size:13px;font-weight:900}.aiBriefArrivalCopy p{overflow:hidden;margin:4px 0 0;color:#5d7493;font-size:11px;font-weight:650;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}.aiBriefArrivalAction{min-height:35px;border-color:#1c4b89;background:#1c4b89;color:#fff;font-size:11px}.aiBriefNew{display:inline-flex;align-items:center;min-height:17px;padding:0 5px;border-radius:999px;background:#e6f3ff;color:#1c68ad;font-size:8px;font-weight:950;letter-spacing:.06em}
+.aiBriefArrivalIcon{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:#173f77;color:#ffd34f}.aiBriefArrivalCopy{min-width:0}.aiBriefArrivalCopy strong{display:block;color:#203b60;font-size:13px;font-weight:900}.aiBriefPreviewLabel{display:inline-flex;align-items:center;margin-left:6px;padding:1px 5px;border:1px solid #b8cee9;border-radius:999px;background:#f8fbff;color:#4f6e96;font-size:9px;font-weight:850;letter-spacing:.02em;vertical-align:2px}.aiBriefArrivalCopy p{overflow:hidden;margin:4px 0 0;color:#5d7493;font-size:11px;font-weight:650;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}.aiBriefArrivalAction{min-height:35px;border-color:#1c4b89;background:#1c4b89;color:#fff;font-size:11px}.aiBriefNew{display:inline-flex;align-items:center;min-height:17px;padding:0 5px;border-radius:999px;background:#e6f3ff;color:#1c68ad;font-size:8px;font-weight:950;letter-spacing:.06em}
 .overviewCard{
   border:1px solid var(--line);
   background:#fff;
@@ -1721,17 +1766,23 @@ body {
   padding:12px;
 }
 .shortcutPanel{ grid-template-columns:repeat(2,minmax(0,1fr)); background:linear-gradient(180deg,#f8fafe 0%,#f3f6fb 100%); }
-.shortcutCard{ appearance:none; min-width:0; min-height:68px; padding:10px 11px; display:grid; grid-template-columns:34px minmax(0,1fr) auto; align-items:center; gap:9px; border:1px solid var(--line); border-radius:14px; background:#fff; color:var(--text); cursor:pointer; font-family:inherit; text-align:left; transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease; }
+.shortcutCard{ appearance:none; min-width:0; min-height:68px; padding:10px 11px; display:grid; grid-template-columns:34px minmax(0,1fr) auto auto; align-items:center; gap:9px; border:1px solid var(--line); border-radius:14px; background:#fff; color:var(--text); cursor:pointer; font-family:inherit; text-align:left; transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease; }
 .shortcutCard:hover:not(.shortcutCardDisabled){ border-color:#aec4e1; box-shadow:0 8px 20px rgba(27,61,103,.09); transform:translateY(-1px); }
 .shortcutIcon{ width:34px; height:34px; display:grid; place-items:center; border-radius:11px; background:#eaf2ff; color:#235da8; }
 .shortcutIconGreen{ background:#ecf9f2; color:#168657; }
 .shortcutIconPurple{ background:#f2edff; color:#7650c7; }
 .shortcutIconOrange{ background:#fff2e8; color:#b95d1d; }
 .shortcutIconPayment{ background:#edf1f7; color:#405a7c; }
+.shortcutIconBilling{ background:#eef3ff; color:#315ca8; }
 .shortcutCopy{ min-width:0; display:grid; gap:3px; }
 .shortcutCopy strong{ overflow:hidden; color:var(--text); font-size:12px; font-weight:900; text-overflow:ellipsis; white-space:nowrap; }
 .shortcutCopy small{ overflow:hidden; color:#78869a; font-size:9px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
 .shortcutArrow{ color:#93a5bb; font-size:20px; }
+.paymentConnectionBadge{ border-radius:999px; padding:4px 7px; font-size:9px; font-weight:900; white-space:nowrap; }
+.paymentConnectionConnected{ background:#eaf8ef; color:#087443; }
+.paymentConnectionNeeded{ background:#fff5df; color:#9a6200; }
+.paymentConnectionAttention{ background:#fff0f0; color:#b42318; }
+.paymentConnectionLoading{ background:#eef2f7; color:#667085; }
 .shortcutCardDisabled{ background:#f7f8fa; opacity:.76; }
 .statsSummary{
   border:1px solid var(--line);
@@ -1813,9 +1864,10 @@ body {
   .adminLayout{ grid-template-columns:1fr; }
   .menuCard{ order:2; }
   .listCard{ order:1; }
+  .mobileStoreQuickRow{display:grid;margin-top:12px;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}
   .mobileStoreToggle{
     width:100%;
-    margin-top:12px;
+    margin-top:0;
     padding:12px 13px;
     display:flex;
     align-items:center;
@@ -1832,6 +1884,7 @@ body {
   .mobileStoreToggle small{ color:var(--muted); font-size:10px; font-weight:750; }
   .mobileStoreToggle strong{ overflow:hidden; font-size:14px; text-overflow:ellipsis; white-space:nowrap; }
   .mobileStoreToggleAction{ flex:0 0 auto; color:#245da9; font-size:12px; font-weight:900; }
+  .mobileStoreBilling{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:100%;border:1px solid #b7cce7;border-radius:11px;background:#f7fbff;color:#174d8d;padding:0 11px;font:inherit;font-size:11px;font-weight:900;white-space:nowrap;cursor:pointer}
   .storePickerClosed .storePickerDetails{ display:none; }
   .storePickerOpen .storePickerDetails{ display:block; }
   .storePickerOpen .storeList{ max-height:min(44vh,360px); }
@@ -1949,12 +2002,13 @@ body {
   .toolsHead p{ display:none; }
   .subPanel{ grid-template-columns:1fr; }
   .shortcutPanel{ grid-template-columns:repeat(2,minmax(0,1fr)); padding:8px; gap:7px; }
-  .shortcutCard{ min-height:58px; padding:8px; grid-template-columns:29px minmax(0,1fr); gap:7px; }
+  .shortcutCard{ min-height:58px; padding:8px; grid-template-columns:29px minmax(0,1fr) auto; gap:7px; }
   .shortcutIcon{ width:29px; height:29px; border-radius:9px; }
   .shortcutIcon svg{ width:16px; height:16px; }
   .shortcutCopy strong{ font-size:11px; }
   .shortcutCopy small{ font-size:8px; }
   .shortcutArrow{ display:none; }
+  .paymentConnectionBadge{ padding:3px 6px; font-size:8px; }
   .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
   .overviewActions{ width:100%; margin-left:0; }
   .overviewActions .btn{ flex:1 1 0; min-height:38px; }
