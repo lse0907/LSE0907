@@ -1032,6 +1032,7 @@ function MenuPageInner() {
           margin: 0 auto;
           padding: 10px 12px 8px;
           display: grid;
+          grid-template-columns: minmax(0, 1fr);
           gap: 8px;
         }
         .titleRow {
@@ -1115,6 +1116,9 @@ function MenuPageInner() {
 
         .benefitBar {
           display: flex;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
@@ -1638,6 +1642,18 @@ function MenuPageInner() {
           .hero {
             height: 128px;
           }
+          .benefitBar {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 7px;
+          }
+          .benefitBar > span {
+            min-width: 0;
+          }
+          .benefitCta {
+            width: 100%;
+            min-height: 34px;
+          }
           .menuRow {
             grid-template-columns: 72px minmax(0, 1fr) auto;
             gap: 10px;
@@ -1749,7 +1765,7 @@ function MenuPageInner() {
                 </span>
               ) : (
                 <>
-                  <span>회원 주문 혜택 · 포인트와 쿠폰을 받을 수 있어요.</span>
+                  <span>회원으로 주문하면 포인트와 쿠폰 혜택을 받을 수 있어요.</span>
                   <button
                     type="button"
                     className="benefitCta"
@@ -1757,7 +1773,7 @@ function MenuPageInner() {
                       router.push(`/signup?next=${encodeURIComponent(nextUrl)}`)
                     }
                   >
-                    혜택 받기
+                    회원 혜택 받기
                   </button>
                 </>
               )}
