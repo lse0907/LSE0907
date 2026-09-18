@@ -10,21 +10,61 @@ function makeCode() {
   return Array.from(bytes, (value) => CODE_ALPHABET[value % CODE_ALPHABET.length]).join("");
 }
 
-async function currentCode(admin: ReturnType<typeof createSupabaseAdminClient>, storeId: string) {
-  return admin
+type ReferralCodeLookup = {
+  data: { id: string; code: string; created_at: string } | null;
+  error: { code?: string; message: string } | null;
+  ownerScoped: boolean;
+};
+
+function isOwnerScopeColumnUnavailable(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return error.code === "42703" || error.code === "PGRST204" || /owner_user_id/i.test(error.message || "");
+}
+
+async function currentCode(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  { ownerUserId, storeId }: { ownerUserId: string; storeId: string },
+): Promise<ReferralCodeLookup> {
+  const ownerScoped = await admin
+    .from("store_referral_codes")
+    .select("id,code,created_at")
+    .eq("owner_user_id", ownerUserId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!ownerScoped.error || !isOwnerScopeColumnUnavailable(ownerScoped.error)) {
+    return { ...ownerScoped, ownerScoped: true };
+  }
+
+  // The API is deployed before the database migration on some environments.
+  // Keep previously issued store codes usable until owner_user_id is available.
+  const legacyByIssuer = await admin
+    .from("store_referral_codes")
+    .select("id,code,created_at")
+    .eq("issued_by", ownerUserId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (legacyByIssuer.error || legacyByIssuer.data) {
+    return { ...legacyByIssuer, ownerScoped: false };
+  }
+
+  const legacyForStore = await admin
     .from("store_referral_codes")
     .select("id,code,created_at")
     .eq("store_id", storeId)
     .eq("is_active", true)
     .maybeSingle();
+  return { ...legacyForStore, ownerScoped: false };
 }
 
 export async function GET(req: NextRequest) {
   try {
     const storeId = String(new URL(req.url).searchParams.get("storeId") || "").trim();
     const admin = createSupabaseAdminClient();
-    await requireStoreRole({ req, supabaseAdmin: admin, storeId, allowedRoles: ["owner"] });
-    const result = await currentCode(admin, storeId);
+    const { userId } = await requireStoreRole({ req, supabaseAdmin: admin, storeId, allowedRoles: ["owner"] });
+    const result = await currentCode(admin, { ownerUserId: userId, storeId });
     if (result.error) throw new Error(`추천코드 조회 실패: ${result.error.message}`);
     return NextResponse.json({ ok: true, referralCode: result.data?.code || null });
   } catch (error: unknown) {
@@ -38,18 +78,21 @@ export async function POST(req: NextRequest) {
     const storeId = String(body.storeId || "").trim();
     const admin = createSupabaseAdminClient();
     const { userId } = await requireStoreRole({ req, supabaseAdmin: admin, storeId, allowedRoles: ["owner"] });
-    const existing = await currentCode(admin, storeId);
+    const existing = await currentCode(admin, { ownerUserId: userId, storeId });
     if (existing.error) throw new Error(`추천코드 조회 실패: ${existing.error.message}`);
     if (existing.data?.code) return NextResponse.json({ ok: true, referralCode: existing.data.code, alreadyIssued: true });
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const code = makeCode();
-      const created = await admin.from("store_referral_codes").insert({
+      const payload = {
         store_id: storeId,
         code,
         issued_by: userId,
-        issued_reason: "점주 추천코드 최초 발급",
-      }).select("code").single();
+        issued_reason: "점주 계정 추천코드 최초 발급",
+      };
+      const created = await admin.from("store_referral_codes").insert(
+        existing.ownerScoped ? { ...payload, owner_user_id: userId } : payload,
+      ).select("code").single();
       if (!created.error && created.data?.code) {
         return NextResponse.json({ ok: true, referralCode: created.data.code, alreadyIssued: false });
       }
