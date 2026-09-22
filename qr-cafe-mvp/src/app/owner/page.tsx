@@ -1,6 +1,16 @@
 "use client";
 
+import OwnerMarketingLanding from "../components/OwnerMarketingLanding";
+
+// /owner is the public landing route. Render the reviewed visual landing here,
+// rather than leaving it isolated behind a preview-only URL.
 export default function OwnerLandingPage() {
+  return <OwnerMarketingLanding />;
+}
+
+// Kept temporarily for a safe, reversible comparison while the new landing is
+// reviewed locally. It is not rendered by the public route.
+export function LegacyOwnerLandingPage() {
   return (
     <main style={pageStyle} className="ownerPage">
       <section style={heroStyle} className="ownerHero">

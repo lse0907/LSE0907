@@ -32,5 +32,5 @@ const paths: Record<OpsIconName, ReactNode> = {
 };
 
 export default function OpsIcon({ name, title, ...props }: OpsIconProps) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden={title ? undefined : true} role={title ? "img" : undefined} {...props}>{title ? <title>{title}</title> : null}{paths[name]}</svg>;
+  return <svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden={title ? undefined : true} role={title ? "img" : undefined} {...props}>{title ? <title>{title}</title> : null}{paths[name]}</svg>;
 }

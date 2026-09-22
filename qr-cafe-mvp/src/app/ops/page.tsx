@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { maskToken } from "@/app/lib/billingSettings";
@@ -12,8 +12,10 @@ import OpsAiUsage from "./ai-usage/page";
 import OpsSupportDesk from "./support/OpsSupportDesk";
 import OpsIncidentAnalysis from "./support/OpsIncidentAnalysis";
 import OpsApprovalCenter from "./approvals/OpsApprovalCenter";
+import OpsBetaApplicationDesk from "./beta-applications/OpsBetaApplicationDesk";
+import OpsBetaRecruitmentRounds from "./beta-applications/OpsBetaRecruitmentRounds";
 
-type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "businessVerification" | "privacyRequests" | "ai" | "approvals" | "tickets" | "incidentAnalysis" | "settings";
+type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "businessVerification" | "betaApplications" | "privacyRequests" | "ai" | "approvals" | "tickets" | "incidentAnalysis" | "settings";
 type OpsPrimaryTab = "overview" | "merchant" | "billing" | "support" | "system";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
 type StoreSort =
@@ -186,25 +188,28 @@ type KpiSummary = {
 type OpsWorkQueue = {
   businessVerificationCount: number;
   privacyRequestCount: number;
+  betaApplicationCount: number;
   oldestBusinessVerificationAt: string | null;
   oldestPrivacyRequestAt: string | null;
+  latestBetaApplicationAt: string | null;
   loading: boolean;
   businessVerificationError: string;
   privacyRequestError: string;
+  betaApplicationError: string;
 };
 
 type AiOpsSignal = { loading: boolean; error: string; failedCount: number; monthlyCostRate: number | null };
 
 const NAV_GROUPS: Array<{ id: OpsPrimaryTab; label: string; icon: OpsIconName; tabs: Array<{ id: OpsTab; label: string; icon: OpsIconName }> }> = [
   { id: "overview", label: "대시보드", icon: "dashboard", tabs: [{ id: "overview", label: "대시보드", icon: "dashboard" }] },
-  { id: "merchant", label: "점주·매장", icon: "store", tabs: [{ id: "stores", label: "매장·점주 관리", icon: "store" }, { id: "businessVerification", label: "사업자 인증", icon: "shield" }] },
+  { id: "merchant", label: "점주·매장", icon: "store", tabs: [{ id: "stores", label: "매장·점주 관리", icon: "store" }, { id: "businessVerification", label: "사업자 인증", icon: "shield" }, { id: "betaApplications", label: "베타 신청", icon: "approval" }] },
   { id: "billing", label: "구독·결제", icon: "card", tabs: [{ id: "subscriptions", label: "구독 관리", icon: "card" }, { id: "payments", label: "결제·환불", icon: "card" }] },
   { id: "support", label: "지원·장애", icon: "support", tabs: [{ id: "tickets", label: "문의·장애", icon: "support" }, { id: "incidentAnalysis", label: "AI 장애 분석", icon: "sparkles" }] },
   { id: "system", label: "시스템·정책", icon: "settings", tabs: [{ id: "ai", label: "AI 운영", icon: "sparkles" }, { id: "approvals", label: "승인함", icon: "approval" }, { id: "privacyRequests", label: "개인정보 요청", icon: "privacy" }, { id: "settings", label: "시스템 설정", icon: "settings" }] },
 ];
 
 function primaryForTab(tab: OpsTab): OpsPrimaryTab {
-  if (tab === "stores" || tab === "businessVerification") return "merchant";
+  if (tab === "stores" || tab === "businessVerification" || tab === "betaApplications") return "merchant";
   if (tab === "subscriptions" || tab === "payments") return "billing";
   if (tab === "tickets" || tab === "incidentAnalysis") return "support";
   if (tab === "ai" || tab === "approvals" || tab === "privacyRequests" || tab === "settings") return "system";
@@ -464,35 +469,57 @@ export default function OpsPage() {
   const [opsWorkQueue, setOpsWorkQueue] = useState<OpsWorkQueue>({
     businessVerificationCount: 0,
     privacyRequestCount: 0,
+    betaApplicationCount: 0,
     oldestBusinessVerificationAt: null,
     oldestPrivacyRequestAt: null,
+    latestBetaApplicationAt: null,
     loading: true,
     businessVerificationError: "",
     privacyRequestError: "",
+    betaApplicationError: "",
   });
   const [aiOpsSignal, setAiOpsSignal] = useState<AiOpsSignal>({ loading: true, error: "", failedCount: 0, monthlyCostRate: null });
+  const [betaApplicationAlert, setBetaApplicationAlert] = useState("");
+  const seenBetaApplicationCount = useRef<number | null>(null);
   const isOpsMaster = opsIdentity.role === "master";
   const canManageBilling = isOpsMaster || opsIdentity.role === "billing";
 
+  useEffect(() => {
+    const queryTimer = window.setTimeout(() => {
+      if (new URLSearchParams(window.location.search).get("tab") === "betaApplications") setActiveTab("betaApplications");
+    }, 0);
+    return () => window.clearTimeout(queryTimer);
+  }, []);
+
   const loadOpsWorkQueue = useCallback(async () => {
-    setOpsWorkQueue((current) => ({ ...current, loading: true, businessVerificationError: "", privacyRequestError: "" }));
-    const [businessResponse, privacyResponse] = await Promise.all([
+    setOpsWorkQueue((current) => ({ ...current, loading: true, businessVerificationError: "", privacyRequestError: "", betaApplicationError: "" }));
+    const [businessResponse, privacyResponse, betaResponse] = await Promise.all([
       fetch("/api/ops/business-verifications?status=submitted&summary=1", { cache: "no-store" }),
       fetch("/api/ops/privacy-requests?status=open&summary=1", { cache: "no-store" }),
+      fetch("/api/ops/beta-applications?summary=1", { cache: "no-store" }),
     ]);
-    const [businessPayload, privacyPayload] = await Promise.all([
+    const [businessPayload, privacyPayload, betaPayload] = await Promise.all([
       businessResponse.json().catch(() => ({})),
       privacyResponse.json().catch(() => ({})),
+      betaResponse.json().catch(() => ({})),
     ]);
 
+    const betaApplicationCount = betaResponse.ok && betaPayload?.ok ? Number(betaPayload.count || 0) : 0;
+    if (seenBetaApplicationCount.current != null && betaApplicationCount > seenBetaApplicationCount.current) {
+      setBetaApplicationAlert(`새 베타 신청 ${betaApplicationCount - seenBetaApplicationCount.current}건이 접수되었습니다.`);
+    }
+    if (betaResponse.ok && betaPayload?.ok) seenBetaApplicationCount.current = betaApplicationCount;
     setOpsWorkQueue({
       businessVerificationCount: businessResponse.ok && businessPayload?.ok ? Number(businessPayload.count || 0) : 0,
       privacyRequestCount: privacyResponse.ok && privacyPayload?.ok ? Number(privacyPayload.count || 0) : 0,
+      betaApplicationCount,
       oldestBusinessVerificationAt: businessResponse.ok && businessPayload?.ok ? String(businessPayload.oldestSubmittedAt || "") || null : null,
       oldestPrivacyRequestAt: privacyResponse.ok && privacyPayload?.ok ? String(privacyPayload.oldestRequestedAt || "") || null : null,
+      latestBetaApplicationAt: betaResponse.ok && betaPayload?.ok ? String(betaPayload.latestCreatedAt || "") || null : null,
       loading: false,
       businessVerificationError: businessResponse.ok && businessPayload?.ok ? "" : "사업자 인증 데이터 준비 상태를 확인해야 합니다.",
       privacyRequestError: privacyResponse.ok && privacyPayload?.ok ? "" : "개인정보 요청 데이터를 불러오지 못했습니다.",
+      betaApplicationError: betaResponse.ok && betaPayload?.ok ? "" : "베타 신청 현황을 불러오지 못했습니다.",
     });
   }, []);
 
@@ -723,6 +750,18 @@ export default function OpsPage() {
 
   useEffect(() => {
     if (isOps !== true) return;
+    const timer = window.setInterval(() => { void loadOpsWorkQueue(); }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [isOps, loadOpsWorkQueue]);
+
+  useEffect(() => {
+    const refreshBetaQueue = () => { void loadOpsWorkQueue(); };
+    window.addEventListener("ops-beta-applications-updated", refreshBetaQueue);
+    return () => window.removeEventListener("ops-beta-applications-updated", refreshBetaQueue);
+  }, [loadOpsWorkQueue]);
+
+  useEffect(() => {
+    if (isOps !== true) return;
     (async () => {
       const response = await fetch("/api/ops/platform-pg", { cache: "no-store" });
       const result = await response.json().catch(() => ({}));
@@ -941,9 +980,9 @@ export default function OpsPage() {
   const subscriptionCheckCount =
     noPaymentPaidStores.length + kpi.expiringSoonStores;
   const opsQueueCount =
-    opsWorkQueue.businessVerificationCount + opsWorkQueue.privacyRequestCount;
+    opsWorkQueue.businessVerificationCount + opsWorkQueue.privacyRequestCount + opsWorkQueue.betaApplicationCount;
   const opsQueueHasError = Boolean(
-    opsWorkQueue.businessVerificationError || opsWorkQueue.privacyRequestError,
+    opsWorkQueue.businessVerificationError || opsWorkQueue.privacyRequestError || opsWorkQueue.betaApplicationError,
   );
   const aiOpsNeedsAttention = Boolean(aiOpsSignal.error || aiOpsSignal.failedCount > 0 || (aiOpsSignal.monthlyCostRate || 0) >= 80);
   const immediateActionCount =
@@ -1685,6 +1724,11 @@ export default function OpsPage() {
         }
         .primaryTabs .tab { min-width:0; }
         .primaryTabs .tab:hover:not(.active) { background:#f3f6fa; color:#233a5e; }
+        .betaApplicationAlert { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:12px; width:100%; margin:14px 0 0; padding:13px 16px; border:1px solid #f1c768; border-radius:13px; background:#fff9ea; color:#6e4800; text-align:left; cursor:pointer; }
+        .betaApplicationAlert span { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:950; }
+        .betaApplicationAlert span svg { width:15px; height:15px; }
+        .betaApplicationAlert strong { font-size:13px; }
+        .betaApplicationAlert small { color:#9a6500; font-size:12px; font-weight:900; }
         .opsNavigation {
           display:grid;
           grid-template-columns:repeat(5, minmax(0, 1fr));
@@ -1739,6 +1783,7 @@ export default function OpsPage() {
           transition:background .18s, color .18s;
         }
         .subTabs button svg { width:15px; height:15px; }
+        .subNavCount { display:grid; place-items:center; min-width:17px; height:17px; padding:0 4px; border-radius:999px; background:#d63b3b; color:#fff; font-size:10px; font-weight:950; }
         .subTabs button:hover:not(.active) { background:#f3f6fa; color:#233a5e; }
         .subTabs button.active { background:transparent; color:#142b50; font-weight:950; }
         .subTabs button.active::after {
@@ -2408,6 +2453,8 @@ export default function OpsPage() {
         </section>
       ) : null}
 
+      {betaApplicationAlert ? <button className="betaApplicationAlert" onClick={() => { setActiveTab("betaApplications"); setBetaApplicationAlert(""); }}><span><OpsIcon name="approval" />새 베타 신청</span><strong>{betaApplicationAlert}</strong><small>신청 확인</small></button> : null}
+
       <div className={`opsNavigation primary-${activePrimary}`}>
         <nav className="tabs primaryTabs" aria-label="OPS 주요 메뉴">
           {NAV_GROUPS.map((group) => (
@@ -2427,7 +2474,7 @@ export default function OpsPage() {
         </nav>
         {availableNavTabs.length > 1 ? <div className="subNavContext">
           <nav className="subTabs" aria-label={`${activeNavGroup.label} 세부 메뉴`}>
-            {availableNavTabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}><OpsIcon name={tab.icon} />{tab.label}</button>)}
+            {availableNavTabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}><OpsIcon name={tab.icon} />{tab.label}{tab.id === "betaApplications" && opsWorkQueue.betaApplicationCount > 0 ? <span className="subNavCount">{opsWorkQueue.betaApplicationCount}</span> : null}</button>)}
           </nav>
         </div> : null}
       </div>
@@ -2438,7 +2485,7 @@ export default function OpsPage() {
             <div className="opsPulseCopy">
               <span className="opsPulseLabel"><OpsIcon name="dashboard" />TODAY&apos;S OPS</span>
               <h2>{opsQueueHasError ? "운영 데이터 확인이 필요합니다" : immediateActionCount > 0 ? "먼저 처리할 운영 업무가 있습니다" : "지금 처리할 운영 업무가 없습니다"}</h2>
-              <p>{opsQueueHasError ? "인증 또는 개인정보 요청 현황을 불러오지 못했습니다. 해당 메뉴에서 데이터를 확인해 주세요." : immediateActionCount > 0 ? "문의, 권한 검토, 개인정보 요청, 구독·결제 점검을 우선순위로 모았습니다." : "대기 중인 문의·권한 검토·개인정보 요청·구독 점검 항목이 없습니다."}</p>
+              <p>{opsQueueHasError ? "인증, 베타 신청 또는 개인정보 요청 현황을 불러오지 못했습니다. 해당 메뉴에서 데이터를 확인해 주세요." : immediateActionCount > 0 ? "문의, 권한 검토, 베타 신청, 개인정보 요청, 구독·결제 점검을 우선순위로 모았습니다." : "대기 중인 문의·권한 검토·베타 신청·개인정보 요청·구독 점검 항목이 없습니다."}</p>
             </div>
             <div className="opsPulseCount">
               <strong>{opsQueueHasError ? "!" : immediateActionCount.toLocaleString()}</strong>
@@ -2458,6 +2505,10 @@ export default function OpsPage() {
             <button className={`immediateAction ${opsWorkQueue.privacyRequestCount > 0 || opsWorkQueue.privacyRequestError ? "danger" : ""}`} disabled={Boolean(opsWorkQueue.privacyRequestError)} onClick={() => setActiveTab("privacyRequests")}>
               <span className="immediateActionTitle"><OpsIcon name="privacy" />개인정보 요청</span>
               <span className="immediateActionMeta"><small>{opsWorkQueue.privacyRequestError || queueAgeLabel(opsWorkQueue.oldestPrivacyRequestAt, "요청 범위와 처리 기한을 확인합니다.")}</small><b>{opsWorkQueue.loading || opsWorkQueue.privacyRequestError ? "-" : `${opsWorkQueue.privacyRequestCount.toLocaleString()}건`}</b></span>
+            </button>
+            <button className={`immediateAction ${opsWorkQueue.betaApplicationCount > 0 || opsWorkQueue.betaApplicationError ? "warn" : ""}`} disabled={Boolean(opsWorkQueue.betaApplicationError)} onClick={() => setActiveTab("betaApplications")}>
+              <span className="immediateActionTitle"><OpsIcon name="approval" />베타 신청</span>
+              <span className="immediateActionMeta"><small>{opsWorkQueue.betaApplicationError || queueAgeLabel(opsWorkQueue.latestBetaApplicationAt, "새로 접수된 베타 신청을 확인합니다.")}</small><b>{opsWorkQueue.loading || opsWorkQueue.betaApplicationError ? "-" : `${opsWorkQueue.betaApplicationCount.toLocaleString()}건`}</b></span>
             </button>
             <button className={`immediateAction ${subscriptionCheckCount > 0 ? "warn" : ""}`} onClick={() => setActiveTab("stores")}>
               <span className="immediateActionTitle"><OpsIcon name="card" />구독·결제 점검</span>
@@ -2990,6 +3041,7 @@ export default function OpsPage() {
       ) : null}
 
       {!loading && activeTab === "businessVerification" ? <OpsBusinessVerifications embedded /> : null}
+      {!loading && activeTab === "betaApplications" ? <><OpsBetaRecruitmentRounds /><OpsBetaApplicationDesk /></> : null}
       {!loading && activeTab === "privacyRequests" ? <OpsPrivacyRequests embedded /> : null}
       {!loading && activeTab === "ai" ? <OpsAiUsage embedded /> : null}
       {!loading && activeTab === "approvals" ? <OpsApprovalCenter /> : null}
