@@ -86,19 +86,7 @@ const PAYMENT_LABEL: Record<PaymentStatus, string> = {
   failed: "결제 확인 필요",
 };
 
-const ORDER_STEPS: Array<{ status: OrderStatus; label: string }> = [
-  { status: "new", label: "접수" },
-  { status: "making", label: "제조" },
-  { status: "ready_for_packing", label: "준비" },
-  { status: "completed", label: "수령" },
-];
-
-function progressIndex(status: OrderStatus) {
-  if (status === "cancelled") return 0;
-  if (status === "checked") return 1;
-  const found = ORDER_STEPS.findIndex((step) => step.status === status);
-  return Math.max(0, found);
-}
+function progressIndex(status: OrderStatus) { switch (status) { case "checked": return 1; case "making": return 2; case "ready_for_packing": case "completed": return 3; default: return 0; } }
 
 function normalizeMode(v: unknown): OrderMode {
   return v === "takeout" ? "takeout" : "dine-in";
@@ -172,7 +160,7 @@ function StatusPageInner() {
 
   const [lastOrderId, setLastOrderId] = useState<string>("");
   const [lastStoreId, setLastStoreId] = useState<string>("");
-  const [lastOrderToken, setLastOrderToken] = useState<string>("");
+  const [lastOrderToken, setLastOrderToken] = useState<string>("");  const [accessHydrated, setAccessHydrated] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<OrderView | null>(null);
@@ -201,15 +189,7 @@ function StatusPageInner() {
     return `/?store=${encodeURIComponent(homeStoreId)}`;
   }, [homeStoreId]);
 
-  useEffect(() => {
-    if (!storeId) return;
-    setLastOrderId(
-      (localStorage.getItem(lsLastOrderIdKey(storeId)) || "").trim(),
-    );
-    setLastOrderToken(
-      (localStorage.getItem(lsLastOrderTokenKey(storeId)) || "").trim(),
-    );
-  }, [storeId]);
+  useEffect(() => {    setAccessHydrated(false);    setLoading(true);    if (!storeId) {      setLastOrderId("");      setLastOrderToken("");      setAccessHydrated(true);      return;    }    setLastOrderId((localStorage.getItem(lsLastOrderIdKey(storeId)) || "").trim());    setLastOrderToken((localStorage.getItem(lsLastOrderTokenKey(storeId)) || "").trim());    setAccessHydrated(true);  }, [storeId]);
 
   const orderId = useMemo(() => {
     return orderIdFromQuery || lastOrderId || "";
@@ -272,7 +252,7 @@ function StatusPageInner() {
   };
 
   useEffect(() => {
-    const run = async () => {
+    const run = async () => { if (!accessHydrated) return;
       setLoading(true);
       if (!storeId || !orderId) {
         setOrder(null);
@@ -284,7 +264,7 @@ function StatusPageInner() {
     };
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, storeId, accessToken]);
+  }, [accessHydrated, orderId, storeId, accessToken]);
 
   useEffect(() => {
     if (!storeId || !orderId) return;
