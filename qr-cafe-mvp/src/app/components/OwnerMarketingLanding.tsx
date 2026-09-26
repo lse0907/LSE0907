@@ -37,7 +37,7 @@ export default function OwnerMarketingLanding() {
   return (
     <main className="landing">
       <header className="landingHeader">
-        <RionBrand compact />
+        <RionBrand compact landing />
         <nav aria-label="랜딩 페이지 이동">
           <a href="#flow">주문 흐름</a>
           <a href="#benefit">베타 혜택</a>

@@ -9,9 +9,10 @@ type RionBrandProps = {
   admin?: boolean;
   auth?: boolean;
   staff?: boolean;
+  landing?: boolean;
 };
 
-export default function RionBrand({ compact = false, inverse = false, product = false, admin = false, auth = false, staff = false }: RionBrandProps) {
+export default function RionBrand({ compact = false, inverse = false, product = false, admin = false, auth = false, staff = false, landing = false }: RionBrandProps) {
   const usesWordmark = admin || auth || staff;
   // All product and operational surfaces use the approved RION brand CI.
   // Do not add a fallback service symbol here: brand-ci verification rejects it.
@@ -19,7 +20,7 @@ export default function RionBrand({ compact = false, inverse = false, product = 
   const productLabel = admin ? "ADMIN" : staff ? "STAFF" : "OPS";
 
   return (
-    <div className={`rionBrand ${compact ? "compact" : ""} ${inverse ? "inverse" : ""} ${admin ? "admin" : ""} ${auth ? "auth" : ""} ${staff ? "staff" : ""}`} aria-label={product ? (auth ? "RION Order" : `RION Order ${productLabel}`) : "RION Labs"}>
+    <div className={`rionBrand ${compact ? "compact" : ""} ${inverse ? "inverse" : ""} ${admin ? "admin" : ""} ${auth ? "auth" : ""} ${staff ? "staff" : ""} ${landing ? "landing" : ""}`} aria-label={product ? (auth ? "RION Order" : `RION Order ${productLabel}`) : "RION Labs"}>
       <Image
         className="rionBrandLogo"
         src={logoSrc}
@@ -58,6 +59,9 @@ export default function RionBrand({ compact = false, inverse = false, product = 
         .rionBrand.staff.compact .rionBrandLogo { width:38px; height:38px; }
         .rionBrand.compact.inverse .rionBrandLogo { width:38px; height:38px; }
         .rionBrand.compact .rionBrandCopy strong { font-size:18px; }
+        .rionBrand.landing.compact { --rion-logo-size:34px; gap:8px; }
+        .rionBrand.landing.compact .rionBrandLogo { width:34px; height:34px; }
+        .rionBrand.landing.compact .rionBrandCopy strong { font-size:17px; }
         @media (max-width:900px) {
           .rionBrand.staff { --rion-logo-size:36px; gap:8px; }
           .rionBrand.staff .rionBrandLogo { width:36px; height:36px; }
@@ -65,6 +69,9 @@ export default function RionBrand({ compact = false, inverse = false, product = 
           .rionBrand.staff .rionBrandCopy span { display:none; }
         }
         @media (max-width:640px) {
+          .rionBrand.landing.compact { --rion-logo-size:32px; gap:7px; }
+          .rionBrand.landing.compact .rionBrandLogo { width:32px; height:32px; }
+          .rionBrand.landing.compact .rionBrandCopy strong { font-size:16px; }
           .rionBrand.admin { --rion-logo-size:38px; gap:8px; }
           .rionBrand.admin .rionBrandLogo { width:38px; height:38px; }
           .rionBrand.admin .rionBrandCopy strong { font-size:18px; }
