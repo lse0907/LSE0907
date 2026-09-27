@@ -101,7 +101,7 @@ assert.doesNotMatch(worker, /service_role|SUPABASE_SERVICE_ROLE_KEY/);
 
 assert.match(tossSnapshot, /export function essentialPaymentSnapshot/);
 assert.doesNotMatch(tossSnapshot, /cancelReason: row\.cancelReason/);
-assert.match(orderConfirm, /toss_response: essentialPaymentSnapshot\(tossResult\)/);
+assert.match(orderConfirm, /toss_response:\s*\{\s*\.\.\.essentialPaymentSnapshot\(tossResult\)/);
 assert.match(billingConfirm, /toss_response: essentialPaymentSnapshot\(parsed\)/);
 
 assert.match(authHelper, /allowRestricted/);

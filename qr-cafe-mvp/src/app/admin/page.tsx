@@ -37,11 +37,6 @@ type StoreBillingSummary = {
   lastPaidAt: string | null;
 };
 
-type StoreAddonSummary = {
-  prepayAddonStatus: string;
-  addonPaidUntil: string | null;
-};
-
 type AiBriefNotice = {
   storeId: string;
   id: string;
@@ -177,9 +172,6 @@ function AdminPageInner() {
   const [billingByStore, setBillingByStore] = useState<
     Record<string, StoreBillingSummary>
   >({});
-  const [addonByStore, setAddonByStore] = useState<
-    Record<string, StoreAddonSummary>
-  >({});
   const [paymentConnectionState, setPaymentConnectionState] = useState<
     "loading" | "connected" | "needed" | "attention"
   >("loading");
@@ -258,14 +250,10 @@ function AdminPageInner() {
         .in("store_id", ids);
     }
 
-    const [billingRes, addonRes, paymentRes] = await Promise.all([
+    const [billingRes, paymentRes] = await Promise.all([
       supabase
         .from("store_billing")
         .select("store_id, base_plan_status, paid_until")
-        .in("store_id", ids),
-      supabase
-        .from("store_addons")
-        .select("store_id, prepay_addon_status, addon_paid_until")
         .in("store_id", ids),
       supabase
         .from("billing_payments")
@@ -277,7 +265,6 @@ function AdminPageInner() {
 
     if (storeRes.error) throw storeRes.error;
     if (billingRes.error) throw billingRes.error;
-    if (addonRes.error) throw addonRes.error;
     if (paymentRes.error) throw paymentRes.error;
 
     const list = (storeRes.data || []) as StoreRow[];
@@ -286,7 +273,6 @@ function AdminPageInner() {
     );
 
     const nextBilling: Record<string, StoreBillingSummary> = {};
-    const nextAddons: Record<string, StoreAddonSummary> = {};
     for (const row of billingRes.data || []) {
       const storeId = String((row as { store_id: string }).store_id || "");
       if (!storeId) continue;
@@ -300,22 +286,6 @@ function AdminPageInner() {
             (row as { paid_until?: string | null }).paid_until || "",
           ).trim() || null,
         lastPaidAt: null,
-      };
-    }
-
-    for (const row of addonRes.data || []) {
-      const storeId = String((row as { store_id: string }).store_id || "");
-      if (!storeId) continue;
-      nextAddons[storeId] = {
-        prepayAddonStatus: String(
-          (row as { prepay_addon_status?: string | null })
-            .prepay_addon_status || "inactive",
-        ),
-        addonPaidUntil:
-          String(
-            (row as { addon_paid_until?: string | null }).addon_paid_until ||
-              "",
-          ).trim() || null,
       };
     }
 
@@ -335,7 +305,6 @@ function AdminPageInner() {
 
     setStores(list);
     setBillingByStore(nextBilling);
-    setAddonByStore(nextAddons);
     setStoresLoaded(true);
   };
 
@@ -543,7 +512,6 @@ function AdminPageInner() {
   const selectedBilling = selectedStoreId
     ? billingByStore[selectedStoreId]
     : null;
-  const selectedAddon = selectedStoreId ? addonByStore[selectedStoreId] : null;
   const selectedFreeRemaining = selectedStore
     ? calcRemainingDays(selectedStore.created_at)
     : null;

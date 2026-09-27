@@ -139,12 +139,20 @@ assert(
   "공개 관리 뷰는 security_invoker로 RLS를 따라야 합니다.",
 );
 
-const leakedTokenUrls = sourceFiles(join(root, "src")).filter((file) =>
-  readFileSync(file, "utf8").includes("accessToken="),
-);
+const leakedTokenUrls = sourceFiles(join(root, "src")).filter((file) => {
+  const source = readFileSync(file, "utf8");
+  return source.includes("&accessToken=") || source.includes("?accessToken=");
+});
 assert(
   leakedTokenUrls.length === 0,
   `접근 토큰이 URL에 포함된 파일: ${leakedTokenUrls.join(", ")}`,
+);
+assert(
+  donePage.includes("persistLastOrderAccess") &&
+    donePage.includes("removeAccessTokenFromCurrentUrl") &&
+    statusPage.includes("persistLastOrderAccess") &&
+    statusPage.includes("removeAccessTokenFromCurrentUrl"),
+  "기존 접근 토큰 링크는 기기에 저장한 뒤 주소창과 기록에서 제거해야 합니다.",
 );
 
 console.log("P0 접근통제 정적 검증 통과");

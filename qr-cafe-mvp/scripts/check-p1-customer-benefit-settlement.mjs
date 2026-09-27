@@ -12,7 +12,7 @@ const staffPage = read("src/app/staff/page.tsx");
 const partialModal = read("src/app/staff/PartialRefundModal.tsx");
 const customerView = read("src/app/api/orders/customer-view/route.ts");
 const customerOrders = read("src/app/api/customer/orders/route.ts");
-const adminPage = read("src/app/admin/page.tsx");
+const adminStoreSummaryRoute = read("src/app/api/admin/store-summary/route.ts");
 const statsPage = read("src/app/admin/stats/page.tsx");
 
 const expect = (source, value, message) => {
@@ -56,7 +56,7 @@ expect(staffPage, "adjusted_total_price", "직원 화면이 최종 주문금액�
 expect(staffPage, "refunded_qty", "직원 화면이 메뉴 환불 수량을 조회하지 않습니다.");
 expect(customerView, "effective_earned_points", "고객 주문상태 API가 최종 적립 포인트를 제공하지 않습니다.");
 expect(customerOrders, "adjusted_total_price", "고객 주문내역 API가 최종 주문금액을 제공하지 않습니다.");
-expect(adminPage, "adjusted_total_price", "관리자 홈 매출이 최종 주문금액을 사용하지 않습니다.");
+expect(adminStoreSummaryRoute, "adjusted_total_price", "관리자 홈 매출 API가 최종 주문금액을 사용하지 않습니다.");
 expect(statsPage, "refunded_qty", "매출 통계가 환불된 메뉴 수량을 제외하지 않습니다.");
 
 console.log("P1 고객혜택·부분환불 정적 검증 통과");
