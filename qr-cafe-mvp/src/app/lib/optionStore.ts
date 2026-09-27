@@ -25,12 +25,28 @@ export type OptionData = {
   items: OptionItem[];
 };
 
+type OptionGroupRow = {
+  id: unknown;
+  name: unknown;
+  required: unknown;
+  min: unknown;
+  max: unknown;
+  sort_order?: unknown;
+};
+
+type OptionItemRow = {
+  id: unknown;
+  group_id: unknown;
+  name: unknown;
+  price_delta: unknown;
+};
+
 export const DEFAULT_OPTIONS: OptionData = {
   groups: [],
   items: [],
 };
 
-function toInt(v: any, fallback = 0) {
+function toInt(v: unknown, fallback = 0) {
   const n = Number(v);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(0, Math.floor(n));
@@ -42,8 +58,8 @@ function toInt(v: any, fallback = 0) {
 export async function fetchOptionsFromDb(storeId: string): Promise<OptionData> {
   if (!storeId) return DEFAULT_OPTIONS;
 
-  let groups: any[] | null = null;
-  let gErr: any = null;
+  let groups: OptionGroupRow[] | null = null;
+  let gErr: Error | null = null;
 
   const gRes = await supabase
     .from("option_groups")
@@ -58,10 +74,10 @@ export async function fetchOptionsFromDb(storeId: string): Promise<OptionData> {
       .select("id, name, required, min, max")
       .eq("store_id", storeId)
       .order("created_at", { ascending: true });
-    groups = fallback.data as any[] | null;
+    groups = fallback.data as unknown as OptionGroupRow[] | null;
     gErr = fallback.error;
   } else {
-    groups = gRes.data as any[] | null;
+    groups = gRes.data as unknown as OptionGroupRow[] | null;
     gErr = gRes.error;
   }
 
@@ -83,11 +99,11 @@ export async function fetchOptionsFromDb(storeId: string): Promise<OptionData> {
 
   return {
     groups: (groups || []).map(mapGroup),
-    items: (items || []).map(mapItem),
+    items: ((items || []) as unknown as OptionItemRow[]).map(mapItem),
   };
 }
 
-function mapGroup(x: any): OptionGroup {
+function mapGroup(x: OptionGroupRow): OptionGroup {
   return {
     id: String(x.id || "").trim(),
     name: String(x.name || "").trim(),
@@ -98,7 +114,7 @@ function mapGroup(x: any): OptionGroup {
   };
 }
 
-function mapItem(x: any): OptionItem {
+function mapItem(x: OptionItemRow): OptionItem {
   return {
     id: String(x.id || "").trim(),
     groupId: String(x.group_id || "").trim(),
@@ -121,9 +137,9 @@ export function useOptionsDb(storeId: string) {
       setErrorMsg("");
       const next = await fetchOptionsFromDb(storeId);
       setData(next);
-    } catch (e: any) {
-      console.error(e);
-      setErrorMsg(e?.message || "옵션 데이터를 불러오지 못했습니다.");
+    } catch (error: unknown) {
+      console.error(error);
+      setErrorMsg(error instanceof Error ? error.message : "옵션 데이터를 불러오지 못했습니다.");
       setData(DEFAULT_OPTIONS);
     } finally {
       setLoading(false);

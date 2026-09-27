@@ -76,8 +76,11 @@ assert(
   "회원가입 서버 API에서 공통 비밀번호 정책을 검증해야 합니다.",
 );
 assert(
-  signupApi.includes("NEXT_PUBLIC_SUPABASE_ANON_KEY") && !signupApi.includes("SERVICE_ROLE"),
-  "회원가입 서버 API는 서비스 역할 키 대신 익명 키를 사용해야 합니다.",
+  signupApi.includes("NEXT_PUBLIC_SUPABASE_ANON_KEY") &&
+    signupApi.includes("createClient(supabaseUrl, supabaseAnonKey") &&
+    signupApi.includes("supabase.auth.signUp") &&
+    signupApi.includes("createClient(supabaseUrl, serviceRole"),
+  "회원가입은 익명 키 클라이언트로 실행하고, 서비스 역할 키는 가입 후 서버 전용 기록 처리로만 사용해야 합니다.",
 );
 assert(
   signupApi.includes('"Cache-Control": "no-store"'),

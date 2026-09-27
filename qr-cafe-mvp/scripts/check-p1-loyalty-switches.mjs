@@ -20,14 +20,20 @@ for (const token of [
   "lock table public.stores in share row exclusive mode",
   "alter column points_enabled set default false",
   "alter column coupons_enabled set default false",
-  "select\n  s.store_id,\n  true,\n  true",
   "create trigger trg_initialize_store_loyalty_defaults",
-  "new.store_id,\n    false,\n    false",
   "security definer",
   "from public, anon, authenticated",
 ]) {
   assert.ok(defaultOffMigration.includes(token), `default-off migration is missing: ${token}`);
 }
+assert.ok(
+  /select\s+s\.store_id,\s+true,\s+true\s+from public\.stores s/i.test(defaultOffMigration),
+  "default-off migration must preserve existing store loyalty settings before changing defaults",
+);
+assert.ok(
+  /values\s*\(\s*new\.store_id,\s*false,\s*false\s*\)/i.test(defaultOffMigration),
+  "default-off trigger must create disabled loyalty settings for new stores",
+);
 
 const validation = read("src/app/api/orders/_lib/orderValidation.ts");
 assert.ok(validation.includes("customer_coupons"), "existing coupon validation must remain");

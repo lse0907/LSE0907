@@ -58,7 +58,10 @@ export default function OpsSupportDesk() {
     window.open(data.url, "_blank", "noopener,noreferrer");
   };
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const task = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(task);
+  }, [load]);
 
   return <section className="card supportDesk">
     <div className="panelHeader">

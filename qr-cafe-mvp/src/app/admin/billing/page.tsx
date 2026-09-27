@@ -9,7 +9,6 @@ import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 import { CustomerIcon } from "@/app/_components/CustomerIcon";
 import previewStyles from "./design-preview/page.module.css";
 
-type SaveMode = "db" | "unsynced";
 type SavedPgView = {
   mid: string;
   clientKey: string;
@@ -93,7 +92,6 @@ function BillingForm({ storeId }: { storeId: string }) {
   const [form, setForm] = useState<BillingSettings>(EMPTY_BILLING);
   const [savedPg, setSavedPg] = useState<SavedPgView | null>(null);
   const [saveBadge, setSaveBadge] = useState<"idle" | "saved" | "error">("idle");
-  const [saveMode, setSaveMode] = useState<SaveMode>("unsynced");
   const [loading, setLoading] = useState(true);
   const [featureState, setFeatureState] = useState<PrepayFeatureState | null>(null);
   const [featureSaving, setFeatureSaving] = useState(false);
@@ -123,11 +121,9 @@ function BillingForm({ storeId }: { storeId: string }) {
           hasSecret: dbData.hasPgSecret,
           updatedAt: dbData.updatedAt ? new Date(dbData.updatedAt).toISOString() : null,
         });
-        setSaveMode("db");
       } else {
         setForm(EMPTY_BILLING);
         setSavedPg(null);
-        setSaveMode("unsynced");
       }
       setLoading(false);
       await loadFeatureState();
@@ -158,7 +154,6 @@ function BillingForm({ storeId }: { storeId: string }) {
         });
       }
       setForm((prev) => ({ ...prev, pgSecretKey: "" }));
-      setSaveMode("db");
       setSaveBadge("saved");
       setConnectionModalOpen(false);
       setTimeout(() => setSaveBadge("idle"), 1400);
@@ -166,7 +161,6 @@ function BillingForm({ storeId }: { storeId: string }) {
       return;
     }
 
-    setSaveMode("unsynced");
     setSaveBadge("error");
     setTimeout(() => setSaveBadge("idle"), 2000);
   };

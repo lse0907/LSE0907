@@ -51,8 +51,6 @@ type ConfirmState = {
   action: null | (() => void);
 };
 
-type MenuLinkStatusFilter = "all" | "linked" | "unlinked";
-
 type OptionTemplateItem = {
   name: string;
   priceDelta: number;
