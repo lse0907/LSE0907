@@ -57,6 +57,18 @@ function safePathJoin(origin: string, path: string) {
   return `${origin}${p}`;
 }
 
+function resolveQrPublicOrigin() {
+  const configuredOrigin = (process.env.NEXT_PUBLIC_QR_PUBLIC_ORIGIN || "").trim();
+  if (!configuredOrigin) return window.location.origin;
+
+  try {
+    return new URL(configuredOrigin).origin;
+  } catch {
+    // A malformed deployment setting must never prevent an owner from creating a QR code.
+    return window.location.origin;
+  }
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -185,7 +197,7 @@ function AdminQrPageInner() {
   }, []);
 
   useEffect(() => {
-    setOrigin(window.location.origin);
+    setOrigin(resolveQrPublicOrigin());
   }, []);
 
   const storeName = profile?.storeName || "매장명 미등록";
