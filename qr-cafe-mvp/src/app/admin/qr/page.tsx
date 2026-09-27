@@ -69,6 +69,10 @@ function resolveQrPublicOrigin() {
   }
 }
 
+function hasConfiguredQrPublicOrigin() {
+  return Boolean((process.env.NEXT_PUBLIC_QR_PUBLIC_ORIGIN || "").trim());
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -288,6 +292,17 @@ function AdminQrPageInner() {
   const qrUsageLabel = (row: AdminQrCode) =>
     row.qr_type === "table" ? "테이블 주문용" : row.qr_type === "counter" ? "카운터·포장용" : "주문 QR";
 
+  const legacyQrRows = useMemo(() => {
+    if (!hasConfiguredQrPublicOrigin() || !origin) return [];
+    return qrRows.filter((row) => {
+      try {
+        return new URL(row.target_url).origin !== origin;
+      } catch {
+        return true;
+      }
+    });
+  }, [origin, qrRows]);
+
   const openQrManage = async () => {
     await refreshQrData();
     setQrManageOpen(true);
@@ -498,6 +513,30 @@ function AdminQrPageInner() {
     } catch (e: unknown) {
       setQrMsgTone("error");
       setQrMsg(`QR 상태 변경 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setQrSaving(false);
+    }
+  }
+
+  async function migrateQrTargetsToPublicOrigin() {
+    if (!origin || !storeId || legacyQrRows.length === 0) return;
+
+    setQrSaving(true);
+    setQrMsg("");
+    try {
+      const updates = legacyQrRows.map((row) => {
+        const targetUrl = row.qr_type === "table" && Number(row.table_no) > 0 ? tableUrl(Number(row.table_no)) : counterUrl;
+        return supabase.from("store_qr_codes").update({ target_url: targetUrl }).eq("id", row.id).eq("store_id", storeId);
+      });
+      const results = await Promise.all(updates);
+      const failed = results.find((result) => result.error);
+      if (failed?.error) throw failed.error;
+      setQrMsgTone("success");
+      setQrMsg(`기존 QR ${legacyQrRows.length}개의 정식 주소를 교체했습니다. PNG를 다시 내려받아 출력해 주세요.`);
+      await refreshQrData();
+    } catch (e: unknown) {
+      setQrMsgTone("error");
+      setQrMsg(`정식 주소 교체 실패: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setQrSaving(false);
     }
@@ -2110,6 +2149,14 @@ function AdminQrPageInner() {
                 <div className="noticeBox compactNotice">
                   <span>사용하지 않는 QR만 중지하세요.<br />중지된 QR로는 고객이 주문할 수 없습니다.</span>
                 </div>
+                {legacyQrRows.length > 0 ? (
+                  <div className="noticeBox compactNotice">
+                    <span>기존 QR {legacyQrRows.length}개가 이전 주소를 사용 중입니다.<br />교체 후 PNG를 다시 내려받아 출력해 주세요.</span>
+                    <button className="btn" onClick={migrateQrTargetsToPublicOrigin} disabled={qrSaving}>
+                      정식 주소로 교체
+                    </button>
+                  </div>
+                ) : null}
                 {qrRows.length === 0 ? (
                   <div className="previewEmpty">생성된 QR이 없습니다.</div>
                 ) : (
