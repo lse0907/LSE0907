@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
+import { betaPaymentMessage, getStoreBetaAccess } from "../_lib/betaAccess";
 import { essentialPaymentSnapshot } from "../../orders/_lib/tossCancellation";
 
 type ConfirmSubscriptionBody = { paymentKey?: unknown; orderId?: unknown; amount?: unknown; storeId?: unknown };
@@ -35,6 +36,9 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = createSupabaseAdminClient();
     const { userId } = await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner"] });
+    if ((await getStoreBetaAccess(supabaseAdmin, storeId)).active) {
+      return publicError("BETA_ACCESS_ACTIVE", betaPaymentMessage(), 409);
+    }
     const attemptRes = await supabaseAdmin
       .from("billing_payment_attempts")
       .select("id,order_id,store_id,payer_user_id,final_amount_krw,status,payment_key,expires_at")

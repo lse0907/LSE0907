@@ -37,6 +37,12 @@ type StoreBillingSummary = {
   lastPaidAt: string | null;
 };
 
+type StoreBetaSummary = {
+  active: boolean;
+  prepayIncluded: boolean;
+  endsAt: string | null;
+};
+
 type AiBriefNotice = {
   storeId: string;
   id: string;
@@ -145,6 +151,8 @@ function AdminPageInner() {
   // 실제 AI 브리핑·읽음 이력을 만들거나 변경하지 않습니다.
   const isLocalAiBriefPreview =
     process.env.NODE_ENV !== "production" && sp.get("briefPreview") === "1";
+  const isLocalBetaPreview =
+    process.env.NODE_ENV !== "production" && sp.get("betaPreview") === "1";
 
   const [booting, setBooting] = useState(true);
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -172,6 +180,7 @@ function AdminPageInner() {
   const [billingByStore, setBillingByStore] = useState<
     Record<string, StoreBillingSummary>
   >({});
+  const [betaByStore, setBetaByStore] = useState<Record<string, StoreBetaSummary>>({});
   const [paymentConnectionState, setPaymentConnectionState] = useState<
     "loading" | "connected" | "needed" | "attention"
   >("loading");
@@ -229,6 +238,7 @@ function AdminPageInner() {
     if (!ids.length) {
       setStores([]);
       setBillingByStore({});
+      setBetaByStore({});
       setStoresLoaded(true);
       return;
     }
@@ -303,8 +313,23 @@ function AdminPageInner() {
       };
     }
 
+    const betaPairs = await Promise.all(ids.map(async (storeId) => {
+      if (isLocalBetaPreview && storeId === (selectedStoreId || ids[0])) {
+        return [storeId, { active: true, prepayIncluded: true, endsAt: null }] as const;
+      }
+      try {
+        const response = await fetch(`/api/billing/beta-access?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" });
+        const result = await response.json().catch(() => ({}));
+        const beta = response.ok && result?.ok ? result.beta : null;
+        return [storeId, { active: beta?.active === true, prepayIncluded: beta?.prepayIncluded === true, endsAt: String(beta?.endsAt || "").trim() || null }] as const;
+      } catch {
+        return [storeId, { active: false, prepayIncluded: false, endsAt: null }] as const;
+      }
+    }));
+
     setStores(list);
     setBillingByStore(nextBilling);
+    setBetaByStore(Object.fromEntries(betaPairs));
     setStoresLoaded(true);
   };
 
@@ -512,19 +537,21 @@ function AdminPageInner() {
   const selectedBilling = selectedStoreId
     ? billingByStore[selectedStoreId]
     : null;
+  const selectedBeta = selectedStoreId ? betaByStore[selectedStoreId] : null;
   const selectedFreeRemaining = selectedStore
     ? calcRemainingDays(selectedStore.created_at)
     : null;
   const selectedPaidRemaining = calcPaidRemainingDays(
     selectedBilling?.paidUntil || null,
   );
-  const selectedSubscriptionStatus =
+  const selectedSubscriptionStatus = selectedBeta?.active ? "베타 이용 중" :
     selectedBilling?.basePlanStatus === "active" ? "유료" : "무료";
-  const selectedRemainingPeriod =
-    selectedBilling?.basePlanStatus === "active"
+  const selectedRemainingPeriod = selectedBeta?.active
+    ? selectedBeta.endsAt ? calcPaidRemainingDays(selectedBeta.endsAt) : null
+    : selectedBilling?.basePlanStatus === "active"
       ? selectedPaidRemaining
       : selectedFreeRemaining;
-  const selectedRemainingText =
+  const selectedRemainingText = selectedBeta?.active && !selectedBeta.endsAt ? "정식 출시 전까지" :
     selectedRemainingPeriod == null ? "-" : `${selectedRemainingPeriod}일`;
   const dismissSetupBanner = () => {
     setHideSetupBannerForCurrentSelection(true);
@@ -745,6 +772,7 @@ function AdminPageInner() {
                       ? selectedStore.store_name || selectedStore.store_id
                       : "매장을 선택해 주세요"}
                   </strong>
+                  {selectedBeta?.active ? <em className="mobileStoreBetaBadge">베타</em> : null}
                 </span>
                 <span className="mobileStoreToggleAction">
                   {mobileStorePickerOpen ? "닫기" : "매장 변경"}
@@ -804,15 +832,17 @@ function AdminPageInner() {
                   const on = s.store_id === selectedStoreId;
                   const remaining = calcRemainingDays(s.created_at);
                   const billing = billingByStore[s.store_id];
+                  const beta = betaByStore[s.store_id];
                   const paidRemaining = calcPaidRemainingDays(
                     billing?.paidUntil || null,
                   );
                   const remainingText = (days: number | null) =>
                     days == null ? "-" : `${days}일`;
-                  const subscriptionStatus =
+                  const subscriptionStatus = beta?.active ? "베타 이용 중" :
                     billing?.basePlanStatus === "active" ? "유료" : "무료";
-                  const remainingPeriod =
-                    billing?.basePlanStatus === "active"
+                  const remainingPeriod = beta?.active
+                    ? (beta.endsAt ? remainingText(calcPaidRemainingDays(beta.endsAt)) : "정식 출시 전까지")
+                    : billing?.basePlanStatus === "active"
                       ? remainingText(paidRemaining)
                       : remainingText(remaining);
                   const displayStatus = getStoreDisplayStatus(s);
@@ -841,6 +871,7 @@ function AdminPageInner() {
                           >
                             {statusLabel}
                           </span>
+                          {beta?.active ? <span className="storeBetaBadge" title="정식 출시 전까지 무료 이용">베타</span> : null}
                         </div>
                         <div className="muted">
                           {subscriptionStatus} · {remainingPeriod} 남음
@@ -877,9 +908,9 @@ function AdminPageInner() {
                 })}
               </div>
               <p className="hint" style={{ marginTop: 6 }}>
-                남은사용기간이 만료 되면 기능 사용이 제한 됩니다.
-                <br />
-                만료 전에 결제를 진행해 주세요.
+                {selectedBeta?.active
+                  ? "베타 이용 기간에는 별도 결제가 필요하지 않습니다. 정식 출시 후에도 자동 결제되지 않습니다."
+                  : <>남은사용기간이 만료 되면 기능 사용이 제한 됩니다.<br />만료 전에 결제를 진행해 주세요.</>}
               </p>
             </>
           )}
@@ -1678,6 +1709,18 @@ body {
   background:#f1f5f9;
   color:#475569;
 }
+.storeBetaBadge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  padding:3px 7px;
+  border:1px solid #a7e1bd;
+  background:#ecfdf3;
+  color:#067647;
+  font-size:11px;
+  font-weight:950;
+}
 .cardBtn{
   min-width:0;
   min-height:92px;
@@ -1851,6 +1894,7 @@ body {
   .mobileStoreToggle > span:first-child{ min-width:0; display:grid; gap:3px; }
   .mobileStoreToggle small{ color:var(--muted); font-size:10px; font-weight:750; }
   .mobileStoreToggle strong{ overflow:hidden; font-size:14px; text-overflow:ellipsis; white-space:nowrap; }
+  .mobileStoreBetaBadge{width:max-content;border:1px solid #a7e1bd;border-radius:999px;background:#ecfdf3;color:#067647;padding:2px 6px;font-size:10px;font-style:normal;font-weight:900;line-height:1.25}
   .mobileStoreToggleAction{ flex:0 0 auto; color:#245da9; font-size:12px; font-weight:900; }
   .mobileStoreBilling{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:100%;border:1px solid #b7cce7;border-radius:11px;background:#f7fbff;color:#174d8d;padding:0 11px;font:inherit;font-size:11px;font-weight:900;white-space:nowrap;cursor:pointer}
   .storePickerClosed .storePickerDetails{ display:none; }

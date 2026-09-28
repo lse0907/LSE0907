@@ -24,6 +24,7 @@ type Quote = {
 type Runtime = { baseStatus: string; addonStatus: string; addonEnabled: boolean; basePaidUntil: string | null; addonPaidUntil: string | null; lastPaidAt: string | null };
 type CreditEntry = { id: number; entryType: string; amountKrw: number; reason: string; createdAt: string };
 type CreditHistory = { availableKrw: number; entries: CreditEntry[]; pendingRewards: Array<{ id: number; holdUntil: string | null }> };
+type BetaAccess = { active: boolean; prepayIncluded: boolean; startsAt: string | null; endsAt: string | null; postBetaDiscountBps: number };
 type TossFactory = (key: string) => { requestPayment: (method: "카드", params: Record<string, unknown>) => Promise<void> };
 
 const PERIODS: Array<{ months: PlanMonths; label: string; discount: string }> = [
@@ -38,6 +39,7 @@ const dateText = (iso: string | null) => {
   const date = new Date(iso);
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString("ko-KR") : "-";
 };
+const LOCAL_BETA_PREVIEW: BetaAccess = { active: true, prepayIncluded: true, startsAt: new Date().toISOString(), endsAt: null, postBetaDiscountBps: 4000 };
 
 function Direction() {
   return <span className="direction" aria-hidden="true"><CustomerIcon name="chevronRight" size={16} /></span>;
@@ -60,8 +62,10 @@ function BillingPayContent() {
   const returnedAmount = Number(sp.get("amount") || 0);
   const failCode = String(sp.get("code") || "").trim();
   const failMessage = String(sp.get("message") || "").trim();
+  const isLocalBetaPreview = process.env.NODE_ENV !== "production" && sp.get("betaPreview") === "1";
   const [storeName, setStoreName] = useState("매장");
   const [runtime, setRuntime] = useState<Runtime>({ baseStatus: "inactive", addonStatus: "inactive", addonEnabled: false, basePaidUntil: null, addonPaidUntil: null, lastPaidAt: null });
+  const [beta, setBeta] = useState<BetaAccess>({ active: false, prepayIncluded: false, startsAt: null, endsAt: null, postBetaDiscountBps: 4000 });
   const [planMonths, setPlanMonths] = useState<PlanMonths>(1);
   const [payBase, setPayBase] = useState(true);
   const [payAddon, setPayAddon] = useState(false);
@@ -87,13 +91,14 @@ function BillingPayContent() {
 
   const refreshRuntime = useCallback(async () => {
     if (!storeId) return;
-    const [storeRes, baseRes, addonRes, paymentRes, keyRes, pgRes] = await Promise.all([
+    const [storeRes, baseRes, addonRes, paymentRes, keyRes, pgRes, betaRes] = await Promise.all([
       supabase.from("stores").select("store_name").eq("store_id", storeId).maybeSingle(),
       supabase.from("store_billing").select("base_plan_status,paid_until").eq("store_id", storeId).maybeSingle(),
       supabase.from("store_addons").select("prepay_addon_status,addon_paid_until,prepay_enabled").eq("store_id", storeId).maybeSingle(),
       supabase.from("billing_payments").select("paid_at").eq("store_id", storeId).eq("status", "paid").order("paid_at", { ascending: false }).limit(1).maybeSingle(),
       fetch(`/api/billing/platform-client-key?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" }),
       fetch(`/api/billing/store-pg-config?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" }),
+      fetch(`/api/billing/beta-access?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" }),
     ]);
     setStoreName(String(storeRes.data?.store_name || storeId));
     setRuntime({
@@ -109,8 +114,11 @@ function BillingPayContent() {
     const pgJson = await pgRes.json().catch(() => ({}));
     const pgConfig = pgRes.ok && pgJson?.ok ? pgJson.config : null;
     setPgReady(Boolean(pgConfig?.mid && pgConfig?.clientKey && pgConfig?.hasSecret));
+    const betaJson = await betaRes.json().catch(() => ({}));
+    const nextBeta = betaRes.ok && betaJson?.ok ? betaJson.beta as BetaAccess : null;
+    setBeta(isLocalBetaPreview ? LOCAL_BETA_PREVIEW : (nextBeta || { active: false, prepayIncluded: false, startsAt: null, endsAt: null, postBetaDiscountBps: 4000 }));
     setPgConnectionChecked(true);
-  }, [storeId]);
+  }, [isLocalBetaPreview, storeId]);
 
   const loadCreditHistory = useCallback(async () => {
     if (!storeId) return;
@@ -132,6 +140,7 @@ function BillingPayContent() {
   }, [payAddon, pgConnectionChecked, pgReady]);
 
   const loadQuote = useCallback(async (prepare = false) => {
+    if (beta.active) { setQuote(null); setQuoteLoading(false); return null; }
     if (!storeId || (!payBase && !payAddon)) { setQuote(null); return null; }
     if (!prepare) setQuoteLoading(true);
     const response = await fetch("/api/billing/quote", {
@@ -155,7 +164,7 @@ function BillingPayContent() {
     }
     setQuoteLoading(false);
     return result as { quote: Quote; orderId?: string };
-  }, [creditToUse, payAddon, payBase, planMonths, storeId]);
+  }, [beta.active, creditToUse, payAddon, payBase, planMonths, storeId]);
 
   useEffect(() => {
     if (!storeId) { router.replace("/admin"); return; }
@@ -176,7 +185,7 @@ function BillingPayContent() {
   useEffect(() => {
     const timer = window.setTimeout(() => void loadQuote(false), 150);
     return () => window.clearTimeout(timer);
-  }, [loadQuote]);
+  }, [beta.active, loadQuote]);
 
   useEffect(() => {
     if (!confirmOpen) return;
@@ -303,9 +312,9 @@ function BillingPayContent() {
       {message ? <section className={`resultBanner ${messageKind}`} role="status"><strong>{messageKind === "success" ? "결제 완료" : messageKind === "warning" ? "처리 상태 확인 중" : messageKind === "error" ? "확인이 필요합니다" : "안내"}</strong><span>{message}</span></section> : null}
 
       <section className="statusPanel">
-        <div><span>기본 구독</span><strong>{statusLabel(runtime.baseStatus)}</strong><small>만료 {dateText(runtime.basePaidUntil)}</small></div>
-        <div><span>선결제 옵션</span><strong>{statusLabel(runtime.addonStatus)} · {runtime.addonEnabled ? "기능 켜짐" : "기능 꺼짐"}</strong><small>만료 {dateText(runtime.addonPaidUntil)}</small></div>
-        <div><span>최근 결제</span><strong>{dateText(runtime.lastPaidAt)}</strong><small>모든 가격은 부가세 포함입니다.</small></div>
+        <div><span>기본 구독</span><strong>{beta.active ? "베타 이용 중" : statusLabel(runtime.baseStatus)}</strong><small>{beta.active ? "정식 출시 전까지 무료" : `만료 ${dateText(runtime.basePaidUntil)}`}</small></div>
+        <div><span>선결제 옵션</span><strong>{beta.active ? (beta.prepayIncluded ? "베타 포함" : "베타 미포함") : `${statusLabel(runtime.addonStatus)} · ${runtime.addonEnabled ? "기능 켜짐" : "기능 꺼짐"}`}</strong><small>{beta.active ? (beta.prepayIncluded ? "PG 연결 후 사용할 수 있어요" : "필요하면 OPS에 문의해 주세요") : `만료 ${dateText(runtime.addonPaidUntil)}`}</small></div>
+        <div><span>{beta.active ? "출시 후 혜택" : "최근 결제"}</span><strong>{beta.active ? `구독료 ${beta.postBetaDiscountBps / 100}% 할인` : dateText(runtime.lastPaidAt)}</strong><small>{beta.active ? "자동 결제되지 않습니다." : "모든 가격은 부가세 포함입니다."}</small></div>
       </section>
 
       <section className="accountBenefitPanel">
@@ -317,6 +326,11 @@ function BillingPayContent() {
         </div>
       </section>
 
+      {beta.active ? <section className="betaAccessPanel" aria-label="무료 베타 이용 안내">
+        <div className="betaAccessTop"><div><span className="eyebrow">BETA ACCESS</span><h2>정식 출시 전까지 무료로 이용 중입니다.</h2><p>지금은 구독 결제가 필요하지 않습니다. 정식 출시 후에도 자동 결제되지 않으며, 계속 이용을 원할 때만 할인된 금액으로 구독을 시작할 수 있어요.</p></div><span className="betaAccessBadge">베타 이용 중</span></div>
+        <div className="betaAccessGrid"><article><span>기본 기능</span><strong>무료 이용</strong><small>QR 주문, 메뉴·직원 관리, 운영 통계를 사용할 수 있어요.</small></article><article><span>온라인 선결제</span><strong>{beta.prepayIncluded ? "베타 포함" : "이번 베타 미포함"}</strong><small>{beta.prepayIncluded ? "결제대행사(PG)를 연결하면 활성화할 수 있어요." : "필요하면 운영팀에 문의해 주세요."}</small></article><article><span>정식 출시 후</span><strong>구독료 {beta.postBetaDiscountBps / 100}% 할인</strong><small>계속 이용을 선택한 경우에만 적용되며, 자동 결제되지 않습니다.</small></article></div>
+        {beta.prepayIncluded ? <button type="button" className="inlinePrepare betaSettingsLink" onClick={() => router.push(`/admin/billing?store=${encodeURIComponent(storeId)}`)}>온라인 결제 설정 <Direction /></button> : null}
+      </section> : <>
       <section className="stepCard"><div className="stepHeading"><span>01</span><div><h2>이용할 기능을 선택하세요</h2><p>기본 구독과 온라인 선결제 옵션을 필요한 만큼 선택할 수 있습니다.</p></div></div>
         <div className="productGrid">
           <button type="button" className={`productCard ${payBase ? "selected" : ""}`} aria-pressed={payBase} onClick={() => setPayBase((v) => !v)}>
@@ -355,6 +369,7 @@ function BillingPayContent() {
       </section>
 
       <section className="benefitPanel postPurchaseBenefits"><span className="eyebrow">YOUR BENEFITS</span><h2>적용된 혜택</h2>{quoteLoading ? <p>혜택을 계산하고 있습니다...</p> : quote?.discountLabels.length ? <ul>{quote.discountLabels.map((label) => <li key={label}>✓ {label}</li>)}</ul> : <p>현재 선택에는 기본 가격이 적용됩니다.</p>}{quote?.founderBase || quote?.founderAddon ? <div className="founderBadge">베타 테스터<br/><strong>테스트에 함께해 주셔서 감사합니다.</strong></div> : null}{quote?.multiStore ? <div className="multiBadge">추가 매장 {quote.storeSequence}호점 혜택 적용</div> : null}</section>
+      </>}
 
       {referralInfoOpen ? <div className="modalBackdrop" role="presentation" onMouseDown={() => setReferralInfoOpen(false)}><section className="confirmModal referralModal" role="dialog" aria-modal="true" aria-labelledby="referral-info-title" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">OWNER BENEFIT</span><h2 id="referral-info-title">추천 혜택 안내</h2><p>추천코드를 공유하면, 가입한 매장과 추천한 계정 모두 혜택을 받을 수 있습니다.</p><div className="referralBenefitGrid"><article><span>추천을 받은 매장</span><strong>첫 유료 기본 구독<br/><b>3,000원 할인</b></strong><small>가입할 때 추천코드를 입력하면 첫 결제에 자동 적용됩니다.</small></article><article><span>추천한 계정</span><strong>서비스 크레딧<br/><b>3,000원 적립</b></strong><small>첫 유료 구독 후 14일 확인기간이 지나면 적립됩니다.</small></article></div><div className="referralCreditGuide"><strong>크레딧 사용 방법</strong><p>구독 결제 화면의 <b>추천 크레딧</b>에서 금액을 입력하거나 <b>전액 사용</b>을 누르세요. 기본 구독료에만 사용할 수 있으며, 현금 전환·양도·선결제 옵션 결제에는 사용할 수 없습니다.</p></div><div className="modalActions"><button className="payButton" type="button" onClick={() => setReferralInfoOpen(false)}>확인</button></div></section></div> : null}
 
@@ -376,6 +391,7 @@ const compactResponsiveCss = `
 `;
 
 const subscriptionPreviewOverrides = `
+  .betaAccessPanel{display:grid;gap:18px;border:1px solid #b8d9c5;border-radius:18px;padding:24px;background:linear-gradient(135deg,#f0fbf4 0%,#f8fffb 58%,#fff 100%);box-shadow:0 12px 32px rgba(6,118,71,.06)}.betaAccessTop{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.betaAccessTop h2{margin:5px 0 7px;font-size:23px;letter-spacing:-.6px}.betaAccessTop p{max-width:700px;margin:0;color:#4e6759;font-size:14px;line-height:1.65}.betaAccessBadge{flex:0 0 auto;border-radius:999px;padding:8px 11px;background:#067647;color:#fff;font-size:12px;font-weight:900}.betaAccessGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.betaAccessGrid article{display:grid;gap:6px;min-height:120px;padding:15px;border:1px solid #cbe6d5;border-radius:14px;background:rgba(255,255,255,.78)}.betaAccessGrid span{color:#536b5d;font-size:11px;font-weight:800}.betaAccessGrid strong{color:#174b2d;font-size:16px}.betaAccessGrid small{color:#5c7064;font-size:12px;line-height:1.55}.betaSettingsLink{justify-self:start;color:#126137}
   .settingsLink{display:inline-flex;align-items:center;justify-content:center;gap:7px}.settingsLink svg{color:var(--brand-dark)}
   .checkoutGrid{align-items:start}.prepayInfoPanel{gap:7px;border-color:#d7e2f3;border-radius:16px;padding:16px 18px;background:#f8faff;box-shadow:none}.prepayInfoPanel h2{font-size:17px;margin:2px 0}.prepayInfoPanel .conditions{gap:7px;margin:6px 0}.prepayInfoPanel .conditions span{gap:8px;font-size:12px}.prepayInfoPanel .conditions i{width:21px;height:21px;font-size:10px}.prepayInfoPanel .conditions i svg{width:13px}
   .prepayGuideStrip{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:16px;margin-top:14px;padding:12px 14px;border-top:1px solid #dce6f5;background:#f8faff}.prepayGuideTitle{display:grid;gap:3px}.prepayGuideTitle span{color:var(--brand);font-size:9px;font-weight:900;letter-spacing:1.2px}.prepayGuideTitle strong{font-size:13px}.prepayGuideStrip ol{display:flex;align-items:center;justify-content:center;gap:0;margin:0;padding:0;list-style:none}.prepayGuideStrip li{display:flex;align-items:center;gap:6px;color:#62708a;font-size:12px;font-weight:800;white-space:nowrap}.prepayGuideStrip li+li:before{content:"→";margin:0 12px;color:#a0aec0;font-weight:500}.prepayGuideStrip li i{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#e9eef6;color:#526581;font-size:10px;font-style:normal}.prepayGuideStrip li.done{color:var(--success)}.prepayGuideStrip li.done i{background:#e7f8ee;color:var(--success)}.prepayGuideStrip li i svg{width:13px}.prepayGuideStrip .inlinePrepare{min-height:32px;white-space:nowrap}.checkoutGrid.summaryOnly{display:block}.checkoutGrid.summaryOnly .summaryPanel{width:100%}
@@ -392,6 +408,7 @@ const subscriptionPreviewOverrides = `
   .prepayInfoPanel{display:grid;align-content:start}.conditions{display:grid;gap:9px;margin:16px 0}.conditions span{display:flex;align-items:center;gap:9px;color:#59677e;font-size:13px;font-weight:750}.conditions i{width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#eef2f7;font-size:11px;font-style:normal}.conditions i svg{width:14px}.conditions .done{color:var(--success)}
   .postPurchaseBenefits{display:grid;grid-template-columns:1fr auto;align-items:start;gap:10px}.postPurchaseBenefits .eyebrow{grid-column:1/-1}.postPurchaseBenefits h2{margin:0}.postPurchaseBenefits ul{margin:0}.postPurchaseBenefits .founderBadge,.postPurchaseBenefits .multiBadge{margin:0}.postPurchaseBenefits .referralBox{margin:0;min-width:310px}
   @media(max-width:760px){.accountBenefitPanel{grid-template-columns:1fr;padding:14px;border-radius:15px;gap:10px}.accountBenefitPanel .referralBox{min-width:0}.benefitInfoButton{justify-self:start;min-height:34px}.stepCard,.benefitPanel,.prepayInfoPanel,.summaryPanel{padding:14px;border-radius:15px}.prepayGuideStrip{grid-template-columns:1fr;gap:9px;margin-top:10px;padding:11px 0 0;background:transparent;border-top:1px solid #e5ebf4}.prepayGuideTitle{display:flex;align-items:center;gap:7px}.prepayGuideTitle strong{font-size:12px}.prepayGuideStrip ol{justify-content:flex-start}.prepayGuideStrip li{display:grid;justify-items:center;gap:4px;flex:1;font-size:10px;text-align:center;white-space:normal}.prepayGuideStrip li+li:before{position:absolute;margin:0;transform:translateX(-50%);color:#a0aec0}.prepayGuideStrip .inlinePrepare{justify-self:start}.checkoutGrid.summaryOnly{display:block}.checkoutGrid.summaryOnly .summaryPanel{width:100%}.referralBenefitGrid{gap:8px;margin:14px 0 8px}.referralBenefitGrid article{padding:11px}.referralCreditGuide{padding:11px;font-size:11px}.productCard,.productCard.selected{min-height:0;padding:14px 48px 13px 14px}.productCard.selected{padding:13px 48px 12px 13px}.lockedCopy,.connectedHint{margin:9px 0 6px}.inlinePrepare{min-height:34px}.postPurchaseBenefits{grid-template-columns:1fr}.postPurchaseBenefits .referralBox{min-width:0}}
+  @media(max-width:760px){.betaAccessPanel{gap:13px;padding:15px;border-radius:15px}.betaAccessTop{display:grid;gap:10px}.betaAccessTop h2{font-size:19px}.betaAccessTop p{font-size:12px}.betaAccessBadge{justify-self:start}.betaAccessGrid{grid-template-columns:1fr;gap:8px}.betaAccessGrid article{min-height:0;padding:12px}.betaAccessGrid strong{font-size:14px}.betaAccessGrid small{font-size:11px}}
   @media(max-width:760px){.prepayGuideStrip{gap:7px;margin-top:10px;padding:10px 0 0}.prepayGuideHeading strong{font-size:12px}.prepayGuideStrip ol{display:flex;justify-content:flex-start;gap:0}.prepayGuideStrip li{display:flex;align-items:center;justify-items:initial;gap:4px;flex:initial;font-size:11px;text-align:left;white-space:nowrap}.prepayGuideStrip li b{margin:0 8px;font-size:12px}.prepayGuideStrip .inlinePrepare{justify-self:auto;min-height:28px}.referralBox .creditOverview{padding-top:10px}.creditHistoryModal{max-height:calc(100vh - 20px)}.creditBalance{margin:13px 0 9px;padding:13px}.creditHistoryList article{padding:11px 0}.creditHistoryList article span{max-width:230px}.creditHistoryList article b{font-size:13px}}
 `;
 
