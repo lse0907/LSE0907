@@ -10,7 +10,7 @@ import { MePlatformHeader } from "./MePlatformHeader";
 import { MeQrScannerSheet } from "./MeQrScannerSheet";
 import { MeQuickMenu } from "./MeQuickMenu";
 import { PwaInstallGuide } from "../_components/PwaInstallGuide";
-import { resolveQrScanTarget } from "../lib/qrScanTarget";
+import { resolveQrScanTarget, waitForQrScannerVideo } from "../lib/qrScanTarget";
 import {
   OrderDetailSheet,
   OrderHistorySheet,
@@ -419,7 +419,8 @@ export function MeDashboard() {
     setScannerOpen(true);
 
     try {
-      const video = videoRef.current;
+      const video = await waitForQrScannerVideo(videoRef);
+      if (requestId !== scanRequestRef.current) return;
       if (!video) {
         setScanError("카메라 초기화에 실패했어요.");
         return;

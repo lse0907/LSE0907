@@ -22,7 +22,7 @@ export function CustomerQrScannerSheet({
         <p className="customerQrLabel">QR SCAN</p>
         <p className="customerQrGuide">매장 QR을 화면 안에 맞춰 주세요.</p>
         <div className="customerQrVideoFrame">
-          <video ref={videoRef} muted playsInline />
+          <video ref={videoRef} autoPlay muted playsInline />
           <span className="customerQrTarget" aria-hidden="true" />
         </div>
         {error ? (

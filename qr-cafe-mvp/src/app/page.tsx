@@ -23,7 +23,7 @@ import {
   resolveViewerAccess,
   type ViewerAccess,
 } from "./lib/viewerAccess";
-import { resolveQrScanTarget } from "./lib/qrScanTarget";
+import { resolveQrScanTarget, waitForQrScannerVideo } from "./lib/qrScanTarget";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
 
@@ -225,7 +225,8 @@ function HomeStartInner() {
       return;
     }
     try {
-      const video = videoRef.current;
+      const video = await waitForQrScannerVideo(videoRef);
+      if (requestId !== scanRequestRef.current) return;
       if (!video) {
         setScanError("카메라 초기화에 실패했어요.");
         return;
