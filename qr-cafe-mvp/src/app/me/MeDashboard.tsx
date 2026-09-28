@@ -10,6 +10,7 @@ import { MePlatformHeader } from "./MePlatformHeader";
 import { MeQrScannerSheet } from "./MeQrScannerSheet";
 import { MeQuickMenu } from "./MeQuickMenu";
 import { PwaInstallGuide } from "../_components/PwaInstallGuide";
+import { resolveQrScanTarget } from "../lib/qrScanTarget";
 import {
   OrderDetailSheet,
   OrderHistorySheet,
@@ -36,14 +37,6 @@ type StoreNameRow = {
   store_id: string;
   store_name: string | null;
 };
-type BarcodeScanResult = { rawValue?: string };
-type BarcodeDetectorLike = {
-  detect: (input: HTMLVideoElement) => Promise<BarcodeScanResult[]>;
-};
-type BarcodeDetectorCtor = new (opts: {
-  formats: string[];
-}) => BarcodeDetectorLike;
-
 function formatPhone(raw: string) {
   const digits = String(raw || "")
     .replace(/[^\d]/g, "")
@@ -118,10 +111,8 @@ export function MeDashboard() {
   } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const scanIntervalRef = useRef<number | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
   const scanRequestRef = useRef(0);
-  const detectingRef = useRef(false);
   const returnTo = useMemo(
     () => String(sp.get("return_to") || sp.get("next") || "").trim(),
     [sp],
@@ -299,25 +290,15 @@ export function MeDashboard() {
 
   const stopScanner = () => {
     scanRequestRef.current += 1;
-    if (scanIntervalRef.current != null) {
-      window.clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
     setScanning(false);
-    detectingRef.current = false;
     setScannerOpen(false);
   };
 
   useEffect(() => {
     return () => {
-      if (scanIntervalRef.current != null)
-        window.clearInterval(scanIntervalRef.current);
-      if (streamRef.current)
-        streamRef.current.getTracks().forEach((t) => t.stop());
+      scannerControlsRef.current?.stop();
     };
   }, []);
 
@@ -415,26 +396,17 @@ export function MeDashboard() {
   }, [returnTo, sp, storeNameMap]);
 
   const moveByScannedText = (raw: string) => {
-    const text = String(raw || "").trim();
-    if (!text) return;
-    try {
-      const asUrl = new URL(text, window.location.origin);
-      if (asUrl.origin !== window.location.origin) {
-        setScanError("현재 서비스 도메인의 QR만 사용할 수 있어요.");
-        return;
-      }
-      const sid = (asUrl.searchParams.get("store") || "").trim();
-      if (!sid) {
-        setScanError("스토어 정보(store)가 없는 QR이에요.");
-        return;
-      }
-      stopScanner();
-      router.push(
-        `/?store=${encodeURIComponent(sid)}${asUrl.searchParams.get("table") ? `&table=${encodeURIComponent(asUrl.searchParams.get("table") || "")}` : ""}`,
-      );
-    } catch {
-      setScanError("인식된 QR 형식이 올바르지 않습니다.");
+    const target = resolveQrScanTarget(raw, window.location.origin);
+    if (!target.ok) {
+      setScanError(target.message);
+      return;
     }
+    stopScanner();
+    if (target.isExternalOrigin) {
+      window.location.assign(target.href);
+      return;
+    }
+    router.push(target.href);
   };
 
   const startQrScanner = async () => {
@@ -446,58 +418,42 @@ export function MeDashboard() {
     setScanError("");
     setScannerOpen(true);
 
-    const detectorCtor = (
-      window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }
-    ).BarcodeDetector;
-    if (!detectorCtor) {
-      setScanError(
-        "현재 브라우저는 실시간 QR 스캔을 지원하지 않아요. 최신 Chrome/Safari를 사용해 주세요.",
-      );
-      return;
-    }
-
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-      if (requestId !== scanRequestRef.current) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
-        stream.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
         setScanError("카메라 초기화에 실패했어요.");
         return;
       }
-      video.srcObject = stream;
-      await video.play();
-
-      const detector = new detectorCtor({ formats: ["qr_code"] });
-      setScanning(true);
-
-      scanIntervalRef.current = window.setInterval(async () => {
-        if (!videoRef.current || detectingRef.current) return;
-        detectingRef.current = true;
-        try {
-          const found = await detector.detect(videoRef.current);
-          const first = Array.isArray(found) ? found[0] : null;
-          const value = String(first?.rawValue || "").trim();
+      const { BrowserQRCodeReader } = await import("@zxing/browser");
+      const reader = new BrowserQRCodeReader(undefined, {
+        delayBetweenScanAttempts: 250,
+        delayBetweenScanSuccess: 1000,
+      });
+      const controls = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        },
+        video,
+        (result) => {
+          if (requestId !== scanRequestRef.current) return;
+          const value = result?.getText().trim();
           if (value) moveByScannedText(value);
-        } catch {
-          // keep scanning
-        } finally {
-          detectingRef.current = false;
-        }
-      }, 500);
-    } catch {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
+        },
+      );
+      if (requestId !== scanRequestRef.current) {
+        controls.stop();
+        return;
       }
+      scannerControlsRef.current = controls;
+      setScanning(true);
+    } catch {
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
       setScanning(false);
       setScanError(
         "카메라 권한이 없거나 기기에서 카메라를 사용할 수 없습니다.",

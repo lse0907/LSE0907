@@ -23,15 +23,9 @@ import {
   resolveViewerAccess,
   type ViewerAccess,
 } from "./lib/viewerAccess";
+import { resolveQrScanTarget } from "./lib/qrScanTarget";
 
 const orderHiddenKey = (storeId: string) => `qrCafeOrderHidden:${storeId}`; // ✅ ready 확인 후 홈에서 숨김
-type BarcodeScanResult = { rawValue?: string };
-type BarcodeDetectorLike = {
-  detect: (input: HTMLVideoElement) => Promise<BarcodeScanResult[]>;
-};
-type BarcodeDetectorCtor = new (opts: {
-  formats: string[];
-}) => BarcodeDetectorLike;
 
 const FALLBACK_OVERLAY = `linear-gradient(
   to bottom,
@@ -66,12 +60,11 @@ function HomeStartInner() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const scanIntervalRef = useRef<number | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const scannerControlsRef = useRef<{ stop: () => void } | null>(null);
+  const scanRequestRef = useRef(0);
 
   useEffect(() => {
     // Hydration is complete here; the remaining state mirrors browser storage.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     if (!storeId) {
       setLastOrderId("");
@@ -194,51 +187,36 @@ function HomeStartInner() {
   const showStatusButton = mounted && !!lastOrderId && !orderHidden;
 
   const stopScanner = () => {
-    if (scanIntervalRef.current != null) {
-      window.clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
+    scanRequestRef.current += 1;
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
     setScanning(false);
     setScannerOpen(false);
   };
 
   useEffect(() => {
     return () => {
-      if (scanIntervalRef.current != null) {
-        window.clearInterval(scanIntervalRef.current);
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
+      scannerControlsRef.current?.stop();
     };
   }, []);
 
   const moveByScannedText = (raw: string) => {
-    const text = String(raw || "").trim();
-    if (!text) return;
-    try {
-      const asUrl = new URL(text, window.location.origin);
-      if (asUrl.origin !== window.location.origin) {
-        setScanError("현재 서비스 도메인의 QR만 사용할 수 있어요.");
-        return;
-      }
-      const sid = (asUrl.searchParams.get("store") || "").trim();
-      if (!sid) {
-        setScanError("스토어 정보(store)가 없는 QR이에요.");
-        return;
-      }
-      stopScanner();
-      router.push(`${asUrl.pathname}${asUrl.search}`);
-    } catch {
-      setScanError("인식된 QR 형식이 올바르지 않습니다.");
+    const target = resolveQrScanTarget(raw, window.location.origin);
+    if (!target.ok) {
+      setScanError(target.message);
+      return;
     }
+    stopScanner();
+    if (target.isExternalOrigin) {
+      window.location.assign(target.href);
+      return;
+    }
+    router.push(target.href);
   };
 
   const startQrScanner = async () => {
+    stopScanner();
+    const requestId = scanRequestRef.current;
     setScanError("");
     setScannerOpen(true);
 
@@ -246,45 +224,43 @@ function HomeStartInner() {
       setScanError("브라우저 환경에서만 QR 스캔을 사용할 수 있어요.");
       return;
     }
-    const detectorCtor = (
-      window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }
-    ).BarcodeDetector;
-    if (!detectorCtor) {
-      setScanError(
-        "현재 브라우저는 실시간 QR 스캔을 지원하지 않아요. 최신 Chrome/Safari를 사용해 주세요.",
-      );
-      return;
-    }
-
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-      streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
         setScanError("카메라 초기화에 실패했어요.");
         return;
       }
-      video.srcObject = stream;
-      await video.play();
-
-      const detector = new detectorCtor({ formats: ["qr_code"] });
-      setScanning(true);
-
-      scanIntervalRef.current = window.setInterval(async () => {
-        if (!videoRef.current) return;
-        try {
-          const found = await detector.detect(videoRef.current);
-          const first = Array.isArray(found) ? found[0] : null;
-          const value = String(first?.rawValue || "").trim();
+      const { BrowserQRCodeReader } = await import("@zxing/browser");
+      const reader = new BrowserQRCodeReader(undefined, {
+        delayBetweenScanAttempts: 250,
+        delayBetweenScanSuccess: 1000,
+      });
+      const controls = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        },
+        video,
+        (result) => {
+          if (requestId !== scanRequestRef.current) return;
+          const value = result?.getText().trim();
           if (value) moveByScannedText(value);
-        } catch {
-          // ignore and continue scanning
-        }
-      }, 500);
+        },
+      );
+      if (requestId !== scanRequestRef.current) {
+        controls.stop();
+        return;
+      }
+      scannerControlsRef.current = controls;
+      setScanning(true);
     } catch {
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+      setScanning(false);
       setScanError(
         "카메라 권한이 없거나 기기에서 카메라를 사용할 수 없습니다.",
       );
