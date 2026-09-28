@@ -1,3 +1,5 @@
+import type { RefObject } from "react";
+
 const RION_ORDER_HOSTS = new Set([
   "order.rionlabs.co.kr",
   "lse-0907.vercel.app",
@@ -46,4 +48,15 @@ export function resolveQrScanTarget(
   } catch {
     return { ok: false, message: "인식된 QR 형식이 올바르지 않습니다." };
   }
+}
+
+/** Wait until React has mounted the scanner sheet's video element. */
+export async function waitForQrScannerVideo(
+  videoRef: RefObject<HTMLVideoElement | null>,
+): Promise<HTMLVideoElement | null> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (videoRef.current) return videoRef.current;
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  }
+  return videoRef.current;
 }
