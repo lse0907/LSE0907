@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
+import { getStoreBetaAccess } from "../_lib/betaAccess";
 
 type Body = { storeId?: unknown; enabled?: unknown; reason?: unknown };
 
 async function state(admin: ReturnType<typeof createSupabaseAdminClient>, storeId: string) {
-  const [base, addon, pg] = await Promise.all([
+  const [base, addon, pg, beta] = await Promise.all([
     admin.from("store_billing").select("base_plan_status,paid_until").eq("store_id", storeId).maybeSingle(),
     admin.from("store_addons").select("prepay_addon_status,addon_paid_until,prepay_enabled,prepay_enabled_at").eq("store_id", storeId).maybeSingle(),
     admin.from("store_pg_config").select("mid,client_key,secret_key,pg_verified_at").eq("store_id", storeId).maybeSingle(),
+    getStoreBetaAccess(admin, storeId),
   ]);
   if (base.error || addon.error || pg.error) throw new Error("온라인 결제 상태를 확인하지 못했습니다.");
   const baseUntil = new Date(String(base.data?.paid_until || "")).getTime();
@@ -16,10 +18,10 @@ async function state(admin: ReturnType<typeof createSupabaseAdminClient>, storeI
   const addonActive = addon.data?.prepay_addon_status === "active" && Number.isFinite(addonUntil) && addonUntil > Date.now();
   const pgReady = Boolean(String(pg.data?.mid || "").trim() && String(pg.data?.client_key || "").trim() && String(pg.data?.secret_key || "").trim());
   const reasons: string[] = [];
-  if (!baseActive) reasons.push("기본 구독이 활성 상태가 아닙니다.");
-  if (!addonActive) reasons.push("선결제 옵션 구독이 활성 상태가 아닙니다.");
+  if (!baseActive && !beta.active) reasons.push("기본 구독이 활성 상태가 아닙니다.");
+  if (!addonActive && !beta.prepayIncluded) reasons.push("선결제 옵션 구독이 활성 상태가 아닙니다.");
   if (!pgReady) reasons.push("토스 PG의 MID, Client Key, Secret Key를 모두 등록해 주세요.");
-  return { enabled: addon.data?.prepay_enabled === true, enabledAt: addon.data?.prepay_enabled_at || null, baseActive, addonActive, pgReady, canEnable: baseActive && addonActive && pgReady, blockedReasons: reasons };
+  return { enabled: addon.data?.prepay_enabled === true, enabledAt: addon.data?.prepay_enabled_at || null, baseActive: baseActive || beta.active, addonActive: addonActive || beta.prepayIncluded, pgReady, betaActive: beta.active, prepayIncluded: beta.prepayIncluded, canEnable: (baseActive || beta.active) && (addonActive || beta.prepayIncluded) && pgReady, blockedReasons: reasons };
 }
 
 export async function GET(req: NextRequest) {

@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
+import { betaPaymentMessage, getStoreBetaAccess } from "../_lib/betaAccess";
 import { buildBillingQuote, normalizePlanMonths } from "../_lib/pricing";
 
 type QuoteBody = { storeId?: unknown; planMonths?: unknown; payBase?: unknown; payAddon?: unknown; creditToUse?: unknown; prepare?: unknown };
@@ -18,6 +19,10 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = createSupabaseAdminClient();
     const { userId } = await requireStoreRole({ req, supabaseAdmin, storeId, allowedRoles: ["owner"] });
+    const beta = await getStoreBetaAccess(supabaseAdmin, storeId);
+    if (beta.active) {
+      return NextResponse.json({ ok: false, code: "BETA_ACCESS_ACTIVE", message: betaPaymentMessage() }, { status: 409 });
+    }
     const creditRequestedKrw = Math.max(0, Math.round(Number(body.creditToUse || 0)));
     const quote = await buildBillingQuote({ supabaseAdmin, storeId, userId, planMonths, payBase, payAddon, creditRequestedKrw });
     if (!body.prepare) return NextResponse.json({ ok: true, quote });

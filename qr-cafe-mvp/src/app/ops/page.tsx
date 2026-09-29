@@ -167,6 +167,7 @@ type StoreBenefit = {
   trialEndAt: string | null;
   paidUntil: string | null;
 };
+type StoreBetaAccess = { active: boolean; prepayIncluded: boolean; startsAt: string | null; endsAt: string | null; postBetaDiscountBps: number; reason: string };
 
 type KpiSummary = {
   totalStores: number;
@@ -447,10 +448,12 @@ export default function OpsPage() {
   const [savedPg, setSavedPg] = useState<SavedPlatformPg | null>(null);
   const [pgReason, setPgReason] = useState("");
   const [benefit, setBenefit] = useState<StoreBenefit | null>(null);
+  const [betaAccess, setBetaAccess] = useState<StoreBetaAccess | null>(null);
+  const [betaAccessForm, setBetaAccessForm] = useState({ active: false, prepayIncluded: false, postBetaDiscountEnabled: true, reason: "" });
+  const [betaAccessOpen, setBetaAccessOpen] = useState(false);
   const [benefitForm, setBenefitForm] = useState({ founderMember: false, founderBase: false, founderAddon: false, founderReason: "", trialEndAt: "", trialReason: "" });
   const [benefitSaving, setBenefitSaving] = useState(false);
   const [opsIdentity, setOpsIdentity] = useState({ email: "", role: "viewer" });
-  const [benefitEditorOpen, setBenefitEditorOpen] = useState(false);
   const [trialEditorOpen, setTrialEditorOpen] = useState(false);
   const [trialMessage, setTrialMessage] = useState("");
   const [refundRows, setRefundRows] = useState<RefundHistoryRow[]>([]);
@@ -1078,20 +1081,29 @@ export default function OpsPage() {
     });
   }, [isOps]);
 
+  const loadBetaAccess = useCallback(async (storeId: string) => {
+    if (!storeId || isOps !== true) return;
+    const response = await fetch(`/api/ops/store-beta-access?storeId=${encodeURIComponent(storeId)}`, { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.ok) return;
+    const next = result.beta as StoreBetaAccess;
+    setBetaAccess(next);
+    setBetaAccessForm({ active: next.active, prepayIncluded: next.prepayIncluded, postBetaDiscountEnabled: next.postBetaDiscountBps > 0, reason: next.reason || "" });
+  }, [isOps]);
+
   useEffect(() => {
     if (!selectedStoreId) return;
-    const timer = window.setTimeout(() => void loadBenefit(selectedStoreId), 0);
+    const timer = window.setTimeout(() => { void loadBenefit(selectedStoreId); void loadBetaAccess(selectedStoreId); }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadBenefit, selectedStoreId]);
+  }, [loadBenefit, loadBetaAccess, selectedStoreId]);
 
-  const saveFounderBenefit = async () => {
-    if (!selectedStoreId || !benefitForm.founderReason.trim()) { setMsg("베타 테스터 혜택 설정 사유를 입력해 주세요."); return; }
-    if (benefitForm.founderAddon && !window.confirm("선결제 베타 테스트 참여를 확인했습니까? 옵션 구독 40% 할인이 적용됩니다.")) return;
+  const saveBetaAccess = async () => {
+    if (!selectedStoreId || !betaAccessForm.reason.trim()) { setMsg("베타 이용 지정 또는 종료 사유를 입력해 주세요."); return; }
     setBenefitSaving(true);
-    const response = await fetch("/api/ops/store-benefits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, founderMember: benefitForm.founderMember, founderBase: benefitForm.founderBase, founderAddon: benefitForm.founderAddon, founderReason: benefitForm.founderReason }) });
+    const response = await fetch("/api/ops/store-beta-access", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId, active: betaAccessForm.active, prepayIncluded: betaAccessForm.active, postBetaDiscountEnabled: betaAccessForm.postBetaDiscountEnabled, reason: betaAccessForm.reason }) });
     const result = await response.json().catch(() => ({}));
-    setMsg(response.ok && result?.ok ? "베타 테스터 혜택을 저장했습니다." : String(result?.message || "혜택 저장에 실패했습니다."));
-    if (response.ok && result?.ok) { setBenefit(result.benefit); setBenefitEditorOpen(false); }
+    setMsg(response.ok && result?.ok ? (betaAccessForm.active ? "무료 베타 이용 권한을 저장했습니다." : "무료 베타 이용을 종료했습니다.") : String(result?.message || "베타 이용 권한 저장에 실패했습니다."));
+    if (response.ok && result?.ok) { setBetaAccess(result.beta); setBetaAccessOpen(false); await loadOps(); }
     setBenefitSaving(false);
   };
 
@@ -1227,7 +1239,7 @@ export default function OpsPage() {
                     </td>
                     <td>
                       <div className="cellMain">
-                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong>{r.founder_member ? <span className="pill founder" title="베타 테스터 혜택 적용 매장">베타</span> : null}</div>
+                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong></div>
                         <small>{r.store_id}</small>
                       </div>
                     </td>
@@ -1260,7 +1272,7 @@ export default function OpsPage() {
                     </td>
                     <td>
                       <div className="cellMain">
-                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong>{r.founder_member ? <span className="pill founder" title="베타 테스터 혜택 적용 매장">베타</span> : null}</div>
+                        <div className="nameWithBadge"><strong>{r.store_name || r.store_id}</strong></div>
                         <small>{r.store_id}</small>
                       </div>
                     </td>
@@ -1403,13 +1415,6 @@ export default function OpsPage() {
             </div>
           </div>
 
-          <div className="benefitBox">
-            <div className="sectionTitle">베타 테스터 혜택</div>
-            <p className="muted">{benefit ? `${benefit.storeSequence}번째 매장 · ${benefit.founderMember ? "베타 테스터" : "일반 점주"}` : "혜택 정보 확인 중..."}</p>
-            <div className="benefitSummary"><span>기본 구독 40%</span><strong>{benefit?.founderBase ? "적용" : "미적용"}</strong><span>선결제 옵션 40%</span><strong>{benefit?.founderAddon ? "적용" : "미적용"}</strong></div>
-            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBenefitEditorOpen(true)}>{canManageBilling ? "베타 테스터 혜택 변경" : "조회 전용"}</button>
-          </div>
-
           <div className="quickLinks">
             <button
               className="btn"
@@ -1494,6 +1499,14 @@ export default function OpsPage() {
           <section className="trialManagementRow">
             <div><div className="sectionTitle">무료 체험</div><p>{benefit?.baseStatus === "trialing" ? `${fmtDate(benefit.trialEndAt)}까지 · ${Math.max(0, Number(remainingDays(benefit.trialEndAt)))}일 남음` : benefit?.baseStatus === "active" || benefit?.paidUntil ? "유료 구독 중인 매장은 무료 체험을 변경할 수 없습니다." : "현재 적용된 무료 체험 기간이 없습니다."}</p></div>
             {benefit?.baseStatus === "active" || benefit?.paidUntil ? <span className="pill ok">유료 구독 중</span> : isOpsMaster ? <button className="btn primary" onClick={() => { setTrialMessage(""); setTrialEditorOpen(true); }}>{benefit?.trialEndAt ? "기간 연장" : "무료 체험 시작"}</button> : <span className="lockedHint">마스터 권한에서 관리</span>}
+          </section>
+          <section className="trialManagementRow betaAccessManagement">
+            <div>
+              <div className="sectionTitle">베타 테스트 운영</div>
+              <p>{betaAccess ? (betaAccess.active ? "무료 베타 이용 중입니다. 종료일은 아직 정해지지 않았습니다." : "현재 베타 테스터 혜택이 적용되지 않았습니다.") : "베타 이용 상태를 확인하고 있습니다."}</p>
+              <div className="benefitSummary"><span>기본 기능</span><strong>{betaAccess?.active ? "무료 이용" : "미적용"}</strong><span>온라인 선결제</span><strong>{betaAccess?.prepayIncluded ? "무료 베타 포함" : "미포함"}</strong><span>유료 전환 혜택</span><strong>{betaAccess?.postBetaDiscountBps ? "구독료 40% 할인" : "미적용"}</strong></div>
+            </div>
+            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBetaAccessOpen(true)}>{canManageBilling ? "베타 테스트 운영 설정" : "조회 전용"}</button>
           </section>
           <button className="activityToggle" type="button" aria-expanded={subscriptionActivityOpen} onClick={() => setSubscriptionActivityOpen((open) => !open)}><span>매장 활동 참고 정보</span><strong>{subscriptionActivityOpen ? "접기" : "펼치기"}</strong></button>
           {subscriptionActivityOpen ? <div className="activityGrid"><div><span>오늘 주문</span><strong>{selectedStore.today_order_count.toLocaleString()}건</strong></div><div><span>이번 달 주문</span><strong>{selectedStore.monthly_order_count.toLocaleString()}건</strong></div><div><span>미처리 문의</span><strong>{selectedStore.open_ticket_count.toLocaleString()}건</strong></div><div><span>최근 주문</span><strong>{fmtDateTime(selectedStore.last_order_at)}</strong></div></div> : null}
@@ -3318,16 +3331,17 @@ export default function OpsPage() {
         </section>
       ) : null}
 
-      {benefitEditorOpen && selectedStore ? (
-        <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setBenefitEditorOpen(false)}>
-          <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="founder-editor-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div><div className="sectionTitle" id="founder-editor-title">베타 테스터 혜택 관리</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 현재 상태 {benefit?.baseStatus || "-"}</p></div>
-            <label className="checkRow"><input type="checkbox" checked={benefitForm.founderMember} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderMember: e.target.checked, founderBase: e.target.checked ? prev.founderBase : false, founderAddon: e.target.checked ? prev.founderAddon : false }))}/><span>베타 테스터로 지정</span></label>
-            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderBase} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderBase: e.target.checked }))}/><span>기본 구독 베타 40%</span></label>
-            <label className="checkRow"><input type="checkbox" disabled={!benefitForm.founderMember} checked={benefitForm.founderAddon} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderAddon: e.target.checked }))}/><span>온라인 선결제 베타 40%</span></label>
-            <textarea className="input" rows={3} maxLength={240} placeholder="베타 자격 지정·변경 사유(필수)" value={benefitForm.founderReason} onChange={(e) => setBenefitForm((prev) => ({ ...prev, founderReason: e.target.value }))}/>
-            <button className="btn primary" disabled={benefitSaving || !benefitForm.founderReason.trim()} onClick={() => void saveFounderBenefit()}>{benefitSaving ? "저장 중..." : "베타 테스터 혜택 저장"}</button>
-            <button className="btn" disabled={benefitSaving} onClick={() => setBenefitEditorOpen(false)}>닫기</button>
+      {betaAccessOpen && selectedStore ? (
+        <div className="modalBackdrop" role="presentation" onMouseDown={() => !benefitSaving && setBetaAccessOpen(false)}>
+          <section className="opsModal" role="dialog" aria-modal="true" aria-labelledby="beta-access-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div><div className="sectionTitle" id="beta-access-editor-title">베타 테스트 운영 설정</div><p className="muted">{selectedStore.store_name || selectedStore.store_id} · 계정당 선택된 한 매장에만 적용됩니다.</p></div>
+            <label className="checkRow"><input type="checkbox" checked={betaAccessForm.active} onChange={(e) => setBetaAccessForm((prev) => ({ ...prev, active: e.target.checked, prepayIncluded: e.target.checked }))}/><span>무료 베타 테스터 선정 (선결제 베타 포함)</span></label>
+            <p className="muted">선결제를 사용하려면 결제대행사(PG) 가입·연결이 필요합니다. PG 가입비·연관리비·결제 수수료는 리온오더 구독료와 별도로 결제대행사에 발생할 수 있습니다.</p>
+            <label className="checkRow"><input type="checkbox" checked={betaAccessForm.postBetaDiscountEnabled} onChange={(e) => setBetaAccessForm((prev) => ({ ...prev, postBetaDiscountEnabled: e.target.checked }))}/><span>유료 전환 시 베타 혜택 40% 할인 적용</span></label>
+            <div className="benefitBox"><div className="sectionTitle">유료 전환 혜택</div><p className="muted">자동 결제는 되지 않습니다. 이후 기본 구독만 선택하면 기본 구독료가, 선결제 옵션을 함께 선택하면 두 구독료가 모두 40% 할인됩니다.</p></div>
+            <p className="muted">온라인 선결제는 포함으로 설정해도 결제대행사(PG) 연결과 PG 비용은 매장에서 별도로 확인해야 합니다.</p>
+            <textarea className="input" rows={3} maxLength={240} placeholder="선정 또는 종료 사유(필수)" value={betaAccessForm.reason} onChange={(e) => setBetaAccessForm((prev) => ({ ...prev, reason: e.target.value }))}/>
+            <div className="modalActions"><button className="btn" disabled={benefitSaving} onClick={() => setBetaAccessOpen(false)}>닫기</button><button className="btn primary" disabled={benefitSaving || !betaAccessForm.reason.trim()} onClick={() => void saveBetaAccess()}>{benefitSaving ? "저장 중..." : betaAccess?.active && !betaAccessForm.active ? "베타 테스트 종료 저장" : "베타 테스트 운영 저장"}</button></div>
           </section>
         </div>
       ) : null}

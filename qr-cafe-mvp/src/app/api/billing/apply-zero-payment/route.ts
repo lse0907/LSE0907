@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "../../_lib/storeAuth";
+import { betaPaymentMessage, getStoreBetaAccess } from "../_lib/betaAccess";
 
 type Body = { storeId?: unknown; orderId?: unknown };
 
@@ -15,6 +16,9 @@ export async function POST(req: NextRequest) {
 
     const admin = createSupabaseAdminClient();
     const { userId } = await requireStoreRole({ req, supabaseAdmin: admin, storeId, allowedRoles: ["owner"] });
+    if ((await getStoreBetaAccess(admin, storeId)).active) {
+      return NextResponse.json({ ok: false, code: "BETA_ACCESS_ACTIVE", message: betaPaymentMessage() }, { status: 409 });
+    }
     const attemptRes = await admin
       .from("billing_payment_attempts")
       .select("id,payer_user_id,external_amount_krw,status")

@@ -128,7 +128,7 @@ export async function buildBillingQuote(params: {
 }): Promise<BillingQuote> {
   const { supabaseAdmin, storeId, userId, planMonths, payBase, payAddon } = params;
   const creditRequestedKrw = integer(params.creditRequestedKrw, 0);
-  const [policyRes, accountRes, baseRes, addonRes, referralRes, previousBaseRes, creditRes] = await Promise.all([
+  const [policyRes, accountRes, baseRes, addonRes, referralRes, previousBaseRes, creditRes, betaAccessRes] = await Promise.all([
     supabaseAdmin.from("billing_price_policies").select("*").eq("id", 1).maybeSingle(),
     supabaseAdmin
       .from("billing_accounts")
@@ -141,6 +141,11 @@ export async function buildBillingQuote(params: {
     supabaseAdmin.from("billing_referrals").select("id,referring_store_id,referred_store_id,status,first_payment_id").eq("referred_user_id", userId).maybeSingle(),
     supabaseAdmin.from("billing_payments").select("id").eq("store_id", storeId).eq("base_paid", true).limit(1),
     supabaseAdmin.rpc("get_billing_credit_summary", { p_user_id: userId, p_store_id: storeId }),
+    supabaseAdmin
+      .from("store_beta_access")
+      .select("status,prepay_included,post_beta_discount_bps")
+      .eq("store_id", storeId)
+      .maybeSingle(),
   ]);
 
   if (policyRes.error) throw new Error(`가격 정책 조회 실패: ${policyRes.error.message}`);
@@ -148,6 +153,9 @@ export async function buildBillingQuote(params: {
   if (baseRes.error || addonRes.error) throw new Error("현재 구독 기간을 확인하지 못했습니다.");
   if (referralRes.error || previousBaseRes.error) throw new Error("추천 혜택 자격을 확인하지 못했습니다.");
   if (creditRes.error) throw new Error("추천 크레딧 잔액을 확인하지 못했습니다.");
+  if (betaAccessRes.error && !["42P01", "PGRST205"].includes(String(betaAccessRes.error.code || ""))) {
+    throw new Error("베타 혜택 자격을 확인하지 못했습니다.");
+  }
 
   const policy = (policyRes.data || {}) as PolicyRow;
   const relation = Array.isArray(accountRes.data?.billing_account_stores)
@@ -164,6 +172,16 @@ export async function buildBillingQuote(params: {
   const multiStoreDiscountBps = integer(policy.multi_store_discount_bps, DEFAULT_POLICY.multiStoreBps);
   const multiStoreCapBps = integer(policy.multi_store_total_cap_bps, DEFAULT_POLICY.multiStoreCapBps);
   const selectedTermBps = termBps(policy, planMonths);
+  const betaAccess = betaAccessRes.data;
+  const betaEnded = betaAccess?.status === "ended";
+  const postBetaDiscountBps = betaEnded
+    ? integer(betaAccess?.post_beta_discount_bps, DEFAULT_POLICY.founderBps)
+    : 0;
+  const postBetaBase = betaEnded && postBetaDiscountBps > 0;
+  // The beta conversion benefit applies to the selected subscription bundle:
+  // base only, or base plus the prepay option. It is not tied to whether
+  // prepay was enabled during the free beta period.
+  const postBetaAddon = postBetaBase;
 
   if (!payBase && payAddon) {
     const paidUntil = new Date(String(baseRes.data?.paid_until || "")).getTime();
@@ -175,13 +193,19 @@ export async function buildBillingQuote(params: {
   let addonDiscountBps = 0;
   if (founderBase) {
     baseDiscountBps = founderDiscountBps;
+  } else if (postBetaBase) {
+    baseDiscountBps = postBetaDiscountBps;
   } else if (multiStore) {
     const combined = 10_000 - Math.round(((10_000 - multiStoreDiscountBps) * (10_000 - selectedTermBps)) / 10_000);
     baseDiscountBps = Math.min(combined, multiStoreCapBps);
   } else {
     baseDiscountBps = selectedTermBps;
   }
-  addonDiscountBps = founderAddon ? founderDiscountBps : selectedTermBps;
+  addonDiscountBps = founderAddon
+    ? founderDiscountBps
+    : postBetaAddon
+      ? postBetaDiscountBps
+      : selectedTermBps;
 
   const baseList = payBase ? baseMonthlyKrw * planMonths : 0;
   const addonList = payAddon ? addonMonthlyKrw * planMonths : 0;
@@ -231,8 +255,10 @@ export async function buildBillingQuote(params: {
   const labels: string[] = [];
   if (founderBase && payBase) labels.push("기본 구독 베타 테스터 40%");
   if (founderAddon && payAddon) labels.push("선결제 옵션 베타 테스터 40%");
-  if (multiStore && payBase && !founderBase) labels.push("추가 매장 기본 구독 15%");
-  if (selectedTermBps && ((payBase && !founderBase) || (payAddon && !founderAddon))) labels.push(`${planMonths}개월 장기 구독 ${selectedTermBps / 100}%`);
+  if (postBetaBase && payBase) labels.push("기본 구독 베타 종료 후 40%");
+  if (postBetaAddon && payAddon) labels.push("선결제 옵션 베타 종료 후 40%");
+  if (multiStore && payBase && !founderBase && !postBetaBase) labels.push("추가 매장 기본 구독 15%");
+  if (selectedTermBps && ((payBase && !founderBase && !postBetaBase) || (payAddon && !founderAddon && !postBetaAddon))) labels.push(`${planMonths}개월 장기 구독 ${selectedTermBps / 100}%`);
   if (multiStore && baseDiscountBps === multiStoreCapBps && selectedTermBps) labels.push("기본 구독 총 할인 25% 상한");
   if (referralDiscountKrw) labels.push("첫 구독 추천 3,000원");
 
