@@ -12,7 +12,8 @@ export type OpsIconName =
   | "shield"
   | "privacy"
   | "sparkles"
-  | "approval";
+  | "approval"
+  | "bell";
 
 type OpsIconProps = SVGProps<SVGSVGElement> & { name: OpsIconName; title?: string };
 
@@ -29,6 +30,7 @@ const paths: Record<OpsIconName, ReactNode> = {
   privacy: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /><path d="M12 14v3" /></>,
   sparkles: <><path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4L12 3Z" /><path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7Z" /><path d="m5 15 .5 1.5L7 17l-1.5.5L5 19l-.5-1.5L3 17l1.5-.5L5 15Z" /></>,
   approval: <><path d="M8 3h8l3 3v15H5V6l3-3Z" /><path d="M9 3v4h6V3" /><path d="m8.5 14 2.2 2.2 4.8-5" /></>,
+  bell: <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
 };
 
 export default function OpsIcon({ name, title, ...props }: OpsIconProps) {
