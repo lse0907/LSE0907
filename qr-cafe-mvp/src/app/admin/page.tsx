@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import RionBrand from "@/app/components/RionBrand";
+import PlatformAnnouncementsButton from "@/app/components/PlatformAnnouncementsButton";
 import { PwaInstallGuide } from "@/app/_components/PwaInstallGuide";
 import {
   getCurrentStoreId,
@@ -658,6 +659,7 @@ function AdminPageInner() {
               직원화면 보기
             </button>
           </div>
+          {selectedStoreId ? <PlatformAnnouncementsButton storeId={selectedStoreId} audience="owner" /> : null}
           <details className="topAccountMenu">
             <summary className="btn" aria-label="계정 메뉴 열기">
               <span className="topProfileAvatar"><AdminIcon name="account" size={15} /></span>

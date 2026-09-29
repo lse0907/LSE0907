@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import RionBrand from "@/app/components/RionBrand";
+import PlatformAnnouncementsButton from "@/app/components/PlatformAnnouncementsButton";
 import { PwaInstallGuide } from "@/app/_components/PwaInstallGuide";
 import { PartialRefundModal } from "./PartialRefundModal";
 
@@ -3452,6 +3453,7 @@ function StaffPageInner() {
             </div>
 
             <div className="topActions">
+              <PlatformAnnouncementsButton storeId={storeId} audience="staff" />
               <button
                 type="button"
                 className="btn topActionBtn"

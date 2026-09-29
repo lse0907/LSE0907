@@ -14,8 +14,9 @@ import OpsIncidentAnalysis from "./support/OpsIncidentAnalysis";
 import OpsApprovalCenter from "./approvals/OpsApprovalCenter";
 import OpsBetaApplicationDesk from "./beta-applications/OpsBetaApplicationDesk";
 import OpsBetaRecruitmentRounds from "./beta-applications/OpsBetaRecruitmentRounds";
+import OpsAnnouncementsDesk from "./announcements/OpsAnnouncementsDesk";
 
-type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "businessVerification" | "betaApplications" | "privacyRequests" | "ai" | "approvals" | "tickets" | "incidentAnalysis" | "settings";
+type OpsTab = "overview" | "stores" | "subscriptions" | "payments" | "businessVerification" | "betaApplications" | "privacyRequests" | "ai" | "approvals" | "tickets" | "incidentAnalysis" | "announcements" | "settings";
 type OpsPrimaryTab = "overview" | "merchant" | "billing" | "support" | "system";
 type StoreStatus = "active" | "inactive" | "deleted" | "setup";
 type StoreSort =
@@ -206,14 +207,14 @@ const NAV_GROUPS: Array<{ id: OpsPrimaryTab; label: string; icon: OpsIconName; t
   { id: "merchant", label: "점주·매장", icon: "store", tabs: [{ id: "stores", label: "매장·점주 관리", icon: "store" }, { id: "businessVerification", label: "사업자 인증", icon: "shield" }, { id: "betaApplications", label: "베타 신청", icon: "approval" }] },
   { id: "billing", label: "구독·결제", icon: "card", tabs: [{ id: "subscriptions", label: "구독 관리", icon: "card" }, { id: "payments", label: "결제·환불", icon: "card" }] },
   { id: "support", label: "지원·장애", icon: "support", tabs: [{ id: "tickets", label: "문의·장애", icon: "support" }, { id: "incidentAnalysis", label: "AI 장애 분석", icon: "sparkles" }] },
-  { id: "system", label: "시스템·정책", icon: "settings", tabs: [{ id: "ai", label: "AI 운영", icon: "sparkles" }, { id: "approvals", label: "승인함", icon: "approval" }, { id: "privacyRequests", label: "개인정보 요청", icon: "privacy" }, { id: "settings", label: "시스템 설정", icon: "settings" }] },
+  { id: "system", label: "시스템·정책", icon: "settings", tabs: [{ id: "announcements", label: "운영 알림", icon: "bell" }, { id: "ai", label: "AI 운영", icon: "sparkles" }, { id: "approvals", label: "승인함", icon: "approval" }, { id: "privacyRequests", label: "개인정보 요청", icon: "privacy" }, { id: "settings", label: "시스템 설정", icon: "settings" }] },
 ];
 
 function primaryForTab(tab: OpsTab): OpsPrimaryTab {
   if (tab === "stores" || tab === "businessVerification" || tab === "betaApplications") return "merchant";
   if (tab === "subscriptions" || tab === "payments") return "billing";
   if (tab === "tickets" || tab === "incidentAnalysis") return "support";
-  if (tab === "ai" || tab === "approvals" || tab === "privacyRequests" || tab === "settings") return "system";
+  if (tab === "announcements" || tab === "ai" || tab === "approvals" || tab === "privacyRequests" || tab === "settings") return "system";
   return "overview";
 }
 
@@ -1501,12 +1502,11 @@ export default function OpsPage() {
             {benefit?.baseStatus === "active" || benefit?.paidUntil ? <span className="pill ok">유료 구독 중</span> : isOpsMaster ? <button className="btn primary" onClick={() => { setTrialMessage(""); setTrialEditorOpen(true); }}>{benefit?.trialEndAt ? "기간 연장" : "무료 체험 시작"}</button> : <span className="lockedHint">마스터 권한에서 관리</span>}
           </section>
           <section className="trialManagementRow betaAccessManagement">
-            <div>
-              <div className="sectionTitle">베타 테스트 운영</div>
-              <p>{betaAccess ? (betaAccess.active ? "무료 베타 이용 중입니다. 종료일은 아직 정해지지 않았습니다." : "현재 베타 테스터 혜택이 적용되지 않았습니다.") : "베타 이용 상태를 확인하고 있습니다."}</p>
-              <div className="benefitSummary"><span>기본 기능</span><strong>{betaAccess?.active ? "무료 이용" : "미적용"}</strong><span>온라인 선결제</span><strong>{betaAccess?.prepayIncluded ? "무료 베타 포함" : "미포함"}</strong><span>유료 전환 혜택</span><strong>{betaAccess?.postBetaDiscountBps ? "구독료 40% 할인" : "미적용"}</strong></div>
+            <div className="betaAccessContent">
+              <div className="betaAccessHeading"><div><div className="sectionTitle">베타 테스트 운영</div><p>{betaAccess ? (betaAccess.active ? "무료 베타 이용 중입니다. 종료일은 아직 정해지지 않았습니다." : "현재 베타 테스터 혜택이 적용되지 않았습니다.") : "베타 이용 상태를 확인하고 있습니다."}</p></div><span className={`betaAccessState ${betaAccess?.active ? "active" : ""}`}>{betaAccess?.active ? "베타 이용 중" : "미적용"}</span></div>
+              <div className="betaAccessSummary" aria-label="베타 혜택 요약"><div><span>기본 기능</span><strong>{betaAccess?.active ? "무료 이용" : "미적용"}</strong></div><div><span>온라인 선결제</span><strong>{betaAccess?.prepayIncluded ? "무료 베타 포함" : "미포함"}</strong></div><div><span>유료 전환 혜택</span><strong>{betaAccess?.postBetaDiscountBps ? "구독료 40% 할인" : "미적용"}</strong></div></div>
             </div>
-            <button className="btn primary" disabled={!canManageBilling} onClick={() => setBetaAccessOpen(true)}>{canManageBilling ? "베타 테스트 운영 설정" : "조회 전용"}</button>
+            <button className="btn primary betaAccessButton" disabled={!canManageBilling} onClick={() => setBetaAccessOpen(true)}>{canManageBilling ? "베타 테스트 운영 설정" : "조회 전용"}</button>
           </section>
           <button className="activityToggle" type="button" aria-expanded={subscriptionActivityOpen} onClick={() => setSubscriptionActivityOpen((open) => !open)}><span>매장 활동 참고 정보</span><strong>{subscriptionActivityOpen ? "접기" : "펼치기"}</strong></button>
           {subscriptionActivityOpen ? <div className="activityGrid"><div><span>오늘 주문</span><strong>{selectedStore.today_order_count.toLocaleString()}건</strong></div><div><span>이번 달 주문</span><strong>{selectedStore.monthly_order_count.toLocaleString()}건</strong></div><div><span>미처리 문의</span><strong>{selectedStore.open_ticket_count.toLocaleString()}건</strong></div><div><span>최근 주문</span><strong>{fmtDateTime(selectedStore.last_order_at)}</strong></div></div> : null}
@@ -1575,6 +1575,16 @@ export default function OpsPage() {
         .trialManagementRow .sectionTitle { margin-bottom:4px; }
         .trialManagementRow p { margin:0;color:#64748b;font-size:12px;line-height:1.5; }
         .trialManagementRow .btn { flex:0 0 auto; }
+        .betaAccessManagement { display:grid; gap:13px; }
+        .betaAccessContent { display:grid; gap:10px; min-width:0; }
+        .betaAccessHeading { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+        .betaAccessState { flex:0 0 auto; padding:5px 8px; border:1px solid #cbd5e1; border-radius:999px; background:#fff; color:#64748b; font-size:10px; font-weight:900; white-space:nowrap; }
+        .betaAccessState.active { border-color:#a7f3d0; background:#ecfdf5; color:#047857; }
+        .betaAccessSummary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+        .betaAccessSummary div { display:grid; gap:3px; min-width:0; padding:9px 10px; border:1px solid #dbeafe; border-radius:10px; background:rgba(255,255,255,.68); }
+        .betaAccessSummary span { color:#64748b; font-size:10px; font-weight:800; }
+        .betaAccessSummary strong { color:#1d4ed8; font-size:12px; line-height:1.25; word-break:keep-all; }
+        .betaAccessButton { width:100%; min-height:42px; padding:10px 13px; font-size:12px; white-space:nowrap; }
         .lockedHint { color:#64748b;font-size:11px;font-weight:800;white-space:nowrap; }
         .trialPresetGrid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
         .trialPresetGrid .btn { width:100%; }
@@ -2421,6 +2431,7 @@ export default function OpsPage() {
           .subscriptionKpis,
           .subscriptionToolbar,
           .subscriptionLinks { grid-template-columns:1fr; }
+          .betaAccessSummary { grid-template-columns:1fr; }
           .trialPresetGrid { grid-template-columns:1fr; }
           .subscriptionTable { min-width:0; }
           .subscriptionTable thead { display:none; }
@@ -3056,6 +3067,7 @@ export default function OpsPage() {
       {!loading && activeTab === "businessVerification" ? <OpsBusinessVerifications embedded /> : null}
       {!loading && activeTab === "betaApplications" ? <><OpsBetaRecruitmentRounds /><OpsBetaApplicationDesk /></> : null}
       {!loading && activeTab === "privacyRequests" ? <OpsPrivacyRequests embedded /> : null}
+      {!loading && activeTab === "announcements" ? <OpsAnnouncementsDesk /> : null}
       {!loading && activeTab === "ai" ? <OpsAiUsage embedded /> : null}
       {!loading && activeTab === "approvals" ? <OpsApprovalCenter /> : null}
 
