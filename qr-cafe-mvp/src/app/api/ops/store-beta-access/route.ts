@@ -3,7 +3,7 @@ import { apiErrorResponse, createSupabaseAdminClient } from "../../_lib/storeAut
 import { requireOpsUser } from "../../_lib/opsAuth";
 import { getStoreBetaAccess } from "../../billing/_lib/betaAccess";
 
-type Body = { storeId?: unknown; active?: unknown; prepayIncluded?: unknown; reason?: unknown };
+type Body = { storeId?: unknown; active?: unknown; prepayIncluded?: unknown; postBetaDiscountEnabled?: unknown; reason?: unknown };
 
 async function load(admin: ReturnType<typeof createSupabaseAdminClient>, storeId: string) {
   const [store, beta] = await Promise.all([
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     const storeId = String(body.storeId || "").trim();
     const active = body.active === true;
     const prepayIncluded = body.prepayIncluded === true;
+    const postBetaDiscountBps = body.postBetaDiscountEnabled === false ? 0 : 4000;
     const reason = String(body.reason || "").trim();
     if (!storeId || !reason) return NextResponse.json({ ok: false, message: "매장과 변경 사유를 입력해 주세요." }, { status: 400 });
     if (prepayIncluded && !active) return NextResponse.json({ ok: false, message: "선결제 포함은 베타 이용 중일 때만 설정할 수 있습니다." }, { status: 400 });
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
       const conflict = await admin.from("store_beta_access").select("store_id").eq("owner_user_id", before.ownerUserId).eq("status", "active").neq("store_id", storeId).maybeSingle();
       if (conflict.error && !["42P01", "PGRST205"].includes(String(conflict.error.code || ""))) throw new Error("기존 베타 매장을 확인하지 못했습니다.");
       if (conflict.data?.store_id) return NextResponse.json({ ok: false, code: "BETA_STORE_ALREADY_ASSIGNED", message: "이 계정에는 이미 베타 이용 매장이 있습니다. 기존 매장을 종료한 뒤 변경해 주세요." }, { status: 409 });
-      const saved = await admin.from("store_beta_access").upsert({ store_id: storeId, owner_user_id: before.ownerUserId, status: "active", prepay_included: prepayIncluded, starts_at: before.startsAt || new Date().toISOString(), ends_at: null, post_beta_discount_bps: 4000, reason, assigned_by: actor.userId, ended_at: null, ended_by: null, updated_at: new Date().toISOString() }, { onConflict: "store_id" });
+      const saved = await admin.from("store_beta_access").upsert({ store_id: storeId, owner_user_id: before.ownerUserId, status: "active", prepay_included: prepayIncluded, starts_at: before.startsAt || new Date().toISOString(), ends_at: null, post_beta_discount_bps: postBetaDiscountBps, reason, assigned_by: actor.userId, ended_at: null, ended_by: null, updated_at: new Date().toISOString() }, { onConflict: "store_id" });
       if (saved.error) throw new Error(`베타 이용 권한을 저장하지 못했습니다: ${saved.error.message}`);
     } else {
       const saved = await admin.from("store_beta_access").update({ status: "ended", reason, ended_at: new Date().toISOString(), ended_by: actor.userId, updated_at: new Date().toISOString() }).eq("store_id", storeId);

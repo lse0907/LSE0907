@@ -328,8 +328,8 @@ function BillingPayContent() {
 
       {beta.active ? <section className="betaAccessPanel" aria-label="무료 베타 이용 안내">
         <div className="betaAccessTop"><div><span className="eyebrow">BETA ACCESS</span><h2>정식 출시 전까지 무료로 이용 중입니다.</h2><p>지금은 구독 결제가 필요하지 않습니다. 정식 출시 후에도 자동 결제되지 않으며, 계속 이용을 원할 때만 할인된 금액으로 구독을 시작할 수 있어요.</p></div><span className="betaAccessBadge">베타 이용 중</span></div>
-        <div className="betaAccessGrid"><article><span>기본 기능</span><strong>무료 이용</strong><small>QR 주문, 메뉴·직원 관리, 운영 통계를 사용할 수 있어요.</small></article><article><span>온라인 선결제</span><strong>{beta.prepayIncluded ? "베타 포함" : "이번 베타 미포함"}</strong><small>{beta.prepayIncluded ? "결제대행사(PG)를 연결하면 활성화할 수 있어요." : "필요하면 운영팀에 문의해 주세요."}</small></article><article><span>정식 출시 후</span><strong>구독료 {beta.postBetaDiscountBps / 100}% 할인</strong><small>계속 이용을 선택한 경우에만 적용되며, 자동 결제되지 않습니다.</small></article></div>
-        {beta.prepayIncluded ? <button type="button" className="inlinePrepare betaSettingsLink" onClick={() => router.push(`/admin/billing?store=${encodeURIComponent(storeId)}`)}>온라인 결제 설정 <Direction /></button> : null}
+        <div className="betaAccessGrid"><article><span>기본 기능</span><strong>무료 이용</strong><small>QR 주문, 메뉴·직원 관리, 운영 통계를 사용할 수 있어요.</small></article><article><span>온라인 선결제</span><strong>{beta.prepayIncluded ? "무료 이용" : "이번 베타 미포함"}</strong><small>{beta.prepayIncluded ? "무료 베타 혜택에 포함되어 있습니다. 사용 전 결제대행사(PG) 가입·연결이 필요하며, PG 가입·연관리비와 결제 수수료는 리온오더 구독료와 별도로 발생할 수 있어요." : "필요하면 운영팀에 문의해 주세요."}</small></article><article><span>정식 출시 후</span><strong>구독료 {beta.postBetaDiscountBps / 100}% 할인</strong><small>계속 이용을 선택한 경우에만 적용되며, 자동 결제되지 않습니다.</small></article></div>
+        {beta.prepayIncluded ? <button type="button" className="inlinePrepare betaSettingsLink" onClick={() => router.push(`/admin/billing?store=${encodeURIComponent(storeId)}`)}>결제대행사(PG) 연결하기 <Direction /></button> : null}
       </section> : <>
       <section className="stepCard"><div className="stepHeading"><span>01</span><div><h2>이용할 기능을 선택하세요</h2><p>기본 구독과 온라인 선결제 옵션을 필요한 만큼 선택할 수 있습니다.</p></div></div>
         <div className="productGrid">

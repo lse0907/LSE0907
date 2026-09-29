@@ -178,7 +178,10 @@ export async function buildBillingQuote(params: {
     ? integer(betaAccess?.post_beta_discount_bps, DEFAULT_POLICY.founderBps)
     : 0;
   const postBetaBase = betaEnded && postBetaDiscountBps > 0;
-  const postBetaAddon = postBetaBase && betaAccess?.prepay_included === true;
+  // The beta conversion benefit applies to the selected subscription bundle:
+  // base only, or base plus the prepay option. It is not tied to whether
+  // prepay was enabled during the free beta period.
+  const postBetaAddon = postBetaBase;
 
   if (!payBase && payAddon) {
     const paidUntil = new Date(String(baseRes.data?.paid_until || "")).getTime();
