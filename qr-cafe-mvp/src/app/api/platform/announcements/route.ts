@@ -4,6 +4,8 @@ import { ApiError, apiErrorResponse, createSupabaseAdminClient, requireStoreRole
 export const dynamic = "force-dynamic";
 
 const audiences = new Set(["owner", "staff"]);
+const isAnnouncementSchemaMissing = (error: { code?: string | null } | null) =>
+  error?.code === "42P01" || error?.code === "PGRST205";
 
 export async function GET(req: NextRequest) {
   try {
@@ -30,6 +32,9 @@ export async function GET(req: NextRequest) {
       .order("pinned", { ascending: false })
       .order("starts_at", { ascending: false })
       .limit(20);
+    if (isAnnouncementSchemaMissing(result.error)) {
+      throw new ApiError(503, "시스템 알림을 준비 중입니다. 잠시 후 다시 확인해 주세요.", "ANNOUNCEMENT_SCHEMA_PENDING");
+    }
     if (result.error) throw new ApiError(500, "운영 알림을 불러오지 못했습니다.", "ANNOUNCEMENT_LOAD_FAILED");
     return Response.json({ ok: true, rows: result.data || [] }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

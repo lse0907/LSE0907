@@ -4,7 +4,13 @@ import type { ReactNode } from "react";
 import RionBrand from "@/app/components/RionBrand";
 import { SIGNUP_POLICY_VERSION } from "@/app/lib/signupPolicy";
 
-export default function LegalPolicyPage({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+export default function LegalPolicyPage({ title, description, children, documentVersion = SIGNUP_POLICY_VERSION, isDraft = true }: {
+  title: string;
+  description: string;
+  children: ReactNode;
+  documentVersion?: string;
+  isDraft?: boolean;
+}) {
   return (
     <main className="legalWrap">
       <div className="legalBrand">
@@ -15,9 +21,9 @@ export default function LegalPolicyPage({ title, description, children }: { titl
         <p className="eyebrow">RION ORDER POLICY</p>
         <h1>{title}</h1>
         <p>{description}</p>
-        <div className="versionRow"><span>문서 버전 {SIGNUP_POLICY_VERSION}</span><span>법률 검토 전 운영정책</span></div>
+        <div className="versionRow"><span>문서 버전 {documentVersion}</span>{isDraft ? <span>법률 검토 전 운영정책</span> : null}</div>
       </header>
-      <aside className="draftNotice"><strong>중요</strong><span>이 문서는 확정된 서비스 운영정책을 가입 화면에 연결하기 위한 검토본입니다. 정식 공개 전 법률 검토 결과와 확정 사업자 정보를 반영하여 새 버전으로 교체합니다.</span></aside>
+      {isDraft ? <aside className="draftNotice"><strong>중요</strong><span>이 문서는 확정된 서비스 운영정책을 가입 화면에 연결하기 위한 검토본입니다. 정식 공개 전 법률 검토 결과와 확정 사업자 정보를 반영하여 새 버전으로 교체합니다.</span></aside> : null}
       <article className="legalBody">{children}</article>
       <nav className="legalNav" aria-label="정책 문서">
         <Link href="/legal/terms?audience=customer">고객 이용정책</Link>

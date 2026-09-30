@@ -26,7 +26,8 @@
     "test:ai-beta-scenarios": "node scripts/check-ai-beta-scenarios.mjs",
     "check:ai-provider-readiness": "node scripts/check-ai-provider-readiness.mjs",
     "test:brand-ci": "node scripts/check-brand-ci.mjs",
-    "test:customer-order-notifications": "node scripts/check-customer-order-notifications.mjs"
+    "test:customer-order-notifications": "node scripts/check-customer-order-notifications.mjs",
+    "test:beta-recruitment-schema": "node scripts/check-beta-recruitment-schema.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
