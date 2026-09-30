@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { ApiError, apiErrorResponse, createSupabaseAdminClient } from "@/app/api/_lib/storeAuth";
+import { BETA_APPLICATION_CONSENT_VERSION } from "@/app/lib/betaApplicationConsent";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     const preferredStart = text(body.preferredStart, 30);
     const preferredStartDate = text(body.preferredStartDate, 10);
     const recruitmentRoundId = Number(body.recruitmentRoundId);
+    const privacyConsentVersion = text(body.privacyConsentVersion, 100);
     const feedbackAvailable = body.feedbackAvailable === true;
     const note = text(body.note, 1000);
 
@@ -66,6 +68,9 @@ export async function POST(req: NextRequest) {
     }
     if (body.privacyConsent !== true) {
       throw new ApiError(400, "신청 검토를 위한 개인정보 수집·이용 안내에 동의해 주세요.", "BETA_APPLICATION_PRIVACY_REQUIRED");
+    }
+    if (privacyConsentVersion !== BETA_APPLICATION_CONSENT_VERSION) {
+      throw new ApiError(400, "개인정보 수집·이용 동의 내용을 다시 확인해 주세요.", "BETA_APPLICATION_PRIVACY_VERSION_REQUIRED");
     }
 
     const admin = createSupabaseAdminClient();
@@ -105,6 +110,8 @@ export async function POST(req: NextRequest) {
       feedback_available: feedbackAvailable,
       note,
       source: "landing",
+      privacy_consent_version: privacyConsentVersion,
+      privacy_consented_at: new Date().toISOString(),
     }).select("id").single();
 
     if (saved.error || !saved.data) {
