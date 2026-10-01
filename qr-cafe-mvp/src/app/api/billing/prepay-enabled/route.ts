@@ -8,7 +8,7 @@ async function state(admin: ReturnType<typeof createSupabaseAdminClient>, storeI
   const [base, addon, pg, beta] = await Promise.all([
     admin.from("store_billing").select("base_plan_status,paid_until").eq("store_id", storeId).maybeSingle(),
     admin.from("store_addons").select("prepay_addon_status,addon_paid_until,prepay_enabled,prepay_enabled_at").eq("store_id", storeId).maybeSingle(),
-    admin.from("store_pg_config").select("mid,client_key,secret_key,pg_verified_at").eq("store_id", storeId).maybeSingle(),
+    admin.from("store_pg_config").select("mid,client_key,secret_key,updated_at").eq("store_id", storeId).maybeSingle(),
     getStoreBetaAccess(admin, storeId),
   ]);
   if (base.error || addon.error || pg.error) throw new Error("온라인 결제 상태를 확인하지 못했습니다.");
@@ -17,11 +17,44 @@ async function state(admin: ReturnType<typeof createSupabaseAdminClient>, storeI
   const baseActive = base.data?.base_plan_status === "active" && Number.isFinite(baseUntil) && baseUntil > Date.now();
   const addonActive = addon.data?.prepay_addon_status === "active" && Number.isFinite(addonUntil) && addonUntil > Date.now();
   const pgReady = Boolean(String(pg.data?.mid || "").trim() && String(pg.data?.client_key || "").trim() && String(pg.data?.secret_key || "").trim());
+  const configuredAt = String(pg.data?.updated_at || "").trim() || null;
+  const verificationOrders = pgReady && configuredAt
+    ? await admin
+      .from("orders")
+      .select("id,created_at,payment_status")
+      .eq("store_id", storeId)
+      .gte("created_at", configuredAt)
+      .in("payment_status", ["paid", "refunded"])
+      .order("created_at", { ascending: true })
+      .limit(100)
+    : { data: [], error: null };
+  if (verificationOrders.error) throw new Error("테스트 결제 상태를 확인하지 못했습니다.");
+  const paymentOrder = (verificationOrders.data || []).find((order) => ["paid", "refunded"].includes(String(order.payment_status || "")));
+  const cancelledOrder = (verificationOrders.data || []).find((order) => String(order.payment_status || "") === "refunded");
+  const paymentVerified = Boolean(paymentOrder);
+  const cancelVerified = Boolean(cancelledOrder);
   const reasons: string[] = [];
   if (!baseActive && !beta.active) reasons.push("기본 구독이 활성 상태가 아닙니다.");
   if (!addonActive && !beta.prepayIncluded) reasons.push("선결제 옵션 구독이 활성 상태가 아닙니다.");
   if (!pgReady) reasons.push("토스 PG의 MID, Client Key, Secret Key를 모두 등록해 주세요.");
-  return { enabled: addon.data?.prepay_enabled === true, enabledAt: addon.data?.prepay_enabled_at || null, baseActive: baseActive || beta.active, addonActive: addonActive || beta.prepayIncluded, pgReady, betaActive: beta.active, prepayIncluded: beta.prepayIncluded, canEnable: (baseActive || beta.active) && (addonActive || beta.prepayIncluded) && pgReady, blockedReasons: reasons };
+  return {
+    enabled: addon.data?.prepay_enabled === true,
+    enabledAt: addon.data?.prepay_enabled_at || null,
+    baseActive: baseActive || beta.active,
+    addonActive: addonActive || beta.prepayIncluded,
+    prepaySubscribed: addonActive,
+    pgReady,
+    configuredAt,
+    paymentVerified,
+    paymentVerifiedAt: paymentOrder?.created_at || null,
+    cancelVerified,
+    cancelVerifiedAt: cancelledOrder?.created_at || null,
+    verificationCompleted: paymentVerified && cancelVerified,
+    betaActive: beta.active,
+    prepayIncluded: beta.prepayIncluded,
+    canEnable: (baseActive || beta.active) && (addonActive || beta.prepayIncluded) && pgReady,
+    blockedReasons: reasons,
+  };
 }
 
 export async function GET(req: NextRequest) {
