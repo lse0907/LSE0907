@@ -51,9 +51,14 @@ export async function proxy(request: NextRequest) {
   const isLocalPrivacyPreview = pathname === "/account/privacy"
     && searchParams.get("preview") === "1"
     && ["localhost", "127.0.0.1"].includes(request.nextUrl.hostname);
+  // Design review only: allow the local-only free-trial preview to render
+  // without an account. Production and Preview deployments remain protected.
+  const isLocalTrialPreview = pathname === "/admin"
+    && searchParams.get("trialPreview") === "1"
+    && ["localhost", "127.0.0.1"].includes(request.nextUrl.hostname);
 
   const isProtected =
-    pathname.startsWith("/admin") ||
+    (pathname.startsWith("/admin") && !isLocalTrialPreview) ||
     pathname.startsWith("/staff") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/me") ||

@@ -34,8 +34,16 @@ type MemberRow = {
 
 type StoreBillingSummary = {
   basePlanStatus: string;
+  trialEndAt: string | null;
   paidUntil: string | null;
   lastPaidAt: string | null;
+};
+
+type FreeTrialState = {
+  loading: boolean;
+  eligible: boolean;
+  reason: "ready" | "setup_required" | "first_store_only" | "beta_active" | "trial_active" | "paid" | "unknown";
+  trialEndAt: string | null;
 };
 
 type StoreBetaSummary = {
@@ -77,7 +85,10 @@ type AdminIconName =
   | "monthly"
   | "subscription"
   | "insight"
+  | "aiRobot"
   | "account"
+  | "mobile"
+  | "tablet"
   | "logout";
 
 function AdminIcon({ name, size = 18 }: { name: AdminIconName; size?: number }) {
@@ -99,7 +110,10 @@ function AdminIcon({ name, size = 18 }: { name: AdminIconName; size?: number }) 
     monthly: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M3 10h18" /><path d="M7 14h2" /><path d="M11 14h2" /><path d="M15 14h2" /><path d="M7 18h2" /><path d="M11 18h2" /></>,
     subscription: <><path d="M12 3 4 7v5c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V7Z" /><path d="m9 12 2 2 4-4" /></>,
     insight: <><path d="m12 3 .9 3.1L16 7l-3.1.9L12 11l-.9-3.1L8 7l3.1-.9L12 3Z" /><path d="m18 13 .6 2.1 2.1.6-2.1.6L18 18.5l-.6-2.2-2.1-.6 2.1-.6L18 13Z" /><path d="m6 14 .5 1.6L8 16l-1.5.4L6 18l-.5-1.6L4 16l1.5-.4L6 14Z" /></>,
+    aiRobot: <><rect x="5" y="7" width="14" height="12" rx="3" /><path d="M12 4v3M10 4h4" /><path d="M9 12h.01M15 12h.01M9 16h6" /></>,
     account: <><circle cx="12" cy="8" r="3.5" /><path d="M4.5 21c.8-4 3.4-6.2 7.5-6.2s6.7 2.2 7.5 6.2" /></>,
+    mobile: <><rect x="7" y="3" width="10" height="18" rx="2" /><path d="M11 18h2" /></>,
+    tablet: <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M11 18h2" /></>,
     logout: <><path d="M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5" /><path d="m15 8 4 4-4 4M9 12h10" /></>,
   };
 
@@ -115,6 +129,13 @@ function toErrorMessage(e: unknown) {
 }
 
 const FREE_TRIAL_DAYS = 30;
+const LOCAL_TRIAL_PREVIEW_STORE: StoreRow = {
+  store_id: "testximen4",
+  store_name: "시먼테스트4",
+  setup_completed: true,
+  setup_last_step: 4,
+  status: "active",
+};
 
 function getStoreLifecycleStatus(store: StoreRow): StoreStatus {
   const raw = String(store.status || "active").trim();
@@ -136,15 +157,6 @@ function getStoreStatusLabel(store: StoreRow) {
   return "운영중";
 }
 
-function calcRemainingDays(createdAt?: string | null) {
-  if (!createdAt) return null;
-  const created = new Date(createdAt).getTime();
-  if (Number.isNaN(created)) return null;
-  const diffMs = Date.now() - created;
-  const usedDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  return Math.max(0, FREE_TRIAL_DAYS - usedDays);
-}
-
 function AdminPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -154,6 +166,8 @@ function AdminPageInner() {
     process.env.NODE_ENV !== "production" && sp.get("briefPreview") === "1";
   const isLocalBetaPreview =
     process.env.NODE_ENV !== "production" && sp.get("betaPreview") === "1";
+  const isLocalTrialPreview =
+    process.env.NODE_ENV !== "production" && sp.get("trialPreview") === "1";
 
   const [booting, setBooting] = useState(true);
   const [stores, setStores] = useState<StoreRow[]>([]);
@@ -172,7 +186,6 @@ function AdminPageInner() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsErr, setStatsErr] = useState("");
   const [aiBriefNotice, setAiBriefNotice] = useState<AiBriefNotice | null>(null);
-  const [referenceNow] = useState(() => Date.now());
   const [statsSummary, setStatsSummary] = useState({
     daily: 0,
     weekly: 0,
@@ -182,6 +195,11 @@ function AdminPageInner() {
     Record<string, StoreBillingSummary>
   >({});
   const [betaByStore, setBetaByStore] = useState<Record<string, StoreBetaSummary>>({});
+  const [freeTrialState, setFreeTrialState] = useState<FreeTrialState>({ loading: true, eligible: false, reason: "unknown", trialEndAt: null });
+  const [trialPreviewStarted, setTrialPreviewStarted] = useState(false);
+  const [trialStartedNotice, setTrialStartedNotice] = useState(false);
+  const [trialConfirmOpen, setTrialConfirmOpen] = useState(false);
+  const [trialStarting, setTrialStarting] = useState(false);
   const [paymentConnectionState, setPaymentConnectionState] = useState<
     "loading" | "connected" | "needed" | "attention"
   >("loading");
@@ -264,7 +282,7 @@ function AdminPageInner() {
     const [billingRes, paymentRes] = await Promise.all([
       supabase
         .from("store_billing")
-        .select("store_id, base_plan_status, paid_until")
+        .select("store_id, base_plan_status, trial_end_at, paid_until")
         .in("store_id", ids),
       supabase
         .from("billing_payments")
@@ -292,6 +310,7 @@ function AdminPageInner() {
           (row as { base_plan_status?: string | null }).base_plan_status ||
             "inactive",
         ),
+        trialEndAt: String((row as { trial_end_at?: string | null }).trial_end_at || "").trim() || null,
         paidUntil:
           String(
             (row as { paid_until?: string | null }).paid_until || "",
@@ -309,6 +328,7 @@ function AdminPageInner() {
         null;
       nextBilling[storeId] = {
         basePlanStatus: nextBilling[storeId]?.basePlanStatus || "inactive",
+        trialEndAt: nextBilling[storeId]?.trialEndAt || null,
         paidUntil: nextBilling[storeId]?.paidUntil || null,
         lastPaidAt: paidAt,
       };
@@ -339,7 +359,7 @@ function AdminPageInner() {
     if (!raw) return null;
     const t = new Date(raw).getTime();
     if (!Number.isFinite(t)) return null;
-    return Math.max(0, Math.ceil((t - referenceNow) / (1000 * 60 * 60 * 24)));
+    return Math.max(0, Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24)));
   };
 
   const fetchStatsSummaryForStore = async (storeId: string) => {
@@ -373,6 +393,17 @@ function AdminPageInner() {
     (async () => {
       setBooting(true);
       setMsg("");
+
+      if (isLocalTrialPreview) {
+        const previewStoreId = (sp.get("store") || LOCAL_TRIAL_PREVIEW_STORE.store_id).trim() || LOCAL_TRIAL_PREVIEW_STORE.store_id;
+        setStores([{ ...LOCAL_TRIAL_PREVIEW_STORE, store_id: previewStoreId }]);
+        setBillingByStore({});
+        setBetaByStore({});
+        setSelectedStoreId(previewStoreId);
+        setStoresLoaded(true);
+        setBooting(false);
+        return;
+      }
 
       const { data, error } = await supabase.auth.getUser();
       if (error) {
@@ -410,7 +441,7 @@ function AdminPageInner() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sp]);
+  }, [isLocalTrialPreview, sp]);
 
   useEffect(() => {
     if (!storesLoaded) return;
@@ -438,6 +469,33 @@ function AdminPageInner() {
       fetchStatsSummaryForStore(selectedStoreId);
     });
     return () => window.cancelAnimationFrame(frame);
+  }, [selectedStoreId]);
+
+  useEffect(() => {
+    setTrialConfirmOpen(false);
+    if (!selectedStoreId) {
+      setFreeTrialState({ loading: false, eligible: false, reason: "unknown", trialEndAt: null });
+      return;
+    }
+    if (isLocalTrialPreview) {
+      setFreeTrialState({ loading: false, eligible: !trialPreviewStarted, reason: trialPreviewStarted ? "trial_active" : "ready", trialEndAt: trialPreviewStarted ? new Date(Date.now() + FREE_TRIAL_DAYS * 86400000).toISOString() : null });
+      return;
+    }
+    const controller = new AbortController();
+    setFreeTrialState({ loading: true, eligible: false, reason: "unknown", trialEndAt: null });
+    fetch(`/api/billing/free-trial?storeId=${encodeURIComponent(selectedStoreId)}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.ok) throw new Error(String(payload?.message || "무료 체험 상태를 확인하지 못했습니다."));
+        return payload.trial as Omit<FreeTrialState, "loading">;
+      })
+      .then((trial) => { if (!controller.signal.aborted) setFreeTrialState({ loading: false, ...trial }); })
+      .catch(() => { if (!controller.signal.aborted) setFreeTrialState({ loading: false, eligible: false, reason: "unknown", trialEndAt: null }); });
+    return () => controller.abort();
+  }, [isLocalTrialPreview, selectedStoreId, trialPreviewStarted]);
+
+  useEffect(() => {
+    setTrialPreviewStarted(false);
   }, [selectedStoreId]);
 
   useEffect(() => {
@@ -539,23 +597,56 @@ function AdminPageInner() {
     ? billingByStore[selectedStoreId]
     : null;
   const selectedBeta = selectedStoreId ? betaByStore[selectedStoreId] : null;
-  const selectedFreeRemaining = selectedStore
-    ? calcRemainingDays(selectedStore.created_at)
-    : null;
+  const selectedTrialRemaining = calcPaidRemainingDays(selectedBilling?.trialEndAt || freeTrialState.trialEndAt || null);
   const selectedPaidRemaining = calcPaidRemainingDays(
     selectedBilling?.paidUntil || null,
   );
   const selectedSubscriptionStatus = selectedBeta?.active ? "베타 이용 중" :
-    selectedBilling?.basePlanStatus === "active" ? "유료" : "무료";
+    selectedBilling?.basePlanStatus === "active" ? "유료" : selectedBilling?.basePlanStatus === "trialing" || freeTrialState.reason === "trial_active" ? "무료 체험 중" : "무료";
   const selectedRemainingPeriod = selectedBeta?.active
     ? selectedBeta.endsAt ? calcPaidRemainingDays(selectedBeta.endsAt) : null
     : selectedBilling?.basePlanStatus === "active"
       ? selectedPaidRemaining
-      : selectedFreeRemaining;
+      : selectedTrialRemaining;
   const selectedRemainingText = selectedBeta?.active && !selectedBeta.endsAt ? "정식 출시 전까지" :
     selectedRemainingPeriod == null ? "-" : `${selectedRemainingPeriod}일`;
   const dismissSetupBanner = () => {
     setHideSetupBannerForCurrentSelection(true);
+  };
+  const showTrialExpiryNotice =
+    freeTrialState.reason === "trial_active" &&
+    selectedTrialRemaining != null &&
+    selectedTrialRemaining <= 7;
+  const showFreeTrialBanner =
+    !showSetupBanner &&
+    !freeTrialState.loading &&
+    (freeTrialState.eligible || trialStartedNotice || showTrialExpiryNotice);
+  const formatTrialEnd = (value: string | null) => value ? new Date(value).toLocaleDateString("ko-KR", { month: "long", day: "numeric" }) : "";
+  const startFreeTrial = async () => {
+    if (!selectedStoreId || trialStarting) return;
+    if (isLocalTrialPreview) {
+      setTrialPreviewStarted(true);
+      setTrialStartedNotice(true);
+      setTrialConfirmOpen(false);
+      setMsg("[로컬 미리보기] 무료 체험이 시작된 상태를 표시합니다.");
+      return;
+    }
+    setTrialStarting(true);
+    try {
+      const response = await fetch("/api/billing/free-trial", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ storeId: selectedStoreId }) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) throw new Error(String(payload?.message || "무료 체험을 시작하지 못했습니다."));
+      const trialEndAt = String(payload.trial?.trialEndAt || "").trim() || null;
+      setBillingByStore((current) => ({ ...current, [selectedStoreId]: { ...(current[selectedStoreId] || { basePlanStatus: "inactive", paidUntil: null, lastPaidAt: null, trialEndAt: null }), basePlanStatus: "trialing", trialEndAt } }));
+      setFreeTrialState({ loading: false, eligible: false, reason: "trial_active", trialEndAt });
+      setTrialStartedNotice(true);
+      setTrialConfirmOpen(false);
+      setMsg(`무료 체험을 시작했습니다. ${formatTrialEnd(trialEndAt)}까지 기본 기능을 이용할 수 있습니다.`);
+    } catch (error: unknown) {
+      setMsg(toErrorMessage(error));
+    } finally {
+      setTrialStarting(false);
+    }
   };
 
   useEffect(() => {
@@ -582,6 +673,10 @@ function AdminPageInner() {
 
   useEffect(() => {
     if (!selectedStoreId) return;
+    if (isLocalTrialPreview) {
+      setSelectedStoreCounts(null);
+      return;
+    }
     let mounted = true;
     (async () => {
       const [catRes, optRes, menuRes] = await Promise.all([
@@ -608,7 +703,7 @@ function AdminPageInner() {
     return () => {
       mounted = false;
     };
-  }, [selectedStoreId]);
+  }, [isLocalTrialPreview, selectedStoreId]);
 
   if (booting) {
     return (
@@ -645,18 +740,24 @@ function AdminPageInner() {
         <div className="topActions">
           <div className="topWorkActions">
             <button
-              className="btn"
+              className="btn topWorkAction"
               onClick={() => goPublic("/menu")}
               disabled={!selectedStoreId}
+              aria-label="고객 화면 열기"
+              title="고객 화면"
             >
-              고객화면 보기
+              <AdminIcon name="mobile" size={16} />
+              <span className="topWorkActionLabel">고객 화면</span>
             </button>
             <button
-              className="btn"
+              className="btn topWorkAction"
               onClick={() => goPublic("/staff")}
               disabled={!selectedStoreId}
+              aria-label="직원 화면 열기"
+              title="직원 화면"
             >
-              직원화면 보기
+              <AdminIcon name="tablet" size={16} />
+              <span className="topWorkActionLabel">직원 화면</span>
             </button>
           </div>
           {selectedStoreId ? <PlatformAnnouncementsButton storeId={selectedStoreId} audience="owner" /> : null}
@@ -735,6 +836,38 @@ function AdminPageInner() {
             </button>
           </div>
         </div>
+      ) : null}
+      {showFreeTrialBanner ? (
+        <section className={`freeTrialBanner ${trialStartedNotice ? "freeTrialBannerActive" : ""} ${showTrialExpiryNotice && !trialStartedNotice ? "freeTrialBannerNotice" : ""}`} aria-live="polite">
+          <div className="freeTrialBannerCopy">
+            <span className="sectionLabel">FIRST STORE BENEFIT</span>
+            {trialStartedNotice ? (
+              <>
+                <strong>무료 체험을 시작했습니다.</strong>
+                <p>기본 기능을 {formatTrialEnd(selectedBilling?.trialEndAt || freeTrialState.trialEndAt)}까지 무료로 이용할 수 있어요. 종료 후 자동 결제되지 않습니다.</p>
+              </>
+            ) : showTrialExpiryNotice ? (
+              <>
+                <strong>무료 체험이 {selectedTrialRemaining}일 후 종료됩니다.</strong>
+                <p>계속 이용하려면 종료 전 구독 옵션을 확인해 주세요. 자동 결제되지 않습니다.</p>
+              </>
+            ) : (
+              <>
+                <strong>운영 준비가 끝났다면 무료 체험을 시작하세요.</strong>
+                <p>오늘부터 30일 동안 기본 기능을 무료로 이용할 수 있어요. 종료 후 자동 결제되지 않습니다.</p>
+              </>
+            )}
+          </div>
+          {freeTrialState.eligible ? (
+            <div className="freeTrialBannerActions">
+              <button className="btn btnBilling btnSmall" onClick={() => setTrialConfirmOpen(true)}>무료 체험 시작</button>
+            </div>
+          ) : showTrialExpiryNotice && !trialStartedNotice ? (
+            <div className="freeTrialBannerActions">
+              <button className="btn btnBilling btnSmall" onClick={() => go("/admin/billing/pay")}>구독 옵션 보기</button>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       <div className="adminLayout">
@@ -832,21 +965,32 @@ function AdminPageInner() {
                 ) : null}
                 {visibleStores.map((s) => {
                   const on = s.store_id === selectedStoreId;
-                  const remaining = calcRemainingDays(s.created_at);
                   const billing = billingByStore[s.store_id];
                   const beta = betaByStore[s.store_id];
+                  const isLocalTrialActive =
+                    isLocalTrialPreview &&
+                    on &&
+                    trialPreviewStarted;
+                  const isTrialing =
+                    billing?.basePlanStatus === "trialing" ||
+                    isLocalTrialActive;
+                  const trialEndAt = isLocalTrialActive
+                    ? freeTrialState.trialEndAt
+                    : billing?.trialEndAt || null;
                   const paidRemaining = calcPaidRemainingDays(
                     billing?.paidUntil || null,
                   );
                   const remainingText = (days: number | null) =>
                     days == null ? "-" : `${days}일`;
                   const subscriptionStatus = beta?.active ? "베타 이용 중" :
-                    billing?.basePlanStatus === "active" ? "유료" : "무료";
+                    billing?.basePlanStatus === "active" ? "유료" : isTrialing ? "무료 체험 중" : "무료";
                   const remainingPeriod = beta?.active
                     ? (beta.endsAt ? remainingText(calcPaidRemainingDays(beta.endsAt)) : "정식 출시 전까지")
                     : billing?.basePlanStatus === "active"
                       ? remainingText(paidRemaining)
-                      : remainingText(remaining);
+                      : isTrialing
+                        ? remainingText(calcPaidRemainingDays(trialEndAt))
+                        : "체험 시작 전";
                   const displayStatus = getStoreDisplayStatus(s);
                   const statusLabel = getStoreStatusLabel(s);
                   return (
@@ -926,7 +1070,7 @@ function AdminPageInner() {
             <div className="dashboardGrid" aria-label="관리자 홈 요약">
               {displayedAiBriefNotice?.storeId === selectedStoreId ? (
                 <section className="aiBriefArrival" aria-label="새 AI 브리핑 알림">
-                  <span className="aiBriefArrivalIcon" aria-hidden="true"><AdminIcon name="insight" size={18} /></span>
+                  <span className="aiBriefArrivalIcon" aria-hidden="true"><AdminIcon name="aiRobot" size={18} /></span>
                   <div className="aiBriefArrivalCopy"><strong>새 AI 브리핑이 도착했어요.{isLocalAiBriefPreview ? <span className="aiBriefPreviewLabel">미리보기</span> : null}</strong><p>{displayedAiBriefNotice.summary || displayedAiBriefNotice.headline}</p></div>
                   <button className="btn btnSmall aiBriefArrivalAction" onClick={() => go("/admin/ai")}>브리핑 보기</button>
                 </section>
@@ -940,7 +1084,7 @@ function AdminPageInner() {
                       매출 보기
                     </button>
                     <button className="btn btnSmall overviewActionInsight" onClick={() => go("/admin/ai")}>
-                      <AdminIcon name="insight" size={15} />
+                      <AdminIcon name="aiRobot" size={15} />
                       AI 브리핑
                       {displayedAiBriefNotice?.storeId === selectedStoreId ? <span className="aiBriefNew">NEW</span> : null}
                     </button>
@@ -1007,7 +1151,7 @@ function AdminPageInner() {
                     </span>
                   </div>
                   {statsErr ? (
-                    <div className="hint">{statsErr}</div>
+                    <div className="hint statsError">{statsErr}</div>
                   ) : null}
                 </div>
               </section>
@@ -1176,6 +1320,19 @@ function AdminPageInner() {
           ) : null}
         </section>
       </div>
+      {trialConfirmOpen ? (
+        <div className="trialModalBackdrop" role="presentation" onMouseDown={() => !trialStarting && setTrialConfirmOpen(false)}>
+          <section className="trialModal" role="dialog" aria-modal="true" aria-labelledby="free-trial-title" onMouseDown={(event) => event.stopPropagation()}>
+            <span className="sectionLabel">30 DAY FREE TRIAL</span>
+            <h2 id="free-trial-title">30일 무료 체험을 시작할까요?</h2>
+            <p>오늘부터 30일 동안 기본 기능을 무료로 이용할 수 있습니다. 체험 종료 후 자동 결제되지 않으며, 온라인 선결제는 PG 연결과 별도 구독이 필요합니다.</p>
+            <div className="trialModalActions">
+              <button className="btn" type="button" onClick={() => setTrialConfirmOpen(false)} disabled={trialStarting}>나중에 시작</button>
+              <button className="btn btnBilling" type="button" onClick={startFreeTrial} disabled={trialStarting}>{trialStarting ? "시작 중…" : "무료 체험 시작"}</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -1261,6 +1418,13 @@ body {
 .topProfileAvatar{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:#dcecff;color:#174e94}.topProfileCopy{display:grid;gap:2px;text-align:left;line-height:1.1}.topProfileCopy strong{font-size:11px}.topProfileCopy small{color:#71819b;font-size:9px;font-weight:750}
 .topAccountMenuList{position:absolute;z-index:25;right:0;top:calc(100% + 7px);width:172px;padding:6px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 12px 26px rgba(30,55,90,.14)}
 .topAccountMenuHeading{padding:5px 9px 8px;border-bottom:1px solid #e9eef5;color:#71819b;font-size:10px;font-weight:850}.topAccountMenuList a{display:block;padding:10px 11px;border-radius:8px;color:#273b5a;font-size:12px;font-weight:800;line-height:1.3;text-decoration:none}.topAccountMenuList a:last-child{margin-top:3px;border-top:1px solid #e9eef5;border-radius:0;color:#79515e}.topAccountMenuList a:hover{background:#f1f6ff;color:#174e94}
+@media (max-width:1040px){
+  .topActions{gap:6px;flex-wrap:nowrap}
+  .topWorkActions{gap:6px}
+  .topActions .topWorkAction{padding:9px 10px}
+  .topProfileCopy{display:none}
+  .topAccountMenu .btn{width:40px;min-height:40px;padding:5px}
+}
 .welcomeHero{
   position:relative;
   overflow:hidden;
@@ -1432,6 +1596,34 @@ body {
   font-size:12px;
   border-radius:9px;
 }
+.freeTrialBanner{
+  border:1px solid #bfdbfe;
+  background:linear-gradient(95deg,#eff6ff,#f8fbff);
+  color:#173d73;
+  border-radius:18px;
+  padding:16px 18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.freeTrialBannerActive{ border-color:#a7f3d0; background:linear-gradient(95deg,#effdf6,#f8fffb); color:#065f46; }
+.freeTrialBannerNotice{ border-color:#fed7aa; background:linear-gradient(95deg,#fff8ed,#fffdfa); color:#9a3412; }
+.freeTrialBannerCopy{ display:grid; gap:5px; }
+.freeTrialBannerCopy .sectionLabel{ color:#2563eb; }
+.freeTrialBannerActive .sectionLabel{ color:#059669; }
+.freeTrialBannerNotice .sectionLabel{ color:#c2410c; }
+.freeTrialBannerCopy strong{ font-size:16px; letter-spacing:-.025em; }
+.freeTrialBannerCopy p{ margin:0; color:#4c6484; font-size:12px; font-weight:650; line-height:1.55; }
+.freeTrialBannerActive .freeTrialBannerCopy p{ color:#47766a; }
+.freeTrialBannerNotice .freeTrialBannerCopy p{ color:#8a6043; }
+.freeTrialBannerActions{ flex:0 0 auto; }
+.trialModalBackdrop{ position:fixed; inset:0; z-index:80; display:grid; place-items:center; padding:20px; background:rgba(11,28,54,.46); }
+.trialModal{ width:min(100%,440px); border:1px solid #d7e5f8; border-radius:22px; background:#fff; padding:24px; box-shadow:0 24px 64px rgba(14,35,67,.28); }
+.trialModal .sectionLabel{ color:#2563eb; }
+.trialModal h2{ margin:10px 0 8px; color:#14213d; font-size:22px; letter-spacing:-.04em; }
+.trialModal p{ margin:0; color:#5e708c; font-size:14px; font-weight:650; line-height:1.65; word-break:keep-all; }
+.trialModalActions{ display:flex; justify-content:flex-end; gap:8px; margin-top:22px; }
 .emptyBox{
   margin-top:12px;
   display:grid;
@@ -1490,20 +1682,23 @@ body {
   gap:8px;
   margin-left:auto;
 }
+.overviewActions .btn{ min-height:36px; padding:8px 12px; font-size:12px; }
 .overviewActionSecondary{
-  background:#fff;
-  border-color:#c9d6e8;
-  color:#29486d;
+  background:#edf5ff;
+  border-color:#b9d3f6;
+  color:#1b4d88;
+  box-shadow:0 4px 10px rgba(31,86,151,.08);
 }
+.overviewActionSecondary:hover:not(:disabled){ border-color:#8bb6e9; background:#e2efff; }
 .overviewActionInsight{
-  background:#183b74;
-  border-color:#183b74;
-  color:#fff;
-  box-shadow:0 5px 12px rgba(24,59,116,.16);
+  background:#f1f3ff;
+  border-color:#c9cff5;
+  color:#374b9c;
+  box-shadow:0 4px 10px rgba(67,56,202,.07);
 }
 .overviewActionInsight:hover:not(:disabled){
-  border-color:#183b74;
-  background:#102d5c;
+  border-color:#aeb9ef;
+  background:#e9edff;
 }
 .overviewStoreLine{
   display:flex;
@@ -1815,31 +2010,40 @@ body {
 }
 .statsRow{
   min-width:0;
-  min-height:105px;
-  padding:13px;
+  min-height:88px;
+  padding:12px;
   display:grid;
-  align-content:start;
-  gap:7px;
+  grid-template-columns:26px auto;
+  grid-template-rows:auto auto;
+  align-items:center;
+  align-content:center;
+  justify-content:center;
+  gap:3px 7px;
   border:1px solid #e3e9f2;
   border-radius:15px;
   background:#fff;
   font-weight:850;
 }
-.statsIcon{ width:27px; height:27px; display:grid; place-items:center; border-radius:9px; background:#edf4ff; color:#2563eb; font-size:12px; font-weight:900; }
+.statsIcon{ width:26px; height:26px; display:grid; grid-row:1; grid-column:1; place-items:center; align-self:center; border-radius:9px; background:#edf4ff; color:#2563eb; font-size:12px; font-weight:900; }
 .statsWeekly .statsIcon{ background:#f0fdf4; color:#15803d; }
 .statsMonthly .statsIcon{ background:#f5f3ff; color:#7c3aed; }
 .statsBilling .statsIcon{ background:#fff7ed; color:#c2410c; }
 .statsLabel{
+  grid-column:2;
   color:var(--muted);
   font-size:12px;
+  white-space:nowrap;
 }
 .statsValue{
+  grid-column:1/-1;
+  justify-self:center;
   overflow:hidden;
   font-size:clamp(13px,1.25vw,17px);
   letter-spacing:-.03em;
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+.statsError{ grid-column:1/-1; margin:2px 0 0; }
 .stickyCard{
   position:sticky;
   top:10px;
@@ -1866,7 +2070,10 @@ body {
   .desc{ margin-top:9px; font-size:13px; }
   .card{ padding:17px; }
   .statsSummaryCompact{ grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .statsRow{ min-height:86px; padding:10px; gap:4px; }
+  .statsRow{ min-height:86px; padding:10px; grid-template-columns:26px minmax(0,1fr); justify-content:start; gap:3px 7px; }
+  .statsIcon{ grid-row:1/3; grid-column:1; }
+  .statsLabel{ grid-column:2; }
+  .statsValue{ grid-column:2; justify-self:start; }
   .cardBtn{ min-height:78px; padding:11px; grid-template-columns:34px minmax(0,1fr) auto; gap:7px; }
   .cardBtnIcon{ width:34px; height:34px; }
   .setupBanner{
@@ -1919,23 +2126,25 @@ body {
     gap:10px;
   }
   .brandArea{
-    flex:1 1 auto;
+    width:100%;
   }
   .topActions{
     width:100%;
     display:flex;
     align-items:stretch;
     gap:7px;
+    justify-content:flex-end;
   }
   .topWorkActions{flex:1 1 auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   .topActions .btn{
-    width:100%;
+    width:40px;
     min-height:42px;
-    padding:8px 7px;
+    padding:0;
     font-size:12px;
     white-space:nowrap;
   }
-  .topAccountMenu{min-width:0;flex:0 0 auto}.topAccountMenu .btn{width:auto;min-height:42px;padding:5px}.topProfileCopy{display:none}.topAccountMenuList{width:172px;top:calc(100% + 5px)}
+  .topActions .topWorkAction{width:100%;min-width:0;padding:8px 7px}
+  .topAccountMenu{min-width:0;flex:0 0 auto}.topAccountMenu .btn{width:40px;min-height:42px;padding:5px}.topProfileCopy{display:none}.topAccountMenuList{width:172px;top:calc(100% + 5px)}
   .adminBadge{ display:none; }
   .welcomeHero{ min-height:0; padding:16px; display:grid; grid-template-columns:minmax(0,.9fr) minmax(158px,1.1fr); gap:12px; border-radius:19px; }
   .welcomeHero::before{ width:240px; right:-86px; top:auto; bottom:-105px; }
@@ -2029,6 +2238,7 @@ body {
   .aiBriefArrival{grid-template-columns:36px minmax(0,1fr);gap:10px;padding:13px}.aiBriefArrivalIcon{width:36px;height:36px;border-radius:11px}.aiBriefArrivalAction{grid-column:2;justify-self:start;min-height:33px}
   .statsRow{ min-height:74px; padding:9px; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:3px 6px; }
   .statsIcon{ width:22px; height:22px; border-radius:7px; font-size:10px; grid-row:1/3; }
+  .statsIcon svg{ width:12px; height:12px; }
   .statsLabel{ font-size:10px; }
   .statsValue{ font-size:13px; }
   .storeList{
@@ -2038,6 +2248,11 @@ body {
     display:grid;
     gap:10px;
   }
+  .freeTrialBanner{ align-items:flex-start; flex-direction:column; }
+  .freeTrialBannerActions{ width:100%; }
+  .freeTrialBannerActions .btn{ width:100%; }
+  .trialModal{ padding:20px; border-radius:18px; }
+  .trialModalActions{ display:grid; grid-template-columns:1fr 1fr; }
 }
 @media (max-width: 360px){
   .topActions .btn{ padding-inline:4px; font-size:11px; }

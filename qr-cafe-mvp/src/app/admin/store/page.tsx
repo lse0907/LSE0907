@@ -76,17 +76,6 @@ function validateCore(core: ReturnType<typeof pickCore>) {
   return "";
 }
 
-const FREE_TRIAL_DAYS = 30;
-
-function calcRemainingDays(createdAt?: string | null) {
-  if (!createdAt) return null;
-  const created = new Date(createdAt).getTime();
-  if (Number.isNaN(created)) return null;
-  const diffMs = Date.now() - created;
-  const usedDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  return Math.max(0, FREE_TRIAL_DAYS - usedDays);
-}
-
 function AdminstorePageInner() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -97,7 +86,6 @@ function AdminstorePageInner() {
     loading: profileLoading,
     loadError: profileLoadError,
   } = useStoreProfile(storeId);
-  const [storeCreatedAt, setStoreCreatedAt] = useState<string | null>(null);
   const [storeStatus, setStoreStatus] = useState<StoreStatus>("active");
   const [statusSaving, setStatusSaving] = useState(false);
   const [deleteEligibility, setDeleteEligibility] =
@@ -162,11 +150,9 @@ function AdminstorePageInner() {
           "[admin/store] load store status error:",
           res.error.message,
         );
-        setStoreCreatedAt(null);
         setStoreStatus("active");
         return;
       }
-      setStoreCreatedAt(res.data?.created_at || null);
       setStoreStatus(normalizeStoreStatus(res.data?.status));
     })();
     return () => {
@@ -181,10 +167,6 @@ function AdminstorePageInner() {
     return JSON.stringify(a) !== JSON.stringify(b);
   }, [draft, profile]);
 
-  const remainingDays = useMemo(
-    () => calcRemainingDays(storeCreatedAt),
-    [storeCreatedAt],
-  );
   const deleteConfirmTarget = String(
     (draft as any)?.storeName || profile?.storeName || storeId || "",
   ).trim();
@@ -1305,9 +1287,7 @@ function AdminstorePageInner() {
             {getStatusLabel(storeStatus)}
           </span>
           <span className="metaText">
-            {remainingDays !== null
-              ? `무료 사용기간 ${FREE_TRIAL_DAYS}일 · 잔여 ${remainingDays}일`
-              : `무료 사용기간 ${FREE_TRIAL_DAYS}일`}
+            첫 매장은 운영 시작 후 30일 무료 체험
           </span>
         </div>
         {isDirty ? (
