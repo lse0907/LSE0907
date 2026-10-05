@@ -31,11 +31,11 @@ export default function SetupProgressBanner({
   onComplete,
   isCompleted = false,
   completedLabel = "확인 완료",
-  completedDescription = "이 단계는 확인 완료되었습니다. 수정했다면 다시 완료 확인해 주세요.",
+  completedDescription = "설정을 확인했습니다.",
 }: SetupProgressBannerProps) {
   const displayTitle = stepLabel;
   const displayGuide = isCompleted ? completedDescription : stepGuide;
-  const actionLabel = isCompleted ? "다시 완료 확인" : completeLabel;
+  const actionLabel = isCompleted ? "다시 확인" : completeLabel;
 
   return (
     <section className={`setupBanner ${isCompleted ? "setupBannerDone" : ""}`}>
@@ -256,21 +256,21 @@ export default function SetupProgressBanner({
             <span className="stepTitleText">{displayTitle}</span>
           </h2>
           <p className="modeLine">
-            <span className="modeLabel">현재 설정 방식: <b>{modeLabel}</b></span>
+            <span className="modeLabel">등록 방식: <b>{modeLabel}</b></span>
             {isCompleted ? <span className="doneBadge" title={completedLabel}>완료 확인됨</span> : null}
           </p>
-          <p className="modeDesc">{modeDescription}</p>
+          {!isCompleted ? <p className="modeDesc">{modeDescription}</p> : null}
           <p className="guide">{displayGuide}</p>
         </div>
         <div className="btnCol">
-          <a className="secondaryBtn" href={setupHref}>{isCompleted ? "초기설정으로" : "설정 방식 변경"}</a>
+          <a className="secondaryBtn" href={setupHref}>{isCompleted ? "초기 설정" : "방식 변경"}</a>
           <button className="primaryBtn" type="button" onClick={onComplete} disabled={completeDisabled}>
             {actionLabel}
           </button>
         </div>
       </div>
       {isCompleted ? (
-        <p className="warnText doneNotice">완료 후에도 내용을 수정할 수 있습니다. 수정했다면 다시 완료 확인을 눌러 주세요.</p>
+        <p className="warnText doneNotice">내용을 바꿨다면 다시 확인해 주세요.</p>
       ) : noticeText ? (
         <p className="warnText">{noticeText}</p>
       ) : completeDisabled && disabledReason ? (

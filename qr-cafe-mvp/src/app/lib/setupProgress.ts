@@ -36,8 +36,8 @@ export async function getSetupProgress(storeId: string): Promise<SetupProgressSt
 export async function setSetupStepConfirmed(storeId: string, step: SetupStepKey, value: boolean): Promise<boolean> {
   if (!storeId) return false;
   const col = toColumn(step);
-  const { error } = await supabase.from("stores").update({ [col]: value }).eq("store_id", storeId);
-  return !error;
+  const { data, error } = await supabase.from("stores").update({ [col]: value }).eq("store_id", storeId).select("store_id").maybeSingle();
+  return !error && Boolean(data);
 }
 
 export async function clearSetupProgress(storeId: string): Promise<boolean> {

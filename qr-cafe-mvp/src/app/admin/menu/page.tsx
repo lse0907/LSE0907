@@ -392,9 +392,7 @@ function AdminMenuPageInner() {
   const hasMenuData = items.length > 0;
   const canShowMenuManagement = setupMode === "manual" || hasMenuData;
   const readyMenuCount = items.filter((item) => Number(item.price || 0) > 0 && !item.is_sold_out && Boolean(item.category_id)).length;
-  const groupIdsWithItems = new Set(optionItems.map((item) => item.group_id));
-  const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
-  const showMenuPrerequisiteNotice = !setupCompleted && !loading && storeId && (categories.length < 1 || !hasOptionSetupReady);
+  const showMenuPrerequisiteNotice = !setupCompleted && !loading && storeId && categories.length < 1;
   const canUseBulkImport = !hasMenuData;
   const showCopyHiddenNotice = isCopyMode && hasMenuData;
   const showBulkHiddenNotice = isBulkMode && hasMenuData;
@@ -770,6 +768,7 @@ function AdminMenuPageInner() {
     }
     setStepConfirmed(true);
     setStatus("success", "메뉴 확인이 완료되었습니다.");
+    router.push(`/admin/menu/option-connect?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}`);
   };
 
   const withDefaultOptionPrices = (basePrices: Record<string, string>, groupIds: string[]) => {
@@ -2551,11 +2550,11 @@ function AdminMenuPageInner() {
                       ? "원본 매장의 메뉴를 복사해 빠르게 시작할 수 있습니다."
                       : "일괄 등록 파일 업로드로 메뉴를 한 번에 등록할 수 있습니다."
                 }
-                stepGuide="판매할 메뉴의 이름, 가격, 카테고리를 확인해 주세요."
-                completeLabel="메뉴 확인 완료"
+                stepGuide="메뉴명·가격·카테고리를 확인해 주세요."
+                completeLabel="확인하고 다음"
                 isCompleted={stepConfirmed}
                 completedLabel="메뉴 확인 완료"
-                completedDescription="판매 메뉴가 준비되었습니다. 수정했다면 다시 확인해 주세요."
+                completedDescription="판매 메뉴를 확인했습니다."
                 completeDisabled={loading || saving || readyMenuCount < 1}
                 disabledReason="가격이 있는 판매 메뉴를 카테고리에 연결하면 완료할 수 있습니다."
                 noticeText={
@@ -2594,16 +2593,11 @@ function AdminMenuPageInner() {
       {showMenuPrerequisiteNotice ? (
         <section className="card" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
           <h2 className="cardTitle">메뉴 등록 전 확인</h2>
-          <p className="sub" style={{ marginTop: 6 }}>카테고리와 옵션을 먼저 준비하면 메뉴 등록이 쉬워집니다.</p>
+          <p className="sub" style={{ marginTop: 6 }}>카테고리를 먼저 등록해 주세요. 메뉴 옵션은 필요한 경우에만 설정하면 됩니다.</p>
           <div className="btnRow" style={{ marginTop: 8 }}>
             {categories.length < 1 ? (
               <a className="btn btnPrimary" href={`/admin/categories${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
                 카테고리 확인
-              </a>
-            ) : null}
-            {!hasOptionSetupReady ? (
-              <a className="btn" href={`/admin/options${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}>
-                옵션 설정
               </a>
             ) : null}
           </div>

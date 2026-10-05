@@ -573,24 +573,7 @@ function AdminPageInner() {
     stores.some(
       (s) => s.store_id === selectedStoreId && s.setup_completed !== true,
     );
-  const selectedStoreNeedsSetupByData =
-    selectedStoreCounts != null &&
-    (selectedStoreCounts.categories < 1 ||
-      selectedStoreCounts.options < 1 ||
-      selectedStoreCounts.menus < 1);
-  const selectedStoreShouldShowSetup =
-    selectedStoreIncomplete || selectedStoreNeedsSetupByData;
-  const selectedStoreSetupCompleted =
-    !!selectedStoreId &&
-    stores.some(
-      (s) => s.store_id === selectedStoreId && s.setup_completed === true,
-    );
-  const selectedStoreCompletedSteps = selectedStoreCounts
-    ? (selectedStoreCounts.categories > 0 ? 1 : 0) +
-      (selectedStoreCounts.options > 0 ? 1 : 0) +
-      (selectedStoreCounts.menus > 0 ? 1 : 0) +
-      (selectedStoreSetupCompleted ? 1 : 0)
-    : 0;
+  const selectedStoreShouldShowSetup = selectedStoreIncomplete;
   const showSetupBanner =
     selectedStoreShouldShowSetup && !hideSetupBannerForCurrentSelection;
   const selectedBilling = selectedStoreId
@@ -821,11 +804,6 @@ function AdminPageInner() {
             <div className="muted">
               남은 단계를 완료하면 주문 운영을 시작할 수 있습니다.
             </div>
-            {selectedStoreCounts ? (
-              <div className="muted">
-                현재 진행 단계: {selectedStoreCompletedSteps}/4
-              </div>
-            ) : null}
           </div>
           <div className="setupBannerActions">
             <button className="btn btnSetup btnSmall setupBannerPrimary" onClick={goSetup}>

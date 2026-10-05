@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 import {
   ApiError,
   apiErrorResponse,
-  createSupabaseAdminClient,
-  requireStoreRole,
+  createRequestSupabaseClient,
+  getOptionalRequestUserId,
+  normalizeRole,
 } from "@/app/api/_lib/storeAuth";
 
 export const dynamic = "force-dynamic";
@@ -38,13 +39,21 @@ function monthStartKey() {
 export async function GET(req: NextRequest) {
   try {
     const storeId = String(req.nextUrl.searchParams.get("store") || "").trim();
-    const admin = createSupabaseAdminClient();
-    await requireStoreRole({
-      req,
-      supabaseAdmin: admin,
-      storeId,
-      allowedRoles: ["owner"],
-    });
+    if (!storeId) throw new ApiError(400, "매장 정보가 없습니다.", "STORE_REQUIRED");
+    const userId = await getOptionalRequestUserId(req);
+    if (!userId) throw new ApiError(401, "로그인이 필요합니다.", "LOGIN_REQUIRED");
+    const supabase = createRequestSupabaseClient(req);
+    const { data: member, error: memberError } = await supabase
+      .from("store_members")
+      .select("role")
+      .eq("store_id", storeId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (memberError) throw new ApiError(500, "매장 권한을 확인하지 못했습니다.", "STORE_ROLE_CHECK_FAILED");
+    if (!member) throw new ApiError(403, "이 매장에 대한 권한이 없습니다.", "STORE_ROLE_FORBIDDEN");
+    if (normalizeRole(member.role) !== "owner") {
+      throw new ApiError(403, "이 작업을 수행할 권한이 없습니다.", "STORE_ROLE_NOT_ALLOWED");
+    }
 
     const today = dayKey();
     const weekStart = mondayKey();
@@ -52,7 +61,7 @@ export async function GET(req: NextRequest) {
     const monthStart = monthStartKey();
     const rangeStart = [monthStart, weekStart].sort()[0];
 
-    const { data, error } = await admin
+    const { data, error } = await supabase
       .from("orders")
       .select("order_date,total_price,adjusted_total_price,status")
       .eq("store_id", storeId)

@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import SetupProgressBanner from "@/app/admin/_components/SetupProgressBanner";
@@ -53,6 +53,7 @@ function getPolicyText(group: OptionGroup) {
 }
 
 function AdminMenuOptionConnectInner() {
+  const router = useRouter();
   const sp = useSearchParams();
   const setupMode = (sp.get("mode") || "manual").trim();
   const [storeId, setStoreId] = useState("");
@@ -322,19 +323,24 @@ function AdminMenuOptionConnectInner() {
     try {
       setSaving(true);
       setMsg("");
-      const { error } = await supabase
+      const { data: current, error: readError } = await supabase
+        .from("stores")
+        .select("setup_last_step")
+        .eq("store_id", storeId)
+        .maybeSingle();
+      if (readError || !current) throw readError || new Error("매장 설정을 확인할 수 없습니다.");
+      const { data, error } = await supabase
         .from("stores")
         .update({
-          setup_last_step: 4,
-          setup_completed: false,
-          setup_completed_at: null,
+          setup_last_step: Math.max(4, Number(current.setup_last_step || 0)),
         })
-        .eq("store_id", storeId);
-      if (error) throw error;
-      setSetupCompleted(false);
+        .eq("store_id", storeId)
+        .select("store_id").maybeSingle();
+      if (error || !data) throw error || new Error("설정 저장 권한을 확인해 주세요.");
       setConnectionStepConfirmed(true);
       setMsgTone("success");
-      setMsg("옵션 연결 확인이 완료되었습니다. 초기설정 페이지에서 최종 완료를 진행해 주세요.");
+      setMsg("옵션 연결을 확인했습니다.");
+      router.push(`/admin/qr?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}`);
     } catch (e: unknown) {
       setMsgTone("error");
       setMsg(`옵션 연결 확인 저장 실패: ${toErrMsg(e)}`);
@@ -848,15 +854,15 @@ function AdminMenuOptionConnectInner() {
           stepLabel="옵션 연결 확인"
           stepNumber={4}
           modeLabel={setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정"}
-          modeDescription="메뉴별 옵션 필요 여부를 확인하는 단계입니다."
-          stepGuide="옵션을 연결하거나 옵션 없음으로 표시해 주세요."
-          completeLabel="옵션 연결 확인 완료"
+          modeDescription="메뉴별 옵션 사용 여부를 확인합니다."
+          stepGuide={optionReviewNeededMenuCount === 0 && menus.length > 0 ? `모든 메뉴 ${menus.length}개를 확인했습니다.` : "옵션을 연결하거나 '옵션 없음'을 선택하세요."}
+          completeLabel="확인하고 QR로"
           isCompleted={connectionStepConfirmed}
           completedLabel="옵션 연결 확인 완료"
           completedDescription="메뉴별 옵션 필요 여부를 확인했습니다."
           completeDisabled={loading || saving || menus.length === 0 || optionReviewNeededMenuCount > 0}
-          disabledReason="메뉴를 등록하고 모든 메뉴를 옵션 연결 또는 옵션 없음으로 확인해 주세요."
-          noticeText="옵션이 필요 없는 메뉴는 옵션 없음으로 표시할 수 있습니다."
+          disabledReason="확인할 메뉴가 남아 있습니다."
+          noticeText={optionReviewNeededMenuCount > 0 ? "옵션이 필요 없는 메뉴는 '옵션 없음'으로 표시하세요." : ""}
           setupHref={setupBackHref}
           onComplete={() => void onCompleteConnectionStep()}
         />
