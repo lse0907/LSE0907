@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { getSetupProgress, setSetupStepConfirmed } from "@/app/lib/setupProgress";
@@ -32,6 +32,7 @@ function uid(prefix = "cat") {
 }
 
 function CategoriesPageInner() {
+  const router = useRouter();
   const sp = useSearchParams();
   const setupMode = (sp.get("mode") || "manual").trim();
   const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
@@ -486,6 +487,7 @@ function CategoriesPageInner() {
     setStepConfirmed(true);
     setMsgTone("success");
     setMsg("카테고리 확인이 완료되었습니다.");
+    router.push(`/admin/options?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}`);
   };
 
   return (
@@ -622,11 +624,11 @@ function CategoriesPageInner() {
                 ? "다른 매장의 카테고리를 복사해 빠르게 시작할 수 있습니다."
                 : "일괄 등록 파일 업로드로 카테고리를 한 번에 등록할 수 있습니다."
           }
-          stepGuide="고객에게 보여줄 메뉴 분류를 확인해 주세요."
-          completeLabel="카테고리 확인 완료"
+          stepGuide="메뉴를 분류해 주세요. 예: 커피, 디저트"
+          completeLabel="확인하고 다음"
           isCompleted={stepConfirmed}
           completedLabel="카테고리 확인 완료"
-          completedDescription="메뉴 분류가 준비되었습니다. 수정했다면 다시 확인해 주세요."
+          completedDescription="메뉴 분류를 확인했습니다."
           completeDisabled={loading || !hasActiveCategory || actionBusy}
           disabledReason="활성 카테고리를 1개 이상 등록하면 완료할 수 있습니다."
           noticeText={

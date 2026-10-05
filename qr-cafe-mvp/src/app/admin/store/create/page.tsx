@@ -194,20 +194,31 @@ export default function AdminStoreCreatePage() {
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData?.user?.id || null;
 
-      const insStore = await supabase.from("stores").insert([
-        {
-          store_id: id,
-          store_name: name,
-          owner_user_id: userId,
-          business_entity_id: businessEntityId,
-        } as any,
-      ]);
+      const storePayload = {
+        store_id: id,
+        store_name: name,
+        owner_user_id: userId,
+        business_entity_id: businessEntityId,
+        store_desc: storeDesc.trim() || null,
+        main_image_url: mainImage.trim() || null,
+        logo_image_url: logoImage.trim() || null,
+        main_image_overlay_strength: clampOverlay(overlayStrength),
+        staff_view_mode: "simple",
+        phone: phone.trim(),
+        address: address.trim(),
+        address_detail: addressDetail.trim() || null,
+        business_hours: hours.trim(),
+        business_number: bizNo.trim(),
+        industry: industry.trim(),
+        sns_url: sns.trim() || null,
+      };
+      const insStore = await supabase.from("stores").insert([storePayload as any]);
 
       if (insStore.error) {
         if (String(insStore.error.message || "").includes("owner_user_id")) {
           const retry = await supabase
             .from("stores")
-            .insert([{ store_id: id, store_name: name, business_entity_id: businessEntityId } as any]);
+            .insert([{ ...storePayload, owner_user_id: undefined } as any]);
           if (retry.error) throw retry.error;
         } else {
           throw insStore.error;
@@ -223,25 +234,6 @@ export default function AdminStoreCreatePage() {
           },
         ]);
         if (insMem.error) throw insMem.error;
-      }
-
-      if (mainImage.trim() || logoImage.trim()) {
-        const { error: imageErr } = await supabase
-          .from("stores")
-          .update({
-            main_image_url: mainImage.trim() || null,
-            logo_image_url: logoImage.trim() || null,
-          })
-          .eq("store_id", id);
-        if (imageErr) {
-          console.error(
-            "[admin/store/create] image update error:",
-            imageErr.message,
-          );
-          setMsg(
-            "이미지는 저장되지 않았습니다. 매장 정보에서 다시 저장해주세요.",
-          );
-        }
       }
 
       saveStoreProfile(id, {

@@ -149,6 +149,8 @@ function rowToQrCode(row: Record<string, unknown>): AdminQrCode {
 function AdminQrPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
+  const isSetupFlow = sp.has("mode");
+  const [showPrintSettings, setShowPrintSettings] = useState(!sp.has("mode"));
 
   const [origin, setOrigin] = useState<string>("");
 
@@ -1750,6 +1752,16 @@ function AdminQrPageInner() {
 
       <AdminPageHeader title="매장 QR 만들기" description="카운터와 테이블에서 사용할 인쇄용 QR을 만듭니다." storeId={storeId} storeName={storeName} eyebrow="QR STUDIO" />
 
+      {isSetupFlow && storeId ? (
+        <section className="card" style={{ marginBottom: 14, borderColor: "#bfdbfe", background: "#eff6ff" }}>
+          <strong>초기 설정 · QR 확인</strong>
+          <p className="hint" style={{ margin: "6px 0 10px" }}>QR을 만들고 휴대폰으로 스캔해 보세요.</p>
+          <a className="btn" href={`/admin/setup?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(sp.get("mode") || "manual")}`}>
+            초기 설정으로 돌아가기
+          </a>
+        </section>
+      ) : null}
+
       <section className="statusGrid" aria-label="QR 등록 현황">
         <div className="statCard">
           <div className="label">카운터 QR</div>
@@ -1776,7 +1788,7 @@ function AdminQrPageInner() {
 
           <div className="formGrid">
             <div className="field spanFull">
-              <div className="label">출력 대상</div>
+              <div className="label">{isSetupFlow ? "QR 종류" : "출력 대상"}</div>
               <div className="btnRow">
                 <button
                   className={`btn ${printTarget === "counter" ? "btnPrimary" : ""}`}
@@ -1809,21 +1821,13 @@ function AdminQrPageInner() {
                 <div className={`inlineActions ${counterQr ? "compactActions" : ""}`}>
                   {!counterQr ? (
                     <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId}>
-                      QR 등록
+                      카운터 QR 만들기
                     </button>
                   ) : null}
                   <button className="btn" onClick={openQrManage} disabled={qrLoading || !storeId}>
                     QR 목록
                   </button>
                 </div>
-                <div className="hint">카운터·포장 주문용</div>
-                {!counterQr ? (
-                  <div className="btnRow">
-                    <button className="btn btnPrimary" onClick={ensureCounterQr} disabled={qrSaving || qrLoading || !origin || !storeId}>
-                      QR 등록
-                    </button>
-                  </div>
-                ) : null}
               </div>
             ) : (
               <div className="setupBox spanFull">
@@ -1866,6 +1870,12 @@ function AdminQrPageInner() {
               </div>
             )}
 
+            <details className="detailPanel spanFull" open={showPrintSettings} onToggle={(event) => { if (event.target === event.currentTarget) setShowPrintSettings(event.currentTarget.open); }}>
+              <summary>
+                <span className="detailSummaryText"><span>인쇄 디자인 조정</span><small>크기·템플릿·문구</small></span>
+                <span className="detailToggle" aria-hidden="true" />
+              </summary>
+              <div className="formGrid">
             {printTarget === "counter" ? (
               <div className="field">
                 <div className="label">출력 크기</div>
@@ -2046,8 +2056,8 @@ function AdminQrPageInner() {
                 디자인 저장
               </button>
             </div>
-
-
+              </div>
+            </details>
           </div>
         </div>
 

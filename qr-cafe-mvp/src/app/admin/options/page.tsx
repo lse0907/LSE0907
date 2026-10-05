@@ -2,7 +2,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getCurrentStoreId, setCurrentStoreId } from "@/app/lib/currentStore";
 import { getSetupProgress, setSetupStepConfirmed } from "@/app/lib/setupProgress";
@@ -247,6 +247,7 @@ function formatTemplateItem(item: OptionTemplateItem) {
 }
 
 function AdminOptionsPageInner() {
+  const router = useRouter();
   const sp = useSearchParams();
   const setupMode = (sp.get("mode") || "manual").trim();
   const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
@@ -583,6 +584,7 @@ function AdminOptionsPageInner() {
   const canShowOptionManagement = setupMode === "manual" || hasOptionData;
   const groupIdsWithItems = new Set(items.map((item) => item.group_id));
   const hasOptionSetupReady = groups.some((group) => groupIdsWithItems.has(group.id));
+  const optionsSkippedDuringSetup = stepConfirmed && groups.length === 0 && items.length === 0;
   const showCopyHiddenNotice = isCopyMode && hasOptionData;
   const isExclusiveSelected = (selectedGroup?.scope || "common") === "exclusive";
 
@@ -1039,6 +1041,7 @@ function AdminOptionsPageInner() {
     setStepConfirmed(true);
     setMsgTone("success");
     setMsg("공통옵션 확인이 완료되었습니다.");
+    router.push(`/admin/menu?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}`);
   };
 
   return (
@@ -1296,7 +1299,6 @@ function AdminOptionsPageInner() {
           background: #fff;
           border-radius: 14px;
           padding: 12px;
-          cursor: pointer;
         }
         .rowBtnOn {
           border: 2px solid var(--brand);
@@ -1311,6 +1313,27 @@ function AdminOptionsPageInner() {
           align-items: center;
           gap: 10px;
         }
+        .rowSelect {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+          width: 100%;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: inherit;
+          font: inherit;
+          text-align: left;
+          cursor: pointer;
+        }
+        .rowSelect:focus-visible {
+          outline: 2px solid var(--brand);
+          outline-offset: 4px;
+          border-radius: 4px;
+        }
+        .rowSelect .muted { grid-column: 1 / -1; }
         .rowMain .name {
           min-width: 0;
           line-height: 1.3;
@@ -1939,7 +1962,13 @@ function AdminOptionsPageInner() {
       <MenuAdminNav active="options" storeId={storeId} />
       <section className="topbar">
         <div className="topbarMain">
-          {!setupCompleted ? (
+          {!setupCompleted && optionsSkippedDuringSetup ? (
+            <section className="card" style={{ marginTop: 8, borderColor: "#bfdbfe", background: "#eff6ff" }}>
+              <strong>옵션 없이 시작하도록 설정했습니다.</strong>
+              <p className="sub" style={{ margin: "6px 0 0" }}>나중에 옵션을 추가할 수 있습니다.</p>
+              <a className="btn" href={`/admin/menu?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}`} style={{ marginTop: 10 }}>메뉴 등록으로</a>
+            </section>
+          ) : !setupCompleted ? (
             <section style={{ marginTop: 8 }}>
               <SetupProgressBanner
                 stepLabel="공통옵션 확인"
@@ -1952,11 +1981,11 @@ function AdminOptionsPageInner() {
                       ? "원본 매장의 옵션을 복사해 빠르게 시작할 수 있습니다."
                       : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."
                 }
-                stepGuide="여러 메뉴에서 함께 사용할 옵션 그룹과 항목을 확인해 주세요."
-                completeLabel="공통옵션 확인 완료"
+                stepGuide="메뉴에 추가 선택이 필요하면 옵션을 만들어 주세요."
+                completeLabel="확인하고 다음"
                 isCompleted={stepConfirmed}
                 completedLabel="공통옵션 확인 완료"
-                completedDescription="공통으로 사용할 옵션이 준비되었습니다. 수정했다면 다시 확인해 주세요."
+                completedDescription="공통옵션을 확인했습니다."
                 completeDisabled={loading || actionBusy || !hasOptionSetupReady}
                 disabledReason="옵션 그룹과 항목을 1개 이상 등록하면 완료할 수 있습니다."
                 noticeText={
@@ -2247,37 +2276,45 @@ function AdminOptionsPageInner() {
 
             <div className="list groupList">
               {scopedGroups.map((g, idx) => (
-                <button
+                <div
                   key={g.id}
                   className={`rowBtn ${g.id === selectedGroupId ? "rowBtnOn" : ""}`}
-                  onClick={() => setSelectedGroupId(g.id)}
                 >
                   <div className="rowMain">
-                    <div className="name" title={g.name}>{g.name}</div>
-                    <div className="rowMeta">
-                      <span className="pill">항목 {itemCountByGroupId.get(g.id) || 0}개</span>
-                      <span className={`statusBadge ${g.required ? "statusRequired" : "statusOptional"}`}>
-                        {g.required ? "필수" : "선택"}
+                    <button
+                      type="button"
+                      className="rowSelect"
+                      onClick={() => setSelectedGroupId(g.id)}
+                      aria-pressed={g.id === selectedGroupId}
+                    >
+                      <span className="name" title={g.name}>{g.name}</span>
+                      <span className="rowMeta">
+                        <span className="pill">항목 {itemCountByGroupId.get(g.id) || 0}개</span>
+                        <span className={`statusBadge ${g.required ? "statusRequired" : "statusOptional"}`}>
+                          {g.required ? "필수" : "선택"}
+                        </span>
+                        <span className="muted">{g.min}~{g.max}개</span>
+                        {(() => {
+                          const linkedCount = (linkedMenuNamesByGroupId[g.id] || []).length;
+                          return (
+                            <span className={`statusBadge ${linkedCount > 0 ? "statusLinked" : "statusUnlinked"}`}>
+                              {linkedCount > 0 ? `연결 ${linkedCount}개` : "미연결"}
+                            </span>
+                          );
+                        })()}
                       </span>
-                      <span className="muted">{g.min}~{g.max}개</span>
-                      {(() => {
-                        const linkedCount = (linkedMenuNamesByGroupId[g.id] || []).length;
-                        return (
-                          <span className={`statusBadge ${linkedCount > 0 ? "statusLinked" : "statusUnlinked"}`}>
-                            {linkedCount > 0 ? `연결 ${linkedCount}개` : "미연결"}
-                          </span>
-                        );
-                      })()}
-                      {activeScope === "common" ? (
-                        <span className="orderActionRow">
+                      {activeScope === "exclusive" ? (
+                        <span className="muted" style={{ marginTop: 4 }}>
+                          연결 메뉴: {(linkedMenuNamesByGroupId[g.id] || []).join(", ") || "없음"}
+                        </span>
+                      ) : null}
+                    </button>
+                    {activeScope === "common" ? (
+                      <span className="orderActionRow">
                           <button
                             className="orderBtn"
                             type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              moveCommonGroup(g.id, -1);
-                            }}
+                            onClick={() => moveCommonGroup(g.id, -1)}
                             disabled={actionBusy || loading || idx === 0 || !hasSortOrderColumn}
                             aria-label={`${g.name} 위로 이동`}
                           >
@@ -2288,11 +2325,7 @@ function AdminOptionsPageInner() {
                           <button
                             className="orderBtn"
                             type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              moveCommonGroup(g.id, 1);
-                            }}
+                            onClick={() => moveCommonGroup(g.id, 1)}
                             disabled={actionBusy || loading || idx === scopedGroups.length - 1 || !hasSortOrderColumn}
                             aria-label={`${g.name} 아래로 이동`}
                           >
@@ -2300,16 +2333,10 @@ function AdminOptionsPageInner() {
                               <path d="M6 10l6 6 6-6" />
                             </svg>
                           </button>
-                        </span>
-                      ) : null}
-                    </div>
+                      </span>
+                    ) : null}
                   </div>
-                  {activeScope === "exclusive" ? (
-                    <div className="muted" style={{ marginTop: 4 }}>
-                      연결 메뉴: {(linkedMenuNamesByGroupId[g.id] || []).join(", ") || "없음"}
-                    </div>
-                  ) : null}
-                </button>
+                </div>
               ))}
               {!loading && scopedGroups.length === 0 ? (
                 <div className="muted" style={{ marginTop: 10 }}>
