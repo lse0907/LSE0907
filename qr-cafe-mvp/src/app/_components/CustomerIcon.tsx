@@ -17,6 +17,8 @@ export type CustomerIconName =
   | "refresh"
   | "warning"
   | "image"
+  | "trash"
+  | "bag"
   | "logout";
 
 export function CustomerIcon({
@@ -110,6 +112,16 @@ export function CustomerIcon({
         <rect x="3" y="4" width="18" height="16" rx="2" />
         <circle cx="8.5" cy="9" r="1.5" />
         <path d="m4 17 4.5-4 3.5 3 2.5-2 5.5 5" />
+      </>
+    ),
+    trash: (
+      <>
+        <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
+      </>
+    ),
+    bag: (
+      <>
+        <path d="M5 7h14l1 14H4zM9 8V6a3 3 0 0 1 6 0v2" />
       </>
     ),
     logout: (

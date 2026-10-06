@@ -1,18 +1,24 @@
 "use client";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { CustomerIcon } from "./CustomerIcon";
+import { CustomerIcon, type CustomerIconName } from "./CustomerIcon";
 
 export function CustomerSheet({
   title,
   onClose,
   closeLabel,
   children,
+  compact = false,
+  footer,
+  icon,
 }: {
   title: string;
   onClose: () => void;
   closeLabel?: string;
   children: ReactNode;
+  compact?: boolean;
+  footer?: ReactNode;
+  icon?: CustomerIconName;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLElement>(null);
@@ -63,14 +69,17 @@ export function CustomerSheet({
     >
       <section
         ref={sheetRef}
-        className="sheet"
+        className={`sheet ${compact ? "sheetCompact" : ""} ${footer ? "sheetWithFooter" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
       >
         <div className="handle" aria-hidden="true" />
         <header>
-          <h2 id={titleId}>{title}</h2>
+          <h2 id={titleId}>
+            {icon ? <span className="titleIcon"><CustomerIcon name={icon} size={20} /></span> : null}
+            {title}
+          </h2>
           <button
             type="button"
             ref={closeRef}
@@ -81,6 +90,7 @@ export function CustomerSheet({
           </button>
         </header>
         <div className="body">{children}</div>
+        {footer ? <div className="footer">{footer}</div> : null}
       </section>
       <style jsx>{`
         .backdrop {
@@ -119,6 +129,21 @@ export function CustomerSheet({
         h2 {
           margin: 0;
           font-size: 20px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+        }
+        .titleIcon {
+          width: 38px;
+          height: 38px;
+          display: grid;
+          place-items: center;
+          border: 1px solid #dce5f2;
+          border-radius: 13px;
+          background: #edf3fc;
+          color: #11264b;
+          flex-shrink: 0;
         }
         button {
           width: 44px;
@@ -135,6 +160,61 @@ export function CustomerSheet({
           overflow: auto;
           padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
         }
+        .sheetWithFooter {
+          display: flex;
+          flex-direction: column;
+        }
+        .sheetWithFooter .handle,
+        .sheetWithFooter header,
+        .footer {
+          flex-shrink: 0;
+        }
+        .sheetWithFooter .body {
+          min-height: 0;
+          padding-bottom: 16px;
+        }
+        .sheetCompact {
+          max-height: 56dvh;
+          border: 1px solid #dfe6f0;
+        }
+        .sheetCompact header {
+          padding: 6px 16px 10px;
+          border-bottom-color: #e8edf5;
+        }
+        .sheetCompact h2 {
+          font-size: 18px;
+          font-weight: 750;
+          letter-spacing: -0.025em;
+          color: #11264b;
+        }
+        .sheetCompact .titleIcon { width: 32px; height: 32px; border-radius: 11px; }
+        .sheetCompact header button {
+          width: 44px;
+          height: 44px;
+          border-color: transparent;
+          border-radius: 50%;
+          background: #f3f6fa;
+          color: #5b6b82;
+          cursor: pointer;
+        }
+        .sheetCompact header button:hover { background: #e8edf5; }
+        .sheetCompact button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .sheetCompact .footer {
+          padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+          border-top-color: #e0e7f1;
+          box-shadow: 0 -6px 20px rgba(15, 31, 61, 0.035);
+        }
+        .sheetCompact .body {
+          max-height: none;
+          overscroll-behavior: contain;
+          padding: 12px 16px;
+          background: #f5f7fb;
+        }
+        .footer {
+          padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+          border-top: 1px solid #e5e7eb;
+          background: #fff;
+        }
         @media (min-width: 700px) {
           .backdrop {
             place-items: center;
@@ -147,6 +227,13 @@ export function CustomerSheet({
           }
           .body {
             max-height: calc(84vh - 68px);
+          }
+          .sheetCompact {
+            width: min(560px, 100%);
+            max-height: 60dvh;
+          }
+          .sheetCompact .body {
+            max-height: none;
           }
         }
         @media (prefers-reduced-motion: no-preference) {
