@@ -1887,31 +1887,27 @@ function MenuPageInner() {
                             <div className="soldout">품절</div>
                           ) : null}
 
-                          {hasOptions ? (
+                          {hasOptions || isInCart ? (
                             <div className="metaLine">
-                              {optionQty > 0
-                                ? `${optionQty}개 담김`
+                              {isInCart
+                                ? `${cartQty}개 담김`
                                 : "옵션 있음"}
                             </div>
                           ) : null}
                         </div>
 
-                        {simpleQty === 0 ? (
+                        {hasOptions || simpleQty === 0 ? (
                           <button
                             className="addBtn"
                             onClick={() => onPlus(m)}
                             disabled={m.isSoldOut}
                             aria-label={
                               hasOptions
-                                ? `${m.name} 옵션 선택`
+                                ? `${m.name} ${isInCart ? "더 담기" : "담기"}, 옵션 선택`
                                 : `${m.name} 담기`
                             }
                           >
-                            {hasOptions
-                              ? optionQty > 0
-                                ? "추가"
-                                : "선택"
-                              : "담기"}
+                            {hasOptions && isInCart ? "더 담기" : "담기"}
                           </button>
                         ) : (
                           <div className="qtyBox">
@@ -2230,7 +2226,7 @@ function MenuPageInner() {
               </div>
 
               <button className="btnPrimary" onClick={onConfirmOptions}>
-                {fmt(modalPrice * Math.max(1, optQty))}원 · 장바구니에 담기
+                {fmt(modalPrice * Math.max(1, optQty))}원 · 담기
               </button>
             </div>
           </div>
