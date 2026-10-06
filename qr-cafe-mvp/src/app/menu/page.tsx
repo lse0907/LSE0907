@@ -14,6 +14,7 @@ import {
   StoreAccessError,
 } from "@/app/_components/CustomerLoadingState";
 import { CustomerIcon } from "@/app/_components/CustomerIcon";
+import { CustomerSheet } from "@/app/_components/CustomerSheet";
 
 type SelectedOptionItem = {
   id: string;
@@ -183,6 +184,8 @@ function MenuPageInner() {
   const [topStickyHeight, setTopStickyHeight] = useState(0);
 
   const [cartLines, setCartLines] = useState<CartLine[]>([]);
+  const [restoredCartKey, setRestoredCartKey] = useState<string | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
 
   const [optOpen, setOptOpen] = useState(false);
   const [optTarget, setOptTarget] = useState<MenuItem | null>(null);
@@ -379,7 +382,9 @@ function MenuPageInner() {
     } catch {
       setCartLines([]);
     }
+    setRestoredCartKey(cartStorageKey);
     setOptOpen(false);
+    setCartOpen(false);
     setOptTarget(null);
     setOptSel({});
     setOptQty(1);
@@ -396,13 +401,15 @@ function MenuPageInner() {
   }, [storeId, cartStorageKey]);
 
   useEffect(() => {
+    // Wait for this store's saved cart to be restored before writing it back.
+    if (restoredCartKey !== cartStorageKey) return;
     try {
       if (!cartLines.length) sessionStorage.removeItem(cartStorageKey);
       else sessionStorage.setItem(cartStorageKey, JSON.stringify(cartLines));
     } catch {
       // ignore storage write errors
     }
-  }, [cartLines, cartStorageKey]);
+  }, [cartLines, cartStorageKey, restoredCartKey]);
 
   const sortedMenuItems = useMemo(() => {
     const sorted = [...(menuItems || [])].sort((a: any, b: any) => {
@@ -681,6 +688,20 @@ function MenuPageInner() {
     decSimple(m);
   };
 
+  const changeCartLineQty = (lineId: string, delta: number) => {
+    setCartLines((prev) =>
+      prev.map((line) =>
+        line.lineId === lineId
+          ? { ...line, qty: Math.max(1, line.qty + delta) }
+          : line,
+      ),
+    );
+  };
+
+  const removeCartLine = (lineId: string) => {
+    setCartLines((prev) => prev.filter((line) => line.lineId !== lineId));
+  };
+
   const findGroup = (gid: string): OptionGroup | null =>
     optionsData.groups.find((g) => g.id === gid) || null;
 
@@ -894,6 +915,7 @@ function MenuPageInner() {
 
   const goConfirm = () => {
     if (!storeId || totals.totalCount === 0) return;
+    setCartOpen(false);
     const cart = encodeURIComponent(JSON.stringify(cartLines));
 
     // ✅ 핵심: confirm으로 store 유지 + table 유지
@@ -1357,6 +1379,133 @@ function MenuPageInner() {
           gap: 2px;
           min-width: 0;
         }
+        .cartToggle {
+          width: 100%;
+          min-height: 52px;
+          padding: 4px 8px;
+          border: 0;
+          border-radius: 12px;
+          background: transparent;
+          color: var(--text);
+          font: inherit;
+          text-align: left;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          min-width: 0;
+        }
+        .cartToggle:hover { background: #f3f6fb; }
+        .cartToggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .cartToggleArrow {
+          display: flex;
+          color: var(--rion-navy);
+          transform: rotate(-90deg);
+          flex-shrink: 0;
+        }
+        .cartPreviewList { display: grid; gap: 8px; }
+        .cartPreviewItem {
+          display: grid;
+          grid-template-columns: 44px minmax(0, 1fr) 44px;
+          column-gap: 10px;
+          row-gap: 6px;
+          border: 1px solid #e1e7f0;
+          border-radius: 16px;
+          padding: 10px 12px;
+          background: #fff;
+          box-shadow: 0 3px 12px rgba(15, 31, 61, 0.025);
+        }
+        .cartPreviewHeading {
+          display: contents;
+        }
+        .cartPreviewImage {
+          grid-column: 1;
+          grid-row: 1 / 3;
+          width: 44px;
+          height: 44px;
+          border-radius: 10px;
+          overflow: hidden;
+          display: grid;
+          place-items: center;
+          background: #edf2f8;
+          color: #8a9bb3;
+          border: 1px solid #e7edf5;
+        }
+        .cartPreviewImage img { width: 100%; height: 100%; object-fit: cover; }
+        .cartPreviewDetails { grid-column: 2; grid-row: 1; min-width: 0; padding-top: 2px; }
+        .cartPreviewName { color: var(--rion-navy); font-size: 15px; font-weight: 750; line-height: 1.4; letter-spacing: -0.025em; overflow-wrap: anywhere; }
+        .cartPreviewPrice { color: var(--rion-navy); font-size: 17px; font-weight: 800; letter-spacing: -0.025em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .cartPreviewOptionList { display: flex; flex-wrap: wrap; gap: 4px; }
+        .cartPreviewOptionList:not(:empty) { margin-top: 4px; }
+        .cartPreviewOptions {
+          border: 1px solid #e8edf5;
+          border-radius: 6px;
+          padding: 2px 6px;
+          background: #f6f8fc;
+          color: #435674;
+          font-size: 11px;
+          line-height: 1.5;
+          overflow-wrap: anywhere;
+          max-width: 100%;
+        }
+        .cartPreviewOptionLabel { color: #6c7d95; margin-right: 4px; }
+        .cartPreviewActions {
+          grid-column: 2 / 4;
+          grid-row: 2;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+        }
+        .cartQuantity {
+          display: inline-flex;
+          align-items: center;
+          border: 1px solid #dce4ef;
+          background: #f7f9fc;
+          border-radius: 12px;
+          flex-shrink: 0;
+        }
+        .cartQuantity button {
+          width: 44px;
+          height: 44px;
+          border: 0;
+          border-radius: 11px;
+          background: transparent;
+          color: var(--rion-navy);
+          font: inherit;
+          font-size: 21px;
+          cursor: pointer;
+        }
+        .cartQuantity button:hover:not(:disabled) { background: #e8effa; }
+        .cartQuantity button:disabled { color: #b5bfd0; cursor: not-allowed; }
+        .cartQuantity b { min-width: 26px; text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+        .cartQuantity button:focus-visible,
+        .cartRemoveBtn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .cartSummary .sumMain { font-size: 20px; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+        .cartSummary .btnPrimary { min-height: 48px; padding: 10px 14px; box-shadow: 0 4px 12px rgba(17, 38, 75, 0.15); }
+        @media (max-width: 420px) {
+          .cartPreviewItem { column-gap: 8px; }
+          .cartPreviewImage { grid-row: 1; }
+          .cartPreviewActions { grid-column: 1 / -1; flex-direction: row-reverse; }
+          .cartPreviewPrice { font-size: 16px; }
+        }
+        .cartRemoveBtn {
+          grid-column: 3;
+          grid-row: 1;
+          width: 44px;
+          height: 44px;
+          display: grid;
+          place-items: center;
+          padding: 0;
+          border: 0;
+          border-radius: 12px;
+          background: transparent;
+          color: #8391a7;
+          cursor: pointer;
+        }
+        .cartRemoveBtn:hover { background: #fff1f1; color: #c34b54; }
+        .cartPreviewEmpty { padding: 16px 0; text-align: center; color: var(--muted); }
         .sumTop {
           color: var(--muted);
           font-weight: 500;
@@ -1887,31 +2036,27 @@ function MenuPageInner() {
                             <div className="soldout">품절</div>
                           ) : null}
 
-                          {hasOptions ? (
+                          {hasOptions || isInCart ? (
                             <div className="metaLine">
-                              {optionQty > 0
-                                ? `${optionQty}개 담김`
+                              {isInCart
+                                ? `${cartQty}개 담김`
                                 : "옵션 있음"}
                             </div>
                           ) : null}
                         </div>
 
-                        {simpleQty === 0 ? (
+                        {hasOptions || simpleQty === 0 ? (
                           <button
                             className="addBtn"
                             onClick={() => onPlus(m)}
                             disabled={m.isSoldOut}
                             aria-label={
                               hasOptions
-                                ? `${m.name} 옵션 선택`
+                                ? `${m.name} ${isInCart ? "더 담기" : "담기"}, 옵션 선택`
                                 : `${m.name} 담기`
                             }
                           >
-                            {hasOptions
-                              ? optionQty > 0
-                                ? "추가"
-                                : "선택"
-                              : "담기"}
+                            {hasOptions && isInCart ? "더 담기" : "담기"}
                           </button>
                         ) : (
                           <div className="qtyBox">
@@ -1947,16 +2092,86 @@ function MenuPageInner() {
       {totals.totalCount > 0 ? (
         <section className="bottomBar">
           <div className="bottomInner">
-            <div className="sumText">
-              <div className="sumTop">장바구니 · {totals.totalCount}개</div>
-              <div className="sumMain">{fmt(totals.totalPrice)}원</div>
-            </div>
+            <button
+              className="cartToggle"
+              type="button"
+              onClick={() => setCartOpen(true)}
+              aria-label={`장바구니 펼치기, ${totals.totalCount}개, ${fmt(totals.totalPrice)}원`}
+              aria-haspopup="dialog"
+              aria-expanded={cartOpen}
+            >
+              <span className="sumText">
+                <span className="sumTop">장바구니 · {totals.totalCount}개</span>
+                <span className="sumMain">{fmt(totals.totalPrice)}원</span>
+              </span>
+              <span className="cartToggleArrow"><CustomerIcon name="chevronRight" size={22} /></span>
+            </button>
 
             <button className="btnPrimary" onClick={goConfirm}>
               주문 확인하기
             </button>
           </div>
         </section>
+      ) : null}
+
+      {cartOpen ? (
+        <CustomerSheet
+          title={`장바구니 · ${totals.totalCount}개`}
+          icon="bag"
+          compact
+          closeLabel="장바구니 접기"
+          onClose={() => setCartOpen(false)}
+          footer={
+            <div className="bottomInner cartSummary">
+              <div className="sumText" aria-live="polite" aria-atomic="true">
+                <span className="sumTop">총금액</span>
+                <span className="sumMain">{fmt(totals.totalPrice)}원</span>
+              </div>
+              {totals.totalCount > 0 ? (
+                <button className="btnPrimary" onClick={goConfirm}>주문 확인하기</button>
+              ) : (
+                <button className="btnPrimary" onClick={() => setCartOpen(false)}>메뉴 담기</button>
+              )}
+            </div>
+          }
+        >
+          {cartLines.length === 0 ? (
+            <p className="cartPreviewEmpty">장바구니가 비어 있어요.</p>
+          ) : (
+            <div className="cartPreviewList">
+              {cartLines.map((line) => (
+                <article className="cartPreviewItem" key={line.lineId}>
+                  <div className="cartPreviewHeading">
+                    <div className="cartPreviewImage" aria-hidden="true">
+                      {line.image ? <img src={line.image} alt="" /> : <CustomerIcon name="image" size={22} />}
+                    </div>
+                    <div className="cartPreviewDetails">
+                      <div className="cartPreviewName">{line.name}</div>
+                      <div className="cartPreviewOptionList">
+                      {line.options.filter((group) => group.items.length > 0).map((group) => (
+                        <span className="cartPreviewOptions" key={group.groupId}>
+                          <span className="cartPreviewOptionLabel">{group.groupName}</span>{group.items.map((item) =>
+                            `${item.name}${item.qty > 1 ? ` × ${item.qty}` : ""}`,
+                          ).join(" · ")}
+                        </span>
+                      ))}
+                      </div>
+                    </div>
+                    <button type="button" className="cartRemoveBtn" onClick={() => removeCartLine(line.lineId)} aria-label={`${line.name} 삭제`} title="메뉴 삭제"><CustomerIcon name="trash" size={19} /></button>
+                  </div>
+                  <div className="cartPreviewActions">
+                    <div className="cartQuantity" role="group" aria-label={`${line.name} 수량`}>
+                      <button type="button" disabled={line.qty <= 1} onClick={() => changeCartLineQty(line.lineId, -1)} aria-label={`${line.name} 수량 줄이기`}>−</button>
+                      <b aria-label={`${line.qty}개`}>{line.qty}</b>
+                      <button type="button" onClick={() => changeCartLineQty(line.lineId, 1)} aria-label={`${line.name} 수량 늘리기`}>+</button>
+                    </div>
+                    <strong className="cartPreviewPrice">{fmt((line.basePrice + line.optionTotal) * line.qty)}원</strong>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </CustomerSheet>
       ) : null}
 
       {optOpen && optTarget ? (
@@ -2230,7 +2445,7 @@ function MenuPageInner() {
               </div>
 
               <button className="btnPrimary" onClick={onConfirmOptions}>
-                {fmt(modalPrice * Math.max(1, optQty))}원 · 장바구니에 담기
+                {fmt(modalPrice * Math.max(1, optQty))}원 · 담기
               </button>
             </div>
           </div>
