@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 import { CustomerSheet } from "../_components/CustomerSheet";
+import { CustomerIcon } from "../_components/CustomerIcon";
 import { MeAccountSheet } from "./MeAccountSheet";
 import { MeBenefitSections } from "./MeBenefitSections";
 import { MePlatformHeader } from "./MePlatformHeader";
@@ -97,7 +98,7 @@ export function MeDashboard() {
     "orders" | "stores" | "account" | null
   >(null);
   const [recentOrders, setRecentOrders] = useState<CustomerOrder[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<CustomerOrder | null>(
     null,
@@ -119,7 +120,7 @@ export function MeDashboard() {
   );
 
   const isSafeInternalPath = (v: string) =>
-    !!v && v.startsWith("/") && !v.startsWith("//");
+    !!v && v.startsWith("/") && !v.startsWith("//") && !/[\\\u0000-\u001f\u007f]/.test(v);
 
   useEffect(() => {
     (async () => {
@@ -639,20 +640,41 @@ export function MeDashboard() {
           border: 1px solid #dfe4eb;
           border-radius: 22px;
           background: linear-gradient(145deg, #fff 0%, #f8fafc 100%);
-          box-shadow: 0 18px 48px rgba(15, 31, 61, 0.08);
+          box-shadow: 0 6px 24px rgba(15, 31, 61, 0.04);
+        }
+        .meHeroTop {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
+          gap: 4px 12px;
+        }
+        .meReturnLink {
+          display: inline-flex;
+          min-height: 44px;
+          align-items: center;
+          gap: 4px;
+          padding: 0 9px;
+          border: 1px solid #dce5f2;
+          border-radius: 11px;
+          background: #f6f9fe;
+          color: #294d80;
+          text-decoration: none;
+          font-size: 12px;
+          font-weight: 800;
+          white-space: nowrap;
         }
         .meBrand {
           display: flex;
           align-items: center;
           gap: 9px;
-          min-height: 30px;
           width: fit-content;
           min-height: 44px;
           color: inherit;
           text-decoration: none;
         }
         .meHeroCopy {
-          margin-top: 22px;
+          margin-top: 14px;
         }
         .meBrandName {
           display: grid;
@@ -680,7 +702,7 @@ export function MeDashboard() {
         .meHero h1 {
           margin: 0;
           color: #0f1f3d;
-          font-size: clamp(27px, 7vw, 36px);
+          font-size: clamp(25px, 5vw, 30px);
           line-height: 1.12;
           letter-spacing: -0.045em;
         }
@@ -693,7 +715,7 @@ export function MeDashboard() {
         }
         .meContext {
           display: inline-flex;
-          margin-top: 14px;
+          margin-top: 10px;
           min-height: 28px;
           align-items: center;
           padding: 5px 10px;
@@ -713,6 +735,7 @@ export function MeDashboard() {
           color: #fff;
           font-size: 14px;
           font-weight: 900;
+          white-space: nowrap;
         }
         .activeOrderBanner {
           display: grid;
@@ -746,13 +769,19 @@ export function MeDashboard() {
           gap: 8px;
         }
         .dismissButton {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
           min-height: 46px;
-          padding: 0 14px;
+          padding: 0 10px;
           border: 1px solid #c6cfdd;
           border-radius: 13px;
           background: #fff;
           color: #475467;
-          font-weight: 850;
+          font-size: 12px;
+          font-weight: 700;
+          white-space: nowrap;
         }
         .sectionHeading {
           display: flex;
@@ -794,20 +823,62 @@ export function MeDashboard() {
           font-size: 19px;
         }
         .benefitItem {
+          position: relative;
           display: grid;
-          gap: 5px;
+          gap: 6px;
           min-width: 0;
           padding: 14px 10px;
           border: 1px solid #e5e7eb;
           border-radius: 14px;
-          background: #f8fafc;
+          background: #fafbfd;
           text-align: center;
           color: #0f1f3d;
+          justify-items: center;
+        }
+        .benefitIndicator {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          display: grid;
+          place-items: center;
+          color: #8191a8;
+        }
+        .benefitIndicator.expand {
+          transform: rotate(90deg);
+        }
+        .benefitItem.active .benefitIndicator.expand {
+          transform: rotate(-90deg);
+          color: #315fba;
+        }
+        .benefitItem .benefitIcon {
+          display: grid;
+          place-items: center;
+          width: 28px;
+          height: 28px;
+          border-radius: 9px;
+          background: #eaf1fb;
+          color: #315fba;
+        }
+        .benefitItem.stores .benefitIcon {
+          background: #eaf7f0;
+          color: #168657;
+        }
+        .benefitItem.coupons .benefitIcon {
+          background: #f2eefa;
+          color: #7255a3;
+        }
+        .benefitHint {
+          margin: 12px 0 0;
+          color: #667085;
+          font-size: 12px;
+          line-height: 1.5;
+          word-break: keep-all;
         }
         button.benefitItem {
           cursor: pointer;
         }
-        button:focus-visible {
+        button:focus-visible,
+        a:focus-visible {
           outline: 3px solid rgba(49, 95, 186, 0.35);
           outline-offset: 2px;
         }
@@ -840,14 +911,15 @@ export function MeDashboard() {
           background: #edf3ff;
           box-shadow: 0 0 0 1px #315fba inset;
         }
-        .benefitItem span {
+        .benefitItem .benefitLabel {
           color: #6b7280;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 800;
         }
         .benefitItem strong {
           color: #0f1f3d;
           font-size: clamp(16px, 4vw, 21px);
+          font-variant-numeric: tabular-nums;
           overflow-wrap: anywhere;
         }
         .benefitDetail {
@@ -941,7 +1013,7 @@ export function MeDashboard() {
             min-height: 72px;
             padding: 10px 5px;
           }
-          .benefitItem span {
+          .benefitItem .benefitLabel {
             font-size: 10px;
           }
           .benefitItem strong {
@@ -955,7 +1027,7 @@ export function MeDashboard() {
           gap: 10px;
         }
         .quickCard {
-          min-height: 92px;
+          min-height: 80px;
           padding: 12px;
           border: 1px solid #e1e7ef;
           border-radius: 17px;
@@ -963,15 +1035,32 @@ export function MeDashboard() {
           color: #111827;
           text-align: left;
           display: grid;
-          grid-template-columns: 40px 1fr;
+          grid-template-columns: 40px minmax(0, 1fr) 16px;
+          align-items: center;
           align-content: center;
-          gap: 10px;
-          box-shadow: 0 8px 24px rgba(15, 31, 61, 0.05);
+          gap: 8px;
+          box-shadow: 0 3px 12px rgba(15, 31, 61, 0.025);
+          cursor: pointer;
+          transition: background 150ms, border-color 150ms;
+        }
+        .quickArrow {
+          display: grid;
+          place-items: center;
+          color: #8191a8;
+        }
+        @media (hover: hover) {
+          .quickCard:hover {
+            border-color: #adc1df;
+            background: #f7faff;
+          }
+          .benefitItem:hover {
+            border-color: #b9cbe5;
+          }
         }
         .quickCard.emphasis {
           border-color: #9db9e8;
           background: #f3f7ff;
-          box-shadow: 0 8px 24px rgba(49, 95, 186, 0.1);
+          box-shadow: none;
         }
         .recentOrderCard {
           width: 100%;
@@ -999,9 +1088,9 @@ export function MeDashboard() {
           font-weight: 900;
         }
         .recentOrderEmpty {
-          margin-top: 20px;
+          margin-top: 16px;
           padding: 16px;
-          border: 1px dashed #cbd5e1;
+          border: 1px solid #dfe4eb;
           border-radius: 16px;
           background: #fff;
         }
@@ -1015,6 +1104,37 @@ export function MeDashboard() {
           color: #667085;
           font-size: 13px;
           line-height: 1.55;
+        }
+        .recentOrderAction {
+          display: inline-flex;
+          min-height: 44px;
+          align-items: center;
+          gap: 6px;
+          margin-top: 8px;
+          padding: 0 12px;
+          border: 1px solid #d4e0f2;
+          border-radius: 11px;
+          background: #f3f7fe;
+          color: #294d80;
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .recentOrderState {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 10px 14px;
+        }
+        .recentOrderState > div {
+          flex: 1 1 180px;
+        }
+        .recentOrderState .recentOrderAction {
+          margin-top: 0;
+        }
+        .recentOrderState h2 {
+          font-size: 16px;
+          line-height: 1.45;
+          word-break: keep-all;
         }
         .quickIcon {
           width: 40px;
@@ -1044,11 +1164,13 @@ export function MeDashboard() {
         }
         .quickCopy strong {
           font-size: 15px;
+          word-break: keep-all;
         }
         .quickCopy small {
           color: #6b7280;
           font-size: 11px;
           line-height: 1.4;
+          word-break: keep-all;
         }
         .sheetList {
           display: grid;
@@ -1120,6 +1242,34 @@ export function MeDashboard() {
           background: #0f1f3d;
           color: #fff;
           font-weight: 900;
+        }
+        .storeMenuActions {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 12px;
+        }
+        .storeMenuAction {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          width: 100%;
+          min-height: 46px;
+          padding: 0 14px;
+          border: 1px solid #cbd9ee;
+          border-radius: 12px;
+          background: #eef4fc;
+          color: #234e8d;
+          font-size: 14px;
+          font-weight: 800;
+          white-space: nowrap;
+          cursor: pointer;
+        }
+        @media (hover: hover) {
+          .storeMenuAction:hover {
+            border-color: #a4bddf;
+            background: #e5eefb;
+          }
         }
         .accountForm {
           display: grid;
@@ -1357,20 +1507,57 @@ export function MeDashboard() {
             border-radius: 18px;
           }
         }
-        @media (max-width: 340px) {
+        @media (min-width: 700px) {
+          .quickGrid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+          .quickCard {
+            grid-template-columns: 1fr 16px;
+            gap: 8px;
+            min-height: 100px;
+          }
+          .quickCard .quickIcon {
+            grid-row: 1;
+            width: 32px;
+            height: 32px;
+          }
+          .quickCard .quickCopy {
+            grid-column: 1 / -1;
+            grid-row: 2;
+          }
+          .quickArrow {
+            grid-column: 2;
+            grid-row: 1;
+          }
+          .storeMenuAction {
+            width: 128px;
+          }
+        }
+        @media (max-width: 379px) {
+          .meReturnContext {
+            display: none;
+          }
           .quickGrid {
             gap: 8px;
           }
           .quickCard {
-            padding: 11px;
-            grid-template-columns: 34px 1fr;
+            padding: 10px;
+            grid-template-columns: 32px minmax(0, 1fr);
+            gap: 7px;
           }
           .quickIcon {
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
           }
-          .quickCopy small {
+          .quickArrow {
             display: none;
+          }
+          .quickCard .quickCopy strong {
+            font-size: 13px;
+            white-space: nowrap;
+          }
+          .quickCard .quickCopy small {
+            font-size: 10px;
           }
           .recentOrderCard {
             grid-template-columns: 34px minmax(0, 1fr);
@@ -1386,13 +1573,14 @@ export function MeDashboard() {
         loading={loading}
         storeCount={wallets.length}
         couponCount={summary.totalCoupons}
+        returnHref={isSafeInternalPath(returnTo) && !cartSummary ? returnTo : undefined}
       >
         {(cartSummary || activeOrder) && !orderBannerDismissed ? (
-          <section className="activeOrderBanner" aria-label="진행 중인 주문">
+          <section className="activeOrderBanner" aria-label={cartSummary ? "담은 메뉴" : "진행 중인 주문"}>
             <div className="activeOrderTop">
               <div>
                 <p className="sectionLabel">
-                  {cartSummary ? "CART IN PROGRESS" : "ORDER IN PROGRESS"}
+                  {cartSummary ? "담은 메뉴" : "ORDER IN PROGRESS"}
                 </p>
                 <strong>
                   {cartSummary?.storeName ||
@@ -1407,7 +1595,7 @@ export function MeDashboard() {
                       : ""}
                 </p>
               </div>
-              {activeOrder ? (
+              {!cartSummary && activeOrder ? (
                 <span
                   className={`statusBadge ${orderStatusTone(activeOrder.status)}`}
                 >
@@ -1449,7 +1637,7 @@ export function MeDashboard() {
                     : "진행 중인 주문 안내를 나중에 보기"
                 }
               >
-                {cartSummary ? "그만두기" : "나중에"}
+                {cartSummary ? <><CustomerIcon name="trash" size={16} />비우기</> : "나중에"}
               </button>
             </div>
           </section>
@@ -1465,13 +1653,27 @@ export function MeDashboard() {
         onQr={() => void startQrScanner()}
         onAccount={() => openPanel("account")}
       />
-      {!ordersLoading && recentOrder ? (
+      {ordersLoading ? (
+        <section className="recentOrderEmpty recentOrderState" role="status">
+          <CustomerIcon name="clock" size={20} />
+          <div><h2>최근 주문</h2><p>주문 내역을 불러오는 중이에요.</p></div>
+        </section>
+      ) : ordersError ? (
+        <section className="recentOrderEmpty recentOrderState" role="alert">
+          <CustomerIcon name="warning" size={20} />
+          <div><h2>주문 내역을 불러오지 못했어요.</h2><p>잠시 후 다시 시도해 주세요.</p></div>
+          <button type="button" className="recentOrderAction" onClick={() => void loadOrders()}>
+            <CustomerIcon name="refresh" size={16} />다시 불러오기
+          </button>
+        </section>
+      ) : null}
+      {!ordersLoading && !ordersError && recentOrder ? (
         <RecentOrderCard
           order={recentOrder}
           onOpen={() => setSelectedOrder(recentOrder)}
         />
       ) : null}
-      {!ordersLoading && !recentOrder ? (
+      {!ordersLoading && !ordersError && !recentOrder ? (
         <section className="recentOrderEmpty">
           <p className="sectionLabel">RECENT ORDER</p>
           <h2>최근 주문</h2>
@@ -1483,10 +1685,10 @@ export function MeDashboard() {
           {!activeOrder ? (
             <button
               type="button"
-              className="sheetAction"
+              className="recentOrderAction"
               onClick={startQrScanner}
             >
-              QR 주문 시작
+              <CustomerIcon name="qr" size={16} />QR 주문 시작<CustomerIcon name="chevronRight" size={16} />
             </button>
           ) : null}
         </section>
@@ -1539,6 +1741,10 @@ export function MeDashboard() {
           key={overlayResetKey}
           view={benefitView}
           onChange={setBenefitView}
+          onStores={() => {
+            setBenefitView(null);
+            openPanel("stores");
+          }}
           wallets={wallets}
           coupons={coupons}
           storeNameMap={storeNameMap}
@@ -1580,7 +1786,7 @@ export function MeDashboard() {
 
       {activePanel === "stores" ? (
         <CustomerSheet
-          title={`내 매장 ${wallets.length}곳`}
+          title={`이용 매장 ${wallets.length}곳`}
           onClose={() => setActivePanel(null)}
         >
           <div className="sheetList">
@@ -1609,15 +1815,19 @@ export function MeDashboard() {
                       주문 {Number(w.lifetime_orders || 0)}회 · 누적{" "}
                       {formatWon(w.lifetime_spent)}
                     </p>
-                    <button
-                      type="button"
-                      className="sheetAction"
-                      onClick={() =>
-                        router.push(`/menu?store=${encodeURIComponent(sid)}`)
-                      }
-                    >
-                      메뉴 보기
-                    </button>
+                    <div className="storeMenuActions">
+                      <button
+                        type="button"
+                        className="storeMenuAction"
+                        aria-label={`${storeNameMap[sid] || "매장"} 메뉴 보기`}
+                        onClick={() =>
+                          router.push(`/menu?store=${encodeURIComponent(sid)}`)
+                        }
+                      >
+                        메뉴 보기
+                        <CustomerIcon name="chevronRight" size={16} />
+                      </button>
+                    </div>
                   </article>
                 );
               })
