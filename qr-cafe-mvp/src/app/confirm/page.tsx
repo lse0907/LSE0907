@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-img-element */
 // src/app/confirm/page.tsx
 "use client";
 
@@ -9,7 +9,7 @@ import {
   CustomerTrustFooter,
   StoreCustomerHeader,
 } from "@/app/_components/StoreCustomerBrand";
-import { CustomerOrderProgress } from "@/app/_components/CustomerOrderProgress";
+import { CustomerIcon } from "@/app/_components/CustomerIcon";
 import { CustomerSheet } from "@/app/_components/CustomerSheet";
 import { StoreAccessError } from "@/app/_components/CustomerLoadingState";
 import {
@@ -308,6 +308,7 @@ function ConfirmPageInner() {
   });
   const [loyaltyPreviewResult, setLoyaltyPreviewResult] =
     useState<LoyaltyPreviewResult | null>(null);
+  const [loyaltyRetry, setLoyaltyRetry] = useState(0);
 
   const effectiveMode: OrderMode = isTableQr ? "dine-in" : mode;
 
@@ -691,6 +692,7 @@ function ConfirmPageInner() {
   }, [
     cartLines,
     loyaltyPreviewRequestKey,
+    loyaltyRetry,
     payableAmount,
     selectedCouponIdForApply,
     storeId,
@@ -714,7 +716,7 @@ function ConfirmPageInner() {
     loyaltyPreviewStatus === "loading"
       ? "적립 혜택 확인 중"
       : loyaltyPreviewStatus === "error"
-        ? "적립 혜택 확인 불가"
+        ? "적립 안내를 불러오지 못했어요."
         : loyaltyPreview.pointsEnabled
           ? customerUserId
             ? `결제 후 ${fmt(estimatedEarnedPoints)}P 적립 (${loyaltyPreview.ratePct}%)`
@@ -722,6 +724,16 @@ function ConfirmPageInner() {
           : customerUserId && Number(wallet?.point_balance || 0) > 0
             ? "신규 적립 중지 · 보유 포인트 사용 가능"
             : "포인트 적립 미운영";
+
+  const checkoutActionLabel = submitting
+    ? isPrepayStore ? "결제창 여는 중…" : "주문 접수 중…"
+    : prepayLoading ? "주문 방식 확인 중…"
+    : isPrepayStore ? "결제하기" : "주문하기";
+  const checkoutNotice = prepayLoading
+    ? "주문 방식을 확인하고 있어요."
+    : isPrepayStore
+      ? "결제 완료 후 주문이 접수됩니다."
+      : "결제는 매장에서 진행합니다.";
 
   const loadTossScript = async () => {
     if (typeof window === "undefined")
@@ -893,7 +905,7 @@ function ConfirmPageInner() {
         .map((ln) =>
           ln.lineId !== lineId
             ? ln
-            : { ...ln, qty: Math.max(0, Number(ln.qty || 0) - 1) },
+            : { ...ln, qty: Math.max(1, Number(ln.qty || 0) - 1) },
         )
         .filter((ln) => ln.qty > 0),
     );
@@ -1032,70 +1044,113 @@ function ConfirmPageInner() {
         }
         .orderItem {
           display: grid;
-          gap: 7px;
-          padding: 16px;
+          grid-template-columns: 44px minmax(0, 1fr) 44px;
+          column-gap: 10px;
+          row-gap: 6px;
+          padding: 10px 12px;
           border: 1px solid var(--customer-line);
           border-radius: 16px;
           background: #fff;
         }
-        .orderItemHead {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 12px;
+        .orderItemImage {
+          grid-column: 1;
+          grid-row: 1 / 3;
+          width: 44px;
+          height: 44px;
+          border: 1px solid #e7edf5;
+          border-radius: 10px;
+          overflow: hidden;
+          display: grid;
+          place-items: center;
+          background: #edf2f8;
+          color: #8a9bb3;
         }
-        .orderItemHead > div {
+        .orderItemImage img { width: 100%; height: 100%; object-fit: cover; }
+        .orderItemDetails {
+          grid-column: 2;
+          grid-row: 1;
+          min-width: 0;
+          padding-top: 2px;
+        }
+        .orderItemName {
+          color: var(--customer-ink);
+          font-size: 15px;
+          font-weight: 750;
+          line-height: 1.4;
+          overflow-wrap: anywhere;
+        }
+        .orderItemBottom {
+          grid-column: 2 / 4;
+          grid-row: 2;
           display: flex;
           align-items: center;
-          gap: 7px;
-          min-width: 0;
+          justify-content: space-between;
+          gap: 8px;
         }
-        .orderItemHead strong {
-          color: var(--customer-ink);
-          font-size: 16px;
-          font-weight: 700;
-          line-height: 1.35;
-        }
-        .orderItemHead > strong {
-          flex: 0 0 auto;
-        }
-        .orderItemHead span {
-          flex: 0 0 auto;
+        .orderItemAmount { display: grid; gap: 2px; text-align: right; }
+        .orderItemAmount strong { color: var(--rion-navy); font-size: 17px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .orderItemAmount span {
           color: var(--customer-muted);
-          font-size: 13px;
-          font-weight: 550;
+          font-size: 11px;
         }
-        .itemMeta,
-        .itemOptions {
+        .itemMeta {
+          margin-top: 4px;
           color: var(--customer-muted);
-          font-size: 13px;
+          font-size: 11px;
           font-weight: 500;
           line-height: 1.55;
+          overflow-wrap: anywhere;
         }
         .itemOptions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
           color: #405069;
         }
+        .itemOptions:not(:empty) { margin-top: 4px; }
+        .optionTag { max-width: 100%; border: 1px solid #e8edf5; border-radius: 6px; background: #f6f8fc; padding: 2px 6px; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+        .optionTag span { color: #6c7d95; margin-right: 4px; }
         .quantityActions {
-          display: flex;
-          gap: 7px;
-          margin-top: 5px;
+          display: inline-flex;
+          align-items: center;
+          flex-shrink: 0;
+          border: 1px solid #dce4ef;
+          border-radius: 12px;
+          background: #f7f9fc;
         }
+        .quantityActions b { min-width: 26px; text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; }
         .quantityButton {
-          min-width: 44px;
-          min-height: 36px;
-          padding: 6px 11px;
-          border: 1px solid var(--customer-line);
+          width: 44px;
+          height: 44px;
+          padding: 0;
+          border: 0;
           border-radius: 11px;
-          background: #f8fafc;
+          background: transparent;
           color: var(--customer-ink);
-          font-size: 13px;
+          font-size: 21px;
           font-weight: 700;
+          cursor: pointer;
         }
+        .quantityButton:disabled { color: #b5bfd0; cursor: not-allowed; }
+        .quantityButton:hover:not(:disabled) { background: #e8effa; }
         .removeButton {
-          border-color: #fecdd3;
-          background: #fff7f8;
-          color: #9f1239;
+          grid-column: 3;
+          grid-row: 1;
+          width: 44px;
+          height: 44px;
+          display: grid;
+          place-items: center;
+          border: 0;
+          border-radius: 12px;
+          background: transparent;
+          color: #8391a7;
+          cursor: pointer;
         }
+        .removeButton:hover { background: #fff1f1; color: #c34b54; }
+        .quantityButton:focus-visible, .removeButton:focus-visible, .modeButton:focus-visible, .retryLoyalty:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+        .optionalLabel { margin-left: 5px; font-size: 12px; font-weight: 500; color: var(--customer-muted); }
+        .retryLoyalty { min-height: 44px; margin-top: 4px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: #315fba; font: inherit; font-size: 12px; cursor: pointer; }
+        .retryLoyalty:hover { background: #e9eff8; }
         .addMenuButton {
           width: 100%;
           min-height: 46px;
@@ -1446,6 +1501,9 @@ function ConfirmPageInner() {
         .mobileCheckoutBar {
           display: none;
         }
+        .mobileCheckoutInner { width: 100%; max-width: 760px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .mobilePaymentNotice { margin: 4px 0 0; color: var(--customer-muted); font-size: 11px; line-height: 1.4; text-align: center; }
+        .modeButton { display: flex; align-items: center; justify-content: center; gap: 7px; }
         @media (max-width: 860px) {
           .confirmPage {
             max-width: 760px;
@@ -1461,10 +1519,10 @@ function ConfirmPageInner() {
             padding-bottom: calc(18px + env(safe-area-inset-bottom));
           }
           .submitActions {
-            grid-template-columns: 1fr 1.35fr;
+            grid-template-columns: 1fr;
           }
           .submitButton {
-            grid-row: auto;
+            display: none;
           }
           .mobileCheckoutBar {
             position: fixed;
@@ -1472,10 +1530,7 @@ function ConfirmPageInner() {
             right: 0;
             bottom: 0;
             z-index: 80;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 18px;
+            display: block;
             padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
             border-top: 1px solid var(--customer-line);
             background: rgba(255, 255, 255, 0.94);
@@ -1517,7 +1572,7 @@ function ConfirmPageInner() {
         }
         @media (max-width: 520px) {
           .confirmPage {
-            padding: 12px 12px 0;
+            padding: 12px 12px calc(112px + env(safe-area-inset-bottom));
           }
           .checkoutSection,
           .summaryCard {
@@ -1529,14 +1584,7 @@ function ConfirmPageInner() {
             margin-top: 16px;
           }
           .orderItem {
-            padding: 14px;
-          }
-          .orderItemHead {
-            align-items: flex-start;
-          }
-          .orderItemHead > div {
-            display: grid;
-            gap: 2px;
+            padding: 10px 12px;
           }
           .summaryCard {
             margin: 0 -12px;
@@ -1565,6 +1613,13 @@ function ConfirmPageInner() {
           .mobileCheckoutBar button {
             width: min(210px, 55vw);
           }
+        }
+        @media (max-width: 420px) {
+          .orderItem { column-gap: 8px; }
+          .orderItemImage { grid-row: 1; }
+          .orderItemBottom { grid-column: 1 / -1; flex-direction: row-reverse; }
+          .orderItemAmount { text-align: left; }
+          .orderItemAmount strong { font-size: 16px; }
         }
       `}</style>
       <main className="confirmPage customer-page">
@@ -1624,7 +1679,6 @@ function ConfirmPageInner() {
             </div>
           }
         />
-        <CustomerOrderProgress activeIndex={1} />
 
         <div className="checkoutGrid">
           <div className="checkoutMain">
@@ -1647,64 +1701,37 @@ function ConfirmPageInner() {
                 <div className="orderList">
                   {cartLines.map((ln) => {
                     const unit = ln.basePrice + ln.optionTotal;
-                    const optText =
-                      ln.options
-                        .map((g) => {
-                          if (!g.items?.length) return null;
-                          return g.items
-                            .map(
-                              (x) =>
-                                `${x.name}×${Math.max(1, Number(x.qty || 1))}`,
-                            )
-                            .join(", ");
-                        })
-                        .filter(Boolean)
-                        .join(" / ") || "";
-
                     return (
                       <article key={ln.lineId} className="orderItem">
-                        <div className="orderItemHead">
-                          <div>
-                            <strong>{ln.name}</strong>
-                            <span>{ln.qty}개</span>
+                        <div className="orderItemImage" aria-hidden="true">
+                          {ln.image ? <img src={ln.image} alt="" /> : <CustomerIcon name="image" size={22} />}
+                        </div>
+                        <div className="orderItemDetails">
+                          <strong className="orderItemName">{ln.name}</strong>
+                          <div className="itemOptions">
+                            {ln.options.filter(g => g.items?.length).map(g => (
+                              <span className="optionTag" key={g.groupId}>
+                                <span>{g.groupName}</span>{g.items.map(x => `${x.name}${x.qty > 1 ? ` × ${x.qty}` : ""}`).join(" · ")}
+                              </span>
+                            ))}
                           </div>
-                          <strong>{fmt(unit * ln.qty)}원</strong>
+                          {ln.optionTotal !== 0 ? (
+                            <div className="itemMeta">기본 {fmt(ln.basePrice)}원 · 옵션 {ln.optionTotal > 0 ? "+" : ""}{fmt(ln.optionTotal)}원 / 1개</div>
+                          ) : null}
                         </div>
-
-                        <div className="itemMeta">
-                          기본 {fmt(ln.basePrice)}원
-                          {ln.optionTotal
-                            ? ` + 옵션 ${fmt(ln.optionTotal)}원`
-                            : ""}
-                          {"  "}· 1개당 {fmt(unit)}원
-                        </div>
-
-                        {optText ? (
-                          <div className="itemOptions">옵션: {optText}</div>
-                        ) : null}
-
-                        <div className="quantityActions">
-                          {ln.qty <= 1 ? (
-                            <button
-                              onClick={() => removeLine(ln.lineId)}
-                              className="quantityButton removeButton"
-                            >
-                              삭제
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => decLine(ln.lineId)}
-                              className="quantityButton"
-                            >
-                              -1
-                            </button>
-                          )}
-                          <button
-                            onClick={() => incLine(ln.lineId)}
-                            className="quantityButton"
-                          >
-                            +1
-                          </button>
+                        <button type="button" onClick={() => removeLine(ln.lineId)} className="removeButton" aria-label={`${ln.name} 삭제`} title="메뉴 삭제">
+                          <CustomerIcon name="trash" size={19} />
+                        </button>
+                        <div className="orderItemBottom">
+                          <div className="quantityActions" role="group" aria-label={`${ln.name} 수량`}>
+                            <button type="button" onClick={() => decLine(ln.lineId)} disabled={ln.qty <= 1} className="quantityButton" aria-label={`${ln.name} 수량 줄이기`}>−</button>
+                            <b aria-label={`${ln.qty}개`}>{ln.qty}</b>
+                            <button type="button" onClick={() => incLine(ln.lineId)} className="quantityButton" aria-label={`${ln.name} 수량 늘리기`}>+</button>
+                          </div>
+                          <div className="orderItemAmount">
+                            {ln.qty > 1 ? <span>1개 {fmt(unit)}원</span> : null}
+                            <strong>{fmt(unit * ln.qty)}원</strong>
+                          </div>
                         </div>
                       </article>
                     );
@@ -2139,17 +2166,19 @@ function ConfirmPageInner() {
               <div className="sectionHeading">
                 <div>
                   <span className="sectionEyebrow">ORDER NOTE</span>
-                  <h2>요청사항</h2>
+                  <h2 id="order-note-title">요청사항 <small className="optionalLabel">선택</small></h2>
                 </div>
               </div>
               <textarea
+                aria-labelledby="order-note-title"
+                aria-describedby="order-note-hint"
                 value={requestNote}
                 onChange={(e) => setRequestNote(e.target.value)}
                 className="requestInput"
                 maxLength={200}
                 placeholder="매장에 전달할 요청사항을 입력해 주세요."
               />
-              <p className="fieldHint">
+              <p className="fieldHint" id="order-note-hint">
                 요청사항은 매장 상황에 따라 반영이 어려울 수 있어요.
               </p>
             </section>
@@ -2168,8 +2197,10 @@ function ConfirmPageInner() {
                     setMode("dine-in");
                   }}
                   disabled={isTableQr}
+                  aria-pressed={effectiveMode === "dine-in"}
                   className={`modeButton ${effectiveMode === "dine-in" ? "active" : ""}`}
                 >
+                  {effectiveMode === "dine-in" ? <CustomerIcon name="check" size={17} /> : <CustomerIcon name="store" size={17} />}
                   매장 이용
                 </button>
 
@@ -2179,8 +2210,10 @@ function ConfirmPageInner() {
                     setMode("takeout");
                   }}
                   disabled={isTableQr}
+                  aria-pressed={effectiveMode === "takeout"}
                   className={`modeButton ${effectiveMode === "takeout" ? "active" : ""}`}
                 >
+                  {effectiveMode === "takeout" ? <CustomerIcon name="check" size={17} /> : <CustomerIcon name="bag" size={17} />}
                   포장
                 </button>
               </div>
@@ -2205,7 +2238,7 @@ function ConfirmPageInner() {
           <aside className="checkoutAside">
             <section className="summaryCard">
               <span className="sectionEyebrow">ORDER SUMMARY</span>
-              <h2>결제 요약</h2>
+              <h2>{isPrepayStore ? "결제 요약" : "주문 요약"}</h2>
               <dl className="summaryList">
                 <div>
                   <dt>주문 금액</dt>
@@ -2218,12 +2251,15 @@ function ConfirmPageInner() {
                   </div>
                 ) : null}
                 <div className="summaryTotal">
-                  <dt>최종 결제 금액</dt>
+                  <dt>{isPrepayStore ? "최종 결제 금액" : "최종 주문 금액"}</dt>
                   <dd>{fmt(payableAmount)}원</dd>
                 </div>
               </dl>
               <div className={`loyaltyEarnNotice ${loyaltyPreview.pointsEnabled ? "" : "loyaltyEarnNoticeOff"}`}>
-                {loyaltyNotice}
+                <span role="status">{loyaltyNotice}</span>
+                {loyaltyPreviewStatus === "error" && totalCount > 0 ? (
+                  <button type="button" className="retryLoyalty" onClick={() => { setLoyaltyPreviewResult(null); setLoyaltyRetry(value => value + 1); }}>다시 확인</button>
+                ) : null}
               </div>
 
               {submitError ? (
@@ -2241,39 +2277,26 @@ function ConfirmPageInner() {
                   disabled={!canSubmit}
                   className="submitButton"
                 >
-                  {submitting
-                    ? isPrepayStore
-                      ? "결제창 여는 중…"
-                      : "주문 접수 중…"
-                    : isPrepayStore
-                      ? "결제하기"
-                      : "주문 접수"}
+                  {checkoutActionLabel}
                 </button>
               </div>
               <p className="paymentNotice">
-                {prepayLoading
-                  ? "매장 결제 옵션 확인 중..."
-                  : isPrepayStore
-                    ? "결제 완료 후 주문이 접수됩니다."
-                    : "결제는 매장에서 진행됩니다."}
+                {checkoutNotice}
               </p>
             </section>
           </aside>
         </div>
         <div className="mobileCheckoutBar" role="region" aria-label="주문 결제">
+          <div className="mobileCheckoutInner">
           <div className="mobileCheckoutTotal">
             <span>{isPrepayStore ? "최종 결제 금액" : "최종 주문 금액"}</span>
             <strong>{fmt(payableAmount)}원</strong>
           </div>
           <button onClick={onSubmit} disabled={!canSubmit}>
-            {submitting
-              ? isPrepayStore
-                ? "결제창 여는 중…"
-                : "주문 접수 중…"
-              : isPrepayStore
-                ? "결제하기"
-                : "주문 접수하기"}
+            {checkoutActionLabel}
           </button>
+          </div>
+          <p className="mobilePaymentNotice">{checkoutNotice}</p>
         </div>
         <CustomerTrustFooter />
       </main>

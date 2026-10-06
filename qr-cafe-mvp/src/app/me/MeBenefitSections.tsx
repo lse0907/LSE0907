@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { CustomerSheet } from "../_components/CustomerSheet";
+import { CustomerIcon, type CustomerIconName } from "../_components/CustomerIcon";
 import {
   type BenefitView,
   type CustomerCoupon,
@@ -15,6 +16,7 @@ import {
 type Props = {
   view: BenefitView;
   onChange: (view: BenefitView) => void;
+  onStores: () => void;
   wallets: WalletRow[];
   coupons: CustomerCoupon[];
   storeNameMap: Record<string, string>;
@@ -27,6 +29,7 @@ type Props = {
 export function MeBenefitSections({
   view,
   onChange,
+  onStores,
   wallets,
   coupons,
   storeNameMap,
@@ -133,25 +136,32 @@ export function MeBenefitSections({
         <div className="benefitGrid">
           {(
             [
-              ["stores", "이용 매장", `${wallets.length}곳`],
-              ["points", "총 보유 포인트", `${totalPoints.toLocaleString()}P`],
-              ["coupons", "내 쿠폰", `${totalCoupons}장`],
+              ["stores", "이용 매장", `${wallets.length}곳`, "store"],
+              ["points", "보유 포인트", `${totalPoints.toLocaleString()}P`, "points"],
+              ["coupons", "내 쿠폰", `${totalCoupons}장`, "coupon"],
             ] as const
-          ).map(([key, label, value]) => (
+          ).map(([key, label, value, icon]) => (
             <button
               type="button"
-              className={`benefitItem ${view === key ? "active" : ""}`}
-              aria-pressed={view === key}
-              onClick={() => onChange(view === key ? null : key)}
+              className={`benefitItem ${key} ${view === key ? "active" : ""}`}
+              aria-pressed={key === "stores" ? undefined : view === key}
+              aria-expanded={key === "stores" ? undefined : view === key}
+              aria-haspopup={key === "stores" ? "dialog" : undefined}
+              onClick={() => key === "stores" ? onStores() : onChange(view === key ? null : key)}
               key={key}
             >
-              <span>{label}</span>
+              <span className={`benefitIndicator ${key === "stores" ? "" : "expand"}`} aria-hidden="true">
+                <CustomerIcon name="chevronRight" size={14} />
+              </span>
+              <span className="benefitIcon"><CustomerIcon name={icon as CustomerIconName} size={18} /></span>
+              <span className="benefitLabel">{label}</span>
               <strong>{value}</strong>
             </button>
           ))}
         </div>
+        <p className="benefitHint">포인트·쿠폰은 해당 매장에서만 사용돼요.</p>
         {view ? (
-          <div className="benefitDetail" aria-live="polite">
+          <div id="me-benefit-detail" className="benefitDetail" aria-live="polite">
             {view === "stores"
               ? renderStores(wallets.slice(0, 3))
               : view === "points"

@@ -22,7 +22,7 @@ export function MeQuickMenu({
       action: onOrders,
     },
     {
-      label: "내 매장",
+      label: "이용 매장",
       detail: "포인트·쿠폰",
       icon: "store" as const,
       tone: "green",
@@ -68,6 +68,7 @@ export function MeQuickMenu({
               <strong>{item.label}</strong>
               <small>{item.detail}</small>
             </span>
+            <span className="quickArrow"><CustomerIcon name="chevronRight" size={16} /></span>
           </button>
         ))}
       </div>

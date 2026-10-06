@@ -49,7 +49,7 @@ export function MeAccountSheet({
   onClose: () => void;
 }) {
   return (
-    <CustomerSheet title="계정 정보" onClose={onClose}>
+    <CustomerSheet title="계정 정보" icon="user" onClose={onClose}>
       {editing ? (
         <div className="accountForm">
           <label>
@@ -102,22 +102,12 @@ export function MeAccountSheet({
           </div>
         </div>
       ) : (
-        <div className="sheetCard accountSummary">
-          <p>
-            <b>이메일</b>
-            <br />
-            {maskEmail(email)}
-          </p>
-          <p>
-            <b>이름</b>
-            <br />
-            {name || "-"}
-          </p>
-          <p>
-            <b>전화번호</b>
-            <br />
-            {maskPhone(phone || "")}
-          </p>
+        <div className="accountSummary">
+          <dl className="accountDetails">
+            <div><dt>이메일</dt><dd>{maskEmail(email)}</dd></div>
+            <div><dt>이름</dt><dd>{name || "미등록"}</dd></div>
+            <div><dt>전화번호</dt><dd>{phone ? maskPhone(phone) : "미등록"}</dd></div>
+          </dl>
           {error ? (
             <p className="accountError" role="alert">
               {error}
@@ -131,13 +121,16 @@ export function MeAccountSheet({
           <button type="button" className="sheetAction" onClick={onEdit}>
             정보 수정
           </button>
-          <Link className="accountSecondary" href="/account">
-            내 계정 관리
-          </Link>
-          <Link className="accountSecondary" href="/account/services/add/owner">
-            사업자 서비스 시작하기
-          </Link>
-          <hr />
+          <nav className="accountLinks" aria-label="계정 관리 메뉴">
+            <Link href="/account">
+              <span><CustomerIcon name="user" size={18} />내 계정 관리</span>
+              <CustomerIcon name="chevronRight" size={16} />
+            </Link>
+            <Link href="/account/services/add/owner">
+              <span><CustomerIcon name="store" size={18} />사업자 서비스 시작하기</span>
+              <CustomerIcon name="chevronRight" size={16} />
+            </Link>
+          </nav>
           <button
             type="button"
             className="logoutButton"
@@ -149,6 +142,85 @@ export function MeAccountSheet({
           </button>
         </div>
       )}
+      <style jsx>{`
+        .accountSummary {
+          display: grid;
+          gap: 14px;
+        }
+        .accountDetails {
+          margin: 0;
+          padding: 0 14px;
+          border: 1px solid #e1e7ef;
+          border-radius: 14px;
+          background: #f8fafc;
+        }
+        .accountDetails > div {
+          display: grid;
+          grid-template-columns: 70px minmax(0, 1fr);
+          align-items: baseline;
+          gap: 12px;
+          padding: 13px 0;
+          border-bottom: 1px solid #e1e7ef;
+        }
+        .accountDetails > div:last-child {
+          border-bottom: 0;
+        }
+        .accountDetails dt {
+          color: #667085;
+          font-size: 12px;
+        }
+        .accountDetails dd {
+          margin: 0;
+          color: #172b4b;
+          font-size: 14px;
+          font-weight: 750;
+          overflow-wrap: anywhere;
+        }
+        .accountSummary > .sheetAction {
+          margin-top: 0;
+        }
+        .accountLinks {
+          display: grid;
+          border: 1px solid #e1e7ef;
+          border-radius: 14px;
+          overflow: hidden;
+        }
+        .accountLinks :global(a) {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          min-height: 50px;
+          padding: 10px 14px;
+          background: #fff;
+          color: #405a7c;
+          font-size: 13px;
+          font-weight: 700;
+          text-decoration: none;
+          border-bottom: 1px solid #e1e7ef;
+        }
+        .accountLinks :global(a:last-child) {
+          border-bottom: 0;
+        }
+        .accountLinks span {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          word-break: keep-all;
+        }
+        .accountLinks :global(svg) {
+          flex-shrink: 0;
+        }
+        .accountLinks :global(a:focus-visible) {
+          outline-offset: -3px;
+        }
+        .accountSummary > .logoutButton {
+          border-color: transparent;
+          background: transparent;
+          color: #667085;
+          font-size: 13px;
+        }
+      `}</style>
     </CustomerSheet>
   );
 }
