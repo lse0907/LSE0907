@@ -10,6 +10,7 @@ import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 import MenuAdminNav from "@/app/admin/_components/MenuAdminNav";
 
 const MENU_IMAGE_BUCKET = "menu-assets";
+const MENU_ID_MAX_LENGTH = 40;
 
 type MenuItem = {
   id: string;
@@ -141,7 +142,15 @@ function sanitizeIdPart(input: string) {
 }
 
 function buildNextMenuId(storeId: string, items: MenuItem[]) {
-  const prefix = `${sanitizeIdPart(storeId)}-menu-`;
+  // Menu IDs are internal and are not editable on this screen. Keep newly
+  // generated IDs inside the database/UI validation limit even when a store
+  // was created with a long ID (for example a UUID).
+  const sequencePlaceholder = "0001";
+  const suffixLength = "-menu-".length + sequencePlaceholder.length;
+  const storePart = sanitizeIdPart(storeId)
+    .slice(0, Math.max(1, MENU_ID_MAX_LENGTH - suffixLength))
+    .replace(/-+$/g, "") || "store";
+  const prefix = `${storePart}-menu-`;
   const re = new RegExp(`^${prefix}(\\d+)$`);
   let maxSeq = 0;
   for (const row of items) {
@@ -150,7 +159,8 @@ function buildNextMenuId(storeId: string, items: MenuItem[]) {
     const n = Number(m[1]);
     if (Number.isFinite(n)) maxSeq = Math.max(maxSeq, n);
   }
-  return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
+  const sequence = String(maxSeq + 1).padStart(4, "0");
+  return `${prefix}${sequence}`;
 }
 
 function getGroupPolicyText(group: OptionGroup) {
@@ -158,6 +168,14 @@ function getGroupPolicyText(group: OptionGroup) {
   const max = Math.max(Number(group.max ?? 1), 1);
   if (group.required) return `필수 ${min}~${max}`;
   return `선택 ${min}~${max}`;
+}
+
+function getOptionPreview(items: OptionItem[], limit = 3) {
+  const names = items.map((item) => item.name.trim()).filter(Boolean);
+  if (names.length === 0) return "등록된 항목 없음";
+  const visibleNames = names.slice(0, limit);
+  const remaining = names.length - visibleNames.length;
+  return remaining > 0 ? `${visibleNames.join(" · ")} 외 ${remaining}개` : visibleNames.join(" · ");
 }
 
 function AdminMenuPageInner() {
@@ -190,7 +208,6 @@ function AdminMenuPageInner() {
   const [pendingOptionTab, setPendingOptionTab] = useState<"common" | "exclusive" | null>(null);
   const [optionPanelOpen, setOptionPanelOpen] = useState(false);
   const [pendingOptionPanelClose, setPendingOptionPanelClose] = useState(false);
-  const [commonGroupIdsToAdd, setCommonGroupIdsToAdd] = useState<string[]>([]);
   const [newExclusiveGroup, setNewExclusiveGroup] = useState({
     name: "",
     max: "1",
@@ -208,6 +225,7 @@ function AdminMenuPageInner() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("");
   const [soldOutOnly, setSoldOutOnly] = useState(false);
+  const [menuListCollapsed, setMenuListCollapsed] = useState(false);
   const [orderDirty, setOrderDirty] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState>({
     open: false,
@@ -219,8 +237,8 @@ function AdminMenuPageInner() {
   const [draft, setDraft] = useState<MenuDraft>(emptyDraft);
   const [selectedId, setSelectedId] = useState<string>("");
   const optionTabs: Array<{ key: "common" | "exclusive"; label: string }> = [
-    { key: "common", label: "공통옵션" },
-    { key: "exclusive", label: "전용옵션" },
+    { key: "common", label: "공통 옵션" },
+    { key: "exclusive", label: "메뉴 전용 옵션" },
   ];
   const setStatus = (tone: "neutral" | "success" | "error", text: string) => {
     setMsgTone(tone);
@@ -471,7 +489,6 @@ function AdminMenuPageInner() {
       setCommonDirty(false);
       setExclusiveDirty(false);
       setPendingOptionTab(null);
-      setCommonGroupIdsToAdd([]);
       setOptionTab("common");
       return;
     }
@@ -500,7 +517,6 @@ function AdminMenuPageInner() {
     setCommonDirty(false);
     setExclusiveDirty(false);
     setPendingOptionTab(null);
-    setCommonGroupIdsToAdd([]);
     setOptionTab("common");
   }, [items, selectedId, optionPrices, optionExclusions]);
 
@@ -536,7 +552,6 @@ function AdminMenuPageInner() {
     setCommonDirty(false);
     setExclusiveDirty(false);
     setPendingOptionTab(null);
-    setCommonGroupIdsToAdd([]);
   };
 
   const onSave = async () => {
@@ -553,10 +568,13 @@ function AdminMenuPageInner() {
       return;
     }
 
-    if (!/^[a-z0-9-]{1,40}$/.test(id)) {
+    // Existing menus can have legacy IDs that are not shown or editable here.
+    // They must remain editable so owners can update an image, price, or
+    // category without being forced to recreate the menu.
+    if (!selectedId && !new RegExp(`^[a-z0-9-]{1,${MENU_ID_MAX_LENGTH}}$`).test(id)) {
       setBadge("error");
       setTimeout(() => setBadge("idle"), 1600);
-      setStatus("error", "메뉴 ID 자동 생성에 실패했습니다. 새로 작성 후 다시 시도해 주세요.");
+      setStatus("error", "새 메뉴 ID를 만들지 못했습니다. 새로 작성 후 다시 시도해 주세요.");
       return;
     }
     if (!selectedId && items.some((x) => x.id === id)) {
@@ -1163,7 +1181,6 @@ function AdminMenuPageInner() {
           optionPriceByItem: {},
           excludedCommonItemIds: [],
         }));
-        setCommonGroupIdsToAdd([]);
         setCommonDirty(false);
         setStatus("success", "옵션 없음으로 저장했습니다.");
         return true;
@@ -1342,6 +1359,7 @@ function AdminMenuPageInner() {
   const exclusiveGroups = groups.filter(
     (g) => (g.scope || "common") === "exclusive" && (!draft.id.trim() || g.linked_menu_id === draft.id.trim())
   );
+  const connectedOptionCount = draft.optionGroupIds.length;
   const selectedExclusiveGroup = useMemo(
     () => exclusiveGroups.find((g) => g.id === selectedExclusiveGroupId) || null,
     [exclusiveGroups, selectedExclusiveGroupId]
@@ -1399,25 +1417,6 @@ function AdminMenuPageInner() {
     });
   };
 
-  const toggleCommonGroupToAdd = (groupId: string) => {
-    setCommonGroupIdsToAdd((prev) =>
-      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId]
-    );
-  };
-
-  const addCommonGroups = () => {
-    const idsToAdd = commonGroupIdsToAdd.filter((id) => unselectedCommonGroups.some((group) => group.id === id));
-    if (idsToAdd.length === 0) return;
-    setCommonDirty(true);
-    setDraft((prev) => ({
-      ...prev,
-      optionGroupIds: Array.from(new Set([...prev.optionGroupIds, ...idsToAdd])),
-      optionPriceByItem: withDefaultOptionPrices(prev.optionPriceByItem, idsToAdd),
-      optionNotRequired: false,
-    }));
-    setCommonGroupIdsToAdd([]);
-  };
-
   const onUploadMenuImage = async (file: File | null) => {
     if (!file) return;
     if (!draft.id.trim()) {
@@ -1429,8 +1428,12 @@ function AdminMenuPageInner() {
     clearStatus();
     try {
       setImageFileName(file.name || "");
-      const ext = getFileExt(file.name) || "png";
-      const path = `${storeId}/${draft.id.trim()}-${Date.now()}.${ext}`;
+      const ext = (getFileExt(file.name) || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+      // Storage object keys must stay URL-safe. Legacy menu IDs can be Korean,
+      // so never use the raw menu ID or store ID in an object path.
+      const safeStoreKey = sanitizeIdPart(storeId);
+      const safeMenuKey = sanitizeIdPart(draft.id.trim());
+      const path = `${safeStoreKey}/${safeMenuKey}-${Date.now()}.${ext}`;
       const { error } = await supabase.storage.from(MENU_IMAGE_BUCKET).upload(path, file, { upsert: true });
       if (error) throw error;
 
@@ -1622,6 +1625,9 @@ function AdminMenuPageInner() {
         .detailColumn {
           display: grid;
           gap: 10px;
+          /* Keep the detail cards at their content height instead of matching
+             the much taller menu-list column in the two-column layout. */
+          align-self: start;
         }
         .cardTitle {
           margin: 0;
@@ -1664,6 +1670,15 @@ function AdminMenuPageInner() {
           justify-content: space-between;
           gap: 10px;
           margin-top: 12px;
+        }
+        .menuListHeading {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+        .mobileListToggle {
+          display: none;
         }
         .menuListActions {
           display: flex;
@@ -1879,32 +1894,95 @@ function AdminMenuPageInner() {
           background: #fffbeb;
           color: #92400e;
         }
-        .optionNoneCard,
-        .optionNoneSaveBox {
+        .optionModeGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          margin-top: 8px;
+        }
+        .optionModeChoice {
+          min-height: 98px;
+          padding: 13px;
           border: 1px solid #dbe1ea;
-          background: #f8fafc;
           border-radius: 14px;
-          padding: 12px;
+          background: #fff;
+          color: var(--text);
+          text-align: left;
+          cursor: pointer;
+          transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+        }
+        .optionModeChoice:hover:not(:disabled) {
+          border-color: #93c5fd;
+          background: #f8fbff;
+        }
+        .optionModeChoice:focus-visible {
+          outline: 3px solid #bfdbfe;
+          outline-offset: 2px;
+        }
+        .optionModeChoiceOn {
+          border-color: var(--brand);
+          background: var(--brand-soft);
+          box-shadow: inset 0 0 0 1px var(--brand);
+        }
+        .optionModeChoiceHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          font-size: 14px;
+          font-weight: 950;
+        }
+        .optionModeCheck {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 999px;
+          background: var(--brand);
+          color: #fff;
+          font-size: 12px;
+          line-height: 1;
+        }
+        .optionModeChoice p {
+          margin: 6px 0 0;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 750;
+          line-height: 1.45;
+        }
+        .optionModeSaveBox {
+          margin-top: 8px;
+          border: 1px solid #bfdbfe;
+          border-radius: 12px;
+          background: #f8fbff;
+          padding: 10px;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 10px;
           flex-wrap: wrap;
-          margin-top: 8px;
         }
-        .optionNoneCardOn {
-          border-color: #a5f3fc;
-          background: #ecfeff;
-          color: #155e75;
+        .optionModeSaveBoxWarning {
+          border-color: #fde68a;
+          background: #fffbeb;
+        }
+        .optionModeSaveText {
+          display: grid;
+          gap: 2px;
+          min-width: 0;
+        }
+        .optionModeSaveText strong { font-size: 13px; }
+        .optionModeSaveText span {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 750;
+          line-height: 1.4;
         }
         .btnOptionNone {
-          border-color: #0f766e;
-          background: #0f766e;
+          border-color: var(--brand);
+          background: var(--brand);
           color: #fff;
-        }
-        .optionNoneSaveBox {
-          display: grid;
-          justify-items: start;
         }
         .field {
           display: grid;
@@ -2005,7 +2083,8 @@ function AdminMenuPageInner() {
           overscroll-behavior: contain;
         }
         .commonGroupChoice {
-          display: flex;
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) minmax(120px, 1.35fr);
           align-items: center;
           gap: 8px;
           min-height: 40px;
@@ -2027,6 +2106,16 @@ function AdminMenuPageInner() {
           gap: 6px;
           min-width: 0;
           white-space: nowrap;
+        }
+        .commonGroupPreview {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+          text-align: right;
         }
         .commonGroupChoiceText .name {
           display: block;
@@ -2267,7 +2356,8 @@ function AdminMenuPageInner() {
         }
         .sectionDivider { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
         .optionSectionBox {
-          margin-top: 14px;
+          /* detailColumn already owns the spacing between its cards. */
+          margin-top: 0;
           border: 1px solid #dbe1ea;
           border-radius: 14px;
           padding: 10px;
@@ -2472,7 +2562,7 @@ function AdminMenuPageInner() {
             max-width: 100%;
           }
           .listScroll {
-            max-height: 45vh;
+            max-height: 38vh;
           }
           .twoColRow {
             grid-template-columns: minmax(0, 1fr) auto;
@@ -2516,8 +2606,59 @@ function AdminMenuPageInner() {
           }
         }
         @media (max-width: 560px) {
+          .mobileListToggle {
+            display: inline-flex;
+          }
+          .mobileMenuListContent.mobileMenuListContentCollapsed {
+            display: none;
+          }
+          .menuListToolbar {
+            margin-top: 10px;
+          }
+          .menuListToolbar,
+          .menuListActions {
+            gap: 6px;
+          }
+          .menuListToolbar .btn {
+            padding: 7px 9px;
+            font-size: 12px;
+          }
+          .filterRow {
+            margin-top: 8px;
+          }
+          .menuOrderGuide {
+            display: none;
+          }
+          .listScroll {
+            max-height: min(32vh, 260px);
+          }
+          .list {
+            gap: 7px;
+            margin-top: 8px;
+          }
+          .rowBtn {
+            border-radius: 12px;
+            padding: 9px 10px;
+            gap: 4px;
+          }
+          .commonGroupChoice {
+            grid-template-columns: auto minmax(0, 1fr);
+          }
+          .commonGroupPreview {
+            grid-column: 2;
+            text-align: left;
+          }
           .commonGroupPicker {
             max-height: 200px;
+          }
+          .optionModeGrid {
+            grid-template-columns: 1fr;
+          }
+          .optionModeChoice {
+            min-height: 0;
+          }
+          .optionModeSaveBox .btn {
+            width: 100%;
           }
         }
         @media (max-width: 360px) {
@@ -2709,8 +2850,19 @@ function AdminMenuPageInner() {
 
           <section className="grid">
           <div className="card">
-            <h2 className="cardTitle">메뉴 목록 ({items.length})</h2>
+            <div className="menuListHeading">
+              <h2 className="cardTitle">메뉴 목록 ({items.length})</h2>
+              <button
+                className="btn btnMini mobileListToggle"
+                type="button"
+                onClick={() => setMenuListCollapsed((prev) => !prev)}
+                aria-expanded={!menuListCollapsed}
+              >
+                {menuListCollapsed ? "목록 펼치기" : "목록 접기"}
+              </button>
+            </div>
 
+            <div className={`mobileMenuListContent ${menuListCollapsed ? "mobileMenuListContentCollapsed" : ""}`.trim()}>
             <div className="menuListToolbar">
               <div className="menuListActions">
                 <button className="btn btnPrimary" onClick={onNew} disabled={saving || loading}>
@@ -2755,9 +2907,9 @@ function AdminMenuPageInner() {
               </select>
             </div>
             <p className="muted" style={{ marginTop: 8 }}>
-              메뉴 항목을 개별 입력하여 등록합니다.
+              메뉴를 선택해 수정하세요.
             </p>
-            <p className="muted" style={{ marginTop: 8 }}>
+            <p className="muted menuOrderGuide" style={{ marginTop: 8 }}>
               목록에서 ↑/↓로 순서를 바꾼 뒤 <b>순서 저장</b>을 눌러주세요.
             </p>
 
@@ -2844,6 +2996,7 @@ function AdminMenuPageInner() {
                   </div>
                 ) : null}
               </div>
+            </div>
             </div>
           </div>
 
@@ -2953,58 +3106,70 @@ function AdminMenuPageInner() {
                 disabled={saving || loading}
                 aria-expanded={optionPanelOpen}
               >
-                {optionPanelOpen ? "옵션 닫기" : "옵션 열기"}
+                {optionPanelOpen ? "접기" : "설정하기"}
               </button>
             </div>
             {!optionPanelOpen ? (
-              <div className="optionClosedBox">옵션은 메뉴별 추가 선택지입니다. 필요할 때 열어서 공통옵션 또는 전용옵션을 연결해 주세요.</div>
+              <div className="optionClosedBox">옵션 사용 여부를 먼저 선택하세요. 옵션을 사용할 때만 공통 옵션 또는 메뉴 전용 옵션을 설정합니다.</div>
             ) : null}
             {optionPanelOpen ? (
               <>
-            <div className="optionSaveGuide">옵션은 별도로 저장됩니다.</div>
-            <div className={`optionNoneCard ${draft.optionNotRequired ? "optionNoneCardOn" : ""}`.trim()}>
-              <div>
-                <strong>{draft.optionNotRequired ? "옵션 없음 선택됨" : "옵션 없음"}</strong>
-                <p className="muted" style={{ marginTop: 4 }}>
-                  {draft.optionNotRequired ? "저장하면 기존 옵션 연결이 해제됩니다." : "추가 옵션 없이 판매할 메뉴에 사용하세요."}
-                </p>
-              </div>
-              {draft.optionNotRequired ? (
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => {
-                    setCommonDirty(true);
-                    setDraft((prev) => ({ ...prev, optionNotRequired: false }));
-                  }}
-                  disabled={saving || loading}
-                >
-                  옵션 연결로 변경
-                </button>
-              ) : (
-                <button
-                  className="btn btnOptionNone"
-                  type="button"
-                  onClick={() => {
-                    setCommonDirty(true);
-                    setDraft((prev) => ({ ...prev, optionNotRequired: true }));
-                  }}
-                  disabled={saving || loading}
-                >
-                  옵션 없음 설정
-                </button>
-              )}
+            <div className="optionSaveGuide">먼저 옵션 사용 여부를 선택한 뒤, 필요한 경우에만 옵션을 연결하세요.</div>
+            <div className="optionModeGrid" role="radiogroup" aria-label="메뉴 옵션 사용 여부">
+              <button
+                className={`optionModeChoice ${!draft.optionNotRequired ? "optionModeChoiceOn" : ""}`.trim()}
+                type="button"
+                role="radio"
+                aria-checked={!draft.optionNotRequired}
+                onClick={() => {
+                  if (!draft.optionNotRequired) return;
+                  setCommonDirty(true);
+                  setDraft((prev) => ({ ...prev, optionNotRequired: false }));
+                }}
+                disabled={saving || loading}
+              >
+                <span className="optionModeChoiceHead">
+                  <span>옵션 사용</span>
+                  {!draft.optionNotRequired ? <span className="optionModeCheck" aria-hidden="true">✓</span> : null}
+                </span>
+                <p>공통 옵션을 연결하거나 이 메뉴만의 옵션을 만듭니다.</p>
+              </button>
+              <button
+                className={`optionModeChoice ${draft.optionNotRequired ? "optionModeChoiceOn" : ""}`.trim()}
+                type="button"
+                role="radio"
+                aria-checked={draft.optionNotRequired}
+                onClick={() => {
+                  if (draft.optionNotRequired) return;
+                  setCommonDirty(true);
+                  setDraft((prev) => ({ ...prev, optionNotRequired: true }));
+                }}
+                disabled={saving || loading}
+              >
+                <span className="optionModeChoiceHead">
+                  <span>옵션 없음</span>
+                  {draft.optionNotRequired ? <span className="optionModeCheck" aria-hidden="true">✓</span> : null}
+                </span>
+                <p>고객이 추가 선택 없이 바로 주문합니다.</p>
+              </button>
             </div>
             {draft.optionNotRequired ? (
-              <div className="optionNoneSaveBox optionNoneCardOn">
-                <p className="muted">저장하면 기존 옵션 연결이 해제됩니다.</p>
+              <div className={`optionModeSaveBox ${connectedOptionCount > 0 ? "optionModeSaveBoxWarning" : ""}`.trim()}>
+                <div className="optionModeSaveText">
+                  <strong>옵션 없이 판매</strong>
+                  <span>
+                    {connectedOptionCount > 0
+                      ? `연결된 옵션 ${connectedOptionCount}개가 해제됩니다.`
+                      : "저장하면 이 메뉴는 추가 선택 없이 주문됩니다."}
+                  </span>
+                </div>
                 <button className="btn btnOptionNone" type="button" onClick={saveOptionNotRequiredInMenu} disabled={saving || loading || !commonDirty}>
-                  옵션 없음 저장
+                  옵션 없음으로 저장
                 </button>
               </div>
             ) : (
               <>
-            <div className="modeSwitchRow" style={{ marginTop: 6 }} role="tablist" aria-label="옵션 타입 탭">
+            <div className="modeSwitchRow" style={{ marginTop: 10 }} role="tablist" aria-label="옵션 설정 방식">
               {optionTabs.map((tab) => (
                 <button
                   key={tab.key}
@@ -3025,34 +3190,31 @@ function AdminMenuPageInner() {
                 <div className="label">공통옵션</div>
                 <div className="optionConnectCard">
                 <div className="commonGroupPickerHead">
-                  <span className="muted">추가할 공통옵션을 선택해 주세요.</span>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={addCommonGroups}
-                    disabled={saving || loading || commonGroupIdsToAdd.length === 0}
-                  >
-                    선택 연결
-                  </button>
+                  <span className="muted">체크하면 아래에서 세부 설정을 바로 확인할 수 있습니다.</span>
                 </div>
                 {unselectedCommonGroups.length === 0 ? (
                   <div className="muted">추가할 공통옵션이 없습니다.</div>
                 ) : (
                   <div className="commonGroupPicker" role="group" aria-label="추가할 공통옵션 그룹 선택">
-                    {unselectedCommonGroups.map((g) => (
-                      <label key={g.id} className="commonGroupChoice">
-                        <input
-                          type="checkbox"
-                          checked={commonGroupIdsToAdd.includes(g.id)}
-                          onChange={() => toggleCommonGroupToAdd(g.id)}
-                          disabled={saving || loading}
-                        />
-                        <span className="commonGroupChoiceText">
-                          <span className="name">{g.name}</span>
-                          <span className="muted commonGroupPolicy">· {getGroupPolicyText(g)}</span>
-                        </span>
-                      </label>
-                    ))}
+                    {unselectedCommonGroups.map((g) => {
+                      const groupOptions = itemsByGroup.get(g.id) || [];
+                      const optionPreview = getOptionPreview(groupOptions);
+                      return (
+                        <label key={g.id} className="commonGroupChoice">
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            onChange={() => toggleGroup(g.id)}
+                            disabled={saving || loading}
+                          />
+                          <span className="commonGroupChoiceText">
+                            <span className="name">{g.name}</span>
+                            <span className="muted commonGroupPolicy">· {getGroupPolicyText(g)}</span>
+                          </span>
+                          <span className="commonGroupPreview" title={optionPreview}>{optionPreview}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
 
