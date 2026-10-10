@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import RionBrand from "@/app/components/RionBrand";
 import BetaApplicationForm from "@/app/components/BetaApplicationForm";
+import BetaVisitTracker from "@/app/components/BetaVisitTracker";
 
 type FormState = {
   storeName: string; businessType: string; operationType: string; region: string;
@@ -14,7 +15,7 @@ type FormState = {
 const initialForm: FormState = { storeName: "", businessType: "", operationType: "", region: "", contactName: "", contactMethod: "email", contactEmail: "", contactPhone: "", preferredStart: "", feedbackAvailable: false, note: "", privacyConsent: false, website: "" };
 
 export default function BetaApplyPage() {
-  return <BetaApplicationForm />;
+  return <><BetaVisitTracker /><BetaApplicationForm /></>;
 }
 
 // Kept temporarily for comparison while the public intake is being refined.
