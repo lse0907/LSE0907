@@ -43,22 +43,24 @@ export default function OwnerMarketingLanding() {
         <nav aria-label="랜딩 페이지 이동">
           <a href="#video">소개 영상</a>
           <a href="#flow">주문 흐름</a>
-          <a href="#benefit">초기 도입 혜택</a>
+          <a href="#benefit">참여 혜택</a>
           <a href="#faq">자주 묻는 질문</a>
         </nav>
-        <a className="headerCta" href="#apply">초기 도입 신청</a>
+        <a className="headerCta" href="#apply">참여 신청하기</a>
       </header>
 
       <section className="heroSection textHero">
         <div className="heroCopy">
           <p className="eyebrow">RION ORDER · STORE OPERATIONS</p>
+          <p className="recruitmentBadge">출시 전 사용 매장 모집</p>
           <h1>바쁜 시간,<br />주문받는 일부터 줄이세요.</h1>
           <p className="heroLead">손님은 자신의 휴대폰으로 메뉴와 옵션을 고르고,<br />매장은 화면으로 주문을 확인합니다.</p>
           <div className="heroActions">
-            <a className="primaryButton" href="#apply">초기 도입 신청하기 <span aria-hidden>→</span></a>
+            <a className="primaryButton" href="#apply">참여 신청하기 <span aria-hidden>→</span></a>
             <a className="quietLink" href="#flow">어떻게 작동하나요</a>
           </div>
-          <p className="microCopy">선정 매장은 정식 출시 전까지 서비스 이용료 무료<br />신청만으로 자동 결제되지 않습니다.</p>
+          <p className="microCopy">선정 매장 초기 도입 비용 0원<br />신청만으로 자동 결제되지 않습니다.</p>
+          <a className="heroBenefitLink" href="#benefit">리온오더 사전 이용 참여 매장 혜택 <span>혜택 보기 <span aria-hidden="true">↓</span></span></a>
         </div>
       </section>
 
@@ -129,9 +131,9 @@ export default function OwnerMarketingLanding() {
 
       <section id="benefit" className="benefitSection">
         <div className="benefitLead">
-          <p className="eyebrow">EARLY ADOPTION</p>
-          <h2>우리 매장의 QR 주문,<br />먼저 시작해 보세요.</h2>
-          <p>정식 출시 전, 리온오더를 먼저 사용할 매장을 찾습니다. 궁금한 점이나 불편한 부분은 언제든 온라인 문의에 남겨 주세요.</p>
+          <p className="eyebrow">PRE-LAUNCH</p>
+          <h2>정식 출시 전,<br />먼저 사용해보실 사장님을 찾습니다.</h2>
+          <p>선정 매장은 초기 도입 비용 0원으로 시작합니다. 실제 매장에서 사용하며, 불편한 점이나 개선할 부분은 언제든 온라인 문의로 알려 주세요.</p>
           <div className="deviceNote"><b>새 장비 없이 바로 시작</b><span>기존 태블릿·휴대폰·PC·노트북 브라우저로 이용</span></div>
           <div className="deviceNote"><b>설정은 직접, 문의는 온라인으로</b><span>초기 설정 마법사를 따라 매장 정보와 메뉴를 등록하고, QR 안내판을 준비하세요.</span></div>
         </div>
@@ -162,16 +164,24 @@ export default function OwnerMarketingLanding() {
       </section>
 
       <section id="apply" className="applySection">
-        <p className="eyebrow">EARLY ADOPTION</p>
-        <h2>우리 매장에서도<br />바로 써보고 싶다면.</h2>
-        <p>신청 내용을 확인한 뒤 선정 결과와 시작 일정을 개별 안내합니다.</p>
-        <div><a className="primaryButton light" href="/beta-apply">초기 도입 신청하기 <span aria-hidden>→</span></a><a className="quietLink lightLink" href="#faq">먼저 궁금한 점 확인하기</a></div>
+        <p className="eyebrow">PRE-LAUNCH</p>
+        <h2>리온오더 출시 전<br />사용 매장 모집</h2>
+        <p>카페·식당·술집·푸드트럭 등 실제 매장에서 먼저 사용해보세요. 신청 검토 후 선정 결과와 시작 일정을 개별 안내합니다.</p>
+        <div><a className="primaryButton light" href="/beta-apply">참여 신청하기 <span aria-hidden>→</span></a><a className="quietLink lightLink" href="#faq">먼저 궁금한 점 확인하기</a></div>
         <small>신청만으로 결제되거나 자동 과금되지 않습니다.</small>
       </section>
 
       <footer>© RION Labs. Realize Innovation ON</footer>
 
       <style>{`
+        .heroBenefitLink{display:inline-flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px 14px;margin-top:20px;padding:12px 17px;border:1px solid #c9daf5;border-radius:12px;background:#edf4ff;color:#244b87;font-size:14px;font-weight:700;line-height:1.5;text-decoration:none}
+        .heroBenefitLink>span{color:#285fd4;font-size:13px;font-weight:800;white-space:nowrap}
+        .heroBenefitLink:hover{background:#e1ecff;border-color:#92b5ef}
+        .heroBenefitLink:focus-visible{outline:3px solid #92b5ef;outline-offset:3px}
+        #benefit{scroll-margin-top:24px}
+        .recruitmentBadge{display:inline-flex;align-items:center;gap:9px;margin:0 0 22px;padding:11px 19px;border:1px solid #183a70;border-radius:999px;background:#10264b;color:#fff;box-shadow:0 5px 14px rgba(16,38,75,.12);font-size:16px;font-weight:800;line-height:1.4}
+        .recruitmentBadge:before{content:"";width:8px;height:8px;flex-shrink:0;border-radius:50%;background:#8dddc0}
+        .benefitLead h2{word-break:keep-all}
         .landing .videoStack{grid-template-columns:minmax(0,1fr);gap:28px;justify-items:center;text-align:center}
         .videoStack .videoCopy{max-width:640px}
         .videoStack .videoPoster{width:min(100%,360px)}
@@ -188,7 +198,7 @@ export default function OwnerMarketingLanding() {
         .compositeFlow{margin-top:40px}
         #video{scroll-margin-top:24px}
         .landing .realHero img{object-fit:contain}
-        .landing .storyGrid{grid-template-columns:minmax(0,.75fr) minmax(0,1.25fr);grid-template-rows:auto;align-items:start}
+        .landing .storyGrid:not(.restoredFlow){grid-template-columns:minmax(0,.75fr) minmax(0,1.25fr);grid-template-rows:auto;align-items:start}
         .realScreenCard{min-width:0;overflow:hidden;border:1px solid #dce5f2;border-radius:22px;background:#f5f7fb}
         .realScreenCard>a{display:block;line-height:0;background:#e9eef6}
         .realScreenCard img{display:block;width:100%;height:auto}
