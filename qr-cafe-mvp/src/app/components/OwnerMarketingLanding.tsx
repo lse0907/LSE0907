@@ -223,7 +223,7 @@ export default function OwnerMarketingLanding() {
         .landing .primaryButton:active,.landingHeader .headerCta:active{transform:translateY(1px)}
         .landing .primaryButton:focus-visible,.landingHeader .headerCta:focus-visible{outline:3px solid #60a5fa;outline-offset:4px}
         @media(max-width:760px){.landingHeader{gap:12px}.landingHeader .headerCta{padding:0 12px;gap:6px;font-size:12px}.landing .primaryButton{min-width:0;width:100%}.textHero .heroActions,.applySection>div{grid-template-columns:minmax(0,1fr)}}
-        @media(max-width:360px){.heroCopy h1{font-size:32px}.heroLead{font-size:14px}}
+        @media(max-width:360px){.textHero .heroCopy h1{font-size:32px}.textHero .heroLead{font-size:14px}}
         @media(prefers-reduced-motion:reduce){.landing .primaryButton,.landingHeader .headerCta{transition:none;transform:none}}
       `}</style>
 
