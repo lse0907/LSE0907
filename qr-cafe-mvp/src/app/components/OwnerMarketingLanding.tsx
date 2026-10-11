@@ -46,17 +46,17 @@ export default function OwnerMarketingLanding() {
           <a href="#benefit">참여 혜택</a>
           <a href="#faq">자주 묻는 질문</a>
         </nav>
-        <a className="headerCta" href="#apply">참여 신청하기</a>
+        <a className="headerCta" href="/beta-apply">사전 이용 신청하기 <span aria-hidden="true">→</span></a>
       </header>
 
       <section className="heroSection textHero">
         <div className="heroCopy">
           <p className="eyebrow">RION ORDER · STORE OPERATIONS</p>
           <p className="recruitmentBadge">출시 전 사용 매장 모집</p>
-          <h1>바쁜 시간,<br />주문받는 일부터 줄이세요.</h1>
-          <p className="heroLead">손님은 자신의 휴대폰으로 메뉴와 옵션을 고르고,<br />매장은 화면으로 주문을 확인합니다.</p>
+          <h1>주문받느라,<br /><span>준비가 멈추나요?</span></h1>
+          <p className="heroLead">메뉴와 옵션 선택은 손님의 휴대폰에서.<br />매장은 화면으로 확인하고, 준비에 집중하세요.</p>
           <div className="heroActions">
-            <a className="primaryButton" href="#apply">참여 신청하기 <span aria-hidden>→</span></a>
+            <a className="primaryButton" href="/beta-apply">사전 이용 신청하기 <span aria-hidden="true">→</span></a>
             <a className="quietLink" href="#flow">어떻게 작동하나요</a>
           </div>
           <p className="microCopy">선정 매장 초기 도입 비용 0원<br />신청만으로 자동 결제되지 않습니다.</p>
@@ -167,7 +167,7 @@ export default function OwnerMarketingLanding() {
         <p className="eyebrow">PRE-LAUNCH</p>
         <h2>리온오더 출시 전<br />사용 매장 모집</h2>
         <p>카페·식당·술집·푸드트럭 등 실제 매장에서 먼저 사용해보세요. 신청 검토 후 선정 결과와 시작 일정을 개별 안내합니다.</p>
-        <div><a className="primaryButton light" href="/beta-apply">참여 신청하기 <span aria-hidden>→</span></a><a className="quietLink lightLink" href="#faq">먼저 궁금한 점 확인하기</a></div>
+        <div><a className="primaryButton light" href="/beta-apply">사전 이용 신청하기 <span aria-hidden="true">→</span></a><a className="quietLink lightLink" href="#faq">먼저 궁금한 점 확인하기</a></div>
         <small>신청만으로 결제되거나 자동 과금되지 않습니다.</small>
       </section>
 
@@ -209,6 +209,23 @@ export default function OwnerMarketingLanding() {
         .realScreenCard small{display:block;margin-top:10px;color:#738199;font-size:12px}
         .realScreenCard a:focus-visible{outline:3px solid #285fd4;outline-offset:-3px}
         @media(max-width:760px){.landing .storyGrid{grid-template-columns:1fr;grid-template-rows:auto;gap:20px}.landing .realHero{max-width:360px}.realScreenCard>div{padding:18px 20px}}
+      `}</style>
+      <style>{`
+        .landingHeader .headerCta{min-height:44px;padding:0 16px;gap:10px;border:1px solid #1e4fb7;background:var(--blue);color:#fff!important;font-size:14px;white-space:nowrap;box-shadow:0 4px 10px rgba(30,83,190,.16)}
+        .heroCopy h1 span{color:var(--blue)}
+        .textHero .heroLead{word-break:keep-all}
+        .textHero .microCopy{font-size:14px;line-height:1.7;color:#526581}
+        .landing .primaryButton{min-height:56px;min-width:240px;padding:12px 24px;box-sizing:border-box;gap:18px;border:1px solid #1e4fb7;font-size:17px!important;line-height:1.4;box-shadow:0 8px 18px rgba(30,83,190,.24)}
+        .landing .primaryButton span{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.16);font-size:20px;line-height:1}
+        .landing .primaryButton.light{border-color:#fff;background:#fff;box-shadow:0 8px 20px rgba(0,0,0,.18)}
+        .landing .primaryButton.light span{background:#edf4ff}
+        .landing .primaryButton,.landingHeader .headerCta{transition:background .16s ease,box-shadow .16s ease,transform .16s ease}
+        @media(hover:hover){.landing .primaryButton:hover,.landingHeader .headerCta:hover{background:#1e4fb7;box-shadow:0 10px 24px rgba(30,83,190,.3);transform:translateY(-2px)}.landing .primaryButton.light:hover{background:#edf4ff;box-shadow:0 10px 24px rgba(0,0,0,.22)}}
+        .landing .primaryButton:active,.landingHeader .headerCta:active{transform:translateY(1px)}
+        .landing .primaryButton:focus-visible,.landingHeader .headerCta:focus-visible{outline:3px solid #60a5fa;outline-offset:4px}
+        @media(max-width:760px){.landingHeader{gap:12px}.landingHeader .headerCta{padding:0 12px;gap:6px;font-size:12px}.landing .primaryButton{min-width:0;width:100%}.textHero .heroActions,.applySection>div{grid-template-columns:minmax(0,1fr)}}
+        @media(max-width:360px){.textHero .heroCopy h1{font-size:32px}.textHero .heroLead{font-size:14px}}
+        @media(prefers-reduced-motion:reduce){.landing .primaryButton,.landingHeader .headerCta{transition:none;transform:none}}
       `}</style>
 
       <style>{`
