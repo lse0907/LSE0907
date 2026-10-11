@@ -12,6 +12,7 @@ const storeTypes = [
 ];
 
 const faqs = [
+  ["손님은 어떻게 주문을 시작하나요?", "손님이 매장의 QR을 휴대폰으로 스캔하면 주문 화면이 열립니다. 메뉴와 옵션을 선택해 주문하면, 직원은 매장 접수 화면에서 내용을 확인하고 준비합니다."],
   ["정말 정식 출시 전까지 무료인가요?", "선정 매장은 정식 출시 전까지 기본 구독과 선택한 선결제 옵션을 무료로 이용합니다. 혜택은 선정된 사장님별 참여 매장 1곳에 적용됩니다. 신청만으로 결제되거나 자동 과금되지 않습니다."],
   ["새 태블릿이나 키오스크를 구매해야 하나요?", "아니요. 매장에서 사용하던 태블릿·휴대폰·PC·노트북의 브라우저로 시작할 수 있습니다. 별도 장비 구매·임대·방문 설치는 필요하지 않습니다."],
   ["처음 설정은 어떻게 하나요?", "사장님이 초기 설정 마법사를 따라 매장 정보와 메뉴, 주문 방식을 직접 설정합니다. QR 안내판을 준비하고 테스트 주문으로 확인한 뒤 운영을 시작하세요. 방문 설치는 제공하지 않으며, 궁금한 점은 온라인 문의로 도움을 드립니다."],
@@ -54,7 +55,7 @@ export default function OwnerMarketingLanding() {
           <p className="eyebrow">RION ORDER · STORE OPERATIONS</p>
           <p className="recruitmentBadge">출시 전 사용 매장 모집</p>
           <h1>주문받느라,<br /><span>준비가 멈추나요?</span></h1>
-          <p className="heroLead">메뉴와 옵션 선택은 손님의 휴대폰에서.<br />매장은 화면으로 확인하고, 준비에 집중하세요.</p>
+          <p className="heroLead">손님은 <strong>매장 QR을 찍고</strong>, 휴대폰으로 주문합니다.<br />매장은 화면으로 확인하고, 준비에 집중하세요.</p>
           <div className="heroActions">
             <a className="primaryButton" href="/beta-apply">사전 이용 신청하기 <span aria-hidden="true">→</span></a>
             <a className="quietLink" href="#flow">어떻게 작동하나요</a>
@@ -68,7 +69,7 @@ export default function OwnerMarketingLanding() {
         <div className="videoCopy">
           <p className="eyebrow">RION ORDER FLOW</p>
           <h2 id="video-preview-title">18초로 보는<br />매장 주문 흐름.</h2>
-          <p>손님은 휴대폰으로 주문하고, 매장은 확인 후 준비합니다.</p>
+          <p>손님은 QR을 찍고 주문하고, 매장은 확인 후 준비합니다.</p>
         </div>
         <div className="videoPoster">
           <video
@@ -90,12 +91,12 @@ export default function OwnerMarketingLanding() {
         <div className="sectionIntro">
           <p className="eyebrow">ORDER FLOW</p>
           <h2>한 번 보면 이해되는<br />매장 주문 흐름.</h2>
-          <p>주문은 고객이 직접 확인하고, 매장은 바로 접수합니다.</p>
+          <p>QR 스캔부터 주문 접수, 메뉴 전달까지 이어집니다.</p>
         </div>
         <div className="storyGrid restoredFlow">
           <article className="storyCard storyTall customerScene">
             <Image src="/marketing/rion-order-flow-customer-v2.png" alt="실제 고객 화면을 활용해 고객이 휴대폰으로 메뉴를 고르는 장면을 구성한 AI 연출 이미지" fill sizes="(max-width: 760px) 100vw, 66vw" />
-            <div><span>01 · 고객 주문</span><b>메뉴와 옵션을 직접 선택</b><p>손님 자신의 휴대폰으로 주문합니다.</p></div>
+            <div><span>01 · QR 스캔과 주문</span><b>QR을 찍고 메뉴·옵션 선택</b><p>매장 QR을 스캔하면 주문 화면이 열립니다.</p></div>
           </article>
           <article className="storyCard staffScene">
             <Image src="/marketing/rion-order-flow-staff-v3.png" alt="직원 어깨 너머로 직원과 같은 방향에서 주문 접수 화면을 확인하는 AI 연출 이미지" fill sizes="(max-width: 760px) 100vw, 40vw" />
@@ -214,6 +215,7 @@ export default function OwnerMarketingLanding() {
         .landingHeader .headerCta{min-height:44px;padding:0 16px;gap:10px;border:1px solid #1e4fb7;background:var(--blue);color:#fff!important;font-size:14px;white-space:nowrap;box-shadow:0 4px 10px rgba(30,83,190,.16)}
         .heroCopy h1 span{color:var(--blue)}
         .textHero .heroLead{word-break:keep-all}
+        .textHero .heroLead strong{color:var(--blue);font-weight:800}
         .textHero .microCopy{font-size:14px;line-height:1.7;color:#526581}
         .landing .primaryButton{min-height:56px;min-width:240px;padding:12px 24px;box-sizing:border-box;gap:18px;border:1px solid #1e4fb7;font-size:17px!important;line-height:1.4;box-shadow:0 8px 18px rgba(30,83,190,.24)}
         .landing .primaryButton span{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.16);font-size:20px;line-height:1}
