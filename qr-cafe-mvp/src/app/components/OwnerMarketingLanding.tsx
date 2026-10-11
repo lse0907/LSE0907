@@ -213,6 +213,7 @@ export default function OwnerMarketingLanding() {
       <style>{`
         .landingHeader .headerCta{min-height:44px;padding:0 16px;gap:10px;border:1px solid #1e4fb7;background:var(--blue);color:#fff!important;font-size:14px;white-space:nowrap;box-shadow:0 4px 10px rgba(30,83,190,.16)}
         .heroCopy h1 span{color:var(--blue)}
+        .textHero .heroLead{word-break:keep-all}
         .textHero .microCopy{font-size:14px;line-height:1.7;color:#526581}
         .landing .primaryButton{min-height:56px;min-width:240px;padding:12px 24px;box-sizing:border-box;gap:18px;border:1px solid #1e4fb7;font-size:17px!important;line-height:1.4;box-shadow:0 8px 18px rgba(30,83,190,.24)}
         .landing .primaryButton span{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.16);font-size:20px;line-height:1}
