@@ -54,7 +54,7 @@ async function check(body, status, origin) { inserted = undefined; const respons
   const legacy = { ...base, intakeType: "application", privacyConsentVersion: oldVersion, operationType: "both", region: "서울", contactName: "검증", preferredStart: "asap" };
   await check(legacy, 201); assert.equal(inserted.region, "서울"); assert.equal(inserted.operation_type, "both");
   await check({ ...legacy, region: "" }, 400);
-  const sql = fs.readFileSync("supabase/migrations/20261013063140_prelaunch_inquiry_optional_details.sql", "utf8");
+  const sql = fs.readFileSync("supabase/migrations/20261013071133_prelaunch_inquiry_optional_details.sql", "utf8");
   for (const field of ["operation_type", "region", "contact_name", "preferred_start"]) assert.ok(sql.includes(`alter column ${field} drop not null`));
   assert.ok(!/delete from|update public|disable row level|grant /i.test(sql));
   console.log("Inquiry email/SMS queries, null details, legacy intake, consent, closed round, duplicate/rate limits and origin checks passed (mock DB; no production writes).");
