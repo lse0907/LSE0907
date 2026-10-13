@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       if (countResult.error || latestResult.error) throw new ApiError(500, "베타 신청 현황을 불러오지 못했습니다.", "BETA_APPLICATION_SUMMARY_FAILED");
       return Response.json({ ok: true, count: countResult.count || 0, latestCreatedAt: latestResult.data?.created_at || null }, { headers: { "Cache-Control": "private, no-store" } });
     }
-    let query = admin.from("beta_applications").select("id,created_at,store_name,business_type,operation_type,region,contact_name,contact_method,contact_email,contact_phone,preferred_start,preferred_start_date,feedback_available,note,status,review_note,reviewed_at,recruitment_round:beta_recruitment_rounds(title)").order("created_at", { ascending: false }).limit(200);
+    let query = admin.from("beta_applications").select("id,created_at,store_name,business_type,operation_type,region,contact_name,contact_method,contact_email,contact_phone,preferred_start,preferred_start_date,feedback_available,note,status,review_note,reviewed_at,privacy_consent_version,recruitment_round:beta_recruitment_rounds(title)").order("created_at", { ascending: false }).limit(200);
     if (statuses.has(status)) query = query.eq("status", status);
     if (Number.isInteger(roundId) && roundId > 0) query = query.eq("recruitment_round_id", roundId);
     const result = await query;

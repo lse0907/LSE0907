@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 
 import { ApiError, apiErrorResponse, createSupabaseAdminClient } from "@/app/api/_lib/storeAuth";
 import { BETA_APPLICATION_CONSENT_VERSION } from "@/app/lib/betaApplicationConsent";
+import { BETA_INQUIRY_CONSENT_VERSION } from "@/app/lib/betaInquiryConsent";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,12 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => null) as Record<string, unknown> | null;
-    if (!body) throw new ApiError(400, "신청 내용을 확인해 주세요.", "BETA_APPLICATION_INVALID");
+    if (!body) throw new ApiError(400, "접수 내용을 확인해 주세요.", "BETA_APPLICATION_INVALID");
     if (text(body.website, 120)) return Response.json({ ok: true });
+    const inquiry = body.intakeType === "inquiry";
+    if (body.intakeType && !inquiry && body.intakeType !== "application") {
+      throw new ApiError(400, "접수 유형을 확인해 주세요.", "BETA_APPLICATION_INVALID");
+    }
 
     const storeName = text(body.storeName, 80);
     const businessType = text(body.businessType, 30);
@@ -45,10 +50,10 @@ export async function POST(req: NextRequest) {
     const feedbackAvailable = body.feedbackAvailable === true;
     const note = text(body.note, 1000);
 
-    if (storeName.length < 2 || region.length < 2 || contactName.length < 2) {
-      throw new ApiError(400, "매장명, 지역, 연락받을 분의 이름을 입력해 주세요.", "BETA_APPLICATION_REQUIRED");
+    if (storeName.length < 2 || (!inquiry && (region.length < 2 || contactName.length < 2))) {
+      throw new ApiError(400, inquiry ? "매장명을 입력해 주세요." : "매장명, 지역, 연락받을 분의 이름을 입력해 주세요.", "BETA_APPLICATION_REQUIRED");
     }
-    if (!businessTypes.has(businessType) || !operationTypes.has(operationType) || !startTimes.has(preferredStart)) {
+    if (!businessTypes.has(businessType) || (!inquiry && (!operationTypes.has(operationType) || !startTimes.has(preferredStart)))) {
       throw new ApiError(400, "선택 항목을 다시 확인해 주세요.", "BETA_APPLICATION_SELECTION_INVALID");
     }
     if (!contactMethods.has(contactMethod)) {
@@ -57,19 +62,19 @@ export async function POST(req: NextRequest) {
     if (!Number.isInteger(recruitmentRoundId) || recruitmentRoundId < 1) {
       throw new ApiError(409, "현재 모집이 마감되었거나 변경되었습니다. 페이지를 새로고침해 주세요.", "BETA_RECRUITMENT_NOT_OPEN");
     }
-    if (preferredStart === "within_month" && !/^\d{4}-\d{2}-\d{2}$/.test(preferredStartDate)) {
+    if (!inquiry && preferredStart === "within_month" && !/^\d{4}-\d{2}-\d{2}$/.test(preferredStartDate)) {
       throw new ApiError(400, "희망 시작일을 선택해 주세요.", "BETA_APPLICATION_START_DATE_REQUIRED");
     }
     if (contactMethod === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
       throw new ApiError(400, "이메일 주소를 확인해 주세요.", "BETA_APPLICATION_EMAIL_INVALID");
     }
-    if (contactMethod === "phone" && contactPhone.length < 8) {
+    if (contactMethod === "phone" && (inquiry ? !/^01[016789]\d{7,8}$/.test(contactPhone) : contactPhone.length < 8)) {
       throw new ApiError(400, "연락처를 확인해 주세요.", "BETA_APPLICATION_PHONE_INVALID");
     }
     if (body.privacyConsent !== true) {
-      throw new ApiError(400, "신청 검토를 위한 개인정보 수집·이용 안내에 동의해 주세요.", "BETA_APPLICATION_PRIVACY_REQUIRED");
+      throw new ApiError(400, "접수를 위한 개인정보 수집·이용 안내에 동의해 주세요.", "BETA_APPLICATION_PRIVACY_REQUIRED");
     }
-    if (privacyConsentVersion !== BETA_APPLICATION_CONSENT_VERSION) {
+    if (privacyConsentVersion !== (inquiry ? BETA_INQUIRY_CONSENT_VERSION : BETA_APPLICATION_CONSENT_VERSION)) {
       throw new ApiError(400, "개인정보 수집·이용 동의 내용을 다시 확인해 주세요.", "BETA_APPLICATION_PRIVACY_VERSION_REQUIRED");
     }
 
@@ -85,29 +90,29 @@ export async function POST(req: NextRequest) {
       .eq(contactColumn, contactValue)
       .in("status", activeStatuses)
       .limit(1);
-    if (duplicate.error) throw new ApiError(500, "신청 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", "BETA_APPLICATION_DUPLICATE_CHECK_FAILED");
-    if (duplicate.data?.length) throw new ApiError(409, "같은 매장과 연락 방법으로 접수된 신청이 이미 있습니다. 검토 결과를 기다려 주세요.", "BETA_APPLICATION_DUPLICATE");
+    if (duplicate.error) throw new ApiError(500, "접수 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", "BETA_APPLICATION_DUPLICATE_CHECK_FAILED");
+    if (duplicate.data?.length) throw new ApiError(409, "같은 매장과 연락 방법으로 접수된 내용이 이미 있습니다. 연락 안내를 기다려 주세요.", "BETA_APPLICATION_DUPLICATE");
 
     const recent = await admin.from("beta_applications")
       .select("id", { count: "exact", head: true })
       .eq(contactColumn, contactValue)
       .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-    if (recent.error) throw new ApiError(500, "신청 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", "BETA_APPLICATION_RATE_CHECK_FAILED");
-    if ((recent.count || 0) >= 3) throw new ApiError(429, "신청 횟수가 많습니다. 잠시 후 다시 시도해 주세요.", "BETA_APPLICATION_RATE_LIMITED");
+    if (recent.error) throw new ApiError(500, "접수 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", "BETA_APPLICATION_RATE_CHECK_FAILED");
+    if ((recent.count || 0) >= 3) throw new ApiError(429, "접수 횟수가 많습니다. 잠시 후 다시 시도해 주세요.", "BETA_APPLICATION_RATE_LIMITED");
 
     const saved = await admin.from("beta_applications").insert({
       store_name: storeName,
       business_type: businessType,
-      operation_type: operationType,
-      region,
-      contact_name: contactName,
+      operation_type: inquiry ? null : operationType,
+      region: inquiry ? null : region,
+      contact_name: inquiry ? null : contactName,
       contact_method: contactMethod,
-      contact_email: contactEmail || null,
-      contact_phone: contactPhone || null,
-      preferred_start: preferredStart,
-      preferred_start_date: preferredStart === "within_month" ? preferredStartDate : null,
+      contact_email: contactMethod === "email" ? contactEmail : null,
+      contact_phone: contactMethod === "phone" ? contactPhone : null,
+      preferred_start: inquiry ? null : preferredStart,
+      preferred_start_date: !inquiry && preferredStart === "within_month" ? preferredStartDate : null,
       recruitment_round_id: recruitmentRoundId,
-      feedback_available: feedbackAvailable,
+      feedback_available: inquiry ? false : feedbackAvailable,
       note,
       source: "landing",
       privacy_consent_version: privacyConsentVersion,
@@ -116,7 +121,7 @@ export async function POST(req: NextRequest) {
 
     if (saved.error || !saved.data) {
       console.error("[beta-application] insert failed", saved.error?.message);
-      throw new ApiError(500, "신청을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", "BETA_APPLICATION_SAVE_FAILED");
+      throw new ApiError(500, "접수 내용을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", "BETA_APPLICATION_SAVE_FAILED");
     }
 
     return Response.json({ ok: true, applicationId: saved.data.id }, { status: 201, headers: { "Cache-Control": "no-store" } });

@@ -20,8 +20,8 @@ export default function OpsBetaVisitStats({ roundId, preview }: { roundId: numbe
     return () => { controller.abort(); window.clearInterval(timer); };
   }, [roundId, preview]);
   const display = (value: number | null | undefined, unit: string) => value == null ? "—" : `${value.toLocaleString("ko-KR")}${unit}`;
-  return <div className="roundStats" aria-label="현재 모집 조회 및 신청 수" title={error || stats?.message || "해당 모집 차수 누적 집계 · 같은 탭 30분 내 새로고침 중복 제외"}>
-    <span>조회 <b>{display(stats?.total, "회")}</b></span><i aria-hidden="true">·</i><span>신청 <b>{display(stats?.applications, "건")}</b></span>
+  return <div className="roundStats" aria-label="현재 모집 조회 및 접수 수" title={error || stats?.message || "해당 모집 차수 누적 집계 · 같은 탭 30분 내 새로고침 중복 제외"}>
+    <span>조회 <b>{display(stats?.total, "회")}</b></span><i aria-hidden="true">·</i><span>접수 <b>{display(stats?.applications, "건")}</b></span>
     {error || stats?.message ? <small role="status">일부 통계 확인 필요</small> : !stats ? <small role="status">불러오는 중…</small> : null}
     <style jsx>{`.roundStats{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:5px;color:#597565;font-size:12px}.roundStats b{margin-left:4px;font-size:15px;color:#173d29;font-variant-numeric:tabular-nums}.roundStats i{font-style:normal;color:#b3c9ba}.roundStats small{font-size:11px;color:#7b6b44}`}</style>
   </div>;

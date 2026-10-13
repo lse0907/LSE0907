@@ -204,7 +204,7 @@ type AiOpsSignal = { loading: boolean; error: string; failedCount: number; month
 
 const NAV_GROUPS: Array<{ id: OpsPrimaryTab; label: string; icon: OpsIconName; tabs: Array<{ id: OpsTab; label: string; icon: OpsIconName }> }> = [
   { id: "overview", label: "대시보드", icon: "dashboard", tabs: [{ id: "overview", label: "대시보드", icon: "dashboard" }] },
-  { id: "merchant", label: "점주·매장", icon: "store", tabs: [{ id: "stores", label: "매장·점주 관리", icon: "store" }, { id: "businessVerification", label: "사업자 인증", icon: "shield" }, { id: "betaApplications", label: "베타 신청", icon: "approval" }] },
+  { id: "merchant", label: "점주·매장", icon: "store", tabs: [{ id: "stores", label: "매장·점주 관리", icon: "store" }, { id: "businessVerification", label: "사업자 인증", icon: "shield" }, { id: "betaApplications", label: "사전 이용 접수", icon: "approval" }] },
   { id: "billing", label: "구독·결제", icon: "card", tabs: [{ id: "subscriptions", label: "구독 관리", icon: "card" }, { id: "payments", label: "결제·환불", icon: "card" }] },
   { id: "support", label: "지원·장애", icon: "support", tabs: [{ id: "tickets", label: "문의·장애", icon: "support" }, { id: "incidentAnalysis", label: "AI 장애 분석", icon: "sparkles" }] },
   { id: "system", label: "시스템·정책", icon: "settings", tabs: [{ id: "announcements", label: "운영 알림", icon: "bell" }, { id: "ai", label: "AI 운영", icon: "sparkles" }, { id: "approvals", label: "승인함", icon: "approval" }, { id: "privacyRequests", label: "개인정보 요청", icon: "privacy" }, { id: "settings", label: "시스템 설정", icon: "settings" }] },
@@ -510,7 +510,7 @@ export default function OpsPage() {
 
     const betaApplicationCount = betaResponse.ok && betaPayload?.ok ? Number(betaPayload.count || 0) : 0;
     if (seenBetaApplicationCount.current != null && betaApplicationCount > seenBetaApplicationCount.current) {
-      setBetaApplicationAlert(`새 베타 신청 ${betaApplicationCount - seenBetaApplicationCount.current}건이 접수되었습니다.`);
+      setBetaApplicationAlert(`새 사전 이용 접수 ${betaApplicationCount - seenBetaApplicationCount.current}건이 접수되었습니다.`);
     }
     if (betaResponse.ok && betaPayload?.ok) seenBetaApplicationCount.current = betaApplicationCount;
     setOpsWorkQueue({
@@ -523,7 +523,7 @@ export default function OpsPage() {
       loading: false,
       businessVerificationError: businessResponse.ok && businessPayload?.ok ? "" : "사업자 인증 데이터 준비 상태를 확인해야 합니다.",
       privacyRequestError: privacyResponse.ok && privacyPayload?.ok ? "" : "개인정보 요청 데이터를 불러오지 못했습니다.",
-      betaApplicationError: betaResponse.ok && betaPayload?.ok ? "" : "베타 신청 현황을 불러오지 못했습니다.",
+      betaApplicationError: betaResponse.ok && betaPayload?.ok ? "" : "사전 이용 접수 현황을 불러오지 못했습니다.",
     });
   }, []);
 
@@ -2477,7 +2477,7 @@ export default function OpsPage() {
         </section>
       ) : null}
 
-      {betaApplicationAlert ? <button className="betaApplicationAlert" onClick={() => { setActiveTab("betaApplications"); setBetaApplicationAlert(""); }}><span><OpsIcon name="approval" />새 베타 신청</span><strong>{betaApplicationAlert}</strong><small>신청 확인</small></button> : null}
+      {betaApplicationAlert ? <button className="betaApplicationAlert" onClick={() => { setActiveTab("betaApplications"); setBetaApplicationAlert(""); }}><span><OpsIcon name="approval" />새 사전 이용 접수</span><strong>{betaApplicationAlert}</strong><small>신청 확인</small></button> : null}
 
       <div className={`opsNavigation primary-${activePrimary}`}>
         <nav className="tabs primaryTabs" aria-label="OPS 주요 메뉴">
@@ -2509,7 +2509,7 @@ export default function OpsPage() {
             <div className="opsPulseCopy">
               <span className="opsPulseLabel"><OpsIcon name="dashboard" />TODAY&apos;S OPS</span>
               <h2>{opsQueueHasError ? "운영 데이터 확인이 필요합니다" : immediateActionCount > 0 ? "먼저 처리할 운영 업무가 있습니다" : "지금 처리할 운영 업무가 없습니다"}</h2>
-              <p>{opsQueueHasError ? "인증, 베타 신청 또는 개인정보 요청 현황을 불러오지 못했습니다. 해당 메뉴에서 데이터를 확인해 주세요." : immediateActionCount > 0 ? "문의, 권한 검토, 베타 신청, 개인정보 요청, 구독·결제 점검을 우선순위로 모았습니다." : "대기 중인 문의·권한 검토·베타 신청·개인정보 요청·구독 점검 항목이 없습니다."}</p>
+              <p>{opsQueueHasError ? "인증, 사전 이용 접수 또는 개인정보 요청 현황을 불러오지 못했습니다. 해당 메뉴에서 데이터를 확인해 주세요." : immediateActionCount > 0 ? "문의, 권한 검토, 사전 이용 접수, 개인정보 요청, 구독·결제 점검을 우선순위로 모았습니다." : "대기 중인 문의·권한 검토·사전 이용 접수·개인정보 요청·구독 점검 항목이 없습니다."}</p>
             </div>
             <div className="opsPulseCount">
               <strong>{opsQueueHasError ? "!" : immediateActionCount.toLocaleString()}</strong>
@@ -2531,8 +2531,8 @@ export default function OpsPage() {
               <span className="immediateActionMeta"><small>{opsWorkQueue.privacyRequestError || queueAgeLabel(opsWorkQueue.oldestPrivacyRequestAt, "요청 범위와 처리 기한을 확인합니다.")}</small><b>{opsWorkQueue.loading || opsWorkQueue.privacyRequestError ? "-" : `${opsWorkQueue.privacyRequestCount.toLocaleString()}건`}</b></span>
             </button>
             <button className={`immediateAction ${opsWorkQueue.betaApplicationCount > 0 || opsWorkQueue.betaApplicationError ? "warn" : ""}`} disabled={Boolean(opsWorkQueue.betaApplicationError)} onClick={() => setActiveTab("betaApplications")}>
-              <span className="immediateActionTitle"><OpsIcon name="approval" />베타 신청</span>
-              <span className="immediateActionMeta"><small>{opsWorkQueue.betaApplicationError || queueAgeLabel(opsWorkQueue.latestBetaApplicationAt, "새로 접수된 베타 신청을 확인합니다.")}</small><b>{opsWorkQueue.loading || opsWorkQueue.betaApplicationError ? "-" : `${opsWorkQueue.betaApplicationCount.toLocaleString()}건`}</b></span>
+              <span className="immediateActionTitle"><OpsIcon name="approval" />사전 이용 접수</span>
+              <span className="immediateActionMeta"><small>{opsWorkQueue.betaApplicationError || queueAgeLabel(opsWorkQueue.latestBetaApplicationAt, "새로 접수된 사전 이용 접수을 확인합니다.")}</small><b>{opsWorkQueue.loading || opsWorkQueue.betaApplicationError ? "-" : `${opsWorkQueue.betaApplicationCount.toLocaleString()}건`}</b></span>
             </button>
             <button className={`immediateAction ${subscriptionCheckCount > 0 ? "warn" : ""}`} onClick={() => setActiveTab("stores")}>
               <span className="immediateActionTitle"><OpsIcon name="card" />구독·결제 점검</span>
