@@ -250,7 +250,7 @@ function AdminOptionsPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const setupMode = (sp.get("mode") || "manual").trim();
-  const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
+  const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? ((process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "사진·파일" : "일괄 등록") : "직접 설정";
   const [storeId, setStoreId] = useState<string>("");
   const [storeName, setStoreName] = useState("");
 
@@ -1979,7 +1979,7 @@ function AdminOptionsPageInner() {
                     ? "옵션 그룹/항목을 직접 등록하는 방식입니다."
                     : setupMode === "copy"
                       ? "원본 매장의 옵션을 복사해 빠르게 시작할 수 있습니다."
-                      : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."
+                      : (process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "사진·파일로 정리한 옵션도 이 화면에서 수정할 수 있습니다." : "옵션은 일괄 등록을 지원하지 않아 직접 설정이 필요합니다."
                 }
                 stepGuide="메뉴에 추가 선택이 필요하면 옵션을 만들어 주세요."
                 completeLabel="확인하고 다음"
@@ -1992,7 +1992,7 @@ function AdminOptionsPageInner() {
                   showCopyHiddenNotice
                     ? "이미 등록된 옵션이 있어 원본 복사를 사용할 수 없습니다."
                     : isBulkMode
-                      ? "옵션은 일괄 등록을 지원하지 않습니다. 옵션 그룹과 항목을 직접 등록해 주세요."
+                      ? (process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "기존 옵션은 여기서 수정하세요. 빈 매장의 일괄 설정은 초기설정에서 시작합니다." : "옵션은 일괄 등록을 지원하지 않습니다. 옵션 그룹과 항목을 직접 등록해 주세요."
                       : ""
                 }
                 setupHref={`/admin/setup${storeId ? `?store=${encodeURIComponent(storeId)}&mode=${encodeURIComponent(setupMode)}` : ""}`}
@@ -2586,11 +2586,11 @@ function AdminOptionsPageInner() {
       ) : isBulkMode ? (
         <section className="card modeActionCard modeActionBulk">
           <div className="modeActionHead">
-            <div className="modeActionTitle">옵션은 직접 설정이 필요합니다</div>
+            <div className="modeActionTitle">{(process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "옵션 등록 방법" : "옵션은 직접 설정이 필요합니다"}</div>
             <span className="modeActionBadge">안내</span>
           </div>
           <p className="sub" style={{ margin: 0 }}>
-            옵션은 일괄 등록으로 자동 생성되지 않습니다. 직접 등록하려면 위의 설정 방식 변경에서 직접 설정을 선택해 주세요.
+            {(process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? <>빈 매장은 사진·파일로 메뉴와 옵션을 함께 정리할 수 있습니다. <a href={`/admin/menu/setup?store=${encodeURIComponent(storeId)}`}>사진·파일로 설정</a></> : "옵션은 일괄 등록으로 자동 생성되지 않습니다. 직접 등록하려면 위의 설정 방식 변경에서 직접 설정을 선택해 주세요."}
           </p>
         </section>
       ) : null}

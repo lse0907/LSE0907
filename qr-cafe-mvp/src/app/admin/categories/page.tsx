@@ -35,7 +35,7 @@ function CategoriesPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const setupMode = (sp.get("mode") || "manual").trim();
-  const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
+  const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? ((process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "사진·파일" : "일괄 등록") : "직접 설정";
   const [storeId, setStoreIdState] = useState("");
   const [storeName, setStoreName] = useState("");
   const [cats, setCats] = useState<MenuCategory[]>([]);
@@ -651,8 +651,8 @@ function CategoriesPageInner() {
           </div>
           <p className="subText" style={{ margin: 0 }}>파일 업로드로 한 번에 등록합니다.</p>
           <div className="row" style={{ marginTop: 10 }}>
-            <a className="btn btnPrimary" href={importHref}>
-              카테고리·메뉴 일괄 등록 시작
+            <a className="btn btnPrimary" href={(process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? `/admin/menu/setup?store=${encodeURIComponent(storeId)}` : importHref}>
+              {(process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "사진·파일로 설정 시작" : "카테고리·메뉴 일괄 등록 시작"}
             </a>
           </div>
         </section>

@@ -182,7 +182,7 @@ function AdminMenuPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const setupMode = (sp.get("mode") || "manual").trim();
-  const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? "일괄 등록" : "직접 설정";
+  const setupModeLabel = setupMode === "copy" ? "원본 복사" : setupMode === "bulk" ? ((process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "사진·파일" : "일괄 등록") : "직접 설정";
   const [storeId, setStoreId] = useState("");
   const [storeName, setStoreName] = useState("");
   const [items, setItems] = useState<MenuItem[]>([]);
@@ -2751,10 +2751,10 @@ function AdminMenuPageInner() {
             <div className="modeActionTitle">메뉴 일괄 등록</div>
             <span className="modeActionBadge">CSV 등록</span>
           </div>
-          <p className="sub" style={{ margin: 0 }}>CSV 파일로 메뉴를 먼저 등록합니다. 카테고리는 등록 후 메뉴 관리에서 선택할 수 있습니다.</p>
+          <p className="sub" style={{ margin: 0 }}>{(process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "자료로 카테고리·메뉴·옵션 초안을 만들고 확인한 뒤 등록합니다." : "CSV 파일로 메뉴를 먼저 등록합니다. 카테고리는 등록 후 메뉴 관리에서 선택할 수 있습니다."}</p>
           <div className="btnRow" style={{ marginTop: 10 }}>
-            <a className="btn btnPrimary" href={importHref}>
-              메뉴 CSV 등록 시작
+            <a className="btn btnPrimary" href={(process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? `/admin/menu/setup?store=${encodeURIComponent(storeId)}` : importHref}>
+              {(process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "사진·파일로 설정 시작" : "메뉴 CSV 등록 시작"}
             </a>
           </div>
         </section>
@@ -3070,6 +3070,22 @@ function AdminMenuPageInner() {
                       accept="image/*"
                       style={{ display: "none" }}
                       onChange={(e) => onUploadMenuImage(e.target.files?.[0] || null)}
+                      disabled={saving || loading || uploadingImage}
+                    />
+                  </label>
+                  <label className="btn uploadControl imageUploadBtn">
+                    직접 촬영
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      aria-label="메뉴 사진 직접 촬영"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        e.target.value = "";
+                        void onUploadMenuImage(file);
+                      }}
                       disabled={saving || loading || uploadingImage}
                     />
                   </label>

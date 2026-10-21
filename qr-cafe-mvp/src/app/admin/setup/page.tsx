@@ -68,10 +68,10 @@ const modeOptions: Array<{ mode: SetupMode; title: string; badge: string; desc: 
   },
   {
     mode: "bulk",
-    title: "일괄 등록",
+    title: (process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "사진·파일로 한 번에 설정" : "일괄 등록",
     badge: "대량 등록",
-    desc: "메뉴가 많으면 CSV 파일을 올립니다.",
-    note: "옵션은 직접 설정합니다.",
+    desc: (process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "메뉴판 사진·촬영·CSV를 사용합니다." : "메뉴가 많으면 CSV 파일을 올립니다.",
+    note: (process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "카테고리·메뉴·옵션을 확인하고 등록합니다." : "옵션은 직접 설정합니다.",
   },
 ];
 
@@ -335,6 +335,7 @@ function AdminSetupPageInner() {
 
   const optionSkipped = progressConfirm.step2 && counts.options === 0 && counts.optionItems === 0;
   const hasRegisteredData = counts.categories + counts.options + counts.menus + counts.qrCodes > 0;
+  const usePhotoSetup = (process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") && setupMode === "bulk" && !countsLoading && counts.categories === 0 && counts.options === 0 && counts.optionItems === 0 && counts.menus === 0 && !dbCompleted;
   const optionReady = hasOptionSetupReady(counts) || optionSkipped;
   const optionConnectionReviewed = (lastStep >= 4 || dbCompleted) && counts.menus > 0 && counts.optionLinkedMenus === counts.menus;
   const qrReviewed = lastStep >= 5 && counts.qrCodes > 0;
@@ -494,14 +495,14 @@ function AdminSetupPageInner() {
               <div>
                 <p className="eyebrow">다음 할 일</p>
                 <div className="summaryTitleRow">
-                  <h2>{isCompleted ? "초기 설정 완료" : nextStep.title}</h2>
+                  <h2>{isCompleted ? "초기 설정 완료" : usePhotoSetup ? "사진·파일로 초안 만들기" : nextStep.title}</h2>
                   <span className={`statePill ${isCompleted ? "stateDone" : isReady ? "stateReady" : "stateWorking"}`}>
                     {isCompleted ? "최종 완료" : isReady ? "확정 대기" : "진행 중"}
                   </span>
                 </div>
-                <p className="summaryText">{nextActionText}</p>
+                <p className="summaryText">{usePhotoSetup ? "메뉴판을 올리고 정리된 메뉴·카테고리·옵션을 확인하세요." : nextActionText}</p>
               </div>
-              {!isCompleted ? (
+              {usePhotoSetup ? <a className="primaryBtn summaryCta" href={`/admin/menu/setup?store=${encodeURIComponent(storeId)}`}>사진·파일로 설정 시작</a> : !isCompleted ? (
                 <button className="primaryBtn summaryCta" disabled={saving || nextStep.locked} onClick={() => onGoStep(nextStep.step, nextStep.href)}>
                   {nextStep.buttonLabel}
                 </button>
@@ -525,7 +526,7 @@ function AdminSetupPageInner() {
               <span>판매메뉴 {counts.readyMenus}개</span>
               <span>옵션연결 {counts.optionLinkedMenus}개</span>
               <span>사용 중 QR {counts.qrCodes}개</span>
-              {!isCompleted ? <span>다음 할 일 {nextStep.title}</span> : null}
+              {!isCompleted ? <span>다음 할 일 {usePhotoSetup ? "사진·파일로 초안 만들기" : nextStep.title}</span> : null}
             </div>
             <p className="summaryCompact">
               카테고리 {counts.categories} · {optionSkipped ? "옵션 미사용" : `옵션항목 ${counts.optionItems}`} · 판매메뉴 {counts.readyMenus} · QR {counts.qrCodes}
@@ -540,7 +541,7 @@ function AdminSetupPageInner() {
                 <p className="eyebrow">설정 방식</p>
                 <h2 className="sectionTitleCompact">{hasRegisteredData ? "등록 방법" : "어떻게 등록할까요?"}</h2>
               </div>
-              <span className="modeCurrent">선택: {setupMode === "manual" ? "직접 설정" : setupMode === "copy" ? "원본 복사" : "일괄 등록"}</span>
+              <span className="modeCurrent">선택: {setupMode === "manual" ? "직접 설정" : setupMode === "copy" ? "원본 복사" : (process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true") ? "사진·파일" : "일괄 등록"}</span>
             </div>
             {hasRegisteredData ? <p className="muted">등록 방법을 바꿔도 저장된 내용은 그대로 유지됩니다.</p> : null}
             <div className="modeGrid" role="group" aria-label="초기 설정 방식 선택">
@@ -567,7 +568,14 @@ function AdminSetupPageInner() {
             </div>
           </section>
 
-          <section className="card">
+          {usePhotoSetup && <section className="card">
+            <h2>자료로 한 번에 시작하세요</h2>
+            <p className="muted">사진이나 CSV로 초안을 만들고, 수정할 부분만 확인합니다. 등록 후에는 기존 메뉴 관리에서 수정할 수 있습니다.</p>
+            <div className="actions"><a className="primaryBtn" href={`/admin/menu/setup?store=${encodeURIComponent(storeId)}`}>사진·파일로 설정 시작</a></div>
+            <details><summary>기존 CSV 양식으로 등록</summary><p className="muted">정해진 양식의 CSV가 있는 경우에만 사용하세요. 옵션은 별도로 설정합니다.</p><a className="ghostBtn" href={`/admin/import?store=${encodeURIComponent(storeId)}&target=menus`}>기존 CSV 등록</a></details>
+          </section>}
+
+          <section className="card" hidden={usePhotoSetup}>
             <div className="sectionHead">
               <div>
                 <p className="eyebrow">체크리스트</p>
@@ -731,6 +739,7 @@ function AdminSetupPageInner() {
           display: grid;
           gap: 14px;
         }
+        .card[hidden] { display: none; }
         .summaryCard { border-color: #bfdbfe; background: linear-gradient(180deg, #eef5ff 0%, #ffffff 100%); }
         .summaryTop, .sectionHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
         .summaryTitleRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
