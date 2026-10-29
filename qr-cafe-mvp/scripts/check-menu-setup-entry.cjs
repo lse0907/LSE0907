@@ -57,6 +57,11 @@ async function main() {
   env.MENU_SETUP_ENABLED = env.NEXT_PUBLIC_MENU_SETUP_ENABLED = "true";
   await assert.rejects(render(), /NOT_FOUND/, "missing deployment origin keeps page closed");
   env.MENU_SETUP_ORIGIN = "https://menu.example";
+  await assert.rejects(render(), /NOT_FOUND/, "empty allowed-store list keeps production page closed");
+  env.MENU_SETUP_ALLOWED_STORE_IDS = "other-store";
+  const blockedStoreReads = reads;
+  await assert.rejects(render(), /NOT_FOUND/); assert.equal(reads, blockedStoreReads);
+  env.MENU_SETUP_ALLOWED_STORE_IDS = "store-a";
   assert.match(await render(), /MenuSetupPreview/, "explicitly enabled production page uses the real owner and empty-store checks");
   existing = true; assert.doesNotMatch(await render(), /MenuSetupPreview/); existing = false;
   authorized = false; const deniedReads = reads;

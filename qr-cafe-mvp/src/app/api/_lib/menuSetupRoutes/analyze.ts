@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { menuSetupRouteEnabled, menuSetupOriginAllowed, type MenuSetupScope } from "../menuSetupAccess";
+import { menuSetupRouteEnabled, menuSetupOriginAllowed, menuSetupStoreAllowed, type MenuSetupScope } from "../menuSetupAccess";
 import { ApiError, apiErrorResponse, createSupabaseAdminClient, requireStoreRole } from "@/app/api/_lib/storeAuth";
 import { finalizeAiExecution, isExternalAiEnabled, reserveAiExecution } from "@/app/api/_lib/aiExecution";
 import { OpenAiProviderError } from "@/app/api/_lib/openAiProvider";
@@ -39,6 +39,7 @@ return async function POST(req: NextRequest) {
     const admin = createSupabaseAdminClient();
     const storeId = typeof body.storeId === "string" ? body.storeId.trim() : "";
     const actor = await requireStoreRole({ req, supabaseAdmin: admin, storeId, allowedRoles: ["owner"] });
+    if (!menuSetupStoreAllowed(storeId)) throw new ApiError(403, "이 매장은 아직 AI 메뉴 설정 대상이 아닙니다.");
     // New feature must be registered in the database capability allowlist first.
     // A missing policy/reservation fails closed; never reuse another feature's quota.
     const reservation = await reserveAiExecution({ admin, storeId, requestedByUserId: actor.userId, feature: "menu_setup",

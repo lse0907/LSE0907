@@ -3,6 +3,21 @@ import type { NextRequest } from "next/server";
 export type MenuSetupScope = "preview" | "admin";
 const loopback = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+function allowedStores(): string[] {
+  const raw = process.env.MENU_SETUP_ALLOWED_STORE_IDS || "";
+  if (!raw.trim() || raw.length > 8192) return [];
+  const stores = raw.split(",").map(value => value.trim());
+  // No implicit all-store mode or wildcard. Invalid configuration fails closed.
+  if (stores.some(value => !value || value.length > 200 || value === "*" || /[\r\n]/.test(value))) return [];
+  return stores;
+}
+
+export function menuSetupStoreAllowed(storeId: string): boolean {
+  if (!storeId || storeId !== storeId.trim()) return false;
+  if (process.env.NODE_ENV === "development") return true;
+  return process.env.NODE_ENV === "production" && allowedStores().includes(storeId);
+}
+
 function configuredOrigin(): string | null {
   try {
     const value = process.env.MENU_SETUP_ORIGIN || "";
@@ -17,7 +32,7 @@ export function menuSetupRouteEnabled(scope: MenuSetupScope): boolean {
   if (scope === "preview") return process.env.NODE_ENV === "development";
   if (process.env.NODE_ENV === "development") return true;
   return process.env.NODE_ENV === "production" && process.env.MENU_SETUP_ENABLED === "true"
-    && process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true" && configuredOrigin() !== null;
+    && process.env.NEXT_PUBLIC_MENU_SETUP_ENABLED === "true" && configuredOrigin() !== null && allowedStores().length > 0;
 }
 
 export function menuSetupOriginAllowed(req: NextRequest, scope: MenuSetupScope): boolean {

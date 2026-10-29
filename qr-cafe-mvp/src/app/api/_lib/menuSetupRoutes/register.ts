@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
-import { menuSetupRouteEnabled, menuSetupOriginAllowed, type MenuSetupScope } from "../menuSetupAccess";
+import { menuSetupRouteEnabled, menuSetupOriginAllowed, menuSetupStoreAllowed, type MenuSetupScope } from "../menuSetupAccess";
 import { ApiError, createSupabaseAdminClient, requireStoreRole } from "@/app/api/_lib/storeAuth";
 import { buildAdminPlan } from "@/app/preview/menu-setup/adminPlan";
 import { isDraft } from "@/app/preview/menu-setup/draftStorage";
@@ -34,6 +34,7 @@ return async function POST(req: NextRequest) {
     if (!storeId || storeId.length > 200 || body.confirmed !== true || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(requestId)) throw new ApiError(400, "대상 매장과 최종 확인을 확인해주세요.");
     const admin = createSupabaseAdminClient();
     const actor = await requireStoreRole({ req, supabaseAdmin: admin, storeId, allowedRoles: ["owner"] });
+    if (!menuSetupStoreAllowed(storeId)) throw new ApiError(403, "이 매장은 아직 AI 메뉴 설정 대상이 아닙니다.");
     if (!isDraft(body.draft) || body.draft.source !== "ai" || body.draft.notes?.some((note) => note.startsWith("검증용 가상 예시"))) throw new ApiError(400, "가상 예시는 실제 등록할 수 없습니다. 분석한 초안을 사용해주세요.");
     let plan;
     try { plan = buildAdminPlan(body.draft, storeId, randomUUID); }
