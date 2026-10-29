@@ -42,6 +42,15 @@ function req(kind, origin = "https://menu.example", target = "https://menu.examp
   }
   assert.equal(dbCalls + providerCalls + reserveCalls + writes, 0);
   env.MENU_SETUP_ORIGIN = "https://menu.example";
+  for (const value of ["", "*", "store-a,", "store-a\nother"]) {
+    env.MENU_SETUP_ALLOWED_STORE_IDS = value;
+    assert.equal(access.menuSetupRouteEnabled("admin"), false);
+    for (const kind of Object.keys(routes)) assert.equal((await routes[kind].POST(req(kind))).status, 404);
+  }
+  env.MENU_SETUP_ALLOWED_STORE_IDS = "store-a";
+  assert.equal(access.menuSetupStoreAllowed("store-a"), true);
+  assert.equal(access.menuSetupStoreAllowed("store-a-other"), false);
+  assert.equal(access.menuSetupStoreAllowed(" store-a"), false);
   for (const flag of ["MENU_SETUP_ENABLED", "NEXT_PUBLIC_MENU_SETUP_ENABLED"]) {
     env[flag] = "false"; assert.equal(access.menuSetupRouteEnabled("admin"), false); env[flag] = "true";
   }
@@ -60,10 +69,21 @@ function req(kind, origin = "https://menu.example", target = "https://menu.examp
   assert.equal(dbCalls + providerCalls + reserveCalls + writes, 0);
   authorized = true;
   for (const kind of Object.keys(routes)) {
+    const response = await routes[kind].POST(req(kind, undefined, undefined, { storeId: "unlisted-store" }));
+    assert.equal(response.status, 403, "even an authorized owner cannot use an unlisted store");
+    if (kind === "register") assert.equal((await response.json()).notSaved, true);
+  }
+  assert.equal(dbCalls + providerCalls + reserveCalls + writes, 0, "unlisted store must never reach budget/provider/DB write or compatibility reads");
+  for (const kind of Object.keys(routes)) {
     const response = await routes[kind].POST(req(kind));
     assert.equal(response.status, 200, kind); assert.equal(response.headers.get("Cache-Control"), "private, no-store");
   }
   assert.equal(providerCalls, 1); assert.equal(reserveCalls, 1); assert.equal(writes, 1);
+  env.MENU_SETUP_ALLOWED_STORE_IDS = "different-store";
+  for (const kind of Object.keys(routes)) assert.equal((await routes[kind].POST(req(kind))).status, 403, "removing the store blocks subsequent requests");
+  assert.equal(providerCalls, 1); assert.equal(reserveCalls, 1); assert.equal(writes, 1);
+  env.MENU_SETUP_ALLOWED_STORE_IDS = " store-a,another-store ";
+  assert.equal(access.menuSetupStoreAllowed("another-store"), true);
   count = 1;
   assert.equal((await (await routes.compatibility.POST(req("compatibility"))).json()).compatible, false);
   env.MENU_SETUP_ANALYSIS_ENABLED = "false"; assert.equal((await routes.analyze.POST(req("analyze"))).status, 503);

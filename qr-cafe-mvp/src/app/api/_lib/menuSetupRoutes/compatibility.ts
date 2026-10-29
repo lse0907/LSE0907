@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
-import { menuSetupRouteEnabled, menuSetupOriginAllowed, type MenuSetupScope } from "../menuSetupAccess";
+import { menuSetupRouteEnabled, menuSetupOriginAllowed, menuSetupStoreAllowed, type MenuSetupScope } from "../menuSetupAccess";
 import { ApiError, createSupabaseAdminClient, requireStoreRole } from "@/app/api/_lib/storeAuth";
 import { buildAdminPlan } from "@/app/preview/menu-setup/adminPlan";
 
@@ -39,6 +39,7 @@ return async function POST(req: NextRequest) {
     if (!storeId || storeId.length > 200 || body.confirmed !== true) throw new ApiError(400, "매장과 최종 확인을 확인해주세요.");
     const admin = createSupabaseAdminClient();
     await requireStoreRole({ req, supabaseAdmin: admin, storeId, allowedRoles: ["owner"] });
+    if (!menuSetupStoreAllowed(storeId)) throw new ApiError(403, "이 매장은 아직 AI 메뉴 설정 대상이 아닙니다.");
     let plan;
     try { plan = buildAdminPlan(body.draft, storeId, randomUUID); }
     catch (error) { throw new ApiError(400, error instanceof Error ? error.message : "초안을 확인해주세요."); }

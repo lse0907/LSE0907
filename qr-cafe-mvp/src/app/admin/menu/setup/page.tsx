@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import AdminPageHeader from "@/app/admin/_components/AdminPageHeader";
 import { createSupabaseAdminClient, requireStoreRole } from "@/app/api/_lib/storeAuth";
 import MenuSetupPreview from "@/app/preview/menu-setup/MenuSetupPreview";
-import { menuSetupRouteEnabled } from "@/app/api/_lib/menuSetupAccess";
+import { menuSetupRouteEnabled, menuSetupStoreAllowed } from "@/app/api/_lib/menuSetupAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,7 @@ export default async function MenuSetupPage({ searchParams }: { searchParams: Pr
   const query = await searchParams;
   const storeId = typeof query.store === "string" ? query.store.trim() : "";
   if (!storeId || storeId.length > 200) notFound();
+  if (!menuSetupStoreAllowed(storeId)) notFound();
   const setupHref = `/admin/setup?store=${encodeURIComponent(storeId)}&mode=bulk`;
   let storeName = "";
   let message = "";
